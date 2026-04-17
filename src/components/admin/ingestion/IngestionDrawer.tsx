@@ -222,7 +222,7 @@ export function IngestionDrawer({ job, onClose, onChanged }: Props) {
       const next = { ...data, [key]: value };
       const { error } = await supabase
         .from("ingestion_jobs")
-        .update({ extracted_data: next })
+        .update({ extracted_data: next as never })
         .eq("id", job.id);
       if (error) throw error;
     } catch (err) {
@@ -242,7 +242,7 @@ export function IngestionDrawer({ job, onClose, onChanged }: Props) {
     for (const k of FIELD_KEYS) next[k] = values[k];
     const { error } = await supabase
       .from("ingestion_jobs")
-      .update({ extracted_data: next })
+      .update({ extracted_data: next as never })
       .eq("id", job.id);
     if (error) {
       toast({ title: error.message, variant: "destructive" });
@@ -263,7 +263,7 @@ export function IngestionDrawer({ job, onClose, onChanged }: Props) {
       }
       const { error } = await supabase
         .from("ingestion_jobs")
-        .update({ raw_scrape: parsed })
+        .update({ raw_scrape: parsed as never })
         .eq("id", job.id);
       if (error) throw error;
       toast({ title: "Raw scrape saved" });
