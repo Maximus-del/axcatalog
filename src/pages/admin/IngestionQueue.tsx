@@ -317,6 +317,56 @@ export default function IngestionQueue() {
         </div>
       )}
 
+      {selected.size > 0 && (
+        <div className="ax-card flex items-center justify-between gap-3 p-3 border-accent/40 bg-accent/5">
+          <div className="text-sm">
+            <span className="font-medium">{selected.size}</span> selected
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="ml-3 text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkRetry}
+              disabled={bulkBusy !== null || selectedFailedCount === 0}
+              className="gap-2"
+              title={
+                selectedFailedCount === 0
+                  ? "No failed jobs in selection"
+                  : `Retry ${selectedFailedCount} failed`
+              }
+            >
+              {bulkBusy === "retry" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5" />
+              )}
+              Retry failed ({selectedFailedCount})
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkCancel}
+              disabled={bulkBusy !== null || selectedCancellableCount === 0}
+              className="gap-2 text-destructive hover:text-destructive"
+            >
+              {bulkBusy === "cancel" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Ban className="h-3.5 w-3.5" />
+              )}
+              Cancel ({selectedCancellableCount})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {loading && (
         <div className="ax-card p-0 overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
