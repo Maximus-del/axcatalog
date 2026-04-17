@@ -1,6 +1,7 @@
 import { StatCards } from "@/components/admin/dashboard/StatCards";
 import { TopClients } from "@/components/admin/dashboard/TopClients";
 import { RecentActivity } from "@/components/admin/dashboard/RecentActivity";
+import { RecentBulkOrders } from "@/components/admin/dashboard/RecentBulkOrders";
 import { SeedImagesButton } from "@/components/admin/dashboard/SeedImagesButton";
 
 export default function AdminDashboard() {
@@ -17,6 +18,8 @@ export default function AdminDashboard() {
         <TopClients />
         <RecentActivity />
       </div>
+
+      <RecentBulkOrders />
 
       <SeedImagesButton />
     </div>
