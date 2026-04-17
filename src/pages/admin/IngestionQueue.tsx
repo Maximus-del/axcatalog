@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   Loader2,
   Plus,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -68,6 +70,8 @@ export default function IngestionQueue() {
   const [reviewing, setReviewing] = useState<IngestionJob | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<"cancel" | "retry" | null>(null);
 
   async function load() {
     setLoading(true);
@@ -168,6 +172,100 @@ export default function IngestionQueue() {
     }
   }
 
+  // ── Bulk selection helpers ──
+  const visibleIds = useMemo(() => filtered.map((j) => j.id), [filtered]);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleIds.some((id) => selected.has(id));
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+  function toggleAllVisible(checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  const selectedJobs = useMemo(
+    () => (jobs ?? []).filter((j) => selected.has(j.id)),
+    [jobs, selected],
+  );
+  const selectedFailedCount = selectedJobs.filter((j) => j.status === "failed").length;
+  const selectedCancellableCount = selectedJobs.filter(
+    (j) => j.status !== "applied" && j.status !== "cancelled",
+  ).length;
+
+  async function handleBulkCancel() {
+    const ids = selectedJobs
+      .filter((j) => j.status !== "applied" && j.status !== "cancelled")
+      .map((j) => j.id);
+    if (!ids.length) return;
+    setBulkBusy("cancel");
+    try {
+      const { error } = await supabase
+        .from("ingestion_jobs")
+        .update({ status: "cancelled" })
+        .in("id", ids);
+      if (error) throw error;
+      toast({ title: `Cancelled ${ids.length} job${ids.length === 1 ? "" : "s"}` });
+      clearSelection();
+      load();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Bulk cancel failed",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkBusy(null);
+    }
+  }
+
+  async function handleBulkRetry() {
+    const failed = selectedJobs.filter((j) => j.status === "failed");
+    if (!failed.length) return;
+    setBulkBusy("retry");
+    try {
+      // Update each so we can bump retry_count individually.
+      await Promise.all(
+        failed.map((j) =>
+          supabase
+            .from("ingestion_jobs")
+            .update({
+              status: "pending",
+              error_message: null,
+              retry_count: j.retry_count + 1,
+            })
+            .eq("id", j.id),
+        ),
+      );
+      toast({ title: `Re-queued ${failed.length} job${failed.length === 1 ? "" : "s"}` });
+      clearSelection();
+      load();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Bulk retry failed",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkBusy(null);
+    }
+  }
+
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       <header className="flex items-center justify-between gap-4 flex-wrap">
@@ -219,6 +317,56 @@ export default function IngestionQueue() {
         </div>
       )}
 
+      {selected.size > 0 && (
+        <div className="ax-card flex items-center justify-between gap-3 p-3 border-accent/40 bg-accent/5">
+          <div className="text-sm">
+            <span className="font-medium">{selected.size}</span> selected
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="ml-3 text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkRetry}
+              disabled={bulkBusy !== null || selectedFailedCount === 0}
+              className="gap-2"
+              title={
+                selectedFailedCount === 0
+                  ? "No failed jobs in selection"
+                  : `Retry ${selectedFailedCount} failed`
+              }
+            >
+              {bulkBusy === "retry" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-3.5 w-3.5" />
+              )}
+              Retry failed ({selectedFailedCount})
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkCancel}
+              disabled={bulkBusy !== null || selectedCancellableCount === 0}
+              className="gap-2 text-destructive hover:text-destructive"
+            >
+              {bulkBusy === "cancel" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Ban className="h-3.5 w-3.5" />
+              )}
+              Cancel ({selectedCancellableCount})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {loading && (
         <div className="ax-card p-0 overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -252,6 +400,19 @@ export default function IngestionQueue() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
+                  <th className="p-3 w-10">
+                    <Checkbox
+                      checked={
+                        allVisibleSelected
+                          ? true
+                          : someVisibleSelected
+                            ? "indeterminate"
+                            : false
+                      }
+                      onCheckedChange={(v) => toggleAllVisible(v === true)}
+                      aria-label="Select all visible"
+                    />
+                  </th>
                   <th className="text-left font-medium text-muted-foreground p-3">Source</th>
                   <th className="text-left font-medium text-muted-foreground p-3">Status</th>
                   <th className="text-left font-medium text-muted-foreground p-3">Confidence</th>
@@ -274,8 +435,21 @@ export default function IngestionQueue() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") openReview(j);
                       }}
-                      className="border-b border-border last:border-b-0 ax-row-hover transition-colors cursor-pointer focus:outline-none focus:bg-accent/5"
+                      className={cn(
+                        "border-b border-border last:border-b-0 ax-row-hover transition-colors cursor-pointer focus:outline-none focus:bg-accent/5",
+                        selected.has(j.id) && "bg-accent/5",
+                      )}
                     >
+                      <td
+                        className="p-3 w-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={selected.has(j.id)}
+                          onCheckedChange={(v) => toggleOne(j.id, v === true)}
+                          aria-label={`Select ${hostOf(j.source_url)}`}
+                        />
+                      </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
