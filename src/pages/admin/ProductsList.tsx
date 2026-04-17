@@ -46,6 +46,8 @@ interface ProductRow {
 const PAGE_SIZE = 25;
 
 export default function ProductsList() {
+  const navigate = useNavigate();
+  const params = useParams<{ id?: string }>();
   const [rows, setRows] = useState<ProductRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -57,6 +59,14 @@ export default function ProductsList() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const detailId = params.id ?? null;
+  const detailOpen = !!detailId;
+  function openDetail(id: string) {
+    navigate(`/admin/products/${id}`);
+  }
+  function closeDetail(open: boolean) {
+    if (!open) navigate("/admin/products");
+  }
 
   async function load() {
     setLoading(true);
@@ -334,7 +344,12 @@ export default function ProductsList() {
                       className="border-b border-border last:border-b-0 ax-row-hover transition-colors"
                     >
                       <td className="p-3">
-                        <Link to={`/admin/products/${r.id}`} className="block">
+                        <button
+                          type="button"
+                          onClick={() => openDetail(r.id)}
+                          className="block"
+                          aria-label={`Open ${r.title}`}
+                        >
                           {r.primary_image_url ? (
                             <img
                               src={r.primary_image_url}
@@ -347,15 +362,16 @@ export default function ProductsList() {
                               <ImageIcon className="h-5 w-5 text-muted-foreground" />
                             </div>
                           )}
-                        </Link>
+                        </button>
                       </td>
                       <td className="p-3">
-                        <Link
-                          to={`/admin/products/${r.id}`}
-                          className="font-medium hover:text-accent transition-colors"
+                        <button
+                          type="button"
+                          onClick={() => openDetail(r.id)}
+                          className="font-medium hover:text-accent transition-colors text-left"
                         >
                           {r.title}
-                        </Link>
+                        </button>
                         {r.sku && (
                           <div className="text-xs text-muted-foreground tabular-nums">
                             {r.sku}
@@ -443,6 +459,12 @@ export default function ProductsList() {
 
       <ProductFormDrawer open={createOpen} onOpenChange={setCreateOpen} onSaved={load} />
       <ImportFromUrlDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ProductDetailDrawer
+        productId={detailId}
+        open={detailOpen}
+        onOpenChange={closeDetail}
+        onChanged={load}
+      />
     </div>
   );
 }
