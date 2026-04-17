@@ -18,6 +18,10 @@ import AthletesList from "./pages/admin/AthletesList";
 import AthleteDetail from "./pages/admin/AthleteDetail";
 import ProductsList from "./pages/admin/ProductsList";
 import IngestionQueue from "./pages/admin/IngestionQueue";
+import DesignsList from "./pages/admin/DesignsList";
+import DesignDetail from "./pages/admin/DesignDetail";
+import BlanksList from "./pages/admin/BlanksList";
+import BlankDetail from "./pages/admin/BlankDetail";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -48,8 +52,10 @@ const App = () => (
               <Route index element={<AdminDashboard />} />
               <Route path="products" element={<ProductsList />} />
               <Route path="products/:id" element={<ProductsList />} />
-              <Route path="designs" element={<AdminPlaceholder title="Designs" />} />
-              <Route path="blanks" element={<AdminPlaceholder title="Blanks" />} />
+              <Route path="designs" element={<DesignsList />} />
+              <Route path="designs/:id" element={<DesignDetail />} />
+              <Route path="blanks" element={<BlanksList />} />
+              <Route path="blanks/:id" element={<BlankDetail />} />
               <Route path="athletes" element={<AthletesList />} />
               <Route path="athletes/:id" element={<AthleteDetail />} />
               <Route path="teams" element={<AdminPlaceholder title="Teams" />} />
