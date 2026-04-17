@@ -59,43 +59,55 @@ export default function ProductsList() {
 
   async function load() {
     setLoading(true);
-    const [{ data: products }, { data: athletes }] = await Promise.all([
-      supabase
-        .from("products")
-        .select("id, title, sku, status, product_type, price, needs_review, updated_at")
-        .order("updated_at", { ascending: false }),
-      supabase
-        .from("athletes")
-        .select("id, first_name, last_name, full_name")
-        .order("last_name"),
-    ]);
+    try {
+      const [productsRes, athletesRes] = await Promise.all([
+        supabase
+          .from("products")
+          .select("id, title, sku, status, product_type, price, needs_review, updated_at")
+          .order("updated_at", { ascending: false }),
+        supabase
+          .from("athletes")
+          .select("id, first_name, last_name, full_name")
+          .order("last_name"),
+      ]);
 
-    setAllAthletes(
-      (athletes ?? []).map((a) => ({
-        id: a.id,
-        name: a.full_name ?? `${a.first_name} ${a.last_name}`,
-      })),
-    );
+      if (productsRes.error) console.error("products query error:", productsRes.error);
+      if (athletesRes.error) console.error("athletes query error:", athletesRes.error);
 
-    const ids = (products ?? []).map((p) => p.id);
-    if (ids.length === 0) {
-      setRows([]);
-      setLoading(false);
-      return;
-    }
+      const products = productsRes.data ?? [];
+      const athletes = athletesRes.data ?? [];
 
-    const [{ data: images }, { data: links }] = await Promise.all([
-      supabase
-        .from("product_images")
-        .select("product_id, storage_bucket, storage_path, is_primary, sort_order")
-        .in("product_id", ids),
-      supabase
-        .from("product_athletes")
-        .select(
-          "product_id, athlete:athletes!product_athletes_athlete_id_fkey(id, first_name, last_name, full_name)",
-        )
-        .in("product_id", ids),
-    ]);
+      setAllAthletes(
+        athletes.map((a) => ({
+          id: a.id,
+          name: a.full_name ?? `${a.first_name} ${a.last_name}`,
+        })),
+      );
+
+      const ids = products.map((p) => p.id);
+      if (ids.length === 0) {
+        setRows([]);
+        return;
+      }
+
+      const [imagesRes, linksRes] = await Promise.all([
+        supabase
+          .from("product_images")
+          .select("product_id, storage_bucket, storage_path, is_primary, sort_order")
+          .in("product_id", ids),
+        supabase
+          .from("product_athletes")
+          .select(
+            "product_id, athlete:athletes!product_athletes_athlete_id_fkey(id, first_name, last_name, full_name)",
+          )
+          .in("product_id", ids),
+      ]);
+
+      if (imagesRes.error) console.error("product_images query error:", imagesRes.error);
+      if (linksRes.error) console.error("product_athletes query error:", linksRes.error);
+
+      const images = imagesRes.data ?? [];
+      const links = linksRes.data ?? [];
 
     // Pick primary image (or first by sort_order) per product
     const imageMap = new Map<string, { url: string }>();
