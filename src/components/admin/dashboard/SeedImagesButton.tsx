@@ -215,7 +215,7 @@ export function SeedImagesButton() {
         <div className="mt-3 space-y-1">
           <Progress value={pct} className="h-2" />
           <div className="text-xs text-muted-foreground">
-            {done} of {total} uploaded
+            {done} of {total} processed{skipped > 0 ? ` · ${skipped} skipped` : ""}
           </div>
         </div>
       )}
