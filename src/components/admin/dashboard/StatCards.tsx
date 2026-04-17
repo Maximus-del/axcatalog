@@ -9,6 +9,7 @@ interface StatData {
   activeDesigns: number;
   openBulkOrders: number;
   pendingIngestion: number;
+  overdueSubmitted: boolean;
 }
 
 export function StatCards() {
@@ -19,7 +20,8 @@ export function StatCards() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [products, designs, orders, ingestion] = await Promise.all([
+      const overdueCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const [products, designs, orders, ingestion, overdue] = await Promise.all([
         supabase
           .from("products")
           .select("id", { count: "exact", head: true })
@@ -36,6 +38,11 @@ export function StatCards() {
           .from("ingestion_jobs")
           .select("id", { count: "exact", head: true })
           .in("status", ["pending", "processing", "review"]),
+        supabase
+          .from("bulk_order_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "submitted")
+          .lt("created_at", overdueCutoff),
       ]);
       if (cancelled) return;
       setData({
@@ -43,6 +50,7 @@ export function StatCards() {
         activeDesigns: designs.count ?? 0,
         openBulkOrders: orders.count ?? 0,
         pendingIngestion: ingestion.count ?? 0,
+        overdueSubmitted: (overdue.count ?? 0) > 0,
       });
       setLoading(false);
     })();
@@ -57,7 +65,8 @@ export function StatCards() {
     {
       label: "Open Bulk Orders",
       value: data?.openBulkOrders,
-      onClick: () => navigate("/admin/orders"),
+      onClick: () => navigate("/admin/orders?tab=open"),
+      alert: data?.overdueSubmitted,
     },
     {
       label: "Pending Ingestion",
@@ -83,10 +92,13 @@ export function StatCards() {
               }
             }}
             className={cn(
-              "ax-card",
+              "ax-card relative",
               clickable && "cursor-pointer hover:border-accent hover:-translate-y-0.5",
             )}
           >
+            {c.alert && (
+              <span className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-card animate-pulse" />
+            )}
             <div className="ax-label mb-3">{c.label}</div>
             {loading ? (
               <Skeleton className="h-9 w-16" />

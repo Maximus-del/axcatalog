@@ -22,6 +22,8 @@ import DesignsList from "./pages/admin/DesignsList";
 import DesignDetail from "./pages/admin/DesignDetail";
 import BlanksList from "./pages/admin/BlanksList";
 import BlankDetail from "./pages/admin/BlankDetail";
+import OrdersList from "./pages/admin/OrdersList";
+import OrderDetail from "./pages/admin/OrderDetail";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -62,7 +64,8 @@ const App = () => (
               <Route path="collections" element={<AdminPlaceholder title="Collections" />} />
               <Route path="ingestion" element={<IngestionQueue />} />
               <Route path="ingestion/:id" element={<IngestionQueue />} />
-              <Route path="orders" element={<AdminPlaceholder title="Orders" />} />
+              <Route path="orders" element={<OrdersList />} />
+              <Route path="orders/:id" element={<OrderDetail />} />
             </Route>
 
             {/* Portal */}
