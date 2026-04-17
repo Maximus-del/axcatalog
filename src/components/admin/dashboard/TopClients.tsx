@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ExternalLink } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { avatarColorFor, initialsFor } from "@/lib/avatar-color";
@@ -129,7 +131,25 @@ export function TopClients() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-muted-foreground shrink-0">— orders</div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-muted-foreground">— orders</span>
+                      {c.kind === "athlete" ? (
+                        <Link
+                          to={`/portal?as=${c.id}`}
+                          title="View this athlete's portal"
+                          className="text-muted-foreground hover:text-accent transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </Link>
+                      ) : (
+                        <span
+                          title="Team portals coming soon"
+                          className="text-muted-foreground/30 cursor-not-allowed"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="mt-2 flex items-center gap-3">
                     <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
