@@ -109,44 +109,49 @@ export default function ProductsList() {
       const images = imagesRes.data ?? [];
       const links = linksRes.data ?? [];
 
-    // Pick primary image (or first by sort_order) per product
-    const imageMap = new Map<string, { url: string }>();
-    (images ?? []).forEach((img) => {
-      const existing = imageMap.get(img.product_id);
-      if (!existing || img.is_primary) {
-        const { data: pub } = supabase.storage
-          .from(img.storage_bucket)
-          .getPublicUrl(img.storage_path);
-        imageMap.set(img.product_id, { url: pub.publicUrl });
-      }
-    });
+      // Pick primary image (or first by sort_order) per product
+      const imageMap = new Map<string, { url: string }>();
+      images.forEach((img) => {
+        const existing = imageMap.get(img.product_id);
+        if (!existing || img.is_primary) {
+          const { data: pub } = supabase.storage
+            .from(img.storage_bucket)
+            .getPublicUrl(img.storage_path);
+          imageMap.set(img.product_id, { url: pub.publicUrl });
+        }
+      });
 
-    // Map athletes per product
-    const athletesByProduct = new Map<string, Array<{ id: string; name: string }>>();
-    (links ?? []).forEach((l) => {
-      const a = Array.isArray(l.athlete) ? l.athlete[0] : l.athlete;
-      if (!a) return;
-      const name = a.full_name ?? `${a.first_name} ${a.last_name}`;
-      const arr = athletesByProduct.get(l.product_id) ?? [];
-      arr.push({ id: a.id, name });
-      athletesByProduct.set(l.product_id, arr);
-    });
+      // Map athletes per product
+      const athletesByProduct = new Map<string, Array<{ id: string; name: string }>>();
+      links.forEach((l) => {
+        const a = Array.isArray(l.athlete) ? l.athlete[0] : l.athlete;
+        if (!a) return;
+        const name = a.full_name ?? `${a.first_name} ${a.last_name}`;
+        const arr = athletesByProduct.get(l.product_id) ?? [];
+        arr.push({ id: a.id, name });
+        athletesByProduct.set(l.product_id, arr);
+      });
 
-    setRows(
-      (products ?? []).map((p) => ({
-        id: p.id,
-        title: p.title,
-        sku: p.sku,
-        status: p.status as ProductStatus,
-        product_type: p.product_type as ProductType,
-        price: p.price,
-        needs_review: p.needs_review,
-        updated_at: p.updated_at,
-        primary_image_url: imageMap.get(p.id)?.url ?? null,
-        athletes: athletesByProduct.get(p.id) ?? [],
-      })),
-    );
-    setLoading(false);
+      setRows(
+        products.map((p) => ({
+          id: p.id,
+          title: p.title,
+          sku: p.sku,
+          status: p.status as ProductStatus,
+          product_type: p.product_type as ProductType,
+          price: p.price,
+          needs_review: p.needs_review,
+          updated_at: p.updated_at,
+          primary_image_url: imageMap.get(p.id)?.url ?? null,
+          athletes: athletesByProduct.get(p.id) ?? [],
+        })),
+      );
+    } catch (err) {
+      console.error("ProductsList load failed:", err);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
