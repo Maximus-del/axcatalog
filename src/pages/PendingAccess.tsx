@@ -28,7 +28,7 @@ export default function PendingAccess() {
           )}
           <Button
             variant="outline"
-            onClick={signOut}
+            onClick={handleSignOut}
             className="w-full border-border text-muted-foreground hover:text-accent hover:border-accent"
           >
             Sign out
