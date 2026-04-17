@@ -400,6 +400,19 @@ export default function IngestionQueue() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
+                  <th className="p-3 w-10">
+                    <Checkbox
+                      checked={
+                        allVisibleSelected
+                          ? true
+                          : someVisibleSelected
+                            ? "indeterminate"
+                            : false
+                      }
+                      onCheckedChange={(v) => toggleAllVisible(v === true)}
+                      aria-label="Select all visible"
+                    />
+                  </th>
                   <th className="text-left font-medium text-muted-foreground p-3">Source</th>
                   <th className="text-left font-medium text-muted-foreground p-3">Status</th>
                   <th className="text-left font-medium text-muted-foreground p-3">Confidence</th>
