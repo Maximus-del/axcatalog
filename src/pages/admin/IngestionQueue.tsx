@@ -70,6 +70,8 @@ export default function IngestionQueue() {
   const [reviewing, setReviewing] = useState<IngestionJob | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState<"cancel" | "retry" | null>(null);
 
   async function load() {
     setLoading(true);
