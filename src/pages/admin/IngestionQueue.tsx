@@ -172,6 +172,100 @@ export default function IngestionQueue() {
     }
   }
 
+  // ── Bulk selection helpers ──
+  const visibleIds = useMemo(() => filtered.map((j) => j.id), [filtered]);
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleIds.some((id) => selected.has(id));
+
+  function toggleOne(id: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+  function toggleAllVisible(checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of visibleIds) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  const selectedJobs = useMemo(
+    () => (jobs ?? []).filter((j) => selected.has(j.id)),
+    [jobs, selected],
+  );
+  const selectedFailedCount = selectedJobs.filter((j) => j.status === "failed").length;
+  const selectedCancellableCount = selectedJobs.filter(
+    (j) => j.status !== "applied" && j.status !== "cancelled",
+  ).length;
+
+  async function handleBulkCancel() {
+    const ids = selectedJobs
+      .filter((j) => j.status !== "applied" && j.status !== "cancelled")
+      .map((j) => j.id);
+    if (!ids.length) return;
+    setBulkBusy("cancel");
+    try {
+      const { error } = await supabase
+        .from("ingestion_jobs")
+        .update({ status: "cancelled" })
+        .in("id", ids);
+      if (error) throw error;
+      toast({ title: `Cancelled ${ids.length} job${ids.length === 1 ? "" : "s"}` });
+      clearSelection();
+      load();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Bulk cancel failed",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkBusy(null);
+    }
+  }
+
+  async function handleBulkRetry() {
+    const failed = selectedJobs.filter((j) => j.status === "failed");
+    if (!failed.length) return;
+    setBulkBusy("retry");
+    try {
+      // Update each so we can bump retry_count individually.
+      await Promise.all(
+        failed.map((j) =>
+          supabase
+            .from("ingestion_jobs")
+            .update({
+              status: "pending",
+              error_message: null,
+              retry_count: j.retry_count + 1,
+            })
+            .eq("id", j.id),
+        ),
+      );
+      toast({ title: `Re-queued ${failed.length} job${failed.length === 1 ? "" : "s"}` });
+      clearSelection();
+      load();
+    } catch (err) {
+      toast({
+        title: err instanceof Error ? err.message : "Bulk retry failed",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkBusy(null);
+    }
+  }
+
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       <header className="flex items-center justify-between gap-4 flex-wrap">
