@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { ChevronLeft, ChevronRight, Download, ImageIcon, Plus, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -27,6 +27,7 @@ import {
 } from "@/lib/product-status";
 import { ProductFormDrawer } from "@/components/admin/products/ProductFormDrawer";
 import { ImportFromUrlDialog } from "@/components/admin/products/ImportFromUrlDialog";
+import { ProductDetailDrawer } from "@/components/admin/products/ProductDetailDrawer";
 import { cn } from "@/lib/utils";
 
 interface ProductRow {
