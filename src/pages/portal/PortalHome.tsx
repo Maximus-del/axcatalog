@@ -6,20 +6,36 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { usePortalStats } from "@/hooks/usePortalStats";
+import { usePortalProducts } from "@/hooks/usePortalProducts";
+import { usePortalOrders } from "@/hooks/usePortalOrders";
 import { ImpersonationBanner } from "@/components/portal/ImpersonationBanner";
 import { PortalNavDrawer } from "@/components/portal/PortalNavDrawer";
 import { PortalHero } from "@/components/portal/PortalHero";
 import { HubCardsRow, type HubCardKey } from "@/components/portal/HubCardsRow";
 import { PortalStatsRow } from "@/components/portal/PortalStatsRow";
 import { PortalSection } from "@/components/portal/PortalSection";
+import { MyProductsGrid } from "@/components/portal/MyProductsGrid";
+import { BulkOrderSheet } from "@/components/portal/BulkOrderSheet";
+import { OrderDraftBar } from "@/components/portal/OrderDraftBar";
+import { OrderDraftProvider } from "@/components/portal/OrderDraftContext";
+import { AnalyticsTopProducts } from "@/components/portal/AnalyticsTopProducts";
+import { AnalyticsRevenueChart } from "@/components/portal/AnalyticsRevenueChart";
+import { AnalyticsRecentOrders } from "@/components/portal/AnalyticsRecentOrders";
+import { ContentHubGrid } from "@/components/portal/ContentHubGrid";
 
-export default function PortalHome() {
+function PortalHomeInner() {
   const { user, signOut } = useAuth();
   const { athlete, loading, isImpersonating, noAccess } = useCurrentAthlete();
   const { productsLive, activeDesigns, loading: statsLoading } = usePortalStats(
     athlete?.id ?? null,
   );
+  const { products, loading: productsLoading } = usePortalProducts(athlete?.id ?? null);
+  const { orders, loading: ordersLoading, refetch: refetchOrders } = usePortalOrders(
+    athlete?.id ?? null,
+  );
+
   const [navOpen, setNavOpen] = useState(false);
+  const [orderSheetOpen, setOrderSheetOpen] = useState(false);
 
   if (noAccess) return <Navigate to="/pending-access" replace />;
 
@@ -48,11 +64,15 @@ export default function PortalHome() {
   }
 
   const handleHubSelect = (key: HubCardKey) => {
-    const map: Record<HubCardKey, string> = {
+    if (key === "order") {
+      setOrderSheetOpen(true);
+      document.getElementById("sec-products")?.scrollIntoView({ behavior: "smooth" });
+      return;
+    }
+    const map: Record<Exclude<HubCardKey, "order">, string> = {
       sales: "sec-analytics",
-      products: "sec-products", // TODO Pass 2: open all-products modal
+      products: "sec-products",
       content: "sec-content",
-      order: "sec-products", // TODO Pass 2: also open Bulk Order Sheet
     };
     document.getElementById(map[key])?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -71,7 +91,6 @@ export default function PortalHome() {
         onMenuClick={() => setNavOpen(true)}
       />
 
-      {/* Account row — small + subtle, top-right of content */}
       <div className="max-w-[1200px] mx-auto px-6 pt-4 flex items-center justify-end gap-3">
         <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>
         <Button
@@ -85,11 +104,9 @@ export default function PortalHome() {
         </Button>
       </div>
 
-      <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-8">
-        {/* Hub cards */}
+      <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-8 pb-32">
         <HubCardsRow onSelect={handleHubSelect} />
 
-        {/* Stats */}
         <PortalStatsRow
           productsLive={productsLive}
           activeDesigns={activeDesigns}
@@ -100,31 +117,38 @@ export default function PortalHome() {
           Scroll down to explore your analytics, products, content, and ordering.
         </p>
 
-        {/* Accent divider */}
         <div className="h-px bg-accent/30" />
 
-        {/* Sections (Pass 2 will fill these) */}
         <PortalSection
           id="sec-products"
           title="Your Product Lineup"
           description="Your merch lineup — share, promote, and order."
           actions={
             <Button
-              disabled
+              onClick={() => setOrderSheetOpen(true)}
               className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider font-bold"
             >
               Bulk Order Sheet
             </Button>
           }
         >
-          <div className="ax-card p-12 text-center text-muted-foreground">
-            Product grid arrives in the next pass.
-          </div>
+          <MyProductsGrid products={products} loading={productsLoading} />
         </PortalSection>
 
         <PortalSection id="sec-analytics" title="Analytics" defaultOpen={false}>
-          <div className="ax-card p-12 text-center text-muted-foreground">
-            Top products, revenue chart, and recent orders arrive in the next pass.
+          <div className="space-y-6">
+            <div>
+              <div className="ax-label mb-3">Top Products</div>
+              <AnalyticsTopProducts products={products} loading={productsLoading} />
+            </div>
+            <div>
+              <div className="ax-label mb-3">Revenue Over Time</div>
+              <AnalyticsRevenueChart />
+            </div>
+            <div>
+              <div className="ax-label mb-3">Recent Orders</div>
+              <AnalyticsRecentOrders orders={orders} loading={ordersLoading} />
+            </div>
           </div>
         </PortalSection>
 
@@ -134,11 +158,28 @@ export default function PortalHome() {
           defaultOpen={false}
           description="Ready-to-post graphics for your collections. Save and share."
         >
-          <div className="ax-card p-12 text-center text-muted-foreground">
-            Content hub arrives in the next pass.
-          </div>
+          <ContentHubGrid products={products} loading={productsLoading} />
         </PortalSection>
       </main>
+
+      <BulkOrderSheet
+        open={orderSheetOpen}
+        onOpenChange={setOrderSheetOpen}
+        products={products}
+        athleteId={athlete.id}
+        organizationId={athlete.organization_id}
+        onSubmitted={refetchOrders}
+      />
+
+      <OrderDraftBar onOpenSheet={() => setOrderSheetOpen(true)} />
     </div>
+  );
+}
+
+export default function PortalHome() {
+  return (
+    <OrderDraftProvider>
+      <PortalHomeInner />
+    </OrderDraftProvider>
   );
 }
