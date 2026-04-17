@@ -127,7 +127,7 @@ export function SeedImagesButton() {
                 storage_path: t.path,
                 file_name: "primary.png",
                 mime_type: "image/png",
-                file_size_bytes: blob.size,
+                file_size_bytes: fileSize,
                 file_extension: "png",
                 is_primary: true,
               });
