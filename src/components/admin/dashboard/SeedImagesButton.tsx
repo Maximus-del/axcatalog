@@ -43,9 +43,11 @@ export function SeedImagesButton() {
   async function run() {
     setRunning(true);
     setDone(0);
+    setSkipped(0);
     setTotal(0);
     setErrors([]);
     const failures: string[] = [];
+    let skippedCount = 0;
 
     try {
       const [designsRes, productsRes] = await Promise.all([
