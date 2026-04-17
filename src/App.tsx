@@ -17,6 +17,7 @@ import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AthletesList from "./pages/admin/AthletesList";
 import AthleteDetail from "./pages/admin/AthleteDetail";
 import ProductsList from "./pages/admin/ProductsList";
+import IngestionQueue from "./pages/admin/IngestionQueue";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -46,13 +47,15 @@ const App = () => (
             >
               <Route index element={<AdminDashboard />} />
               <Route path="products" element={<ProductsList />} />
+              <Route path="products/:id" element={<ProductsList />} />
               <Route path="designs" element={<AdminPlaceholder title="Designs" />} />
               <Route path="blanks" element={<AdminPlaceholder title="Blanks" />} />
               <Route path="athletes" element={<AthletesList />} />
               <Route path="athletes/:id" element={<AthleteDetail />} />
               <Route path="teams" element={<AdminPlaceholder title="Teams" />} />
               <Route path="collections" element={<AdminPlaceholder title="Collections" />} />
-              <Route path="ingestion" element={<AdminPlaceholder title="Ingestion" />} />
+              <Route path="ingestion" element={<IngestionQueue />} />
+              <Route path="ingestion/:id" element={<IngestionQueue />} />
               <Route path="orders" element={<AdminPlaceholder title="Orders" />} />
             </Route>
 
