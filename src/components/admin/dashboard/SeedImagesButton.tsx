@@ -82,13 +82,19 @@ export function SeedImagesButton() {
 
       for (const t of targets) {
         try {
-          const blob = await fetchPlaceholder(t.id);
-          const file = new File([blob], "primary.png", { type: "image/png" });
+          const exists = await fileExists(t.bucket, t.path);
+          if (exists) {
+            skippedCount += 1;
+            setSkipped(skippedCount);
+          } else {
+            const blob = await fetchPlaceholder(t.id);
+            const file = new File([blob], "primary.png", { type: "image/png" });
 
-          const { error: upErr } = await supabase.storage
-            .from(t.bucket)
-            .upload(t.path, file, { upsert: true, contentType: "image/png" });
-          if (upErr) throw upErr;
+            const { error: upErr } = await supabase.storage
+              .from(t.bucket)
+              .upload(t.path, file, { upsert: false, contentType: "image/png" });
+            if (upErr) throw upErr;
+          }
 
           if (t.kind === "design") {
             // Upsert a design_files row marked primary as a "mockup"
