@@ -14,6 +14,8 @@ import NotFound from "./pages/NotFound";
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
+import AthletesList from "./pages/admin/AthletesList";
+import AthleteDetail from "./pages/admin/AthleteDetail";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -45,7 +47,8 @@ const App = () => (
               <Route path="products" element={<AdminPlaceholder title="Products" />} />
               <Route path="designs" element={<AdminPlaceholder title="Designs" />} />
               <Route path="blanks" element={<AdminPlaceholder title="Blanks" />} />
-              <Route path="athletes" element={<AdminPlaceholder title="Athletes" />} />
+              <Route path="athletes" element={<AthletesList />} />
+              <Route path="athletes/:id" element={<AthleteDetail />} />
               <Route path="teams" element={<AdminPlaceholder title="Teams" />} />
               <Route path="collections" element={<AdminPlaceholder title="Collections" />} />
               <Route path="ingestion" element={<AdminPlaceholder title="Ingestion" />} />
