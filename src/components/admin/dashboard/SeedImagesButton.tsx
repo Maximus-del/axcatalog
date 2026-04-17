@@ -25,6 +25,8 @@ export function SeedImagesButton() {
   const [total, setTotal] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
 
+  if (!import.meta.env.DEV) return null;
+
   async function run() {
     setRunning(true);
     setDone(0);
