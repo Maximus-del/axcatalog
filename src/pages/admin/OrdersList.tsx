@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import {
   useAdminOrders,
@@ -182,7 +183,7 @@ export default function OrdersList() {
     o: AdminOrderRow,
     action: "acknowledge" | "complete" | "cancel",
   ) => {
-    const patch: Record<string, unknown> = {};
+    const patch: TablesUpdate<"bulk_order_requests"> = {};
     if (action === "acknowledge") {
       patch.status = "acknowledged";
       patch.acknowledged_at = new Date().toISOString();

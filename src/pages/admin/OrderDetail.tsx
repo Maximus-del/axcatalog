@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { useAdminOrderDetail } from "@/hooks/useAdminOrderDetail";
 import {
@@ -143,7 +144,7 @@ export default function OrderDetail() {
       return;
     }
 
-    const patch: Record<string, unknown> = { status: next };
+    const patch: TablesUpdate<"bulk_order_requests"> = { status: next };
     if (next === "acknowledged") patch.acknowledged_at = new Date().toISOString();
     if (next === "completed") patch.completed_at = new Date().toISOString();
 
