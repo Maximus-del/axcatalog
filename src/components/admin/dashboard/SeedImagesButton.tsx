@@ -83,11 +83,13 @@ export function SeedImagesButton() {
       for (const t of targets) {
         try {
           const exists = await fileExists(t.bucket, t.path);
+          let fileSize: number | null = null;
           if (exists) {
             skippedCount += 1;
             setSkipped(skippedCount);
           } else {
             const blob = await fetchPlaceholder(t.id);
+            fileSize = blob.size;
             const file = new File([blob], "primary.png", { type: "image/png" });
 
             const { error: upErr } = await supabase.storage
