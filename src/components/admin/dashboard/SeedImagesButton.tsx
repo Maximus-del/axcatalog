@@ -169,8 +169,11 @@ export function SeedImagesButton() {
       }
 
       setErrors(failures);
+      const uploaded = targets.length - skippedCount - failures.length;
       if (failures.length === 0) {
-        toast.success(`Seeded ${targets.length} placeholder images.`);
+        toast.success(
+          `Seeded ${uploaded} new image(s)${skippedCount > 0 ? `, skipped ${skippedCount} existing` : ""}.`
+        );
       } else {
         toast.error(`Completed with ${failures.length} error(s). See dashboard.`);
       }
