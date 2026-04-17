@@ -16,6 +16,7 @@ import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AthletesList from "./pages/admin/AthletesList";
 import AthleteDetail from "./pages/admin/AthleteDetail";
+import ProductsList from "./pages/admin/ProductsList";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -44,7 +45,7 @@ const App = () => (
               }
             >
               <Route index element={<AdminDashboard />} />
-              <Route path="products" element={<AdminPlaceholder title="Products" />} />
+              <Route path="products" element={<ProductsList />} />
               <Route path="designs" element={<AdminPlaceholder title="Designs" />} />
               <Route path="blanks" element={<AdminPlaceholder title="Blanks" />} />
               <Route path="athletes" element={<AthletesList />} />
