@@ -435,8 +435,21 @@ export default function IngestionQueue() {
                       onKeyDown={(e) => {
                         if (e.key === "Enter") openReview(j);
                       }}
-                      className="border-b border-border last:border-b-0 ax-row-hover transition-colors cursor-pointer focus:outline-none focus:bg-accent/5"
+                      className={cn(
+                        "border-b border-border last:border-b-0 ax-row-hover transition-colors cursor-pointer focus:outline-none focus:bg-accent/5",
+                        selected.has(j.id) && "bg-accent/5",
+                      )}
                     >
+                      <td
+                        className="p-3 w-10"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Checkbox
+                          checked={selected.has(j.id)}
+                          onCheckedChange={(v) => toggleOne(j.id, v === true)}
+                          aria-label={`Select ${hostOf(j.source_url)}`}
+                        />
+                      </td>
                       <td className="p-3">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <img
