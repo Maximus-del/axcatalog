@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import {
   AlertTriangle,
+  Ban,
   CheckCircle2,
   Loader2,
   Plus,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
