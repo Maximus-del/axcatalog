@@ -25,6 +25,9 @@ interface Props {
   athleteId: string;
   organizationId: string;
   onSubmitted?: () => void;
+  /** When true, the submit button is intercepted via onBlockedSubmit. */
+  impersonating?: boolean;
+  onBlockedSubmit?: () => void;
 }
 
 function generateOrderNumber(): string {
@@ -48,6 +51,8 @@ export function BulkOrderSheet({
   athleteId,
   organizationId,
   onSubmitted,
+  impersonating,
+  onBlockedSubmit,
 }: Props) {
   const { user } = useAuth();
   const { draft, setQty, clear } = useOrderDraft();
@@ -81,6 +86,10 @@ export function BulkOrderSheet({
   }, [products]);
 
   const handleSubmit = async () => {
+    if (impersonating) {
+      onBlockedSubmit?.();
+      return;
+    }
     if (totalUnits <= 0) {
       toast.error("Add at least one unit before submitting");
       return;
