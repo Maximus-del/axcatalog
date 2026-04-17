@@ -22,17 +22,32 @@ async function fetchPlaceholder(seed: string): Promise<Blob> {
 export function SeedImagesButton() {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
+  const [skipped, setSkipped] = useState(0);
   const [total, setTotal] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
 
   if (!import.meta.env.DEV) return null;
 
+  async function fileExists(bucket: string, path: string): Promise<boolean> {
+    const lastSlash = path.lastIndexOf("/");
+    const dir = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
+    const name = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+    const { data, error } = await supabase.storage.from(bucket).list(dir, {
+      limit: 100,
+      search: name,
+    });
+    if (error) return false;
+    return (data ?? []).some((f) => f.name === name);
+  }
+
   async function run() {
     setRunning(true);
     setDone(0);
+    setSkipped(0);
     setTotal(0);
     setErrors([]);
     const failures: string[] = [];
+    let skippedCount = 0;
 
     try {
       const [designsRes, productsRes] = await Promise.all([
@@ -67,13 +82,21 @@ export function SeedImagesButton() {
 
       for (const t of targets) {
         try {
-          const blob = await fetchPlaceholder(t.id);
-          const file = new File([blob], "primary.png", { type: "image/png" });
+          const exists = await fileExists(t.bucket, t.path);
+          let fileSize: number | null = null;
+          if (exists) {
+            skippedCount += 1;
+            setSkipped(skippedCount);
+          } else {
+            const blob = await fetchPlaceholder(t.id);
+            fileSize = blob.size;
+            const file = new File([blob], "primary.png", { type: "image/png" });
 
-          const { error: upErr } = await supabase.storage
-            .from(t.bucket)
-            .upload(t.path, file, { upsert: true, contentType: "image/png" });
-          if (upErr) throw upErr;
+            const { error: upErr } = await supabase.storage
+              .from(t.bucket)
+              .upload(t.path, file, { upsert: false, contentType: "image/png" });
+            if (upErr) throw upErr;
+          }
 
           if (t.kind === "design") {
             // Upsert a design_files row marked primary as a "mockup"
@@ -104,7 +127,7 @@ export function SeedImagesButton() {
                 storage_path: t.path,
                 file_name: "primary.png",
                 mime_type: "image/png",
-                file_size_bytes: blob.size,
+                file_size_bytes: fileSize,
                 file_extension: "png",
                 is_primary: true,
               });
@@ -146,8 +169,11 @@ export function SeedImagesButton() {
       }
 
       setErrors(failures);
+      const uploaded = targets.length - skippedCount - failures.length;
       if (failures.length === 0) {
-        toast.success(`Seeded ${targets.length} placeholder images.`);
+        toast.success(
+          `Seeded ${uploaded} new image(s)${skippedCount > 0 ? `, skipped ${skippedCount} existing` : ""}.`
+        );
       } else {
         toast.error(`Completed with ${failures.length} error(s). See dashboard.`);
       }
@@ -189,7 +215,7 @@ export function SeedImagesButton() {
         <div className="mt-3 space-y-1">
           <Progress value={pct} className="h-2" />
           <div className="text-xs text-muted-foreground">
-            {done} of {total} uploaded
+            {done} of {total} processed{skipped > 0 ? ` · ${skipped} skipped` : ""}
           </div>
         </div>
       )}
