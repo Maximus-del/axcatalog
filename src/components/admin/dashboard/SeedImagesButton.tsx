@@ -22,10 +22,23 @@ async function fetchPlaceholder(seed: string): Promise<Blob> {
 export function SeedImagesButton() {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
+  const [skipped, setSkipped] = useState(0);
   const [total, setTotal] = useState(0);
   const [errors, setErrors] = useState<string[]>([]);
 
   if (!import.meta.env.DEV) return null;
+
+  async function fileExists(bucket: string, path: string): Promise<boolean> {
+    const lastSlash = path.lastIndexOf("/");
+    const dir = lastSlash >= 0 ? path.slice(0, lastSlash) : "";
+    const name = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+    const { data, error } = await supabase.storage.from(bucket).list(dir, {
+      limit: 100,
+      search: name,
+    });
+    if (error) return false;
+    return (data ?? []).some((f) => f.name === name);
+  }
 
   async function run() {
     setRunning(true);
