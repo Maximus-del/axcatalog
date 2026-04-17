@@ -5,6 +5,7 @@ import { useAuth } from "@/auth/AuthProvider";
 
 export type CurrentAthlete = {
   id: string;
+  organization_id: string;
   first_name: string;
   last_name: string;
   full_name: string | null;
@@ -65,7 +66,9 @@ export function useCurrentAthlete(): State {
     void (async () => {
       const { data, error: err } = await supabase
         .from("athletes")
-        .select("id, first_name, last_name, full_name, slug, jersey_number, position, league, current_team_id")
+        .select(
+          "id, organization_id, first_name, last_name, full_name, slug, jersey_number, position, league, current_team_id",
+        )
         .eq("id", targetId)
         .maybeSingle();
       if (cancelled) return;
