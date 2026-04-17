@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "./AdminSidebar";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/admin/orders/NotificationBell";
 
 export default function AdminLayout() {
   const { user, signOut } = useAuth();
@@ -17,7 +18,8 @@ export default function AdminLayout() {
               <SidebarTrigger className="text-muted-foreground hover:text-accent" />
               <span className="ax-label hidden sm:block">Admin</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <NotificationBell />
               <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>
               <Button
                 variant="ghost"
