@@ -20,8 +20,6 @@ async function fetchPlaceholder(seed: string): Promise<Blob> {
 }
 
 export function SeedImagesButton() {
-  if (!import.meta.env.DEV) return null;
-
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(0);
   const [total, setTotal] = useState(0);
