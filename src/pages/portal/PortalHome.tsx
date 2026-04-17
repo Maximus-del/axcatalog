@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { usePortalStats } from "@/hooks/usePortalStats";
 import { usePortalProducts } from "@/hooks/usePortalProducts";
 import { usePortalOrders } from "@/hooks/usePortalOrders";
 import { ImpersonationBanner } from "@/components/portal/ImpersonationBanner";
+import { ImpersonationGuardModal } from "@/components/portal/ImpersonationGuardModal";
 import { PortalNavDrawer } from "@/components/portal/PortalNavDrawer";
 import { PortalHero } from "@/components/portal/PortalHero";
 import { HubCardsRow, type HubCardKey } from "@/components/portal/HubCardsRow";
@@ -36,6 +38,28 @@ function PortalHomeInner() {
 
   const [navOpen, setNavOpen] = useState(false);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
+  const [guardOpen, setGuardOpen] = useState(false);
+  const [teamName, setTeamName] = useState<string | null>(null);
+
+  // Fetch the current team name for display in the impersonation banner.
+  useEffect(() => {
+    if (!athlete?.current_team_id) {
+      setTeamName(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("teams")
+        .select("name")
+        .eq("id", athlete.current_team_id!)
+        .maybeSingle();
+      if (!cancelled) setTeamName(data?.name ?? null);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [athlete?.current_team_id]);
 
   if (noAccess) return <Navigate to="/pending-access" replace />;
 
@@ -80,7 +104,13 @@ function PortalHomeInner() {
   return (
     <div className="min-h-screen scroll-smooth">
       {isImpersonating && (
-        <ImpersonationBanner athleteName={`${athlete.first_name} ${athlete.last_name}`} />
+        <ImpersonationBanner
+          athleteId={athlete.id}
+          athleteName={
+            athlete.full_name || `${athlete.first_name} ${athlete.last_name}`
+          }
+          teamName={teamName}
+        />
       )}
 
       <PortalNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
@@ -169,9 +199,13 @@ function PortalHomeInner() {
         athleteId={athlete.id}
         organizationId={athlete.organization_id}
         onSubmitted={refetchOrders}
+        impersonating={isImpersonating}
+        onBlockedSubmit={() => setGuardOpen(true)}
       />
 
       <OrderDraftBar onOpenSheet={() => setOrderSheetOpen(true)} />
+
+      <ImpersonationGuardModal open={guardOpen} onOpenChange={setGuardOpen} />
     </div>
   );
 }
