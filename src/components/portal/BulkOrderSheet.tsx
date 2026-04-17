@@ -307,8 +307,9 @@ export function BulkOrderSheet({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={submitting || totalUnits === 0}
+              disabled={submitting || (totalUnits === 0 && !impersonating)}
               className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
+              title={impersonating ? "Blocked while impersonating" : undefined}
             >
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Submit Order
