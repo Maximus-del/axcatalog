@@ -299,51 +299,45 @@ export function ProductFormDrawer({ open, onOpenChange, onSaved }: Props) {
       if (error) throw error;
       const productId = product.id;
 
-      const writes: Promise<unknown>[] = [];
+      const errors: string[] = [];
       if (pickedAthletes.length) {
-        writes.push(
-          supabase.from("product_athletes").insert(
-            pickedAthletes.map((p) => ({
-              product_id: productId,
-              athlete_id: p.athlete_id,
-              role: p.role,
-              team_id_at_release: p.team_id_at_release,
-            })),
-          ),
+        const { error: e } = await supabase.from("product_athletes").insert(
+          pickedAthletes.map((p) => ({
+            product_id: productId,
+            athlete_id: p.athlete_id,
+            role: p.role,
+            team_id_at_release: p.team_id_at_release,
+          })),
         );
+        if (e) errors.push(e.message);
       }
       if (pickedTeams.length) {
-        writes.push(
-          supabase.from("product_teams").insert(
-            pickedTeams.map((team_id) => ({ product_id: productId, team_id })),
-          ),
-        );
+        const { error: e } = await supabase
+          .from("product_teams")
+          .insert(pickedTeams.map((team_id) => ({ product_id: productId, team_id })));
+        if (e) errors.push(e.message);
       }
       if (pickedDesigns.length) {
-        writes.push(
-          supabase.from("product_designs").insert(
-            pickedDesigns.map((d) => ({
-              product_id: productId,
-              design_id: d.design_id,
-              placement: d.placement,
-            })),
-          ),
+        const { error: e } = await supabase.from("product_designs").insert(
+          pickedDesigns.map((d) => ({
+            product_id: productId,
+            design_id: d.design_id,
+            placement: d.placement,
+          })),
         );
+        if (e) errors.push(e.message);
       }
       if (pickedTags.length) {
-        writes.push(
-          supabase.from("product_tags").insert(
-            pickedTags.map((tag_id) => ({ product_id: productId, tag_id })),
-          ),
-        );
+        const { error: e } = await supabase
+          .from("product_tags")
+          .insert(pickedTags.map((tag_id) => ({ product_id: productId, tag_id })));
+        if (e) errors.push(e.message);
       }
-      const results = await Promise.all(writes);
-      const failed = results.find(
-        (r) => (r as { error?: { message: string } }).error,
-      );
-      if (failed) {
-        const msg = (failed as { error: { message: string } }).error.message;
-        toast({ title: `Saved product, but: ${msg}`, variant: "destructive" });
+      if (errors.length) {
+        toast({
+          title: `Saved product, but: ${errors.join("; ")}`,
+          variant: "destructive",
+        });
       } else {
         toast({ title: "Product created" });
       }
