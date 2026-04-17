@@ -22,7 +22,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<AppRole>(null);
   const [linkedAthleteIds, setLinkedAthleteIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [profileLoading, setProfileLoading] = useState(false);
+  // Start true so consumers wait for profile resolution before routing.
+  const [profileLoading, setProfileLoading] = useState(true);
 
   // CRITICAL ORDER: register the listener BEFORE getSession to avoid missing events.
   useEffect(() => {
@@ -31,12 +32,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!newSession) {
         setRole(null);
         setLinkedAthleteIds([]);
+        setProfileLoading(false);
+      } else {
+        // New session arrived — profile must be re-resolved before routing.
+        setProfileLoading(true);
       }
     });
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
+      if (!data.session) setProfileLoading(false);
     });
 
     return () => sub.subscription.unsubscribe();
@@ -48,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) {
       setRole(null);
       setLinkedAthleteIds([]);
+      setProfileLoading(false);
       return;
     }
 
