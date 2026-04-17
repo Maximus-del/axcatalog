@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { differenceInYears, parseISO } from "date-fns";
-import { Pencil, Plus, Package, Palette, FolderOpen } from "lucide-react";
+import { Pencil, Plus, Package, Palette, FolderOpen, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -323,6 +323,11 @@ export default function AthleteDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" asChild className="gap-2">
+            <Link to={`/portal?as=${athlete.id}`}>
+              <Eye className="h-4 w-4" /> View Portal
+            </Link>
+          </Button>
           <Button variant="outline" onClick={() => setMembershipOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Add Team Membership
           </Button>
