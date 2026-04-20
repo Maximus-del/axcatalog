@@ -47,6 +47,8 @@ interface Props {
   open: boolean;
   productId: string;
   organizationId: string;
+  /** Optional file to pre-populate (e.g. from drag-and-drop). */
+  initialFile?: File | null;
   onOpenChange: (o: boolean) => void;
   onUploaded: () => void;
 }
@@ -60,6 +62,7 @@ export function VideoUploadDialog({
   open,
   productId,
   organizationId,
+  initialFile,
   onOpenChange,
   onUploaded,
 }: Props) {
@@ -94,6 +97,17 @@ export function VideoUploadDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // When opened with an initialFile (drag-and-drop), feed it through the
+  // same picker handler so the thumbnail/duration extraction runs.
+  useEffect(() => {
+    if (open && initialFile) {
+      const dt = new DataTransfer();
+      dt.items.add(initialFile);
+      void handlePick(dt.files);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialFile]);
 
   async function handlePick(files: FileList | null) {
     const f = files?.[0];

@@ -126,7 +126,16 @@ export function MockupsTab({ productId, shopifyProductId, shopifyShopDomain, onC
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative" {...dropProps}>
+      {isOver && (
+        <div className="absolute inset-0 z-20 rounded-lg border-2 border-dashed border-muted-foreground/40 bg-muted/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground text-center px-4">
+            <Ban className="h-8 w-8" />
+            <div className="text-sm font-medium">Mockups are managed in Shopify</div>
+            <div className="text-xs">Upload product images in Shopify — they sync here automatically</div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {rows.map((m, i) => (
           <div
