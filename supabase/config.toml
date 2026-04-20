@@ -1,1 +1,4 @@
 project_id = "cuidofxidstqpgypxcop"
+
+[functions.shopify-update-product-tags]
+verify_jwt = true

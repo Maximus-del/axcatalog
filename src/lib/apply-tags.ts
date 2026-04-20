@@ -139,30 +139,38 @@ export async function applyTagsToProducts({
         .filter((x): x is string => !!x)
         .map((tag_id) => ({ product_id: productId, tag_id }));
 
-      const opPromises: Promise<unknown>[] = [];
+      const opPromises: Promise<{ error: unknown } | unknown>[] = [];
       if (athleteUpserts.length > 0)
         opPromises.push(
-          supabase
-            .from("product_athletes")
-            .upsert(athleteUpserts, { onConflict: "product_id,athlete_id", ignoreDuplicates: true }),
+          Promise.resolve(
+            supabase
+              .from("product_athletes")
+              .upsert(athleteUpserts, { onConflict: "product_id,athlete_id", ignoreDuplicates: true }),
+          ),
         );
       if (teamUpserts.length > 0)
         opPromises.push(
-          supabase
-            .from("product_teams")
-            .upsert(teamUpserts, { onConflict: "product_id,team_id", ignoreDuplicates: true }),
+          Promise.resolve(
+            supabase
+              .from("product_teams")
+              .upsert(teamUpserts, { onConflict: "product_id,team_id", ignoreDuplicates: true }),
+          ),
         );
       if (collectionUpserts.length > 0)
         opPromises.push(
-          supabase
-            .from("product_collections")
-            .upsert(collectionUpserts, { onConflict: "product_id,collection_id", ignoreDuplicates: true }),
+          Promise.resolve(
+            supabase
+              .from("product_collections")
+              .upsert(collectionUpserts, { onConflict: "product_id,collection_id", ignoreDuplicates: true }),
+          ),
         );
       if (tagUpserts.length > 0)
         opPromises.push(
-          supabase
-            .from("product_tags")
-            .upsert(tagUpserts, { onConflict: "product_id,tag_id", ignoreDuplicates: true }),
+          Promise.resolve(
+            supabase
+              .from("product_tags")
+              .upsert(tagUpserts, { onConflict: "product_id,tag_id", ignoreDuplicates: true }),
+          ),
         );
 
       // REMOVES
@@ -172,11 +180,13 @@ export async function applyTagsToProducts({
         .filter((x): x is string => !!x);
       if (athleteRemoveIds.length > 0)
         opPromises.push(
-          supabase
-            .from("product_athletes")
-            .delete()
-            .eq("product_id", productId)
-            .in("athlete_id", athleteRemoveIds),
+          Promise.resolve(
+            supabase
+              .from("product_athletes")
+              .delete()
+              .eq("product_id", productId)
+              .in("athlete_id", athleteRemoveIds),
+          ),
         );
       const teamRemoveIds = removes
         .filter((t) => t.kind === "team")
@@ -184,11 +194,13 @@ export async function applyTagsToProducts({
         .filter((x): x is string => !!x);
       if (teamRemoveIds.length > 0)
         opPromises.push(
-          supabase
-            .from("product_teams")
-            .delete()
-            .eq("product_id", productId)
-            .in("team_id", teamRemoveIds),
+          Promise.resolve(
+            supabase
+              .from("product_teams")
+              .delete()
+              .eq("product_id", productId)
+              .in("team_id", teamRemoveIds),
+          ),
         );
       const collectionRemoveIds = removes
         .filter((t) => t.kind === "collection")
@@ -196,26 +208,30 @@ export async function applyTagsToProducts({
         .filter((x): x is string => !!x);
       if (collectionRemoveIds.length > 0)
         opPromises.push(
-          supabase
-            .from("product_collections")
-            .delete()
-            .eq("product_id", productId)
-            .in("collection_id", collectionRemoveIds),
+          Promise.resolve(
+            supabase
+              .from("product_collections")
+              .delete()
+              .eq("product_id", productId)
+              .in("collection_id", collectionRemoveIds),
+          ),
         );
       const tagRemoveIds = freeformRemove
         .map((t) => tagIdByName.get(t.name))
         .filter((x): x is string => !!x);
       if (tagRemoveIds.length > 0)
         opPromises.push(
-          supabase
-            .from("product_tags")
-            .delete()
-            .eq("product_id", productId)
-            .in("tag_id", tagRemoveIds),
+          Promise.resolve(
+            supabase
+              .from("product_tags")
+              .delete()
+              .eq("product_id", productId)
+              .in("tag_id", tagRemoveIds),
+          ),
         );
 
       const results = await Promise.all(opPromises);
-      const dbErr = results.find((r: any) => r?.error)?.["error" as keyof typeof r];
+      const dbErr = (results as Array<{ error?: unknown }>).find((r) => r?.error)?.error;
       if (dbErr) throw dbErr;
 
       succeeded.push(productId);
