@@ -1264,6 +1264,88 @@ export type Database = {
           },
         ]
       }
+      product_videos: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          duration_seconds: number | null
+          id: string
+          metadata: Json | null
+          organization_id: string
+          product_id: string
+          sort_order: number | null
+          storage_bucket: string
+          storage_path: string
+          thumbnail_path: string | null
+          title: string | null
+          updated_at: string
+          video_type: string | null
+          visible_on_storefront: boolean | null
+          visible_to_athlete: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          product_id: string
+          sort_order?: number | null
+          storage_bucket?: string
+          storage_path: string
+          thumbnail_path?: string | null
+          title?: string | null
+          updated_at?: string
+          video_type?: string | null
+          visible_on_storefront?: boolean | null
+          visible_to_athlete?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          duration_seconds?: number | null
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          product_id?: string
+          sort_order?: number | null
+          storage_bucket?: string
+          storage_path?: string
+          thumbnail_path?: string | null
+          title?: string | null
+          updated_at?: string
+          video_type?: string | null
+          visible_on_storefront?: boolean | null
+          visible_to_athlete?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_videos_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_videos_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_videos_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           ai_confidence_score: number | null
