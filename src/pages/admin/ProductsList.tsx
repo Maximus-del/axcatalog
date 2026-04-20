@@ -591,37 +591,26 @@ export default function ProductsList() {
           </aside>
 
           <section className="space-y-4 min-w-0">
-            {/* Search + sort + bulk toggle + mobile filter */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            {/* Search — sticky on mobile, regular on desktop */}
+            <div className="sticky top-0 z-20 -mx-4 px-4 py-2 bg-background/85 backdrop-blur-md md:static md:mx-0 md:px-0 md:py-0 md:bg-transparent md:backdrop-blur-none">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   ref={searchInputRef}
                   placeholder="Search products…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
+                  inputMode="search"
+                  className="pl-9 h-11 md:h-10"
                 />
               </div>
-              {tab !== "hidden" && (
-                <label
-                  className={cn(
-                    "flex items-center gap-2 px-3 h-10 rounded-md border border-border bg-card text-sm cursor-pointer whitespace-nowrap",
-                    showHidden && "border-accent/60 bg-accent/5 text-accent",
-                  )}
-                  title="Temporarily include hidden products in this view"
-                >
-                  <Checkbox
-                    checked={showHidden}
-                    onCheckedChange={(v) => setShowHidden(!!v)}
-                    aria-label="Show hidden products"
-                  />
-                  <span>Show hidden</span>
-                </label>
-              )}
+            </div>
+
+            {/* Toolbar — wraps to multiple rows on small screens */}
+            <div className="flex items-center gap-2 flex-wrap">
               <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
                 <SheetTrigger asChild>
-                  <Button variant="outline" size="sm" className="lg:hidden gap-2">
+                  <Button variant="outline" size="sm" className="lg:hidden gap-2 h-11 px-3 pressable">
                     <Filter className="h-4 w-4" />
                     Filters
                     {activeFilterCount > 0 && (
@@ -631,17 +620,31 @@ export default function ProductsList() {
                     )}
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="p-0 w-[300px] sm:w-[340px]">
-                  <SheetHeader className="p-4 border-b border-border">
+                {/* On phones, slide up from bottom; on tablets, slide from left */}
+                <SheetContent
+                  side="bottom"
+                  className="p-0 rounded-t-2xl max-h-[85vh] flex flex-col md:hidden"
+                >
+                  <div className="mx-auto mt-2 mb-1 h-1.5 w-10 rounded-full bg-muted shrink-0" />
+                  <SheetHeader className="px-4 py-3 border-b border-border shrink-0">
                     <SheetTitle className="flex items-center gap-2">
                       <SlidersHorizontal className="h-4 w-4" /> Filters
                     </SheetTitle>
                   </SheetHeader>
-                  <div className="h-[calc(100vh-65px)]">{sidebar}</div>
+                  <div className="flex-1 overflow-y-auto scroll-touch pb-safe">{sidebar}</div>
+                </SheetContent>
+                <SheetContent side="left" className="hidden md:flex p-0 w-[300px] sm:w-[340px] flex-col">
+                  <SheetHeader className="p-4 border-b border-border shrink-0">
+                    <SheetTitle className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-4 w-4" /> Filters
+                    </SheetTitle>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto scroll-touch">{sidebar}</div>
                 </SheetContent>
               </Sheet>
+
               <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="flex-1 min-w-[140px] md:flex-none md:w-[180px] h-11 md:h-10">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -652,16 +655,35 @@ export default function ProductsList() {
                   ))}
                 </SelectContent>
               </Select>
+
+              {tab !== "hidden" && (
+                <label
+                  className={cn(
+                    "flex items-center gap-2 px-3 h-11 md:h-10 rounded-md border border-border bg-card text-sm cursor-pointer whitespace-nowrap pressable",
+                    showHidden && "border-accent/60 bg-accent/5 text-accent",
+                  )}
+                  title="Temporarily include hidden products in this view"
+                >
+                  <Checkbox
+                    checked={showHidden}
+                    onCheckedChange={(v) => setShowHidden(!!v)}
+                    aria-label="Show hidden products"
+                    className="h-5 w-5"
+                  />
+                  <span>Show hidden</span>
+                </label>
+              )}
+
               <label
                 className={cn(
-                  "flex items-center gap-2 px-3 h-10 rounded-md border border-border bg-card text-sm cursor-pointer",
+                  "flex items-center gap-2 px-3 h-11 md:h-10 rounded-md border border-border bg-card text-sm cursor-pointer pressable",
                   filtered.length === 0 && "opacity-50 cursor-not-allowed",
                   bulkMode && "border-accent bg-accent/10",
                 )}
                 title="Toggle bulk tag mode (B)"
               >
                 <Tag className="h-4 w-4" />
-                <span>Bulk Tag Mode</span>
+                <span className="whitespace-nowrap">Bulk Tag</span>
                 <Switch
                   checked={bulkMode}
                   disabled={filtered.length === 0}
