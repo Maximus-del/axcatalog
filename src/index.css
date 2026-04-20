@@ -130,4 +130,44 @@
   .ax-row-hover:hover {
     background: hsl(var(--accent) / 0.04);
   }
+
+  /* iOS safe-area helpers — used by fixed bottom navs and sticky bars */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+  .mb-safe { margin-bottom: env(safe-area-inset-bottom, 0px); }
+  .bottom-safe { bottom: env(safe-area-inset-bottom, 0px); }
+  /* Reserve space for the fixed mobile bottom nav (56px bar + safe area) */
+  .pb-bottom-nav { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Pressable: tactile feedback on tap. Disabled on hover-capable inputs. */
+  .pressable { transition: transform 120ms ease, opacity 120ms ease; }
+  .pressable:active { transform: scale(0.97); opacity: 0.9; }
+
+  /* 44x44 minimum tap target — pair with inline width/height when needed */
+  .tap-target { min-width: 44px; min-height: 44px; }
+}
+
+@layer utilities {
+  /* Native momentum scrolling on iOS */
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+}
+
+/* iOS auto-zooms inputs whose font-size is < 16px on focus.
+   Force 16px on phone widths only — desktop densities stay tighter. */
+@media (max-width: 767px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Smooth scrolling site-wide (respect reduced motion via the spec) */
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .pressable { transition: none; }
 }
