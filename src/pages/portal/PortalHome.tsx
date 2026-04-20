@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+// Mobile-first. Test at 375px before merging.
+import { useCallback, useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,10 +10,11 @@ import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { usePortalStats } from "@/hooks/usePortalStats";
 import { usePortalProducts } from "@/hooks/usePortalProducts";
 import { usePortalOrders } from "@/hooks/usePortalOrders";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ImpersonationBanner } from "@/components/portal/ImpersonationBanner";
 import { ImpersonationGuardModal } from "@/components/portal/ImpersonationGuardModal";
 import { PortalNavDrawer } from "@/components/portal/PortalNavDrawer";
-import { PortalHero } from "@/components/portal/PortalHero";
+import { MobileHeader } from "@/components/portal/home/MobileHeader";
 import { HubCardsRow, type HubCardKey } from "@/components/portal/HubCardsRow";
 import { PortalStatsRow } from "@/components/portal/PortalStatsRow";
 import { PortalSection } from "@/components/portal/PortalSection";
@@ -24,6 +26,11 @@ import { AnalyticsTopProducts } from "@/components/portal/AnalyticsTopProducts";
 import { AnalyticsRevenueChart } from "@/components/portal/AnalyticsRevenueChart";
 import { AnalyticsRecentOrders } from "@/components/portal/AnalyticsRecentOrders";
 import { ContentHubGrid } from "@/components/portal/ContentHubGrid";
+import { RecommendationsCarousel } from "@/components/portal/home/RecommendationsCarousel";
+import { EraComparison } from "@/components/portal/home/EraComparison";
+import { SuperfansCard } from "@/components/portal/home/SuperfansCard";
+import { FanbaseMap } from "@/components/portal/home/FanbaseMap";
+import { UpcomingDrops } from "@/components/portal/home/UpcomingDrops";
 
 function PortalHomeInner() {
   const { user, signOut } = useAuth();
@@ -31,7 +38,8 @@ function PortalHomeInner() {
   const { productsLive, activeDesigns, loading: statsLoading } = usePortalStats(
     athlete?.id ?? null,
   );
-  const { products, loading: productsLoading } = usePortalProducts(athlete?.id ?? null);
+  const { products, loading: productsLoading, refetch: refetchProducts } =
+    usePortalProducts(athlete?.id ?? null);
   const { orders, loading: ordersLoading, refetch: refetchOrders } = usePortalOrders(
     athlete?.id ?? null,
   );
@@ -40,6 +48,15 @@ function PortalHomeInner() {
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const [guardOpen, setGuardOpen] = useState(false);
   const [teamName, setTeamName] = useState<string | null>(null);
+
+  // Pull-to-refresh on mobile — refetch products + orders.
+  const handleRefresh = useCallback(async () => {
+    refetchProducts();
+    refetchOrders();
+    // Tiny delay so the spinner is perceptible even on a fast refetch.
+    await new Promise((r) => setTimeout(r, 350));
+  }, [refetchProducts, refetchOrders]);
+  const { pullPx, refreshing } = usePullToRefresh({ onRefresh: handleRefresh });
 
   // Fetch the current team name for display in the impersonation banner.
   useEffect(() => {
@@ -71,7 +88,7 @@ function PortalHomeInner() {
           <Skeleton className="h-10 w-64" />
           <Skeleton className="h-3 w-40" />
         </div>
-        <div className="max-w-[1200px] mx-auto p-6 space-y-6">
+        <div className="max-w-[1200px] mx-auto p-4 sm:p-6 space-y-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-xl" />
@@ -102,7 +119,22 @@ function PortalHomeInner() {
   };
 
   return (
-    <div className="min-h-screen scroll-smooth">
+    <div className="min-h-screen scroll-smooth scroll-touch">
+      {/* Pull-to-refresh indicator */}
+      {(pullPx > 0 || refreshing) && (
+        <div
+          className="fixed top-0 left-0 right-0 z-40 flex items-center justify-center pointer-events-none"
+          style={{ transform: `translateY(${Math.min(pullPx, 80)}px)` }}
+        >
+          <div className="mt-2 h-9 w-9 rounded-full bg-card border border-border flex items-center justify-center shadow-md">
+            <RefreshCw
+              className={`h-4 w-4 text-accent ${refreshing ? "animate-spin" : ""}`}
+              style={{ transform: `rotate(${pullPx * 4}deg)` }}
+            />
+          </div>
+        </div>
+      )}
+
       {isImpersonating && (
         <ImpersonationBanner
           athleteId={athlete.id}
@@ -115,37 +147,70 @@ function PortalHomeInner() {
 
       <PortalNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
 
-      <PortalHero
+      <MobileHeader
         firstName={athlete.first_name}
         lastName={athlete.last_name}
+        lifetimeRevenue={null}
         onMenuClick={() => setNavOpen(true)}
       />
 
-      <div className="max-w-[1200px] mx-auto px-6 pt-4 flex items-center justify-end gap-3">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-3 flex items-center justify-end gap-3">
         <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>
         <Button
           variant="ghost"
           size="sm"
           onClick={signOut}
-          className="text-muted-foreground hover:text-accent h-8"
+          className="text-muted-foreground hover:text-accent h-9 tap-target"
         >
           <LogOut className="h-4 w-4 mr-1.5" />
           <span className="hidden sm:inline">Sign out</span>
         </Button>
       </div>
 
-      <main className="max-w-[1200px] mx-auto px-6 py-6 space-y-8 pb-32">
-        <HubCardsRow onSelect={handleHubSelect} />
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-8 pb-bottom-nav md:pb-32">
+        <div className="stagger-fade" style={{ ["--i" as string]: 0 }}>
+          <HubCardsRow onSelect={handleHubSelect} />
+        </div>
 
-        <PortalStatsRow
-          productsLive={productsLive}
-          activeDesigns={activeDesigns}
-          loading={statsLoading}
-        />
+        <div className="stagger-fade" style={{ ["--i" as string]: 1 }}>
+          <PortalStatsRow
+            productsLive={productsLive}
+            activeDesigns={activeDesigns}
+            loading={statsLoading}
+          />
+        </div>
 
-        <p className="text-sm text-muted-foreground text-center">
-          Scroll down to explore your analytics, products, content, and ordering.
-        </p>
+        {/* This Week's Recommendations — swipeable on mobile */}
+        <section
+          aria-labelledby="sec-recs-h"
+          className="stagger-fade space-y-3"
+          style={{ ["--i" as string]: 2 }}
+        >
+          <h2
+            id="sec-recs-h"
+            className="ax-section-header"
+            style={{ letterSpacing: "0.22em" }}
+          >
+            This Week's Recommendations
+          </h2>
+          <RecommendationsCarousel />
+        </section>
+
+        {/* Era Comparison — only renders if 2+ memberships */}
+        <section
+          aria-labelledby="sec-era-h"
+          className="stagger-fade space-y-3"
+          style={{ ["--i" as string]: 3 }}
+        >
+          <h2
+            id="sec-era-h"
+            className="ax-section-header"
+            style={{ letterSpacing: "0.22em" }}
+          >
+            Era Comparison
+          </h2>
+          <EraComparison athleteId={athlete.id} />
+        </section>
 
         <div className="h-px bg-accent/30" />
 
@@ -156,7 +221,7 @@ function PortalHomeInner() {
           actions={
             <Button
               onClick={() => setOrderSheetOpen(true)}
-              className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider font-bold"
+              className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider font-bold tap-target w-full sm:w-auto"
             >
               Bulk Order Sheet
             </Button>
@@ -179,6 +244,14 @@ function PortalHomeInner() {
               <div className="ax-label mb-3">Recent Orders</div>
               <AnalyticsRecentOrders orders={orders} loading={ordersLoading} />
             </div>
+            <div>
+              <div className="ax-label mb-3">Superfans</div>
+              <SuperfansCard />
+            </div>
+            <div>
+              <div className="ax-label mb-3">Fanbase Map</div>
+              <FanbaseMap />
+            </div>
           </div>
         </PortalSection>
 
@@ -189,6 +262,14 @@ function PortalHomeInner() {
           description="Ready-to-post graphics for your collections. Save and share."
         >
           <ContentHubGrid products={products} loading={productsLoading} />
+        </PortalSection>
+
+        <PortalSection
+          id="sec-drops"
+          title="Upcoming Drops"
+          defaultOpen={false}
+        >
+          <UpcomingDrops />
         </PortalSection>
       </main>
 
