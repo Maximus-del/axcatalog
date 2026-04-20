@@ -264,20 +264,25 @@ export default function ProductsList() {
     load();
   }, []);
 
+  // Tab counts are canonical (showHidden=false) so the labels are stable.
+  // The Hidden tab counts hidden; all other tabs exclude hidden.
   const tabCounts = useMemo(() => {
     const c: Record<ViewTab, number> = { live: 0, drafts: 0, hidden: 0, archived: 0, all: 0 };
     (rows ?? []).forEach((r) => {
       c.all += 1;
-      if (matchesTab(r, "live")) c.live += 1;
-      if (matchesTab(r, "drafts")) c.drafts += 1;
-      if (matchesTab(r, "hidden")) c.hidden += 1;
-      if (matchesTab(r, "archived")) c.archived += 1;
+      if (matchesTab(r, "live", false)) c.live += 1;
+      if (matchesTab(r, "drafts", false)) c.drafts += 1;
+      if (matchesTab(r, "hidden", false)) c.hidden += 1;
+      if (matchesTab(r, "archived", false)) c.archived += 1;
     });
     return c;
   }, [rows]);
 
-  // Filter sidebar counts derive from the active tab's slice.
-  const tabRows = useMemo(() => (rows ?? []).filter((r) => matchesTab(r, tab)), [rows, tab]);
+  // Filter sidebar counts derive from the active tab's slice (with current showHidden).
+  const tabRows = useMemo(
+    () => (rows ?? []).filter((r) => matchesTab(r, tab, showHidden)),
+    [rows, tab, showHidden],
+  );
 
   const { categoryCounts, athleteOptions, teamOptions, statusCounts, priceBucketCounts } =
     useMemo(() => {
