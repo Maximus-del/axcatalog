@@ -21,6 +21,18 @@ import { ProductDetailDrawer } from "@/components/admin/products/ProductDetailDr
 import { ProductCard } from "@/components/admin/products/ProductCard";
 import { BulkTagBar } from "@/components/admin/products/BulkTagBar";
 import { ProductTagPopover } from "@/components/admin/products/ProductTagPopover";
+import { EditTitleDialog } from "@/components/admin/products/EditTitleDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from "@/auth/AuthProvider";
 import {
   ProductFilterSidebar,
   type FilterState,
@@ -62,9 +74,9 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
 
 const TABS: Array<{ id: ViewTab; label: string }> = [
   { id: "live", label: "Live" },
-  { id: "drafts", label: "Drafts" },
   { id: "hidden", label: "Hidden" },
   { id: "archived", label: "Archived" },
+  { id: "drafts", label: "Drafts" },
   { id: "all", label: "All" },
 ];
 
