@@ -49,7 +49,32 @@ export function AnalyticsRecentOrders({ orders, loading }: Props) {
 
   return (
     <div className="ax-card p-0 overflow-hidden">
-      <table className="w-full text-sm">
+      {/* Mobile: stacked card list */}
+      <ul className="md:hidden divide-y divide-border">
+        {paged.map((o) => (
+          <li key={o.id} className="px-4 py-3 flex items-center gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="font-mono text-xs text-foreground truncate">
+                {o.order_number ?? "—"}
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                {format(new Date(o.created_at), "MMM d, yyyy")} · {o.total_units} units
+              </div>
+            </div>
+            <span
+              className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wider border shrink-0",
+                STATUS_COLORS[o.status],
+              )}
+            >
+              {o.status.replace(/_/g, " ")}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {/* Desktop: traditional table */}
+      <table className="w-full text-sm hidden md:table">
         <thead className="bg-[hsl(var(--dark))] border-b border-border">
           <tr>
             <th className="text-left px-4 py-3 ax-label">Order #</th>

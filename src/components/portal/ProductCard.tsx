@@ -1,3 +1,4 @@
+// Mobile-first. Test at 375px before merging.
 import { useState } from "react";
 import { Copy, ExternalLink, Plus, Shirt, Minus } from "lucide-react";
 import { toast } from "sonner";
@@ -5,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
+import { shopifyImg } from "@/lib/shopify-image";
 
 interface Props {
   product: PortalProduct;
@@ -53,7 +55,7 @@ export function ProductCard({ product }: Props) {
       <div className="relative h-40 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
         {product.primary_image_url ? (
           <img
-            src={product.primary_image_url}
+            src={shopifyImg(product.primary_image_url, 400) ?? product.primary_image_url}
             alt={product.title}
             className="max-h-full max-w-full object-contain p-3"
             loading="lazy"

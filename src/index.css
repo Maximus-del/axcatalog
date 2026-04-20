@@ -153,6 +153,30 @@
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
   }
+
+  /* Horizontal snap rail — used for swipeable card carousels */
+  .snap-rail {
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .snap-rail::-webkit-scrollbar { display: none; }
+  .snap-card { scroll-snap-align: start; scroll-snap-stop: always; }
+
+  /* Stagger fade-in: parent sets index via style="--i:N" */
+  @keyframes ax-fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .stagger-fade {
+    opacity: 0;
+    animation: ax-fade-up 360ms ease-out forwards;
+    animation-delay: calc(var(--i, 0) * 50ms);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .stagger-fade { animation: none; opacity: 1; }
+  }
 }
 
 /* iOS auto-zooms inputs whose font-size is < 16px on focus.

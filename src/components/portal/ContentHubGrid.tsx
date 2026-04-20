@@ -1,8 +1,10 @@
+// Mobile-first. Test at 375px before merging.
 import { Copy, Download, ExternalLink, Shirt } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
+import { shopifyImg } from "@/lib/shopify-image";
 
 interface Props {
   products: PortalProduct[];
@@ -63,7 +65,7 @@ export function ContentHubGrid({ products, loading }: Props) {
             <div className="relative h-56 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
               {p.primary_image_url ? (
                 <img
-                  src={p.primary_image_url}
+                  src={shopifyImg(p.primary_image_url, 600) ?? p.primary_image_url}
                   alt={p.title}
                   className="max-h-full max-w-full object-contain p-3"
                   loading="lazy"
