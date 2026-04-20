@@ -28,6 +28,7 @@ export type Database = {
           notes: string | null
           organization_id: string
           position: string | null
+          shopify_tag: string | null
           slug: string
           status: Database["public"]["Enums"]["athlete_status"]
           updated_at: string
@@ -45,6 +46,7 @@ export type Database = {
           notes?: string | null
           organization_id: string
           position?: string | null
+          shopify_tag?: string | null
           slug: string
           status?: Database["public"]["Enums"]["athlete_status"]
           updated_at?: string
@@ -62,11 +64,19 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           position?: string | null
+          shopify_tag?: string | null
           slug?: string
           status?: Database["public"]["Enums"]["athlete_status"]
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "athletes_current_team_id_fkey"
+            columns: ["current_team_id"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
+          },
           {
             foreignKeyName: "athletes_current_team_id_fkey"
             columns: ["current_team_id"]
@@ -79,6 +89,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -219,6 +236,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "blanks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       bulk_order_items: {
@@ -338,6 +362,20 @@ export type Database = {
             foreignKeyName: "bulk_order_requests_athlete_id_fkey"
             columns: ["athlete_id"]
             isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "bulk_order_requests_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "bulk_order_requests_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
             referencedRelation: "athletes"
             referencedColumns: ["id"]
           },
@@ -349,11 +387,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bulk_order_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bulk_order_requests_requested_by_fkey"
             columns: ["requested_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_order_requests_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
           },
           {
             foreignKeyName: "bulk_order_requests_team_id_fkey"
@@ -490,6 +542,20 @@ export type Database = {
             foreignKeyName: "collections_athlete_id_fkey"
             columns: ["athlete_id"]
             isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "collections_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "collections_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
             referencedRelation: "athletes"
             referencedColumns: ["id"]
           },
@@ -499,6 +565,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
           },
           {
             foreignKeyName: "collections_team_id_fkey"
@@ -533,6 +613,20 @@ export type Database = {
             foreignKeyName: "design_athletes_athlete_id_fkey"
             columns: ["athlete_id"]
             isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
             referencedRelation: "athletes"
             referencedColumns: ["id"]
           },
@@ -542,6 +636,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "designs"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_athletes_team_id_at_creation_fkey"
+            columns: ["team_id_at_creation"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
           },
           {
             foreignKeyName: "design_athletes_team_id_at_creation_fkey"
@@ -669,6 +770,13 @@ export type Database = {
             foreignKeyName: "design_teams_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "design_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -732,11 +840,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "designs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designs_primary_athlete_id_fkey"
+            columns: ["primary_athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "designs_primary_athlete_id_fkey"
+            columns: ["primary_athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
             foreignKeyName: "designs_primary_athlete_id_fkey"
             columns: ["primary_athlete_id"]
             isOneToOne: false
             referencedRelation: "athletes"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "designs_primary_team_id_fkey"
+            columns: ["primary_team_id"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
           },
           {
             foreignKeyName: "designs_primary_team_id_fkey"
@@ -821,6 +957,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ingestion_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       organizations: {
@@ -828,6 +971,12 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          shopify_access_token: string | null
+          shopify_connected: boolean
+          shopify_connected_at: string | null
+          shopify_last_sync_at: string | null
+          shopify_shop_domain: string | null
+          shopify_webhook_secret: string | null
           slug: string
           updated_at: string
         }
@@ -835,6 +984,12 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          shopify_access_token?: string | null
+          shopify_connected?: boolean
+          shopify_connected_at?: string | null
+          shopify_last_sync_at?: string | null
+          shopify_shop_domain?: string | null
+          shopify_webhook_secret?: string | null
           slug: string
           updated_at?: string
         }
@@ -842,6 +997,12 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          shopify_access_token?: string | null
+          shopify_connected?: boolean
+          shopify_connected_at?: string | null
+          shopify_last_sync_at?: string | null
+          shopify_shop_domain?: string | null
+          shopify_webhook_secret?: string | null
           slug?: string
           updated_at?: string
         }
@@ -877,6 +1038,20 @@ export type Database = {
             foreignKeyName: "product_athletes_athlete_id_fkey"
             columns: ["athlete_id"]
             isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "product_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "product_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
             referencedRelation: "athletes"
             referencedColumns: ["id"]
           },
@@ -886,6 +1061,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_athletes_team_id_at_release_fkey"
+            columns: ["team_id_at_release"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
           },
           {
             foreignKeyName: "product_athletes_team_id_at_release_fkey"
@@ -1046,6 +1228,13 @@ export type Database = {
             foreignKeyName: "product_teams_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "product_teams_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
@@ -1142,6 +1331,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
       revenue_splits: {
@@ -1192,6 +1388,20 @@ export type Database = {
             foreignKeyName: "revenue_splits_athlete_id_fkey"
             columns: ["athlete_id"]
             isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "revenue_splits_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "revenue_splits_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
             referencedRelation: "athletes"
             referencedColumns: ["id"]
           },
@@ -1210,10 +1420,512 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "revenue_splits_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "revenue_splits_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_mapping_queue: {
+        Row: {
+          created_at: string
+          id: string
+          ignored: boolean
+          match_confidence: number | null
+          organization_id: string
+          product_id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          shopify_collections: string[] | null
+          shopify_product_type: string | null
+          shopify_tags: string[] | null
+          shopify_title: string
+          shopify_vendor: string | null
+          suggested_athlete_ids: string[] | null
+          suggested_team_ids: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ignored?: boolean
+          match_confidence?: number | null
+          organization_id: string
+          product_id: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          shopify_collections?: string[] | null
+          shopify_product_type?: string | null
+          shopify_tags?: string[] | null
+          shopify_title: string
+          shopify_vendor?: string | null
+          suggested_athlete_ids?: string[] | null
+          suggested_team_ids?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ignored?: boolean
+          match_confidence?: number | null
+          organization_id?: string
+          product_id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          shopify_collections?: string[] | null
+          shopify_product_type?: string | null
+          shopify_tags?: string[] | null
+          shopify_title?: string
+          shopify_vendor?: string | null
+          suggested_athlete_ids?: string[] | null
+          suggested_team_ids?: string[] | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_mapping_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_mapping_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_mapping_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_mapping_queue_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_order_line_items: {
+        Row: {
+          created_at: string
+          fulfillable_quantity: number | null
+          fulfillment_status:
+            | Database["public"]["Enums"]["shopify_fulfillment_status"]
+            | null
+          id: string
+          line_total: number | null
+          organization_id: string
+          price: number | null
+          product_id: string | null
+          product_title: string
+          properties: Json | null
+          quantity: number
+          shopify_line_item_id: string
+          shopify_order_uuid: string
+          shopify_product_id: string | null
+          shopify_variant_id: string | null
+          sku: string | null
+          total_discount: number | null
+          variant_title: string | null
+          vendor: string | null
+        }
+        Insert: {
+          created_at?: string
+          fulfillable_quantity?: number | null
+          fulfillment_status?:
+            | Database["public"]["Enums"]["shopify_fulfillment_status"]
+            | null
+          id?: string
+          line_total?: number | null
+          organization_id: string
+          price?: number | null
+          product_id?: string | null
+          product_title: string
+          properties?: Json | null
+          quantity: number
+          shopify_line_item_id: string
+          shopify_order_uuid: string
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          sku?: string | null
+          total_discount?: number | null
+          variant_title?: string | null
+          vendor?: string | null
+        }
+        Update: {
+          created_at?: string
+          fulfillable_quantity?: number | null
+          fulfillment_status?:
+            | Database["public"]["Enums"]["shopify_fulfillment_status"]
+            | null
+          id?: string
+          line_total?: number | null
+          organization_id?: string
+          price?: number | null
+          product_id?: string | null
+          product_title?: string
+          properties?: Json | null
+          quantity?: number
+          shopify_line_item_id?: string
+          shopify_order_uuid?: string
+          shopify_product_id?: string | null
+          shopify_variant_id?: string | null
+          sku?: string | null
+          total_discount?: number | null
+          variant_title?: string | null
+          vendor?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_order_line_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_order_line_items_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_order_line_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_order_line_items_shopify_order_uuid_fkey"
+            columns: ["shopify_order_uuid"]
+            isOneToOne: false
+            referencedRelation: "shopify_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_orders: {
+        Row: {
+          cancel_reason: string | null
+          created_at: string
+          currency: string | null
+          customer_email: string | null
+          customer_first_name: string | null
+          customer_last_name: string | null
+          financial_status:
+            | Database["public"]["Enums"]["shopify_financial_status"]
+            | null
+          first_synced_at: string
+          fulfillment_status:
+            | Database["public"]["Enums"]["shopify_fulfillment_status"]
+            | null
+          id: string
+          last_synced_at: string
+          line_item_count: number | null
+          note: string | null
+          order_status:
+            | Database["public"]["Enums"]["shopify_order_status"]
+            | null
+          organization_id: string
+          raw_payload: Json | null
+          shopify_cancelled_at: string | null
+          shopify_created_at: string | null
+          shopify_customer_id: string | null
+          shopify_order_id: string
+          shopify_order_name: string | null
+          shopify_order_number: string | null
+          shopify_processed_at: string | null
+          shopify_updated_at: string | null
+          subtotal_price: number | null
+          tags: string[] | null
+          total_discounts: number | null
+          total_price: number | null
+          total_quantity: number | null
+          total_shipping: number | null
+          total_tax: number | null
+          updated_at: string
+        }
+        Insert: {
+          cancel_reason?: string | null
+          created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          customer_first_name?: string | null
+          customer_last_name?: string | null
+          financial_status?:
+            | Database["public"]["Enums"]["shopify_financial_status"]
+            | null
+          first_synced_at?: string
+          fulfillment_status?:
+            | Database["public"]["Enums"]["shopify_fulfillment_status"]
+            | null
+          id?: string
+          last_synced_at?: string
+          line_item_count?: number | null
+          note?: string | null
+          order_status?:
+            | Database["public"]["Enums"]["shopify_order_status"]
+            | null
+          organization_id: string
+          raw_payload?: Json | null
+          shopify_cancelled_at?: string | null
+          shopify_created_at?: string | null
+          shopify_customer_id?: string | null
+          shopify_order_id: string
+          shopify_order_name?: string | null
+          shopify_order_number?: string | null
+          shopify_processed_at?: string | null
+          shopify_updated_at?: string | null
+          subtotal_price?: number | null
+          tags?: string[] | null
+          total_discounts?: number | null
+          total_price?: number | null
+          total_quantity?: number | null
+          total_shipping?: number | null
+          total_tax?: number | null
+          updated_at?: string
+        }
+        Update: {
+          cancel_reason?: string | null
+          created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          customer_first_name?: string | null
+          customer_last_name?: string | null
+          financial_status?:
+            | Database["public"]["Enums"]["shopify_financial_status"]
+            | null
+          first_synced_at?: string
+          fulfillment_status?:
+            | Database["public"]["Enums"]["shopify_fulfillment_status"]
+            | null
+          id?: string
+          last_synced_at?: string
+          line_item_count?: number | null
+          note?: string | null
+          order_status?:
+            | Database["public"]["Enums"]["shopify_order_status"]
+            | null
+          organization_id?: string
+          raw_payload?: Json | null
+          shopify_cancelled_at?: string | null
+          shopify_created_at?: string | null
+          shopify_customer_id?: string | null
+          shopify_order_id?: string
+          shopify_order_name?: string | null
+          shopify_order_number?: string | null
+          shopify_processed_at?: string | null
+          shopify_updated_at?: string | null
+          subtotal_price?: number | null
+          tags?: string[] | null
+          total_discounts?: number | null
+          total_price?: number | null
+          total_quantity?: number | null
+          total_shipping?: number | null
+          total_tax?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_orders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_sync_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          cursor: string | null
+          duration_ms: number | null
+          error_details: Json | null
+          error_message: string | null
+          id: string
+          metadata: Json
+          organization_id: string
+          records_created: number | null
+          records_examined: number | null
+          records_failed: number | null
+          records_skipped: number | null
+          records_updated: number | null
+          started_at: string
+          status: Database["public"]["Enums"]["shopify_sync_run_status"]
+          sync_type: Database["public"]["Enums"]["shopify_sync_type"]
+          trigger_source: string | null
+          triggered_by: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          cursor?: string | null
+          duration_ms?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          organization_id: string
+          records_created?: number | null
+          records_examined?: number | null
+          records_failed?: number | null
+          records_skipped?: number | null
+          records_updated?: number | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["shopify_sync_run_status"]
+          sync_type: Database["public"]["Enums"]["shopify_sync_type"]
+          trigger_source?: string | null
+          triggered_by?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          cursor?: string | null
+          duration_ms?: number | null
+          error_details?: Json | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          organization_id?: string
+          records_created?: number | null
+          records_examined?: number | null
+          records_failed?: number | null
+          records_skipped?: number | null
+          records_updated?: number | null
+          started_at?: string
+          status?: Database["public"]["Enums"]["shopify_sync_run_status"]
+          sync_type?: Database["public"]["Enums"]["shopify_sync_type"]
+          trigger_source?: string | null
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_sync_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_sync_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_sync_logs_triggered_by_fkey"
+            columns: ["triggered_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shopify_webhooks: {
+        Row: {
+          created_at: string
+          error_details: Json | null
+          error_message: string | null
+          event: Database["public"]["Enums"]["shopify_webhook_event"]
+          headers: Json | null
+          id: string
+          organization_id: string
+          payload: Json | null
+          processed_at: string | null
+          received_at: string
+          retry_count: number
+          shopify_resource_id: string | null
+          shopify_topic: string
+          shopify_webhook_id: string | null
+          status: Database["public"]["Enums"]["shopify_webhook_status"]
+          sync_log_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_details?: Json | null
+          error_message?: string | null
+          event: Database["public"]["Enums"]["shopify_webhook_event"]
+          headers?: Json | null
+          id?: string
+          organization_id: string
+          payload?: Json | null
+          processed_at?: string | null
+          received_at?: string
+          retry_count?: number
+          shopify_resource_id?: string | null
+          shopify_topic: string
+          shopify_webhook_id?: string | null
+          status?: Database["public"]["Enums"]["shopify_webhook_status"]
+          sync_log_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_details?: Json | null
+          error_message?: string | null
+          event?: Database["public"]["Enums"]["shopify_webhook_event"]
+          headers?: Json | null
+          id?: string
+          organization_id?: string
+          payload?: Json | null
+          processed_at?: string | null
+          received_at?: string
+          retry_count?: number
+          shopify_resource_id?: string | null
+          shopify_topic?: string
+          shopify_webhook_id?: string | null
+          status?: Database["public"]["Enums"]["shopify_webhook_status"]
+          sync_log_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_webhooks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_webhooks_sync_log_id_fkey"
+            columns: ["sync_log_id"]
+            isOneToOne: false
+            referencedRelation: "shopify_sync_logs"
             referencedColumns: ["id"]
           },
         ]
@@ -1249,6 +1961,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tags_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1289,6 +2008,20 @@ export type Database = {
             foreignKeyName: "team_memberships_athlete_id_fkey"
             columns: ["athlete_id"]
             isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "team_memberships_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "team_memberships_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
             referencedRelation: "athletes"
             referencedColumns: ["id"]
           },
@@ -1298,6 +2031,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
           },
           {
             foreignKeyName: "team_memberships_team_id_fkey"
@@ -1320,6 +2067,7 @@ export type Database = {
           organization_id: string
           primary_color: string | null
           secondary_color: string | null
+          shopify_tag: string | null
           slug: string
           status: Database["public"]["Enums"]["team_status"]
           updated_at: string
@@ -1335,6 +2083,7 @@ export type Database = {
           organization_id: string
           primary_color?: string | null
           secondary_color?: string | null
+          shopify_tag?: string | null
           slug: string
           status?: Database["public"]["Enums"]["team_status"]
           updated_at?: string
@@ -1350,6 +2099,7 @@ export type Database = {
           organization_id?: string
           primary_color?: string | null
           secondary_color?: string | null
+          shopify_tag?: string | null
           slug?: string
           status?: Database["public"]["Enums"]["team_status"]
           updated_at?: string
@@ -1360,6 +2110,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1384,6 +2141,20 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_athlete_links_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "user_athlete_links_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
           {
             foreignKeyName: "user_athlete_links_athlete_id_fkey"
             columns: ["athlete_id"]
@@ -1436,11 +2207,135 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      athlete_revenue_monthly: {
+        Row: {
+          athlete_id: string | null
+          month: string | null
+          orders: number | null
+          organization_id: string | null
+          revenue: number | null
+          units: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_revenue_summary: {
+        Row: {
+          athlete_id: string | null
+          athlete_name: string | null
+          first_order_at: string | null
+          gross_revenue: number | null
+          last_order_at: string | null
+          order_count: number | null
+          organization_id: string | null
+          units_sold: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations_safe: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          name: string | null
+          shopify_connected: boolean | null
+          shopify_connected_at: string | null
+          shopify_last_sync_at: string | null
+          shopify_shop_domain: string | null
+          slug: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          shopify_connected?: boolean | null
+          shopify_connected_at?: string | null
+          shopify_last_sync_at?: string | null
+          shopify_shop_domain?: string | null
+          slug?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          shopify_connected?: boolean | null
+          shopify_connected_at?: string | null
+          shopify_last_sync_at?: string | null
+          shopify_shop_domain?: string | null
+          slug?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      team_revenue_summary: {
+        Row: {
+          first_order_at: string | null
+          gross_revenue: number | null
+          last_order_at: string | null
+          order_count: number | null
+          organization_id: string | null
+          team_id: string | null
+          team_name: string | null
+          units_sold: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       current_user_is_admin: { Args: never; Returns: boolean }
@@ -1531,12 +2426,60 @@ export type Database = {
         | "blank_bulk"
         | "pod"
         | "other"
+      shopify_financial_status:
+        | "pending"
+        | "authorized"
+        | "partially_paid"
+        | "paid"
+        | "partially_refunded"
+        | "refunded"
+        | "voided"
+        | "unknown"
+      shopify_fulfillment_status:
+        | "fulfilled"
+        | "partial"
+        | "unfulfilled"
+        | "restocked"
+        | "unknown"
+      shopify_order_status: "open" | "closed" | "cancelled" | "unknown"
+      shopify_sync_run_status:
+        | "running"
+        | "success"
+        | "partial_success"
+        | "failed"
       shopify_sync_status:
         | "not_synced"
         | "pending"
         | "synced"
         | "out_of_sync"
         | "error"
+      shopify_sync_type:
+        | "products_full"
+        | "products_delta"
+        | "product_single"
+        | "orders_full"
+        | "orders_delta"
+        | "order_single"
+        | "webhook_processed"
+        | "reconciliation"
+      shopify_webhook_event:
+        | "products/create"
+        | "products/update"
+        | "products/delete"
+        | "orders/create"
+        | "orders/updated"
+        | "orders/paid"
+        | "orders/fulfilled"
+        | "orders/cancelled"
+        | "orders/partially_fulfilled"
+        | "inventory_levels/update"
+        | "other"
+      shopify_webhook_status:
+        | "received"
+        | "processing"
+        | "processed"
+        | "failed"
+        | "replayed"
       split_basis: "product" | "collection" | "athlete_global"
       tag_category:
         | "style"
@@ -1758,12 +2701,66 @@ export const Constants = {
         "pod",
         "other",
       ],
+      shopify_financial_status: [
+        "pending",
+        "authorized",
+        "partially_paid",
+        "paid",
+        "partially_refunded",
+        "refunded",
+        "voided",
+        "unknown",
+      ],
+      shopify_fulfillment_status: [
+        "fulfilled",
+        "partial",
+        "unfulfilled",
+        "restocked",
+        "unknown",
+      ],
+      shopify_order_status: ["open", "closed", "cancelled", "unknown"],
+      shopify_sync_run_status: [
+        "running",
+        "success",
+        "partial_success",
+        "failed",
+      ],
       shopify_sync_status: [
         "not_synced",
         "pending",
         "synced",
         "out_of_sync",
         "error",
+      ],
+      shopify_sync_type: [
+        "products_full",
+        "products_delta",
+        "product_single",
+        "orders_full",
+        "orders_delta",
+        "order_single",
+        "webhook_processed",
+        "reconciliation",
+      ],
+      shopify_webhook_event: [
+        "products/create",
+        "products/update",
+        "products/delete",
+        "orders/create",
+        "orders/updated",
+        "orders/paid",
+        "orders/fulfilled",
+        "orders/cancelled",
+        "orders/partially_fulfilled",
+        "inventory_levels/update",
+        "other",
+      ],
+      shopify_webhook_status: [
+        "received",
+        "processing",
+        "processed",
+        "failed",
+        "replayed",
       ],
       split_basis: ["product", "collection", "athlete_global"],
       tag_category: [
