@@ -115,12 +115,22 @@ export function MockupsTab({ productId, shopifyProductId, shopifyShopDomain, onC
 
   if (!rows || rows.length === 0) {
     return (
-      <div className="ax-card p-12 text-center space-y-3">
-        <ImageIcon className="h-10 w-10 text-muted-foreground mx-auto" />
-        <p className="text-sm text-muted-foreground">No mockups synced yet.</p>
-        <p className="text-xs text-muted-foreground">
-          Add product images in Shopify — they'll sync here automatically.
-        </p>
+      <div className="relative" {...dropProps}>
+        {isOver && (
+          <div className="absolute inset-0 z-20 rounded-lg border-2 border-dashed border-muted-foreground/40 bg-muted/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center gap-2 text-muted-foreground text-center px-4">
+              <Ban className="h-8 w-8" />
+              <div className="text-sm font-medium">Mockups are managed in Shopify</div>
+            </div>
+          </div>
+        )}
+        <div className="ax-card p-12 text-center space-y-3">
+          <ImageIcon className="h-10 w-10 text-muted-foreground mx-auto" />
+          <p className="text-sm text-muted-foreground">No mockups synced yet.</p>
+          <p className="text-xs text-muted-foreground">
+            Add product images in Shopify — they'll sync here automatically.
+          </p>
+        </div>
       </div>
     );
   }
