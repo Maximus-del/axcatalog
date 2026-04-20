@@ -735,6 +735,7 @@ export default function ProductsList() {
                     status={r.status}
                     imageUrl={r.primary_image_url}
                     isHidden={r.is_hidden_from_dashboard}
+                    isAdmin={isAdmin}
                     bulkMode={bulkMode}
                     selected={selected.has(r.id)}
                     onClick={() => {
@@ -743,7 +744,9 @@ export default function ProductsList() {
                     }}
                     onToggleHidden={() => toggleHidden(r.id)}
                     onOpenTagPopover={(anchor) => setTagPopover({ id: r.id, anchor })}
-                    onEdit={() => openDetail(r.id)}
+                    onViewDetails={() => openDetail(r.id)}
+                    onEditTitle={() => setEditTitleFor({ id: r.id, title: r.title })}
+                    onArchive={() => setArchiveFor({ id: r.id, title: r.title })}
                   />
                 ))}
               </div>
@@ -766,6 +769,39 @@ export default function ProductsList() {
         onClose={() => setTagPopover(null)}
         onSaved={load}
       />
+      <EditTitleDialog
+        productId={editTitleFor?.id ?? null}
+        initialTitle={editTitleFor?.title ?? ""}
+        open={!!editTitleFor}
+        onOpenChange={(o) => !o && setEditTitleFor(null)}
+        onSaved={(newTitle) => {
+          if (!editTitleFor) return;
+          setRows((rs) =>
+            rs ? rs.map((r) => (r.id === editTitleFor.id ? { ...r, title: newTitle } : r)) : rs,
+          );
+        }}
+      />
+      <AlertDialog open={!!archiveFor} onOpenChange={(o) => !o && setArchiveFor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive “{archiveFor?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will be removed from your storefront.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (archiveFor) archiveProduct(archiveFor.id);
+                setArchiveFor(null);
+              }}
+            >
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
