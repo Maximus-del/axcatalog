@@ -144,8 +144,8 @@ export function TagChipInput({ tags, onChange, placeholder, withSuggestions = tr
             key={t}
             className={cn(
               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border",
-              t.startsWith("athlete:") && "bg-blue-500/15 text-blue-300 border-blue-500/30",
-              t.startsWith("team:") && "bg-purple-500/15 text-purple-300 border-purple-500/30",
+              t.startsWith("athlete:") && "bg-[hsl(210_80%_55%/0.15)] text-[hsl(210_80%_75%)] border-[hsl(210_80%_55%/0.3)]",
+              t.startsWith("team:") && "bg-[hsl(270_60%_60%/0.15)] text-[hsl(270_60%_78%)] border-[hsl(270_60%_60%/0.3)]",
               t.startsWith("collection:") && "bg-muted text-muted-foreground border-border",
               !/^(athlete|team|collection):/.test(t) && "bg-accent/15 text-accent border-accent/30",
             )}
