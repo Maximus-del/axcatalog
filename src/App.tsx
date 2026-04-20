@@ -17,6 +17,7 @@ import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AthletesList from "./pages/admin/AthletesList";
 import AthleteDetail from "./pages/admin/AthleteDetail";
 import ProductsList from "./pages/admin/ProductsList";
+import ProductDetail from "./pages/admin/ProductDetail";
 import IngestionQueue from "./pages/admin/IngestionQueue";
 import DesignsList from "./pages/admin/DesignsList";
 import DesignDetail from "./pages/admin/DesignDetail";
@@ -53,7 +54,7 @@ const App = () => (
             >
               <Route index element={<AdminDashboard />} />
               <Route path="products" element={<ProductsList />} />
-              <Route path="products/:id" element={<ProductsList />} />
+              <Route path="products/:id" element={<ProductDetail />} />
               <Route path="designs" element={<DesignsList />} />
               <Route path="designs/:id" element={<DesignDetail />} />
               <Route path="blanks" element={<BlanksList />} />
