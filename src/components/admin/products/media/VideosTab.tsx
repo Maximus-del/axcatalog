@@ -4,7 +4,7 @@
 // the lazy-loaded VideoPlayer (poster-only until tap). Admin can edit
 // metadata, delete, or change visibility.
 import { useEffect, useState } from "react";
-import { Edit3, Loader2, Plus, Trash2, Video as VideoIcon } from "lucide-react";
+import { Edit3, Loader2, Plus, Trash2, Upload, Video as VideoIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +40,7 @@ import { toast } from "sonner";
 import { getSignedUrl } from "@/lib/storage";
 import { VideoPlayer } from "@/components/media/VideoPlayer";
 import { VideoUploadDialog } from "./VideoUploadDialog";
+import { useFileDropZone } from "@/hooks/useFileDropZone";
 
 interface VideoRow {
   id: string;
@@ -82,8 +83,22 @@ export function VideosTab({ productId, organizationId, onCountChange }: Props) {
   const [rows, setRows] = useState<VideoRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [editTarget, setEditTarget] = useState<VideoRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VideoRow | null>(null);
+
+  const { isOver, dropProps } = useFileDropZone({
+    accept: ["video/"],
+    onFiles: (files) => {
+      const f = files[0];
+      if (!f) {
+        toast.error("Please drop a video file");
+        return;
+      }
+      setPendingFile(f);
+      setUploadOpen(true);
+    },
+  });
 
   async function load() {
     setLoading(true);
@@ -136,7 +151,16 @@ export function VideosTab({ productId, organizationId, onCountChange }: Props) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative" {...dropProps}>
+      {isOver && (
+        <div className="absolute inset-0 z-20 rounded-lg border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-accent">
+            <Upload className="h-8 w-8" />
+            <div className="text-sm font-medium">Drop to upload video</div>
+            <div className="text-xs text-accent/80">.mp4, .mov, .webm</div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">
           Athlete-facing and behind-the-scenes videos. Stored privately in the{" "}
@@ -225,7 +249,11 @@ export function VideosTab({ productId, organizationId, onCountChange }: Props) {
         open={uploadOpen}
         productId={productId}
         organizationId={organizationId}
-        onOpenChange={setUploadOpen}
+        initialFile={pendingFile}
+        onOpenChange={(o) => {
+          setUploadOpen(o);
+          if (!o) setPendingFile(null);
+        }}
         onUploaded={load}
       />
 

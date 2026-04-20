@@ -7,13 +7,14 @@
 //  - Set as primary
 //  - Open the corresponding Shopify product page in a new tab
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, ImageIcon, Star, Maximize2 } from "lucide-react";
+import { ExternalLink, ImageIcon, Star, Maximize2, Ban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFileDropZone } from "@/hooks/useFileDropZone";
 
 interface MockupRow {
   id: string;
@@ -38,6 +39,15 @@ export function MockupsTab({ productId, shopifyProductId, shopifyShopDomain, onC
   const [rows, setRows] = useState<MockupRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  // Mockups are Shopify-sourced — we accept the drop visually but tell the
+  // user where to actually upload them.
+  const { isOver, dropProps } = useFileDropZone({
+    accept: ["image/"],
+    onFiles: () => {
+      toast.info("Mockups are managed in Shopify. Add product images there and they'll sync here.");
+    },
+  });
 
   async function load() {
     setLoading(true);
