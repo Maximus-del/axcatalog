@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Download, Filter, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Download, Filter, Plus, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -17,6 +19,8 @@ import { ProductFormDrawer } from "@/components/admin/products/ProductFormDrawer
 import { ImportFromUrlDialog } from "@/components/admin/products/ImportFromUrlDialog";
 import { ProductDetailDrawer } from "@/components/admin/products/ProductDetailDrawer";
 import { ProductCard } from "@/components/admin/products/ProductCard";
+import { BulkTagBar } from "@/components/admin/products/BulkTagBar";
+import { ProductTagPopover } from "@/components/admin/products/ProductTagPopover";
 import {
   ProductFilterSidebar,
   type FilterState,
@@ -28,6 +32,7 @@ import {
   type PriceBucketId,
 } from "@/lib/product-category";
 import type { ProductStatus } from "@/lib/product-status";
+import { cn } from "@/lib/utils";
 
 interface ProductRow {
   id: string;
@@ -39,11 +44,13 @@ interface ProductRow {
   updated_at: string;
   primary_image_url: string | null;
   category: ProductCategory;
+  is_hidden_from_dashboard: boolean;
   athletes: Array<{ id: string; name: string }>;
   teams: Array<{ id: string; name: string }>;
 }
 
 type SortKey = "newest" | "oldest" | "price_asc" | "price_desc" | "title_asc";
+type ViewTab = "live" | "drafts" | "hidden" | "archived" | "all";
 
 const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "newest", label: "Newest first" },
@@ -51,6 +58,14 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
   { value: "price_asc", label: "Price: low to high" },
   { value: "price_desc", label: "Price: high to low" },
   { value: "title_asc", label: "Title A–Z" },
+];
+
+const TABS: Array<{ id: ViewTab; label: string }> = [
+  { id: "live", label: "Live" },
+  { id: "drafts", label: "Drafts" },
+  { id: "hidden", label: "Hidden" },
+  { id: "archived", label: "Archived" },
+  { id: "all", label: "All" },
 ];
 
 function emptyFilters(): FilterState {
@@ -68,6 +83,22 @@ function bucketIdFor(price: number | null): PriceBucketId | null {
   return PRICE_BUCKETS.find((b) => b.test(price))?.id ?? null;
 }
 
+function matchesTab(r: ProductRow, tab: ViewTab): boolean {
+  switch (tab) {
+    case "live":
+      return r.status === "published" && !r.is_hidden_from_dashboard;
+    case "drafts":
+      return r.status === "draft";
+    case "hidden":
+      return r.is_hidden_from_dashboard === true;
+    case "archived":
+      return r.status === "archived";
+    case "all":
+    default:
+      return true;
+  }
+}
+
 export default function ProductsList() {
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
@@ -79,8 +110,13 @@ export default function ProductsList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [tab, setTab] = useState<ViewTab>("live");
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [tagPopover, setTagPopover] = useState<{ id: string; anchor: HTMLElement } | null>(null);
   const detailId = params.id ?? null;
-  const detailOpen = !!detailId;
+  const detailOpen = !!detailId && !bulkMode;
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   function openDetail(id: string) {
     navigate(`/admin/products/${id}`);
@@ -95,7 +131,7 @@ export default function ProductsList() {
       const productsRes = await supabase
         .from("products")
         .select(
-          "id, title, status, price, compare_at_price, created_at, updated_at",
+          "id, title, status, price, compare_at_price, created_at, updated_at, is_hidden_from_dashboard",
         )
         .order("updated_at", { ascending: false });
 
@@ -134,7 +170,6 @@ export default function ProductsList() {
       const teamLinks = teamsLinkRes.data ?? [];
       const tagLinks = tagsLinkRes.data ?? [];
 
-      // Image: prefer primary, fall back to lowest sort_order. storage_path is full Shopify CDN URL.
       const imagesByProduct = new Map<string, typeof images>();
       images.forEach((img) => {
         const arr = imagesByProduct.get(img.product_id) ?? [];
@@ -188,6 +223,7 @@ export default function ProductsList() {
           compare_at_price: p.compare_at_price,
           created_at: p.created_at,
           updated_at: p.updated_at,
+          is_hidden_from_dashboard: (p as any).is_hidden_from_dashboard ?? false,
           primary_image_url: imageMap.get(p.id) ?? null,
           category: detectCategory(p.title, tagsByProduct.get(p.id) ?? []),
           athletes: athletesByProduct.get(p.id) ?? [],
@@ -206,7 +242,21 @@ export default function ProductsList() {
     load();
   }, []);
 
-  // Counts derived from full row set so users can see what's available.
+  const tabCounts = useMemo(() => {
+    const c: Record<ViewTab, number> = { live: 0, drafts: 0, hidden: 0, archived: 0, all: 0 };
+    (rows ?? []).forEach((r) => {
+      c.all += 1;
+      if (matchesTab(r, "live")) c.live += 1;
+      if (matchesTab(r, "drafts")) c.drafts += 1;
+      if (matchesTab(r, "hidden")) c.hidden += 1;
+      if (matchesTab(r, "archived")) c.archived += 1;
+    });
+    return c;
+  }, [rows]);
+
+  // Filter sidebar counts derive from the active tab's slice.
+  const tabRows = useMemo(() => (rows ?? []).filter((r) => matchesTab(r, tab)), [rows, tab]);
+
   const { categoryCounts, athleteOptions, teamOptions, statusCounts, priceBucketCounts } =
     useMemo(() => {
       const cat = new Map<string, number>();
@@ -214,7 +264,7 @@ export default function ProductsList() {
       const team = new Map<string, { name: string; count: number }>();
       const stat = new Map<ProductStatus, number>();
       const price = new Map<PriceBucketId, number>();
-      (rows ?? []).forEach((r) => {
+      tabRows.forEach((r) => {
         cat.set(r.category, (cat.get(r.category) ?? 0) + 1);
         stat.set(r.status, (stat.get(r.status) ?? 0) + 1);
         const b = bucketIdFor(r.price);
@@ -239,12 +289,11 @@ export default function ProductsList() {
           .map(([id, v]) => ({ id, name: v.name, count: v.count }))
           .sort((a, b) => a.name.localeCompare(b.name)),
       };
-    }, [rows]);
+    }, [tabRows]);
 
   const filtered = useMemo(() => {
-    if (!rows) return [];
     const q = search.trim().toLowerCase();
-    const out = rows.filter((r) => {
+    const out = tabRows.filter((r) => {
       if (filters.categories.size > 0 && !filters.categories.has(r.category)) return false;
       if (filters.statuses.size > 0 && !filters.statuses.has(r.status)) return false;
       if (filters.athletes.size > 0 && !r.athletes.some((a) => filters.athletes.has(a.id)))
@@ -275,7 +324,7 @@ export default function ProductsList() {
       }
     });
     return sorted;
-  }, [rows, search, filters, sort]);
+  }, [tabRows, search, filters, sort]);
 
   const isEmpty = !loading && rows && rows.length === 0;
   const activeFilterCount =
@@ -300,6 +349,67 @@ export default function ProductsList() {
     });
   }
 
+  function toggleSelected(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exitBulkMode() {
+    setBulkMode(false);
+    setSelected(new Set());
+  }
+
+  // Optimistic local toggle for is_hidden_from_dashboard
+  async function toggleHidden(id: string) {
+    const row = rows?.find((r) => r.id === id);
+    if (!row) return;
+    const next = !row.is_hidden_from_dashboard;
+    setRows((rs) =>
+      rs ? rs.map((r) => (r.id === id ? { ...r, is_hidden_from_dashboard: next } : r)) : rs,
+    );
+    const { error } = await supabase
+      .from("products")
+      .update({ is_hidden_from_dashboard: next })
+      .eq("id", id);
+    if (error) {
+      // revert on failure
+      setRows((rs) =>
+        rs ? rs.map((r) => (r.id === id ? { ...r, is_hidden_from_dashboard: !next } : r)) : rs,
+      );
+      toast.error("Could not update visibility");
+    } else {
+      toast.success(next ? "Hidden from dashboard" : "Visible on dashboard");
+    }
+  }
+
+  // Keyboard shortcuts: B toggles bulk mode, Esc exits.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      const inField = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
+      if (e.key === "Escape") {
+        if (bulkMode) {
+          e.preventDefault();
+          exitBulkMode();
+        }
+        return;
+      }
+      if (inField) return;
+      if (e.key === "b" || e.key === "B") {
+        if (filtered.length === 0) return;
+        e.preventDefault();
+        if (bulkMode) exitBulkMode();
+        else setBulkMode(true);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [bulkMode, filtered.length]);
+
   const sidebar = (
     <ProductFilterSidebar
       filters={filters}
@@ -314,7 +424,18 @@ export default function ProductsList() {
 
   return (
     <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">
-      <header className="flex items-center justify-between gap-4 flex-wrap mb-6">
+      {bulkMode && (
+        <BulkTagBar
+          selectedIds={Array.from(selected)}
+          onCancel={exitBulkMode}
+          onApplied={() => {
+            setSelected(new Set());
+            load();
+          }}
+        />
+      )}
+
+      <header className="flex items-center justify-between gap-4 flex-wrap mb-6 mt-4">
         <div>
           <div className="ax-section-header mb-2">Catalog</div>
           <h1 className="text-3xl font-bold">Products</h1>
@@ -328,6 +449,36 @@ export default function ProductsList() {
           </Button>
         </div>
       </header>
+
+      {/* View tabs */}
+      {!isEmpty && (
+        <div className="flex items-center gap-1 mb-4 border-b border-border overflow-x-auto">
+          {TABS.map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => {
+                  setTab(t.id);
+                  if (bulkMode) setSelected(new Set());
+                }}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors tabular-nums",
+                  active
+                    ? "border-accent text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t.label}{" "}
+                <span className={cn("ml-1 text-xs", active ? "text-accent" : "text-muted-foreground/70")}>
+                  ({tabCounts[t.id]})
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {isEmpty && (
         <div className="ax-card p-12 text-center space-y-4">
@@ -347,17 +498,17 @@ export default function ProductsList() {
 
       {!isEmpty && (
         <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-6">
-          {/* Desktop sidebar */}
           <aside className="hidden lg:block bg-card border border-border rounded-xl sticky top-4 h-[calc(100vh-2rem)]">
             {sidebar}
           </aside>
 
           <section className="space-y-4 min-w-0">
-            {/* Search + sort + mobile filter trigger */}
+            {/* Search + sort + bulk toggle + mobile filter */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[200px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  ref={searchInputRef}
                   placeholder="Search products…"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -397,9 +548,27 @@ export default function ProductsList() {
                   ))}
                 </SelectContent>
               </Select>
+              <label
+                className={cn(
+                  "flex items-center gap-2 px-3 h-10 rounded-md border border-border bg-card text-sm cursor-pointer",
+                  filtered.length === 0 && "opacity-50 cursor-not-allowed",
+                  bulkMode && "border-accent bg-accent/10",
+                )}
+                title="Toggle bulk tag mode (B)"
+              >
+                <Tag className="h-4 w-4" />
+                <span>Bulk Tag Mode</span>
+                <Switch
+                  checked={bulkMode}
+                  disabled={filtered.length === 0}
+                  onCheckedChange={(v) => {
+                    if (v) setBulkMode(true);
+                    else exitBulkMode();
+                  }}
+                />
+              </label>
             </div>
 
-            {/* Active filter chips */}
             {activeFilterCount > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
                 {Array.from(filters.categories).map((c) => (
@@ -452,7 +621,6 @@ export default function ProductsList() {
               </div>
             )}
 
-            {/* Result count */}
             {!loading && (
               <div className="text-xs text-muted-foreground tabular-nums">
                 {filtered.length} {filtered.length === 1 ? "product" : "products"}
@@ -474,10 +642,12 @@ export default function ProductsList() {
               </div>
             ) : filtered.length === 0 ? (
               <div className="ax-card p-12 text-center space-y-4">
-                <p className="text-muted-foreground">No products match these filters</p>
-                <Button variant="outline" onClick={clearAll}>
-                  Clear all filters
-                </Button>
+                <p className="text-muted-foreground">{emptyMessage(tab, activeFilterCount > 0 || search.trim() !== "")}</p>
+                {(activeFilterCount > 0 || search.trim() !== "") && (
+                  <Button variant="outline" onClick={clearAll}>
+                    Clear all filters
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -490,7 +660,16 @@ export default function ProductsList() {
                     compareAtPrice={r.compare_at_price}
                     status={r.status}
                     imageUrl={r.primary_image_url}
-                    onClick={() => openDetail(r.id)}
+                    isHidden={r.is_hidden_from_dashboard}
+                    bulkMode={bulkMode}
+                    selected={selected.has(r.id)}
+                    onClick={() => {
+                      if (bulkMode) toggleSelected(r.id);
+                      else openDetail(r.id);
+                    }}
+                    onToggleHidden={() => toggleHidden(r.id)}
+                    onOpenTagPopover={(anchor) => setTagPopover({ id: r.id, anchor })}
+                    onEdit={() => openDetail(r.id)}
                   />
                 ))}
               </div>
@@ -507,8 +686,30 @@ export default function ProductsList() {
         onOpenChange={closeDetail}
         onChanged={load}
       />
+      <ProductTagPopover
+        productId={tagPopover?.id ?? null}
+        anchor={tagPopover?.anchor ?? null}
+        onClose={() => setTagPopover(null)}
+        onSaved={load}
+      />
     </div>
   );
+}
+
+function emptyMessage(tab: ViewTab, hasFilters: boolean): string {
+  if (hasFilters) return "No products match these filters";
+  switch (tab) {
+    case "drafts":
+      return "No draft products. Drafts from Shopify appear here.";
+    case "hidden":
+      return "No hidden products. Hide products you don't want shown on this dashboard using the eye icon.";
+    case "archived":
+      return "No archived products.";
+    case "live":
+      return "No live products. Published, non-hidden products appear here.";
+    default:
+      return "No products to show.";
+  }
 }
 
 function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
