@@ -1,8 +1,9 @@
-import { Edit3, Eye, EyeOff, Tag } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { avatarColorFor, initialsFor } from "@/lib/avatar-color";
 import { Checkbox } from "@/components/ui/checkbox";
 import { statusBadgeClass, formatStatus, type ProductStatus } from "@/lib/product-status";
+import { ProductCardMenu } from "./ProductCardMenu";
 
 interface ProductCardProps {
   id: string;
@@ -12,12 +13,15 @@ interface ProductCardProps {
   status: ProductStatus;
   imageUrl: string | null;
   isHidden?: boolean;
+  isAdmin?: boolean;
   bulkMode?: boolean;
   selected?: boolean;
   onClick: () => void;
   onToggleHidden?: () => void;
   onOpenTagPopover?: (anchor: HTMLElement) => void;
-  onEdit?: () => void;
+  onViewDetails?: () => void;
+  onEditTitle?: () => void;
+  onArchive?: () => void;
 }
 
 export function ProductCard({
@@ -27,28 +31,39 @@ export function ProductCard({
   status,
   imageUrl,
   isHidden = false,
+  isAdmin = false,
   bulkMode = false,
   selected = false,
   onClick,
   onToggleHidden,
   onOpenTagPopover,
-  onEdit,
+  onViewDetails,
+  onEditTitle,
+  onArchive,
 }: ProductCardProps) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       className={cn(
-        "group relative text-left bg-card border rounded-xl overflow-hidden transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        "group relative text-left bg-card border rounded-xl overflow-hidden transition-all duration-200 cursor-pointer",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         selected
           ? "border-accent ring-2 ring-accent/40 shadow-[0_8px_24px_-12px_hsl(var(--accent)/0.5)]"
           : "border-border hover:border-accent hover:shadow-[0_8px_24px_-12px_hsl(var(--accent)/0.4)] hover:-translate-y-0.5",
-        isHidden && "opacity-50 hover:opacity-80",
+        isHidden && "opacity-50 saturate-50 hover:opacity-90",
       )}
     >
       {bulkMode && (
         <div
-          className="absolute top-2 left-2 z-10 bg-background/80 backdrop-blur-sm rounded p-1"
+          className="absolute top-2 left-2 z-20 bg-background/80 backdrop-blur-sm rounded p-1"
           onClick={(e) => e.stopPropagation()}
         >
           <Checkbox
@@ -76,52 +91,57 @@ export function ProductCard({
             {initialsFor(title)}
           </div>
         )}
+
+        {/* Hidden badge — top-left, only when applicable */}
+        {isHidden && (
+          <span className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] bg-background/80 backdrop-blur-sm border border-border text-muted-foreground">
+            <EyeOff className="h-3 w-3" /> Hidden
+          </span>
+        )}
+
+        {/* Status pill — bottom-left, subtle */}
         <span
           className={cn(
-            "absolute top-2 right-2 inline-flex px-2 py-0.5 rounded-full text-[10px] border capitalize backdrop-blur-sm",
+            "absolute bottom-2 left-2 z-10 inline-flex px-2 py-0.5 rounded-full text-[10px] border capitalize backdrop-blur-sm",
             statusBadgeClass(status),
           )}
         >
           {formatStatus(status)}
         </span>
 
-        {/* Quick actions — visible on hover, hidden in bulk mode to reduce clutter */}
-        {!bulkMode && (onToggleHidden || onOpenTagPopover || onEdit) && (
-          <div className="absolute top-9 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {onToggleHidden && (
-              <IconBtn
-                label={isHidden ? "Show on dashboard" : "Hide from dashboard"}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleHidden();
-                }}
-              >
-                {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              </IconBtn>
+        {/* 3-dot menu — always visible, top-right */}
+        {!bulkMode && onViewDetails && onEditTitle && onOpenTagPopover && onToggleHidden && onArchive && (
+          <ProductCardMenu
+            isHidden={isHidden}
+            isAdmin={isAdmin}
+            isArchived={status === "archived"}
+            onViewDetails={onViewDetails}
+            onEditTitle={onEditTitle}
+            onManageTags={onOpenTagPopover}
+            onToggleHidden={onToggleHidden}
+            onArchive={onArchive}
+          />
+        )}
+
+        {/* Quick eye toggle — bottom-right, hover-only shortcut */}
+        {!bulkMode && isAdmin && onToggleHidden && (
+          <button
+            type="button"
+            title={isHidden ? "Show on dashboard" : "Hide from dashboard"}
+            aria-label={isHidden ? "Show on dashboard" : "Hide from dashboard"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleHidden();
+            }}
+            className={cn(
+              "absolute bottom-2 right-2 z-10 h-7 w-7 inline-flex items-center justify-center rounded-md",
+              "bg-background/80 backdrop-blur-sm border border-border",
+              "text-muted-foreground hover:text-accent hover:border-accent",
+              "opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
             )}
-            {onOpenTagPopover && (
-              <IconBtn
-                label="Edit tags"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenTagPopover(e.currentTarget);
-                }}
-              >
-                <Tag className="h-3.5 w-3.5" />
-              </IconBtn>
-            )}
-            {onEdit && (
-              <IconBtn
-                label="Edit product"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit();
-                }}
-              >
-                <Edit3 className="h-3.5 w-3.5" />
-              </IconBtn>
-            )}
-          </div>
+          >
+            {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
         )}
       </div>
       <div className="p-3 space-y-1">
@@ -139,28 +159,6 @@ export function ProductCard({
           )}
         </div>
       </div>
-    </button>
-  );
-}
-
-function IconBtn({
-  children,
-  label,
-  onClick,
-}: {
-  children: React.ReactNode;
-  label: string;
-  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      className="bg-background/80 hover:bg-accent hover:text-accent-foreground backdrop-blur-sm border border-border rounded-md p-1.5 transition-colors"
-    >
-      {children}
-    </button>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   Select,
@@ -21,6 +22,18 @@ import { ProductDetailDrawer } from "@/components/admin/products/ProductDetailDr
 import { ProductCard } from "@/components/admin/products/ProductCard";
 import { BulkTagBar } from "@/components/admin/products/BulkTagBar";
 import { ProductTagPopover } from "@/components/admin/products/ProductTagPopover";
+import { EditTitleDialog } from "@/components/admin/products/EditTitleDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from "@/auth/AuthProvider";
 import {
   ProductFilterSidebar,
   type FilterState,
@@ -62,9 +75,9 @@ const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
 
 const TABS: Array<{ id: ViewTab; label: string }> = [
   { id: "live", label: "Live" },
-  { id: "drafts", label: "Drafts" },
   { id: "hidden", label: "Hidden" },
   { id: "archived", label: "Archived" },
+  { id: "drafts", label: "Drafts" },
   { id: "all", label: "All" },
 ];
 
@@ -83,19 +96,24 @@ function bucketIdFor(price: number | null): PriceBucketId | null {
   return PRICE_BUCKETS.find((b) => b.test(price))?.id ?? null;
 }
 
-function matchesTab(r: ProductRow, tab: ViewTab): boolean {
+/**
+ * Tab matcher. When `showHidden` is true, hidden rows are *also* visible
+ * inside the Live / Drafts / Archived / All tabs (they appear faded). The
+ * Hidden tab itself ignores the toggle.
+ */
+function matchesTab(r: ProductRow, tab: ViewTab, showHidden: boolean): boolean {
   switch (tab) {
     case "live":
-      return r.status === "published" && !r.is_hidden_from_dashboard;
+      return r.status === "published" && (showHidden || !r.is_hidden_from_dashboard);
     case "drafts":
-      return r.status === "draft";
+      return r.status === "draft" && (showHidden || !r.is_hidden_from_dashboard);
     case "hidden":
       return r.is_hidden_from_dashboard === true;
     case "archived":
-      return r.status === "archived";
+      return r.status === "archived" && (showHidden || !r.is_hidden_from_dashboard);
     case "all":
     default:
-      return true;
+      return showHidden || !r.is_hidden_from_dashboard;
   }
 }
 
@@ -114,6 +132,11 @@ export default function ProductsList() {
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagPopover, setTagPopover] = useState<{ id: string; anchor: HTMLElement } | null>(null);
+  const [editTitleFor, setEditTitleFor] = useState<{ id: string; title: string } | null>(null);
+  const [archiveFor, setArchiveFor] = useState<{ id: string; title: string } | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const detailId = params.id ?? null;
   const detailOpen = !!detailId && !bulkMode;
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -242,20 +265,25 @@ export default function ProductsList() {
     load();
   }, []);
 
+  // Tab counts are canonical (showHidden=false) so the labels are stable.
+  // The Hidden tab counts hidden; all other tabs exclude hidden.
   const tabCounts = useMemo(() => {
     const c: Record<ViewTab, number> = { live: 0, drafts: 0, hidden: 0, archived: 0, all: 0 };
     (rows ?? []).forEach((r) => {
       c.all += 1;
-      if (matchesTab(r, "live")) c.live += 1;
-      if (matchesTab(r, "drafts")) c.drafts += 1;
-      if (matchesTab(r, "hidden")) c.hidden += 1;
-      if (matchesTab(r, "archived")) c.archived += 1;
+      if (matchesTab(r, "live", false)) c.live += 1;
+      if (matchesTab(r, "drafts", false)) c.drafts += 1;
+      if (matchesTab(r, "hidden", false)) c.hidden += 1;
+      if (matchesTab(r, "archived", false)) c.archived += 1;
     });
     return c;
   }, [rows]);
 
-  // Filter sidebar counts derive from the active tab's slice.
-  const tabRows = useMemo(() => (rows ?? []).filter((r) => matchesTab(r, tab)), [rows, tab]);
+  // Filter sidebar counts derive from the active tab's slice (with current showHidden).
+  const tabRows = useMemo(
+    () => (rows ?? []).filter((r) => matchesTab(r, tab, showHidden)),
+    [rows, tab, showHidden],
+  );
 
   const { categoryCounts, athleteOptions, teamOptions, statusCounts, priceBucketCounts } =
     useMemo(() => {
@@ -382,7 +410,37 @@ export default function ProductsList() {
       );
       toast.error("Could not update visibility");
     } else {
-      toast.success(next ? "Hidden from dashboard" : "Visible on dashboard");
+      toast.success(next ? "Hidden from dashboard" : "Shown on dashboard");
+    }
+  }
+
+  // Archive a product locally + push to Shopify.
+  async function archiveProduct(id: string) {
+    const row = rows?.find((r) => r.id === id);
+    if (!row) return;
+    const prevStatus = row.status;
+    setRows((rs) =>
+      rs ? rs.map((r) => (r.id === id ? { ...r, status: "archived" as ProductStatus } : r)) : rs,
+    );
+    const { error } = await supabase
+      .from("products")
+      .update({ status: "archived" })
+      .eq("id", id);
+    if (error) {
+      setRows((rs) =>
+        rs ? rs.map((r) => (r.id === id ? { ...r, status: prevStatus } : r)) : rs,
+      );
+      toast.error("Could not archive product");
+      return;
+    }
+    const { error: fnErr } = await supabase.functions.invoke(
+      "shopify-update-product",
+      { body: { product_id: id, status: "archived" } },
+    );
+    if (fnErr) {
+      toast.success("Archived locally — Shopify sync failed");
+    } else {
+      toast.success(`Archived "${row.title}"`);
     }
   }
 
@@ -515,6 +573,22 @@ export default function ProductsList() {
                   className="pl-9"
                 />
               </div>
+              {tab !== "hidden" && (
+                <label
+                  className={cn(
+                    "flex items-center gap-2 px-3 h-10 rounded-md border border-border bg-card text-sm cursor-pointer whitespace-nowrap",
+                    showHidden && "border-accent/60 bg-accent/5 text-accent",
+                  )}
+                  title="Temporarily include hidden products in this view"
+                >
+                  <Checkbox
+                    checked={showHidden}
+                    onCheckedChange={(v) => setShowHidden(!!v)}
+                    aria-label="Show hidden products"
+                  />
+                  <span>Show hidden</span>
+                </label>
+              )}
               <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="sm" className="lg:hidden gap-2">
@@ -661,6 +735,7 @@ export default function ProductsList() {
                     status={r.status}
                     imageUrl={r.primary_image_url}
                     isHidden={r.is_hidden_from_dashboard}
+                    isAdmin={isAdmin}
                     bulkMode={bulkMode}
                     selected={selected.has(r.id)}
                     onClick={() => {
@@ -669,7 +744,9 @@ export default function ProductsList() {
                     }}
                     onToggleHidden={() => toggleHidden(r.id)}
                     onOpenTagPopover={(anchor) => setTagPopover({ id: r.id, anchor })}
-                    onEdit={() => openDetail(r.id)}
+                    onViewDetails={() => openDetail(r.id)}
+                    onEditTitle={() => setEditTitleFor({ id: r.id, title: r.title })}
+                    onArchive={() => setArchiveFor({ id: r.id, title: r.title })}
                   />
                 ))}
               </div>
@@ -692,6 +769,39 @@ export default function ProductsList() {
         onClose={() => setTagPopover(null)}
         onSaved={load}
       />
+      <EditTitleDialog
+        productId={editTitleFor?.id ?? null}
+        initialTitle={editTitleFor?.title ?? ""}
+        open={!!editTitleFor}
+        onOpenChange={(o) => !o && setEditTitleFor(null)}
+        onSaved={(newTitle) => {
+          if (!editTitleFor) return;
+          setRows((rs) =>
+            rs ? rs.map((r) => (r.id === editTitleFor.id ? { ...r, title: newTitle } : r)) : rs,
+          );
+        }}
+      />
+      <AlertDialog open={!!archiveFor} onOpenChange={(o) => !o && setArchiveFor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive “{archiveFor?.title}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              It will be removed from your storefront.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (archiveFor) archiveProduct(archiveFor.id);
+                setArchiveFor(null);
+              }}
+            >
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
