@@ -247,7 +247,7 @@ export async function applyTagsToProducts({
   // surface any errors back to the caller.
   if (succeeded.length > 0 && (addTags.length > 0 || removeTags.length > 0)) {
     try {
-      const { error } = await supabase.functions.invoke("shopify-update-product-tags", {
+      const { data, error } = await supabase.functions.invoke("shopify-update-product-tags", {
         body: {
           product_ids: succeeded,
           add_tags: addTags,
@@ -256,9 +256,28 @@ export async function applyTagsToProducts({
       });
       if (error) {
         console.warn("Shopify tag push failed:", error);
+        succeeded.forEach((id) =>
+          failed.push({ productId: id, error: `Shopify sync failed (queued for retry): ${error.message ?? error}` }),
+        );
+      } else if (data?.results?.length) {
+        const shopifyFailed = (data.results as Array<{ product_id: string; ok: boolean; error?: string; queued?: boolean }>)
+          .filter((r) => !r.ok);
+        if (shopifyFailed.length) {
+          shopifyFailed.forEach((r) => {
+            failed.push({
+              productId: r.product_id,
+              error: r.queued
+                ? `Saved locally — Shopify sync queued for retry: ${r.error}`
+                : `Shopify sync failed: ${r.error}`,
+            });
+          });
+        }
       }
     } catch (e) {
       console.warn("Shopify tag push exception:", e);
+      succeeded.forEach((id) =>
+        failed.push({ productId: id, error: `Shopify sync error: ${(e as Error)?.message ?? e}` }),
+      );
     }
   }
 

@@ -3,6 +3,7 @@ import { TopClients } from "@/components/admin/dashboard/TopClients";
 import { RecentActivity } from "@/components/admin/dashboard/RecentActivity";
 import { RecentBulkOrders } from "@/components/admin/dashboard/RecentBulkOrders";
 import { SeedImagesButton } from "@/components/admin/dashboard/SeedImagesButton";
+import { PendingSyncCard } from "@/components/admin/PendingSyncCard";
 
 export default function AdminDashboard() {
   return (
@@ -20,6 +21,8 @@ export default function AdminDashboard() {
       </div>
 
       <RecentBulkOrders />
+
+      <PendingSyncCard />
 
       <SeedImagesButton />
     </div>

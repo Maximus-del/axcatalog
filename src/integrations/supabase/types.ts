@@ -1878,6 +1878,63 @@ export type Database = {
           },
         ]
       }
+      shopify_sync_queue: {
+        Row: {
+          attempts: number
+          changes: Json
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          last_attempt_at: string | null
+          last_error: string | null
+          organization_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          changes?: Json
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          organization_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          changes?: Json
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string | null
+          organization_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_sync_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_sync_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       shopify_webhooks: {
         Row: {
           created_at: string
