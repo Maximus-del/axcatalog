@@ -1,9 +1,13 @@
+// Mobile-first. Test at 375px before merging.
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Loader2, Tag } from "lucide-react";
+import { Loader2, Tag, X } from "lucide-react";
 import { TagChipInput } from "./TagChipInput";
 import { applyTagsToProducts, type ApplyResult } from "@/lib/apply-tags";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { haptic } from "@/lib/haptics";
+import { cn } from "@/lib/utils";
 
 interface Props {
   selectedIds: string[];
@@ -11,10 +15,18 @@ interface Props {
   onApplied: (result: ApplyResult) => void;
 }
 
+/**
+ * Bulk-tag bar.
+ * - Desktop: sticky to the top of the page (above the page header).
+ * - Mobile: fixed to the bottom of the viewport, sitting above the
+ *   bottom tab nav, with a stacked layout so the tag input gets the
+ *   full width.
+ */
 export function BulkTagBar({ selectedIds, onCancel, onApplied }: Props) {
   const [tags, setTags] = useState<string[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const busy = !!progress;
+  const isMobile = useIsMobile();
 
   async function handleApply() {
     if (tags.length === 0 || selectedIds.length === 0) return;
@@ -26,6 +38,7 @@ export function BulkTagBar({ selectedIds, onCancel, onApplied }: Props) {
     });
     setProgress(null);
     if (result.failed.length === 0) {
+      haptic.success();
       toast.success(
         `Tagged ${result.succeeded.length} product${result.succeeded.length === 1 ? "" : "s"} with: ${tags.join(", ")}`,
       );
@@ -36,6 +49,56 @@ export function BulkTagBar({ selectedIds, onCancel, onApplied }: Props) {
     }
     setTags([]);
     onApplied(result);
+  }
+
+  if (isMobile) {
+    // Bottom-fixed bar sitting above the 56px bottom nav + safe area
+    return (
+      <div
+        className={cn(
+          "md:hidden fixed inset-x-0 z-40 px-3 pt-3 pb-3",
+          "bg-background/95 backdrop-blur-md border-t border-accent/40",
+          "shadow-[0_-4px_20px_-8px_hsl(var(--accent)/0.4)]",
+        )}
+        style={{ bottom: "calc(56px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Tag className="h-4 w-4 text-accent" />
+            <span className="tabular-nums">
+              {selectedIds.length} selected
+            </span>
+            {progress && (
+              <span className="text-xs text-muted-foreground tabular-nums">
+                · {progress.done}/{progress.total}
+              </span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            aria-label="Cancel bulk tag mode"
+            className="pressable h-8 w-8 inline-flex items-center justify-center rounded-md text-muted-foreground"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <TagChipInput
+          tags={tags}
+          onChange={setTags}
+          placeholder="Add tags…"
+        />
+        <Button
+          onClick={handleApply}
+          disabled={busy || tags.length === 0 || selectedIds.length === 0}
+          className="w-full mt-2 h-11 gap-2 pressable"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Apply Tags
+        </Button>
+      </div>
+    );
   }
 
   return (

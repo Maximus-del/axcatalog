@@ -1,11 +1,20 @@
+// Mobile-first. Test at 375px before merging.
 import { useEffect, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { TagChipInput } from "./TagChipInput";
 import { supabase } from "@/integrations/supabase/client";
 import { applyTagsToProducts } from "@/lib/apply-tags";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { haptic } from "@/lib/haptics";
 
 interface Props {
   productId: string | null;
@@ -15,15 +24,18 @@ interface Props {
 }
 
 /**
- * Popover for editing tags on a single product. Shows current product tags
- * (freeform + athletes/teams/collections inferred) and lets user add/remove.
+ * Edit tags on a single product.
+ * - Desktop: anchored popover
+ * - Mobile (<768px): full-screen bottom sheet with large input
  */
 export function ProductTagPopover({ productId, anchor, onClose, onSaved }: Props) {
   const [tags, setTags] = useState<string[]>([]);
   const [original, setOriginal] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const open = !!productId && !!anchor;
+  const isMobile = useIsMobile();
+  // On mobile we don't need the anchor — opening is purely controlled by productId
+  const open = !!productId && (isMobile || !!anchor);
 
   useEffect(() => {
     if (!productId) return;
@@ -85,6 +97,7 @@ export function ProductTagPopover({ productId, anchor, onClose, onSaved }: Props
       if (failed.length > 0) {
         toast.error(`Tag update failed: ${failed[0].error}`);
       } else {
+        haptic.success();
         toast.success("Tags updated");
         onSaved?.();
         onClose();
@@ -92,6 +105,44 @@ export function ProductTagPopover({ productId, anchor, onClose, onSaved }: Props
     } finally {
       setSaving(false);
     }
+  }
+
+  const body = (
+    <>
+      {loading ? (
+        <div className="flex items-center justify-center py-6">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <TagChipInput
+          tags={tags}
+          onChange={setTags}
+          placeholder="athlete:..., team:..., or freeform"
+        />
+      )}
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="ghost" size={isMobile ? "default" : "sm"} onClick={onClose} disabled={saving}>
+          Cancel
+        </Button>
+        <Button size={isMobile ? "default" : "sm"} onClick={handleSave} disabled={saving || loading}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+        </Button>
+      </div>
+    </>
+  );
+
+  if (isMobile) {
+    return (
+      <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+        <SheetContent side="bottom" className="rounded-t-2xl pb-safe max-h-[90vh] overflow-y-auto">
+          <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-muted" />
+          <SheetHeader className="text-left">
+            <SheetTitle>Manage tags</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">{body}</div>
+        </SheetContent>
+      </Sheet>
+    );
   }
 
   return (
@@ -115,25 +166,7 @@ export function ProductTagPopover({ productId, anchor, onClose, onSaved }: Props
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Tags
         </div>
-        {loading ? (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <TagChipInput
-            tags={tags}
-            onChange={setTags}
-            placeholder="athlete:..., team:..., or freeform"
-          />
-        )}
-        <div className="flex justify-end gap-2 pt-1">
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving || loading}>
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
-          </Button>
-        </div>
+        {body}
       </PopoverContent>
     </Popover>
   );
