@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Archive, Edit3, Eye, EyeOff, MoreHorizontal, Tag } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,10 +35,13 @@ export function ProductCardMenu({
   onToggleHidden,
   onArchive,
 }: Props) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           aria-label="Product actions"
           onClick={(e) => e.stopPropagation()}
@@ -65,12 +69,8 @@ export function ProductCardMenu({
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
-          onSelect={(e) => {
-            // We need the trigger's bounding rect for the popover anchor.
-            const trigger = (e.target as HTMLElement)
-              ?.closest("[role='menu']")
-              ?.parentElement?.querySelector("button[aria-label='Product actions']") as HTMLElement | null;
-            if (trigger) onManageTags(trigger);
+          onSelect={() => {
+            if (triggerRef.current) onManageTags(triggerRef.current);
           }}
         >
           <Tag className="h-4 w-4 mr-2" /> Manage tags
