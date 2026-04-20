@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Download, Plus, Search } from "lucide-react";
+import { Download, Filter, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,35 +12,61 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { avatarColorFor, initialsFor } from "@/lib/avatar-color";
-import {
-  PRODUCT_STATUSES,
-  PRODUCT_TYPES,
-  type ProductStatus,
-  type ProductType,
-  formatStatus,
-  formatType,
-  statusBadgeClass,
-} from "@/lib/product-status";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { ProductFormDrawer } from "@/components/admin/products/ProductFormDrawer";
 import { ImportFromUrlDialog } from "@/components/admin/products/ImportFromUrlDialog";
 import { ProductDetailDrawer } from "@/components/admin/products/ProductDetailDrawer";
-import { cn } from "@/lib/utils";
+import { ProductCard } from "@/components/admin/products/ProductCard";
+import {
+  ProductFilterSidebar,
+  type FilterState,
+} from "@/components/admin/products/ProductFilterSidebar";
+import {
+  detectCategory,
+  PRICE_BUCKETS,
+  type ProductCategory,
+  type PriceBucketId,
+} from "@/lib/product-category";
+import type { ProductStatus } from "@/lib/product-status";
 
 interface ProductRow {
   id: string;
   title: string;
-  sku: string | null;
   status: ProductStatus;
-  product_type: ProductType;
   price: number | null;
-  needs_review: boolean;
+  compare_at_price: number | null;
+  created_at: string;
   updated_at: string;
   primary_image_url: string | null;
+  category: ProductCategory;
   athletes: Array<{ id: string; name: string }>;
+  teams: Array<{ id: string; name: string }>;
 }
 
-const PAGE_SIZE = 25;
+type SortKey = "newest" | "oldest" | "price_asc" | "price_desc" | "title_asc";
+
+const SORT_OPTIONS: Array<{ value: SortKey; label: string }> = [
+  { value: "newest", label: "Newest first" },
+  { value: "oldest", label: "Oldest first" },
+  { value: "price_asc", label: "Price: low to high" },
+  { value: "price_desc", label: "Price: high to low" },
+  { value: "title_asc", label: "Title A–Z" },
+];
+
+function emptyFilters(): FilterState {
+  return {
+    categories: new Set(),
+    athletes: new Set(),
+    teams: new Set(),
+    statuses: new Set(),
+    priceBuckets: new Set(),
+  };
+}
+
+function bucketIdFor(price: number | null): PriceBucketId | null {
+  if (price == null) return null;
+  return PRICE_BUCKETS.find((b) => b.test(price))?.id ?? null;
+}
 
 export default function ProductsList() {
   const navigate = useNavigate();
@@ -51,16 +74,14 @@ export default function ProductsList() {
   const [rows, setRows] = useState<ProductRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [athleteFilter, setAthleteFilter] = useState<string>("all");
-  const [needsReviewOnly, setNeedsReviewOnly] = useState(false);
-  const [allAthletes, setAllAthletes] = useState<Array<{ id: string; name: string }>>([]);
-  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortKey>("newest");
+  const [filters, setFilters] = useState<FilterState>(emptyFilters);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
   const detailId = params.id ?? null;
   const detailOpen = !!detailId;
+
   function openDetail(id: string) {
     navigate(`/admin/products/${id}`);
   }
@@ -71,29 +92,15 @@ export default function ProductsList() {
   async function load() {
     setLoading(true);
     try {
-      const [productsRes, athletesRes] = await Promise.all([
-        supabase
-          .from("products")
-          .select("id, title, sku, status, product_type, price, needs_review, updated_at")
-          .order("updated_at", { ascending: false }),
-        supabase
-          .from("athletes")
-          .select("id, first_name, last_name, full_name")
-          .order("last_name"),
-      ]);
+      const productsRes = await supabase
+        .from("products")
+        .select(
+          "id, title, status, price, compare_at_price, created_at, updated_at",
+        )
+        .order("updated_at", { ascending: false });
 
       if (productsRes.error) console.error("products query error:", productsRes.error);
-      if (athletesRes.error) console.error("athletes query error:", athletesRes.error);
-
       const products = productsRes.data ?? [];
-      const athletes = athletesRes.data ?? [];
-
-      setAllAthletes(
-        athletes.map((a) => ({
-          id: a.id,
-          name: a.full_name ?? `${a.first_name} ${a.last_name}`,
-        })),
-      );
 
       const ids = products.map((p) => p.id);
       if (ids.length === 0) {
@@ -101,10 +108,10 @@ export default function ProductsList() {
         return;
       }
 
-      const [imagesRes, linksRes] = await Promise.all([
+      const [imagesRes, athletesLinkRes, teamsLinkRes, tagsLinkRes] = await Promise.all([
         supabase
           .from("product_images")
-          .select("product_id, storage_bucket, storage_path, is_primary, sort_order")
+          .select("product_id, storage_path, is_primary, sort_order")
           .in("product_id", ids),
         supabase
           .from("product_athletes")
@@ -112,37 +119,40 @@ export default function ProductsList() {
             "product_id, athlete:athletes!product_athletes_athlete_id_fkey(id, first_name, last_name, full_name)",
           )
           .in("product_id", ids),
+        supabase
+          .from("product_teams")
+          .select("product_id, team:teams!product_teams_team_id_fkey(id, name)")
+          .in("product_id", ids),
+        supabase
+          .from("product_tags")
+          .select("product_id, tag:tags!product_tags_tag_id_fkey(name)")
+          .in("product_id", ids),
       ]);
 
-      if (imagesRes.error) console.error("product_images query error:", imagesRes.error);
-      if (linksRes.error) console.error("product_athletes query error:", linksRes.error);
-
       const images = imagesRes.data ?? [];
-      const links = linksRes.data ?? [];
+      const athleteLinks = athletesLinkRes.data ?? [];
+      const teamLinks = teamsLinkRes.data ?? [];
+      const tagLinks = tagsLinkRes.data ?? [];
 
-      // Pick primary image; fall back to lowest sort_order. storage_path is a
-      // full Shopify CDN URL, so use it directly without going through storage.
+      // Image: prefer primary, fall back to lowest sort_order. storage_path is full Shopify CDN URL.
       const imagesByProduct = new Map<string, typeof images>();
       images.forEach((img) => {
         const arr = imagesByProduct.get(img.product_id) ?? [];
         arr.push(img);
         imagesByProduct.set(img.product_id, arr);
       });
-      const imageMap = new Map<string, { url: string }>();
+      const imageMap = new Map<string, string>();
       imagesByProduct.forEach((imgs, productId) => {
         const primary = imgs.find((i) => i.is_primary);
         const fallback = [...imgs].sort(
           (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
         )[0];
         const chosen = primary ?? fallback;
-        if (chosen?.storage_path) {
-          imageMap.set(productId, { url: chosen.storage_path });
-        }
+        if (chosen?.storage_path) imageMap.set(productId, chosen.storage_path);
       });
 
-      // Map athletes per product
       const athletesByProduct = new Map<string, Array<{ id: string; name: string }>>();
-      links.forEach((l) => {
+      athleteLinks.forEach((l) => {
         const a = Array.isArray(l.athlete) ? l.athlete[0] : l.athlete;
         if (!a) return;
         const name = a.full_name ?? `${a.first_name} ${a.last_name}`;
@@ -151,18 +161,37 @@ export default function ProductsList() {
         athletesByProduct.set(l.product_id, arr);
       });
 
+      const teamsByProduct = new Map<string, Array<{ id: string; name: string }>>();
+      teamLinks.forEach((l) => {
+        const t = Array.isArray(l.team) ? l.team[0] : l.team;
+        if (!t) return;
+        const arr = teamsByProduct.get(l.product_id) ?? [];
+        arr.push({ id: t.id, name: t.name });
+        teamsByProduct.set(l.product_id, arr);
+      });
+
+      const tagsByProduct = new Map<string, string[]>();
+      tagLinks.forEach((l) => {
+        const t = Array.isArray(l.tag) ? l.tag[0] : l.tag;
+        if (!t?.name) return;
+        const arr = tagsByProduct.get(l.product_id) ?? [];
+        arr.push(t.name);
+        tagsByProduct.set(l.product_id, arr);
+      });
+
       setRows(
         products.map((p) => ({
           id: p.id,
           title: p.title,
-          sku: p.sku,
           status: p.status as ProductStatus,
-          product_type: p.product_type as ProductType,
           price: p.price,
-          needs_review: p.needs_review,
+          compare_at_price: p.compare_at_price,
+          created_at: p.created_at,
           updated_at: p.updated_at,
-          primary_image_url: imageMap.get(p.id)?.url ?? null,
+          primary_image_url: imageMap.get(p.id) ?? null,
+          category: detectCategory(p.title, tagsByProduct.get(p.id) ?? []),
           athletes: athletesByProduct.get(p.id) ?? [],
+          teams: teamsByProduct.get(p.id) ?? [],
         })),
       );
     } catch (err) {
@@ -177,131 +206,128 @@ export default function ProductsList() {
     load();
   }, []);
 
+  // Counts derived from full row set so users can see what's available.
+  const { categoryCounts, athleteOptions, teamOptions, statusCounts, priceBucketCounts } =
+    useMemo(() => {
+      const cat = new Map<string, number>();
+      const ath = new Map<string, { name: string; count: number }>();
+      const team = new Map<string, { name: string; count: number }>();
+      const stat = new Map<ProductStatus, number>();
+      const price = new Map<PriceBucketId, number>();
+      (rows ?? []).forEach((r) => {
+        cat.set(r.category, (cat.get(r.category) ?? 0) + 1);
+        stat.set(r.status, (stat.get(r.status) ?? 0) + 1);
+        const b = bucketIdFor(r.price);
+        if (b) price.set(b, (price.get(b) ?? 0) + 1);
+        r.athletes.forEach((a) => {
+          const cur = ath.get(a.id) ?? { name: a.name, count: 0 };
+          ath.set(a.id, { name: a.name, count: cur.count + 1 });
+        });
+        r.teams.forEach((t) => {
+          const cur = team.get(t.id) ?? { name: t.name, count: 0 };
+          team.set(t.id, { name: t.name, count: cur.count + 1 });
+        });
+      });
+      return {
+        categoryCounts: cat,
+        statusCounts: stat,
+        priceBucketCounts: price,
+        athleteOptions: Array.from(ath.entries())
+          .map(([id, v]) => ({ id, name: v.name, count: v.count }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+        teamOptions: Array.from(team.entries())
+          .map(([id, v]) => ({ id, name: v.name, count: v.count }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      };
+    }, [rows]);
+
   const filtered = useMemo(() => {
     if (!rows) return [];
     const q = search.trim().toLowerCase();
-    return rows.filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (typeFilter !== "all" && r.product_type !== typeFilter) return false;
-      if (needsReviewOnly && !r.needs_review) return false;
-      if (athleteFilter !== "all" && !r.athletes.some((a) => a.id === athleteFilter))
+    const out = rows.filter((r) => {
+      if (filters.categories.size > 0 && !filters.categories.has(r.category)) return false;
+      if (filters.statuses.size > 0 && !filters.statuses.has(r.status)) return false;
+      if (filters.athletes.size > 0 && !r.athletes.some((a) => filters.athletes.has(a.id)))
         return false;
-      if (!q) return true;
-      return (
-        r.title.toLowerCase().includes(q) ||
-        (r.sku ?? "").toLowerCase().includes(q)
-      );
+      if (filters.teams.size > 0 && !r.teams.some((t) => filters.teams.has(t.id)))
+        return false;
+      if (filters.priceBuckets.size > 0) {
+        const b = bucketIdFor(r.price);
+        if (!b || !filters.priceBuckets.has(b)) return false;
+      }
+      if (q && !r.title.toLowerCase().includes(q)) return false;
+      return true;
     });
-  }, [rows, search, statusFilter, typeFilter, athleteFilter, needsReviewOnly]);
+    const sorted = [...out];
+    sorted.sort((a, b) => {
+      switch (sort) {
+        case "oldest":
+          return +new Date(a.created_at) - +new Date(b.created_at);
+        case "price_asc":
+          return (a.price ?? Infinity) - (b.price ?? Infinity);
+        case "price_desc":
+          return (b.price ?? -Infinity) - (a.price ?? -Infinity);
+        case "title_asc":
+          return a.title.localeCompare(b.title);
+        case "newest":
+        default:
+          return +new Date(b.created_at) - +new Date(a.created_at);
+      }
+    });
+    return sorted;
+  }, [rows, search, filters, sort]);
 
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, typeFilter, athleteFilter, needsReviewOnly]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageStart = (page - 1) * PAGE_SIZE;
-  const paged = filtered.slice(pageStart, pageStart + PAGE_SIZE);
   const isEmpty = !loading && rows && rows.length === 0;
+  const activeFilterCount =
+    filters.categories.size +
+    filters.athletes.size +
+    filters.teams.size +
+    filters.statuses.size +
+    filters.priceBuckets.size;
+
+  function clearAll() {
+    setFilters(emptyFilters());
+    setSearch("");
+  }
+
+  function removeFilter(kind: keyof FilterState, value: string) {
+    setFilters((f) => {
+      const next = { ...f };
+      const set = new Set(next[kind] as Set<string>);
+      set.delete(value);
+      (next as Record<string, Set<string>>)[kind] = set;
+      return next;
+    });
+  }
+
+  const sidebar = (
+    <ProductFilterSidebar
+      filters={filters}
+      onChange={setFilters}
+      categoryCounts={categoryCounts}
+      athleteOptions={athleteOptions}
+      teamOptions={teamOptions}
+      statusCounts={statusCounts}
+      priceBucketCounts={priceBucketCounts}
+    />
+  );
 
   return (
-    <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
-      <header className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">
+      <header className="flex items-center justify-between gap-4 flex-wrap mb-6">
         <div>
           <div className="ax-section-header mb-2">Catalog</div>
           <h1 className="text-3xl font-bold">Products</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setCreateOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" /> Create Manually
+            <Plus className="h-4 w-4" /> Create
           </Button>
           <Button onClick={() => setImportOpen(true)} className="gap-2">
-            <Download className="h-4 w-4" /> Import from URL
+            <Download className="h-4 w-4" /> Import URL
           </Button>
         </div>
       </header>
-
-      {!isEmpty && (
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[220px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search title or SKU…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              {PRODUCT_STATUSES.map((s) => (
-                <SelectItem key={s} value={s} className="capitalize">
-                  {formatStatus(s)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              {PRODUCT_TYPES.map((t) => (
-                <SelectItem key={t} value={t} className="capitalize">
-                  {formatType(t)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={athleteFilter} onValueChange={setAthleteFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All athletes</SelectItem>
-              {allAthletes.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="flex items-center gap-2 px-3 h-10 rounded-md border border-border bg-card">
-            <Switch
-              id="needs-review"
-              checked={needsReviewOnly}
-              onCheckedChange={setNeedsReviewOnly}
-            />
-            <Label htmlFor="needs-review" className="text-sm cursor-pointer">
-              Needs review
-            </Label>
-          </div>
-        </div>
-      )}
-
-      {loading && (
-        <div className="ax-card p-0 overflow-hidden">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 p-4 border-b border-border last:border-b-0"
-            >
-              <Skeleton className="h-12 w-12 rounded-md" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-4 w-1/3" />
-                <Skeleton className="h-3 w-1/4" />
-              </div>
-              <Skeleton className="h-6 w-16" />
-              <Skeleton className="h-4 w-12" />
-            </div>
-          ))}
-        </div>
-      )}
 
       {isEmpty && (
         <div className="ax-card p-12 text-center space-y-4">
@@ -319,154 +345,158 @@ export default function ProductsList() {
         </div>
       )}
 
-      {!loading && rows && rows.length > 0 && (
-        <>
-          <div className="ax-card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30">
-                    <th className="text-left font-medium text-muted-foreground p-3 w-16">
-                      Image
-                    </th>
-                    <th className="text-left font-medium text-muted-foreground p-3">Title</th>
-                    <th className="text-left font-medium text-muted-foreground p-3">Type</th>
-                    <th className="text-left font-medium text-muted-foreground p-3">
-                      Status
-                    </th>
-                    <th className="text-right font-medium text-muted-foreground p-3">
-                      Price
-                    </th>
-                    <th className="text-left font-medium text-muted-foreground p-3">
-                      Athletes
-                    </th>
-                    <th className="text-right font-medium text-muted-foreground p-3">
-                      Updated
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged.map((r) => (
-                    <tr
-                      key={r.id}
-                      className="border-b border-border last:border-b-0 ax-row-hover transition-colors"
-                    >
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => openDetail(r.id)}
-                          className="block"
-                          aria-label={`Open ${r.title}`}
-                        >
-                          {r.primary_image_url ? (
-                            <img
-                              src={r.primary_image_url}
-                              alt={r.title}
-                              className="h-12 w-12 rounded-md object-cover bg-muted"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div
-                              className="h-12 w-12 rounded-md flex items-center justify-center text-xs font-semibold text-white"
-                              style={{ backgroundColor: avatarColorFor(r.title) }}
-                              aria-hidden
-                            >
-                              {initialsFor(r.title)}
-                            </div>
-                          )}
-                        </button>
-                      </td>
-                      <td className="p-3">
-                        <button
-                          type="button"
-                          onClick={() => openDetail(r.id)}
-                          className="font-medium hover:text-accent transition-colors text-left"
-                        >
-                          {r.title}
-                        </button>
-                        {r.sku && (
-                          <div className="text-xs text-muted-foreground tabular-nums">
-                            {r.sku}
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs border border-border bg-muted text-muted-foreground capitalize">
-                          {formatType(r.product_type)}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <span
-                          className={cn(
-                            "inline-flex px-2 py-0.5 rounded-full text-xs border capitalize",
-                            statusBadgeClass(r.status),
-                          )}
-                        >
-                          {formatStatus(r.status)}
-                        </span>
-                        {r.needs_review && r.status !== "needs_review" && (
-                          <span
-                            className={cn(
-                              "ml-1 inline-flex px-2 py-0.5 rounded-full text-xs border capitalize",
-                              statusBadgeClass("needs_review"),
-                            )}
-                          >
-                            review
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right tabular-nums">
-                        {r.price != null ? `$${r.price.toFixed(2)}` : "—"}
-                      </td>
-                      <td className="p-3">
-                        <AthleteStack athletes={r.athletes} />
-                      </td>
-                      <td className="p-3 text-right text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(r.updated_at), { addSuffix: true })}
-                      </td>
-                    </tr>
+      {!isEmpty && (
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-6">
+          {/* Desktop sidebar */}
+          <aside className="hidden lg:block bg-card border border-border rounded-xl sticky top-4 h-[calc(100vh-2rem)]">
+            {sidebar}
+          </aside>
+
+          <section className="space-y-4 min-w-0">
+            {/* Search + sort + mobile filter trigger */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search products…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="lg:hidden gap-2">
+                    <Filter className="h-4 w-4" />
+                    Filters
+                    {activeFilterCount > 0 && (
+                      <span className="bg-accent text-accent-foreground rounded-full text-[10px] font-bold w-5 h-5 inline-flex items-center justify-center">
+                        {activeFilterCount}
+                      </span>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="p-0 w-[300px] sm:w-[340px]">
+                  <SheetHeader className="p-4 border-b border-border">
+                    <SheetTitle className="flex items-center gap-2">
+                      <SlidersHorizontal className="h-4 w-4" /> Filters
+                    </SheetTitle>
+                  </SheetHeader>
+                  <div className="h-[calc(100vh-65px)]">{sidebar}</div>
+                </SheetContent>
+              </Sheet>
+              <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SORT_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
                   ))}
-                </tbody>
-              </table>
+                </SelectContent>
+              </Select>
             </div>
-          </div>
 
-          {filtered.length === 0 && (
-            <div className="ax-card p-8 text-center text-sm text-muted-foreground">
-              No products match your filters.
-            </div>
-          )}
+            {/* Active filter chips */}
+            {activeFilterCount > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {Array.from(filters.categories).map((c) => (
+                  <FilterChip key={`c-${c}`} label={c} onRemove={() => removeFilter("categories", c)} />
+                ))}
+                {Array.from(filters.statuses).map((s) => (
+                  <FilterChip
+                    key={`s-${s}`}
+                    label={s.charAt(0).toUpperCase() + s.slice(1)}
+                    onRemove={() => removeFilter("statuses", s)}
+                  />
+                ))}
+                {Array.from(filters.priceBuckets).map((p) => {
+                  const lbl = PRICE_BUCKETS.find((b) => b.id === p)?.label ?? p;
+                  return (
+                    <FilterChip
+                      key={`p-${p}`}
+                      label={lbl}
+                      onRemove={() => removeFilter("priceBuckets", p)}
+                    />
+                  );
+                })}
+                {Array.from(filters.athletes).map((id) => {
+                  const a = athleteOptions.find((x) => x.id === id);
+                  return (
+                    <FilterChip
+                      key={`a-${id}`}
+                      label={a?.name ?? id}
+                      onRemove={() => removeFilter("athletes", id)}
+                    />
+                  );
+                })}
+                {Array.from(filters.teams).map((id) => {
+                  const t = teamOptions.find((x) => x.id === id);
+                  return (
+                    <FilterChip
+                      key={`t-${id}`}
+                      label={t?.name ?? id}
+                      onRemove={() => removeFilter("teams", id)}
+                    />
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-xs text-muted-foreground hover:text-accent underline-offset-2 hover:underline ml-1"
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
 
-          {filtered.length > 0 && (
-            <div className="flex items-center justify-between text-sm">
-              <div className="text-muted-foreground">
-                {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of{" "}
-                {filtered.length}
+            {/* Result count */}
+            {!loading && (
+              <div className="text-xs text-muted-foreground tabular-nums">
+                {filtered.length} {filtered.length === 1 ? "product" : "products"}
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-4 w-4" /> Prev
-                </Button>
-                <span className="text-muted-foreground tabular-nums">
-                  {page} / {totalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  Next <ChevronRight className="h-4 w-4" />
+            )}
+
+            {/* Grid */}
+            {loading ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="bg-card border border-border rounded-xl overflow-hidden">
+                    <Skeleton className="aspect-square w-full rounded-none" />
+                    <div className="p-3 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-4 w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="ax-card p-12 text-center space-y-4">
+                <p className="text-muted-foreground">No products match these filters</p>
+                <Button variant="outline" onClick={clearAll}>
+                  Clear all filters
                 </Button>
               </div>
-            </div>
-          )}
-        </>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
+                {filtered.map((r) => (
+                  <ProductCard
+                    key={r.id}
+                    id={r.id}
+                    title={r.title}
+                    price={r.price}
+                    compareAtPrice={r.compare_at_price}
+                    status={r.status}
+                    imageUrl={r.primary_image_url}
+                    onClick={() => openDetail(r.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
       )}
 
       <ProductFormDrawer open={createOpen} onOpenChange={setCreateOpen} onSaved={load} />
@@ -481,28 +511,18 @@ export default function ProductsList() {
   );
 }
 
-function AthleteStack({ athletes }: { athletes: Array<{ id: string; name: string }> }) {
-  if (athletes.length === 0)
-    return <span className="text-xs text-muted-foreground">—</span>;
-  const visible = athletes.slice(0, 3);
-  const overflow = athletes.length - visible.length;
+function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <div className="flex items-center -space-x-2">
-      {visible.map((a) => (
-        <div
-          key={a.id}
-          title={a.name}
-          className="h-7 w-7 rounded-full text-[10px] font-semibold text-white flex items-center justify-center border-2 border-card"
-          style={{ background: avatarColorFor(a.name) }}
-        >
-          {initialsFor(a.name)}
-        </div>
-      ))}
-      {overflow > 0 && (
-        <div className="h-7 w-7 rounded-full text-[10px] font-semibold flex items-center justify-center bg-muted text-muted-foreground border-2 border-card">
-          +{overflow}
-        </div>
-      )}
-    </div>
+    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-accent/15 text-accent border border-accent/30">
+      {label}
+      <button
+        type="button"
+        onClick={onRemove}
+        className="hover:bg-accent/20 rounded-full p-0.5 -mr-1"
+        aria-label={`Remove ${label}`}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </span>
   );
 }
