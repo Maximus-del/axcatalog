@@ -586,7 +586,7 @@ export default function ProductsList() {
 
       {!isEmpty && (
         <div className="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-6">
-          <aside className="hidden lg:block bg-card border border-border rounded-xl sticky top-4 h-[calc(100vh-2rem)]">
+          <aside className="hidden lg:block bg-card border border-border rounded-xl sticky top-4 h-[calc(100vh-2rem)] overflow-y-auto scroll-touch">
             {sidebar}
           </aside>
 

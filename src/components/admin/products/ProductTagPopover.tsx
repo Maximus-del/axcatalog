@@ -1,6 +1,7 @@
 // Mobile-first. Test at 375px before merging.
-import { useEffect, useState } from "react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import {
   Sheet,
   SheetContent,
@@ -25,17 +26,37 @@ interface Props {
 
 /**
  * Edit tags on a single product.
- * - Desktop: anchored popover
- * - Mobile (<768px): full-screen bottom sheet with large input
+ * - Desktop: Radix Popover anchored to the menu button via PopoverAnchor
+ *   rendered through a portal at the anchor's live coordinates so scrolling
+ *   the page doesn't desync the popover.
+ * - Mobile (<768px): full-screen bottom sheet.
  */
 export function ProductTagPopover({ productId, anchor, onClose, onSaved }: Props) {
   const [tags, setTags] = useState<string[]>([]);
   const [original, setOriginal] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const isMobile = useIsMobile();
-  // On mobile we don't need the anchor — opening is purely controlled by productId
   const open = !!productId && (isMobile || !!anchor);
+
+  // Track the anchor's bounding rect — refresh on scroll/resize so the
+  // popover stays glued to the menu button even as the user scrolls.
+  useLayoutEffect(() => {
+    if (!anchor || isMobile) return;
+    function update() {
+      if (!anchor) return;
+      const r = anchor.getBoundingClientRect();
+      setPos({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [anchor, isMobile]);
 
   useEffect(() => {
     if (!productId) return;
@@ -57,6 +78,7 @@ export function ProductTagPopover({ productId, anchor, onClose, onSaved }: Props
           .eq("product_id", productId),
       ]);
       if (cancel) return;
+      // Order: athlete → team → collection → freeform.
       const out: string[] = [];
       (athRes.data ?? []).forEach((r) => {
         const a = Array.isArray(r.athlete) ? r.athlete[0] : r.athlete;
@@ -145,24 +167,35 @@ export function ProductTagPopover({ productId, anchor, onClose, onSaved }: Props
     );
   }
 
+  // Desktop: render a portaled invisible anchor element pinned to the menu
+  // button's live position. PopoverAnchor wraps it so Radix positions the
+  // PopoverContent next to it. Scrolling updates the anchor via the effect
+  // above, so the popover follows.
+  if (!anchor || !pos) return null;
+
+  const anchorEl = (
+    <div
+      style={{
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        width: pos.width,
+        height: pos.height,
+        pointerEvents: "none",
+      }}
+      aria-hidden
+    />
+  );
+
   return (
     <Popover open={open} onOpenChange={(o) => !o && onClose()}>
-      <PopoverTrigger asChild>
-        {/* Anchor handled via virtual reference using a hidden span */}
-        <span
-          ref={(el) => {
-            if (el && anchor) {
-              const r = anchor.getBoundingClientRect();
-              el.style.position = "fixed";
-              el.style.top = `${r.bottom + window.scrollY}px`;
-              el.style.left = `${r.left + window.scrollX}px`;
-              el.style.width = "1px";
-              el.style.height = "1px";
-            }
-          }}
-        />
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-3 space-y-3" align="end">
+      <PopoverAnchor asChild>{anchorEl}</PopoverAnchor>
+      <PopoverContent
+        className="w-80 p-3 space-y-3 z-50"
+        align="end"
+        sideOffset={6}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Tags
         </div>
