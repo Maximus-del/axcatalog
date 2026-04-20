@@ -52,14 +52,24 @@ export function EditTitleDialog({ productId, initialTitle, open, onOpenChange, o
         .eq("id", productId);
       if (error) throw error;
 
-      // Push to Shopify (non-blocking error — local update already succeeded)
-      const { error: fnErr } = await supabase.functions.invoke(
+      // Push to Shopify. Local update already succeeded, so we keep the new
+      // title even on Shopify failure — but show the user what happened.
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke(
         "shopify-update-product",
         { body: { product_id: productId, title: next } },
       );
-      if (fnErr) {
-        console.warn("Shopify title push failed:", fnErr);
-        toast.success("Title updated locally — Shopify sync failed");
+      const shopifyErr =
+        fnErr?.message ??
+        (fnData && !fnData.ok ? fnData.error : null);
+      if (shopifyErr) {
+        console.warn("Shopify title push failed:", shopifyErr);
+        if (fnData?.queued) {
+          toast.warning(
+            `Saved locally — Shopify sync queued for retry: ${shopifyErr}`,
+          );
+        } else {
+          toast.warning(`Saved locally — Shopify sync failed: ${shopifyErr}`);
+        }
       } else {
         toast.success("Title updated");
       }
