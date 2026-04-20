@@ -39,6 +39,7 @@ import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import { DesignPickerDialog } from "./DesignPickerDialog";
 import { PLACEMENT_OPTIONS, formatPlacement, type DesignPlacement } from "./placements";
+import { useFileDropZone } from "@/hooks/useFileDropZone";
 
 interface LinkRow {
   id: string; // product_designs.id
@@ -73,6 +74,18 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
   const [uploading, setUploading] = useState(false);
   const [unlinkConfirm, setUnlinkConfirm] = useState<LinkRow | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUploadFiles(files: File[]) {
+    if (!files.length) return;
+    const dt = new DataTransfer();
+    files.forEach((f) => dt.items.add(f));
+    await handleUploadNew(dt.files);
+  }
+
+  const { isOver, dropProps } = useFileDropZone({
+    onFiles: handleUploadFiles,
+    disabled: uploading,
+  });
 
   async function load() {
     setLoading(true);
@@ -289,7 +302,16 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative" {...dropProps}>
+      {isOver && (
+        <div className="absolute inset-0 z-20 rounded-lg border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-accent">
+            <Upload className="h-8 w-8" />
+            <div className="text-sm font-medium">Drop to upload as new design{" "}</div>
+            <div className="text-xs text-accent/80">Images, PDF, AI, PSD, SVG</div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">
           Designs linked to this product. Stored privately in the{" "}

@@ -7,13 +7,14 @@
 //  - Set as primary
 //  - Open the corresponding Shopify product page in a new tab
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, ImageIcon, Star, Maximize2 } from "lucide-react";
+import { ExternalLink, ImageIcon, Star, Maximize2, Ban } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useFileDropZone } from "@/hooks/useFileDropZone";
 
 interface MockupRow {
   id: string;
@@ -38,6 +39,15 @@ export function MockupsTab({ productId, shopifyProductId, shopifyShopDomain, onC
   const [rows, setRows] = useState<MockupRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  // Mockups are Shopify-sourced — we accept the drop visually but tell the
+  // user where to actually upload them.
+  const { isOver, dropProps } = useFileDropZone({
+    accept: ["image/"],
+    onFiles: () => {
+      toast.info("Mockups are managed in Shopify. Add product images there and they'll sync here.");
+    },
+  });
 
   async function load() {
     setLoading(true);
@@ -105,18 +115,37 @@ export function MockupsTab({ productId, shopifyProductId, shopifyShopDomain, onC
 
   if (!rows || rows.length === 0) {
     return (
-      <div className="ax-card p-12 text-center space-y-3">
-        <ImageIcon className="h-10 w-10 text-muted-foreground mx-auto" />
-        <p className="text-sm text-muted-foreground">No mockups synced yet.</p>
-        <p className="text-xs text-muted-foreground">
-          Add product images in Shopify — they'll sync here automatically.
-        </p>
+      <div className="relative" {...dropProps}>
+        {isOver && (
+          <div className="absolute inset-0 z-20 rounded-lg border-2 border-dashed border-muted-foreground/40 bg-muted/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center gap-2 text-muted-foreground text-center px-4">
+              <Ban className="h-8 w-8" />
+              <div className="text-sm font-medium">Mockups are managed in Shopify</div>
+            </div>
+          </div>
+        )}
+        <div className="ax-card p-12 text-center space-y-3">
+          <ImageIcon className="h-10 w-10 text-muted-foreground mx-auto" />
+          <p className="text-sm text-muted-foreground">No mockups synced yet.</p>
+          <p className="text-xs text-muted-foreground">
+            Add product images in Shopify — they'll sync here automatically.
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative" {...dropProps}>
+      {isOver && (
+        <div className="absolute inset-0 z-20 rounded-lg border-2 border-dashed border-muted-foreground/40 bg-muted/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-muted-foreground text-center px-4">
+            <Ban className="h-8 w-8" />
+            <div className="text-sm font-medium">Mockups are managed in Shopify</div>
+            <div className="text-xs">Upload product images in Shopify — they sync here automatically</div>
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {rows.map((m, i) => (
           <div
