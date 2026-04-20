@@ -102,7 +102,7 @@ export function BulkTagBar({ selectedIds, onCancel, onApplied }: Props) {
   }
 
   return (
-    <div className="sticky top-0 z-30 -mx-4 lg:-mx-8 px-4 lg:px-8 py-3 bg-background/85 backdrop-blur-md border-b border-accent/40 shadow-[0_4px_16px_-8px_hsl(var(--accent)/0.4)]">
+    <div className="sticky top-0 z-40 -mx-4 lg:-mx-8 px-4 lg:px-8 py-3 bg-dark/95 backdrop-blur-md border-b-2 border-accent shadow-[0_8px_24px_-8px_hsl(var(--accent)/0.5)]">
       <div className="max-w-[1600px] mx-auto flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 text-sm font-medium whitespace-nowrap">
           <Tag className="h-4 w-4 text-accent" />
