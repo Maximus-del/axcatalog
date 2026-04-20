@@ -1,9 +1,13 @@
+// Mobile-first. Test at 375px before merging.
 import { Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { avatarColorFor, initialsFor } from "@/lib/avatar-color";
 import { Checkbox } from "@/components/ui/checkbox";
 import { statusBadgeClass, formatStatus, type ProductStatus } from "@/lib/product-status";
 import { ProductCardMenu } from "./ProductCardMenu";
+import { Swipeable } from "@/components/mobile/Swipeable";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { haptic } from "@/lib/haptics";
 
 interface ProductCardProps {
   id: string;
@@ -41,7 +45,13 @@ export function ProductCard({
   onEditTitle,
   onArchive,
 }: ProductCardProps) {
-  return (
+  const isMobile = useIsMobile();
+  // Swipe-to-archive only makes sense for admins on touch devices,
+  // when not already archived and not in bulk-select mode.
+  const swipeEnabled =
+    isMobile && isAdmin && !bulkMode && status !== "archived" && !!onArchive;
+
+  const card = (
     <div
       role="button"
       tabIndex={0}
@@ -53,7 +63,7 @@ export function ProductCard({
         }
       }}
       className={cn(
-        "group relative text-left bg-card border rounded-xl overflow-hidden transition-all duration-200 cursor-pointer",
+        "group relative text-left bg-card border rounded-xl overflow-hidden transition-all duration-200 cursor-pointer pressable",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         selected
           ? "border-accent ring-2 ring-accent/40 shadow-[0_8px_24px_-12px_hsl(var(--accent)/0.5)]"
@@ -70,6 +80,7 @@ export function ProductCard({
             checked={selected}
             onCheckedChange={onClick}
             aria-label={`Select ${title}`}
+            className="h-5 w-5"
           />
         </div>
       )}
@@ -80,6 +91,7 @@ export function ProductCard({
             src={imageUrl}
             alt={title}
             loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
@@ -123,7 +135,9 @@ export function ProductCard({
           />
         )}
 
-        {/* Quick eye toggle — bottom-right, hover-only shortcut */}
+        {/* Quick eye toggle — bottom-right.
+            On desktop it's hover-only; on touch we leave it always visible
+            so it's actually reachable (no hover state on a phone). */}
         {!bulkMode && isAdmin && onToggleHidden && (
           <button
             type="button"
@@ -131,16 +145,17 @@ export function ProductCard({
             aria-label={isHidden ? "Show on dashboard" : "Hide from dashboard"}
             onClick={(e) => {
               e.stopPropagation();
+              haptic.tap();
               onToggleHidden();
             }}
             className={cn(
-              "absolute bottom-2 right-2 z-10 h-7 w-7 inline-flex items-center justify-center rounded-md",
+              "absolute bottom-2 right-2 z-10 h-9 w-9 inline-flex items-center justify-center rounded-md",
               "bg-background/80 backdrop-blur-sm border border-border",
               "text-muted-foreground hover:text-accent hover:border-accent",
-              "opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity",
+              "md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100 transition-opacity pressable",
             )}
           >
-            {isHidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+            {isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         )}
       </div>
@@ -161,4 +176,21 @@ export function ProductCard({
       </div>
     </div>
   );
+
+  if (swipeEnabled && onArchive) {
+    return (
+      <Swipeable
+        actionLabel="Archive"
+        onAction={() => {
+          haptic.warn();
+          onArchive();
+        }}
+        className="rounded-xl"
+      >
+        {card}
+      </Swipeable>
+    );
+  }
+
+  return card;
 }
