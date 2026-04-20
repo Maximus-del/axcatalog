@@ -144,6 +144,14 @@ export default function ProductsList() {
   const detailOpen = !!detailId && !bulkMode;
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Pull-to-refresh on touch devices
+  const { pullPx, refreshing } = usePullToRefresh({
+    onRefresh: async () => {
+      haptic.tap();
+      await load();
+    },
+  });
+
   function openDetail(id: string) {
     navigate(`/admin/products/${id}`);
   }
@@ -484,7 +492,26 @@ export default function ProductsList() {
   );
 
   return (
-    <div className="p-4 lg:p-8 max-w-[1600px] mx-auto">
+    <div className={cn(
+      "p-4 lg:p-8 max-w-[1600px] mx-auto",
+      // Reserve room above the fixed mobile bulk bar so content isn't covered
+      bulkMode && "pb-48 md:pb-0",
+    )}>
+      {/* Pull-to-refresh indicator */}
+      {(pullPx > 0 || refreshing) && (
+        <div
+          className="md:hidden flex items-center justify-center text-muted-foreground"
+          style={{
+            height: refreshing ? 36 : Math.min(pullPx, 80),
+            opacity: refreshing ? 1 : Math.min(pullPx / 70, 1),
+            transition: refreshing ? "height 200ms ease" : "none",
+          }}
+          aria-hidden
+        >
+          <Loader2 className={cn("h-4 w-4", refreshing && "animate-spin")} />
+        </div>
+      )}
+
       {bulkMode && (
         <BulkTagBar
           selectedIds={Array.from(selected)}
@@ -496,17 +523,17 @@ export default function ProductsList() {
         />
       )}
 
-      <header className="flex items-center justify-between gap-4 flex-wrap mb-6 mt-4">
+      <header className="flex items-center justify-between gap-3 flex-wrap mb-6 mt-4">
         <div>
           <div className="ax-section-header mb-2">Catalog</div>
-          <h1 className="text-3xl font-bold">Products</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Products</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setCreateOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" /> Create
+          <Button variant="outline" onClick={() => setCreateOpen(true)} className="gap-2 h-11 md:h-10 pressable">
+            <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Create</span>
           </Button>
-          <Button onClick={() => setImportOpen(true)} className="gap-2">
-            <Download className="h-4 w-4" /> Import URL
+          <Button onClick={() => setImportOpen(true)} className="gap-2 h-11 md:h-10 pressable">
+            <Download className="h-4 w-4" /> <span className="hidden sm:inline">Import URL</span>
           </Button>
         </div>
       </header>
