@@ -10,22 +10,27 @@ export function AnalyticsRevenueChart() {
       <p className="text-xs text-muted-foreground mb-4">
         Revenue data will appear here after Shopify sync.
       </p>
-      <div className="h-56 w-full relative">
+      <div className="h-60 md:h-56 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={stubData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+          <BarChart data={stubData} margin={{ top: 10, right: 8, bottom: 8, left: -24 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
             <XAxis
               dataKey="month"
               stroke="hsl(var(--muted-foreground))"
-              fontSize={11}
+              fontSize={10}
               tickLine={false}
               axisLine={false}
+              interval="preserveStartEnd"
+              angle={-35}
+              textAnchor="end"
+              height={40}
             />
             <YAxis
               stroke="hsl(var(--muted-foreground))"
-              fontSize={11}
+              fontSize={10}
               tickLine={false}
               axisLine={false}
+              width={36}
             />
             <Tooltip
               cursor={{ fill: "hsl(var(--accent) / 0.05)" }}
