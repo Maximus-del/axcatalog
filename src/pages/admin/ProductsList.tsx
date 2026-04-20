@@ -409,7 +409,37 @@ export default function ProductsList() {
       );
       toast.error("Could not update visibility");
     } else {
-      toast.success(next ? "Hidden from dashboard" : "Visible on dashboard");
+      toast.success(next ? "Hidden from dashboard" : "Shown on dashboard");
+    }
+  }
+
+  // Archive a product locally + push to Shopify.
+  async function archiveProduct(id: string) {
+    const row = rows?.find((r) => r.id === id);
+    if (!row) return;
+    const prevStatus = row.status;
+    setRows((rs) =>
+      rs ? rs.map((r) => (r.id === id ? { ...r, status: "archived" as ProductStatus } : r)) : rs,
+    );
+    const { error } = await supabase
+      .from("products")
+      .update({ status: "archived" })
+      .eq("id", id);
+    if (error) {
+      setRows((rs) =>
+        rs ? rs.map((r) => (r.id === id ? { ...r, status: prevStatus } : r)) : rs,
+      );
+      toast.error("Could not archive product");
+      return;
+    }
+    const { error: fnErr } = await supabase.functions.invoke(
+      "shopify-update-product",
+      { body: { product_id: id, status: "archived" } },
+    );
+    if (fnErr) {
+      toast.success("Archived locally — Shopify sync failed");
+    } else {
+      toast.success(`Archived "${row.title}"`);
     }
   }
 
