@@ -37,7 +37,10 @@ export default function AdminLayout() {
               </Button>
             </div>
           </header>
-          <main className="flex-1 overflow-auto scroll-touch pb-bottom-nav md:pb-0">
+          {/* No overflow on main: let body scroll. The sticky bars and the
+              left filter sidebar each manage their own scroll ancestors so
+              wheel/keyboard/PageDown work everywhere on the page. */}
+          <main className="flex-1 scroll-touch pb-bottom-nav md:pb-0 min-w-0">
             <Outlet />
           </main>
         </div>
