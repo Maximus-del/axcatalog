@@ -755,8 +755,7 @@ export default function ProductsList() {
 
             {/* Grid */}
             {loading ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                {Array.from({ length: 12 }).map((_, i) => (
+              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
                   <div key={i} className="bg-card border border-border rounded-xl overflow-hidden">
                     <Skeleton className="aspect-square w-full rounded-none" />
                     <div className="p-3 space-y-2">
@@ -776,8 +775,7 @@ export default function ProductsList() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filtered.map((r) => (
+              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
                   <ProductCard
                     key={r.id}
                     id={r.id}
