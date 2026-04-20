@@ -1078,6 +1078,30 @@ export type Database = {
           },
         ]
       }
+      product_collections: {
+        Row: {
+          collection_id: string
+          created_at: string
+          id: string
+          product_id: string
+          sort_order: number
+        }
+        Insert: {
+          collection_id: string
+          created_at?: string
+          id?: string
+          product_id: string
+          sort_order?: number
+        }
+        Update: {
+          collection_id?: string
+          created_at?: string
+          id?: string
+          product_id?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       product_designs: {
         Row: {
           created_at: string
@@ -1248,6 +1272,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          is_hidden_from_dashboard: boolean
           metadata: Json
           needs_review: boolean
           notes: string | null
@@ -1273,6 +1298,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_hidden_from_dashboard?: boolean
           metadata?: Json
           needs_review?: boolean
           notes?: string | null
@@ -1298,6 +1324,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          is_hidden_from_dashboard?: boolean
           metadata?: Json
           needs_review?: boolean
           notes?: string | null
