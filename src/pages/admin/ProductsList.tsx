@@ -572,6 +572,22 @@ export default function ProductsList() {
                   className="pl-9"
                 />
               </div>
+              {tab !== "hidden" && (
+                <label
+                  className={cn(
+                    "flex items-center gap-2 px-3 h-10 rounded-md border border-border bg-card text-sm cursor-pointer whitespace-nowrap",
+                    showHidden && "border-accent/60 bg-accent/5 text-accent",
+                  )}
+                  title="Temporarily include hidden products in this view"
+                >
+                  <Checkbox
+                    checked={showHidden}
+                    onCheckedChange={(v) => setShowHidden(!!v)}
+                    aria-label="Show hidden products"
+                  />
+                  <span>Show hidden</span>
+                </label>
+              )}
               <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="sm" className="lg:hidden gap-2">
