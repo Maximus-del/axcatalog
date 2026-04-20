@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.shopify-update-product]
 verify_jwt = true
+
+[functions.shopify-sync-pending]
+verify_jwt = true
