@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
-import { ChevronLeft, ChevronRight, Download, ImageIcon, Plus, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Plus, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,15 +120,23 @@ export default function ProductsList() {
       const images = imagesRes.data ?? [];
       const links = linksRes.data ?? [];
 
-      // Pick primary image (or first by sort_order) per product
-      const imageMap = new Map<string, { url: string }>();
+      // Pick primary image; fall back to lowest sort_order. storage_path is a
+      // full Shopify CDN URL, so use it directly without going through storage.
+      const imagesByProduct = new Map<string, typeof images>();
       images.forEach((img) => {
-        const existing = imageMap.get(img.product_id);
-        if (!existing || img.is_primary) {
-          const { data: pub } = supabase.storage
-            .from(img.storage_bucket)
-            .getPublicUrl(img.storage_path);
-          imageMap.set(img.product_id, { url: pub.publicUrl });
+        const arr = imagesByProduct.get(img.product_id) ?? [];
+        arr.push(img);
+        imagesByProduct.set(img.product_id, arr);
+      });
+      const imageMap = new Map<string, { url: string }>();
+      imagesByProduct.forEach((imgs, productId) => {
+        const primary = imgs.find((i) => i.is_primary);
+        const fallback = [...imgs].sort(
+          (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+        )[0];
+        const chosen = primary ?? fallback;
+        if (chosen?.storage_path) {
+          imageMap.set(productId, { url: chosen.storage_path });
         }
       });
 
@@ -358,8 +366,12 @@ export default function ProductsList() {
                               loading="lazy"
                             />
                           ) : (
-                            <div className="h-12 w-12 rounded-md bg-muted flex items-center justify-center">
-                              <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                            <div
+                              className="h-12 w-12 rounded-md flex items-center justify-center text-xs font-semibold text-white"
+                              style={{ backgroundColor: avatarColorFor(r.title) }}
+                              aria-hidden
+                            >
+                              {initialsFor(r.title)}
                             </div>
                           )}
                         </button>
