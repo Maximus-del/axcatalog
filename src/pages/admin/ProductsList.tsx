@@ -366,8 +366,12 @@ export default function ProductsList() {
                               loading="lazy"
                             />
                           ) : (
-                            <div className="h-12 w-12 rounded-md bg-muted flex items-center justify-center">
-                              <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                            <div
+                              className="h-12 w-12 rounded-md flex items-center justify-center text-xs font-semibold text-white"
+                              style={{ backgroundColor: avatarColorFor(r.title) }}
+                              aria-hidden
+                            >
+                              {initialsFor(r.title)}
                             </div>
                           )}
                         </button>
