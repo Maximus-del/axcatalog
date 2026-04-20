@@ -95,19 +95,24 @@ function bucketIdFor(price: number | null): PriceBucketId | null {
   return PRICE_BUCKETS.find((b) => b.test(price))?.id ?? null;
 }
 
-function matchesTab(r: ProductRow, tab: ViewTab): boolean {
+/**
+ * Tab matcher. When `showHidden` is true, hidden rows are *also* visible
+ * inside the Live / Drafts / Archived / All tabs (they appear faded). The
+ * Hidden tab itself ignores the toggle.
+ */
+function matchesTab(r: ProductRow, tab: ViewTab, showHidden: boolean): boolean {
   switch (tab) {
     case "live":
-      return r.status === "published" && !r.is_hidden_from_dashboard;
+      return r.status === "published" && (showHidden || !r.is_hidden_from_dashboard);
     case "drafts":
-      return r.status === "draft";
+      return r.status === "draft" && (showHidden || !r.is_hidden_from_dashboard);
     case "hidden":
       return r.is_hidden_from_dashboard === true;
     case "archived":
-      return r.status === "archived";
+      return r.status === "archived" && (showHidden || !r.is_hidden_from_dashboard);
     case "all":
     default:
-      return true;
+      return showHidden || !r.is_hidden_from_dashboard;
   }
 }
 
@@ -126,6 +131,11 @@ export default function ProductsList() {
   const [bulkMode, setBulkMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [tagPopover, setTagPopover] = useState<{ id: string; anchor: HTMLElement } | null>(null);
+  const [editTitleFor, setEditTitleFor] = useState<{ id: string; title: string } | null>(null);
+  const [archiveFor, setArchiveFor] = useState<{ id: string; title: string } | null>(null);
+  const [showHidden, setShowHidden] = useState(false);
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const detailId = params.id ?? null;
   const detailOpen = !!detailId && !bulkMode;
   const searchInputRef = useRef<HTMLInputElement>(null);
