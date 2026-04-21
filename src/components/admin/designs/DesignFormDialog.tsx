@@ -557,3 +557,107 @@ function MultiPicker({
     </div>
   );
 }
+
+function FilePickerArea({
+  files,
+  fileStatus,
+  fileKey,
+  onAdd,
+  onRemove,
+  disabled,
+}: {
+  files: File[];
+  fileStatus: Record<string, "pending" | "uploading" | "ok" | "fail">;
+  fileKey: (f: File) => string;
+  onAdd: (files: FileList | File[] | null) => void;
+  onRemove: (f: File) => void;
+  disabled?: boolean;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <div className="space-y-3">
+      <label
+        onDragEnter={(e) => {
+          if (disabled) return;
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragOver={(e) => {
+          if (disabled) return;
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setOver(false);
+        }}
+        onDrop={(e) => {
+          if (disabled) return;
+          e.preventDefault();
+          setOver(false);
+          onAdd(e.dataTransfer?.files ?? null);
+        }}
+        className={cn(
+          "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors",
+          over
+            ? "border-accent bg-accent/5"
+            : "border-border hover:border-accent/50 hover:bg-muted/30",
+          disabled && "opacity-50 pointer-events-none",
+        )}
+      >
+        <Upload className="h-6 w-6 text-muted-foreground" />
+        <div className="text-sm font-medium">Drop PNG files here or click to browse</div>
+        <div className="text-xs text-muted-foreground">PNG only · multiple files allowed</div>
+        <input
+          type="file"
+          accept="image/png"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            onAdd(e.target.files);
+            e.currentTarget.value = "";
+          }}
+          disabled={disabled}
+        />
+      </label>
+
+      {files.length > 0 && (
+        <ul className="space-y-1.5 max-h-48 overflow-y-auto rounded-md border border-border p-2 bg-muted/20">
+          {files.map((f) => {
+            const st = fileStatus[fileKey(f)] ?? "pending";
+            return (
+              <li
+                key={fileKey(f)}
+                className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-background"
+              >
+                <span className="flex-1 truncate" title={f.name}>
+                  {f.name}
+                </span>
+                <span className="text-muted-foreground">
+                  {(f.size / 1024).toFixed(1)} KB
+                </span>
+                <span className="w-5 flex justify-center">
+                  {st === "uploading" && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />}
+                  {st === "ok" && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                  {st === "fail" && <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                </span>
+                {st !== "uploading" && st !== "ok" && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(f)}
+                    className="text-muted-foreground hover:text-destructive"
+                    disabled={disabled}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
