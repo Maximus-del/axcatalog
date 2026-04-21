@@ -8,6 +8,7 @@ import {
   FolderKanban,
   Download,
   ClipboardList,
+  FolderOpen,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -28,6 +29,7 @@ const items = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
   { title: "Products", url: "/admin/products", icon: Package },
   { title: "Designs", url: "/admin/designs", icon: Palette },
+  { title: "Design Library", url: "/admin/design-library", icon: FolderOpen },
   { title: "Blanks", url: "/admin/blanks", icon: Shirt },
   { title: "Athletes", url: "/admin/athletes", icon: Users },
   { title: "Teams", url: "/admin/teams", icon: Trophy },
