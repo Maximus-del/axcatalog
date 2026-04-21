@@ -1,6 +1,6 @@
 // Mobile-first. Test at 375px before merging.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Download, Filter, Loader2, Plus, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -123,9 +123,10 @@ function matchesTab(r: ProductRow, tab: ViewTab, showHidden: boolean): boolean {
 export default function ProductsList() {
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<ProductRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [sort, setSort] = useState<SortKey>("newest");
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
   const [createOpen, setCreateOpen] = useState(false);
@@ -275,6 +276,18 @@ export default function ProductsList() {
   useEffect(() => {
     load();
   }, []);
+
+  // Keep ?search= in the URL in sync with the search box. We use replace
+  // so each keystroke doesn't pollute browser history — only the final
+  // value is what back/forward restores.
+  useEffect(() => {
+    const current = searchParams.get("search") ?? "";
+    if (current === search) return;
+    const next = new URLSearchParams(searchParams);
+    if (search) next.set("search", search);
+    else next.delete("search");
+    setSearchParams(next, { replace: true });
+  }, [search, searchParams, setSearchParams]);
 
   // Tab counts are canonical (showHidden=false) so the labels are stable.
   // The Hidden tab counts hidden; all other tabs exclude hidden.
