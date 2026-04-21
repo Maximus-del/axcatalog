@@ -123,9 +123,10 @@ function matchesTab(r: ProductRow, tab: ViewTab, showHidden: boolean): boolean {
 export default function ProductsList() {
   const navigate = useNavigate();
   const params = useParams<{ id?: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState<ProductRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [sort, setSort] = useState<SortKey>("newest");
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
   const [createOpen, setCreateOpen] = useState(false);
