@@ -126,6 +126,36 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
 
   const athleteTeamMap = useMemo(() => new Map<string, string | null>(), []);
 
+  function fileKey(f: File) {
+    return `${f.name}-${f.size}-${f.lastModified}`;
+  }
+
+  function addFiles(picked: FileList | File[] | null) {
+    if (!picked) return;
+    const incoming = Array.from(picked);
+    const pngs = incoming.filter((f) => f.type === "image/png");
+    const skipped = incoming.length - pngs.length;
+    if (skipped > 0) toast.error(`Skipped ${skipped} non-PNG file(s)`);
+    if (!pngs.length) return;
+    setFiles((prev) => {
+      const seen = new Set(prev.map(fileKey));
+      const merged = [...prev];
+      pngs.forEach((f) => {
+        if (!seen.has(fileKey(f))) merged.push(f);
+      });
+      return merged;
+    });
+  }
+
+  function removeFile(f: File) {
+    setFiles((prev) => prev.filter((x) => fileKey(x) !== fileKey(f)));
+    setFileStatus((s) => {
+      const next = { ...s };
+      delete next[fileKey(f)];
+      return next;
+    });
+  }
+
   async function handleSubmit() {
     if (!user) {
       toast.error("Not signed in");
