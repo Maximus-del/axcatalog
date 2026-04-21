@@ -494,7 +494,13 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Creating…" : "Create Design"}
+            {submitting
+              ? files.length > 0
+                ? `Uploading… (${Object.values(fileStatus).filter((s) => s === "ok" || s === "fail").length}/${files.length})`
+                : "Creating…"
+              : files.length > 0
+                ? `Create ${files.length} Design${files.length === 1 ? "" : "s"}`
+                : "Create Design"}
           </Button>
         </DialogFooter>
       </DialogContent>
