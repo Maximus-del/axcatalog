@@ -599,55 +599,24 @@ function CollectionView({
 
     setUploading(true);
     try {
-      const profileRes = await supabase
-        .from("user_profiles")
-        .select("organization_id")
-        .eq("id", user.id)
-        .maybeSingle();
-      const orgId = profileRes.data?.organization_id;
+      const orgId = await getCurrentUserOrgId(user.id);
       if (!orgId) throw new Error("No organization");
 
-      let createdCount = 0;
-      for (const file of pngs) {
-        const baseName = file.name.replace(/\.[^.]+$/, "");
-        const title = baseName || "Untitled";
-
-        const designRes = await supabase
-          .from("designs")
-          .insert({
-            organization_id: orgId,
-            title,
-            slug: `${slugify(title)}-${Date.now().toString(36)}`,
-            status: "concept",
-            design_collection_id: collectionId,
-          })
-          .select("id")
-          .single();
-        if (designRes.error) throw designRes.error;
-        const designId = designRes.data.id;
-
-        const path = `${orgId}/${designId}/${Date.now()}-${file.name}`;
-        const upRes = await supabase.storage.from(DESIGN_BUCKET).upload(path, file, {
-          contentType: "image/png",
-          upsert: false,
-        });
-        if (upRes.error) throw upRes.error;
-
-        const fileRes = await supabase.from("design_files").insert({
-          design_id: designId,
-          file_type: "mockup",
-          storage_bucket: DESIGN_BUCKET,
-          storage_path: path,
-          file_name: file.name,
-          file_extension: "png",
-          mime_type: "image/png",
-          file_size_bytes: file.size,
-          is_primary: true,
-        });
-        if (fileRes.error) throw fileRes.error;
-        createdCount++;
+      const { successes, failures } = await uploadDesignsBatch(
+        pngs,
+        orgId,
+        collectionId,
+      );
+      if (successes.length) {
+        toast.success(`Uploaded ${successes.length} design(s)`);
       }
-      toast.success(`Uploaded ${createdCount} design(s)`);
+      if (failures.length) {
+        toast.error(
+          `${failures.length} upload(s) failed: ${failures
+            .map((f) => f.file.name)
+            .join(", ")}`,
+        );
+      }
       void load();
     } catch (err) {
       console.error("Upload failed:", err);
