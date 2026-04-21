@@ -653,6 +653,48 @@ export type Database = {
           },
         ]
       }
+      design_collections: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_collections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_collections_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_files: {
         Row: {
           created_at: string
@@ -787,6 +829,7 @@ export type Database = {
           campaign: string | null
           created_at: string
           description: string | null
+          design_collection_id: string | null
           id: string
           metadata: Json
           notes: string | null
@@ -803,6 +846,7 @@ export type Database = {
           campaign?: string | null
           created_at?: string
           description?: string | null
+          design_collection_id?: string | null
           id?: string
           metadata?: Json
           notes?: string | null
@@ -819,6 +863,7 @@ export type Database = {
           campaign?: string | null
           created_at?: string
           description?: string | null
+          design_collection_id?: string | null
           id?: string
           metadata?: Json
           notes?: string | null
@@ -832,6 +877,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "designs_design_collection_id_fkey"
+            columns: ["design_collection_id"]
+            isOneToOne: false
+            referencedRelation: "design_collections"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "designs_organization_id_fkey"
             columns: ["organization_id"]
