@@ -120,6 +120,8 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
     setTagIds([]);
     setNewTag("");
     setNotes("");
+    setFiles([]);
+    setFileStatus({});
   }
 
   const athleteTeamMap = useMemo(() => new Map<string, string | null>(), []);
