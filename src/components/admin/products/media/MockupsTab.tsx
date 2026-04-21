@@ -63,8 +63,15 @@ export function MockupsTab({ productId, shopifyProductId, shopifyShopDomain, onC
       return;
     }
     const out = (data ?? []).map((r) => {
-      const { data: pub } = supabase.storage.from(r.storage_bucket).getPublicUrl(r.storage_path);
-      return { ...r, url: pub.publicUrl } as MockupRow;
+      // Shopify-synced rows store the full CDN URL in storage_path with
+      // bucket = 'external'. For real bucket-backed rows we resolve a
+      // public URL.
+      let url = r.storage_path;
+      if (r.storage_bucket !== "external" && !/^https?:\/\//i.test(r.storage_path)) {
+        const { data: pub } = supabase.storage.from(r.storage_bucket).getPublicUrl(r.storage_path);
+        url = pub.publicUrl;
+      }
+      return { ...r, url } as MockupRow;
     });
     setRows(out);
     onCountChange?.(out.length);
