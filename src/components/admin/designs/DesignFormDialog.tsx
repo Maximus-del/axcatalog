@@ -314,10 +314,37 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
         </DialogHeader>
 
         <div className="space-y-6 py-2">
+          <Section title="Files (optional)">
+            <p className="text-xs text-muted-foreground -mt-1">
+              Attach one or more PNG files. <strong>Each file becomes its own design.</strong>{" "}
+              When files are attached, the metadata below is ignored (you can edit each design
+              afterwards). Leave empty to create a single metadata-only design.
+            </p>
+            <FilePickerArea
+              files={files}
+              fileStatus={fileStatus}
+              fileKey={fileKey}
+              onAdd={addFiles}
+              onRemove={removeFile}
+              disabled={submitting}
+            />
+          </Section>
+
           <Section title="Basics">
             <div className="space-y-2">
               <Label>Title *</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={
+                  files.length > 1
+                    ? "Ignored — each file becomes its own design (titled by filename)"
+                    : files.length === 1
+                      ? "Optional — defaults to the filename"
+                      : ""
+                }
+                disabled={files.length > 1}
+              />
             </div>
             <div className="space-y-2">
               <Label>Slug</Label>
