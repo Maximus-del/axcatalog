@@ -127,12 +127,13 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
   const athleteTeamMap = useMemo(() => new Map<string, string | null>(), []);
 
   async function handleSubmit() {
-    if (!title.trim()) {
-      toast.error("Title is required");
-      return;
-    }
     if (!user) {
       toast.error("Not signed in");
+      return;
+    }
+    // Validation depends on which mode we're in.
+    if (files.length === 0 && !title.trim()) {
+      toast.error("Add a title or attach at least one PNG file");
       return;
     }
     setSubmitting(true);
@@ -144,7 +145,48 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
         .maybeSingle();
       const orgId = profileRes.data?.organization_id;
       if (!orgId) throw new Error("No organization for user");
+      const targetCollectionId = collectionId === "none" ? null : collectionId;
 
+      // ---- MODE A: file(s) attached → each file = its own design ----
+      if (files.length > 0) {
+        let okCount = 0;
+        let failCount = 0;
+        const initial: Record<string, Status> = {};
+        files.forEach((f) => {
+          initial[fileKey(f)] = "pending";
+        });
+        setFileStatus(initial);
+
+        for (const file of files) {
+          setFileStatus((s) => ({ ...s, [fileKey(file)]: "uploading" }));
+          try {
+            await uploadDesignFromFile({
+              file,
+              organizationId: orgId,
+              collectionId: targetCollectionId,
+              // Use the typed Title only if exactly one file is being uploaded.
+              titleOverride: files.length === 1 && title.trim() ? title.trim() : undefined,
+            });
+            setFileStatus((s) => ({ ...s, [fileKey(file)]: "ok" }));
+            okCount += 1;
+          } catch (err) {
+            console.error("Upload failed for", file.name, err);
+            setFileStatus((s) => ({ ...s, [fileKey(file)]: "fail" }));
+            failCount += 1;
+          }
+        }
+
+        if (okCount > 0) toast.success(`Created ${okCount} design(s)`);
+        if (failCount > 0) toast.error(`${failCount} upload(s) failed`);
+        if (failCount === 0) {
+          reset();
+          onOpenChange(false);
+        }
+        onCreated?.();
+        return;
+      }
+
+      // ---- MODE B: full metadata, no files (legacy behavior) ----
       const insertRes = await supabase
         .from("designs")
         .insert({
@@ -158,7 +200,7 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
           season: season || null,
           campaign: campaign || null,
           notes: notes || null,
-          design_collection_id: collectionId === "none" ? null : collectionId,
+          design_collection_id: targetCollectionId,
         })
         .select("id")
         .single();
