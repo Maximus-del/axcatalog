@@ -63,10 +63,8 @@ import {
 import { DesignFormDialog } from "@/components/admin/designs/DesignFormDialog";
 import { useAuth } from "@/auth/AuthProvider";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
-import { slugify } from "@/lib/slug";
+import { uploadDesignsBatch, getCurrentUserOrgId } from "@/lib/upload-design";
 import { cn } from "@/lib/utils";
-
-const DESIGN_BUCKET = "design-files";
 
 export default function DesignsList() {
   const [searchParams, setSearchParams] = useSearchParams();
