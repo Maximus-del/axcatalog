@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { CheckCircle2, Loader2, Upload, X, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,8 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { slugify } from "@/lib/slug";
 import { DESIGN_STATUSES, formatDesignStatus } from "@/lib/design-status";
+import { uploadDesignFromFile } from "@/lib/upload-design";
+import { cn } from "@/lib/utils";
 
 interface AthleteOption {
   id: string;
@@ -72,6 +74,11 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
   const [tags, setTags] = useState<TagOption[]>([]);
   const [collections, setCollections] = useState<Array<{ id: string; name: string }>>([]);
 
+  // PNG file uploads. When present, EACH file creates its own design.
+  const [files, setFiles] = useState<File[]>([]);
+  type Status = "pending" | "uploading" | "ok" | "fail";
+  const [fileStatus, setFileStatus] = useState<Record<string, Status>>({});
+
   useEffect(() => {
     if (!open) return;
     setCollectionId(defaultCollectionId ?? "none");
@@ -113,17 +120,50 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
     setTagIds([]);
     setNewTag("");
     setNotes("");
+    setFiles([]);
+    setFileStatus({});
   }
 
   const athleteTeamMap = useMemo(() => new Map<string, string | null>(), []);
 
+  function fileKey(f: File) {
+    return `${f.name}-${f.size}-${f.lastModified}`;
+  }
+
+  function addFiles(picked: FileList | File[] | null) {
+    if (!picked) return;
+    const incoming = Array.from(picked);
+    const pngs = incoming.filter((f) => f.type === "image/png");
+    const skipped = incoming.length - pngs.length;
+    if (skipped > 0) toast.error(`Skipped ${skipped} non-PNG file(s)`);
+    if (!pngs.length) return;
+    setFiles((prev) => {
+      const seen = new Set(prev.map(fileKey));
+      const merged = [...prev];
+      pngs.forEach((f) => {
+        if (!seen.has(fileKey(f))) merged.push(f);
+      });
+      return merged;
+    });
+  }
+
+  function removeFile(f: File) {
+    setFiles((prev) => prev.filter((x) => fileKey(x) !== fileKey(f)));
+    setFileStatus((s) => {
+      const next = { ...s };
+      delete next[fileKey(f)];
+      return next;
+    });
+  }
+
   async function handleSubmit() {
-    if (!title.trim()) {
-      toast.error("Title is required");
-      return;
-    }
     if (!user) {
       toast.error("Not signed in");
+      return;
+    }
+    // Validation depends on which mode we're in.
+    if (files.length === 0 && !title.trim()) {
+      toast.error("Add a title or attach at least one PNG file");
       return;
     }
     setSubmitting(true);
@@ -135,7 +175,48 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
         .maybeSingle();
       const orgId = profileRes.data?.organization_id;
       if (!orgId) throw new Error("No organization for user");
+      const targetCollectionId = collectionId === "none" ? null : collectionId;
 
+      // ---- MODE A: file(s) attached → each file = its own design ----
+      if (files.length > 0) {
+        let okCount = 0;
+        let failCount = 0;
+        const initial: Record<string, Status> = {};
+        files.forEach((f) => {
+          initial[fileKey(f)] = "pending";
+        });
+        setFileStatus(initial);
+
+        for (const file of files) {
+          setFileStatus((s) => ({ ...s, [fileKey(file)]: "uploading" }));
+          try {
+            await uploadDesignFromFile({
+              file,
+              organizationId: orgId,
+              collectionId: targetCollectionId,
+              // Use the typed Title only if exactly one file is being uploaded.
+              titleOverride: files.length === 1 && title.trim() ? title.trim() : undefined,
+            });
+            setFileStatus((s) => ({ ...s, [fileKey(file)]: "ok" }));
+            okCount += 1;
+          } catch (err) {
+            console.error("Upload failed for", file.name, err);
+            setFileStatus((s) => ({ ...s, [fileKey(file)]: "fail" }));
+            failCount += 1;
+          }
+        }
+
+        if (okCount > 0) toast.success(`Created ${okCount} design(s)`);
+        if (failCount > 0) toast.error(`${failCount} upload(s) failed`);
+        if (failCount === 0) {
+          reset();
+          onOpenChange(false);
+        }
+        onCreated?.();
+        return;
+      }
+
+      // ---- MODE B: full metadata, no files (legacy behavior) ----
       const insertRes = await supabase
         .from("designs")
         .insert({
@@ -149,7 +230,7 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
           season: season || null,
           campaign: campaign || null,
           notes: notes || null,
-          design_collection_id: collectionId === "none" ? null : collectionId,
+          design_collection_id: targetCollectionId,
         })
         .select("id")
         .single();
@@ -233,10 +314,37 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
         </DialogHeader>
 
         <div className="space-y-6 py-2">
+          <Section title="Files (optional)">
+            <p className="text-xs text-muted-foreground -mt-1">
+              Attach one or more PNG files. <strong>Each file becomes its own design.</strong>{" "}
+              When files are attached, the metadata below is ignored (you can edit each design
+              afterwards). Leave empty to create a single metadata-only design.
+            </p>
+            <FilePickerArea
+              files={files}
+              fileStatus={fileStatus}
+              fileKey={fileKey}
+              onAdd={addFiles}
+              onRemove={removeFile}
+              disabled={submitting}
+            />
+          </Section>
+
           <Section title="Basics">
             <div className="space-y-2">
               <Label>Title *</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={
+                  files.length > 1
+                    ? "Ignored — each file becomes its own design (titled by filename)"
+                    : files.length === 1
+                      ? "Optional — defaults to the filename"
+                      : ""
+                }
+                disabled={files.length > 1}
+              />
             </div>
             <div className="space-y-2">
               <Label>Slug</Label>
@@ -386,7 +494,13 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Creating…" : "Create Design"}
+            {submitting
+              ? files.length > 0
+                ? `Uploading… (${Object.values(fileStatus).filter((s) => s === "ok" || s === "fail").length}/${files.length})`
+                : "Creating…"
+              : files.length > 0
+                ? `Create ${files.length} Design${files.length === 1 ? "" : "s"}`
+                : "Create Design"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -440,6 +554,110 @@ function MultiPicker({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function FilePickerArea({
+  files,
+  fileStatus,
+  fileKey,
+  onAdd,
+  onRemove,
+  disabled,
+}: {
+  files: File[];
+  fileStatus: Record<string, "pending" | "uploading" | "ok" | "fail">;
+  fileKey: (f: File) => string;
+  onAdd: (files: FileList | File[] | null) => void;
+  onRemove: (f: File) => void;
+  disabled?: boolean;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <div className="space-y-3">
+      <label
+        onDragEnter={(e) => {
+          if (disabled) return;
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragOver={(e) => {
+          if (disabled) return;
+          if (!e.dataTransfer?.types?.includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setOver(false);
+        }}
+        onDrop={(e) => {
+          if (disabled) return;
+          e.preventDefault();
+          setOver(false);
+          onAdd(e.dataTransfer?.files ?? null);
+        }}
+        className={cn(
+          "flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 cursor-pointer transition-colors",
+          over
+            ? "border-accent bg-accent/5"
+            : "border-border hover:border-accent/50 hover:bg-muted/30",
+          disabled && "opacity-50 pointer-events-none",
+        )}
+      >
+        <Upload className="h-6 w-6 text-muted-foreground" />
+        <div className="text-sm font-medium">Drop PNG files here or click to browse</div>
+        <div className="text-xs text-muted-foreground">PNG only · multiple files allowed</div>
+        <input
+          type="file"
+          accept="image/png"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            onAdd(e.target.files);
+            e.currentTarget.value = "";
+          }}
+          disabled={disabled}
+        />
+      </label>
+
+      {files.length > 0 && (
+        <ul className="space-y-1.5 max-h-48 overflow-y-auto rounded-md border border-border p-2 bg-muted/20">
+          {files.map((f) => {
+            const st = fileStatus[fileKey(f)] ?? "pending";
+            return (
+              <li
+                key={fileKey(f)}
+                className="flex items-center gap-2 text-xs px-2 py-1.5 rounded bg-background"
+              >
+                <span className="flex-1 truncate" title={f.name}>
+                  {f.name}
+                </span>
+                <span className="text-muted-foreground">
+                  {(f.size / 1024).toFixed(1)} KB
+                </span>
+                <span className="w-5 flex justify-center">
+                  {st === "uploading" && <Loader2 className="h-3.5 w-3.5 animate-spin text-accent" />}
+                  {st === "ok" && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                  {st === "fail" && <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                </span>
+                {st !== "uploading" && st !== "ok" && (
+                  <button
+                    type="button"
+                    onClick={() => onRemove(f)}
+                    className="text-muted-foreground hover:text-destructive"
+                    disabled={disabled}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
