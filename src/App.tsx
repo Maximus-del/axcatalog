@@ -21,8 +21,6 @@ import ProductDetail from "./pages/admin/ProductDetail";
 import IngestionQueue from "./pages/admin/IngestionQueue";
 import DesignsList from "./pages/admin/DesignsList";
 import DesignDetail from "./pages/admin/DesignDetail";
-import DesignLibrary from "./pages/admin/DesignLibrary";
-import DesignLibraryItem from "./pages/admin/DesignLibraryItem";
 import BlanksList from "./pages/admin/BlanksList";
 import BlankDetail from "./pages/admin/BlankDetail";
 import OrdersList from "./pages/admin/OrdersList";
@@ -59,8 +57,6 @@ const App = () => (
               <Route path="products/:id" element={<ProductDetail />} />
               <Route path="designs" element={<DesignsList />} />
               <Route path="designs/:id" element={<DesignDetail />} />
-              <Route path="design-library" element={<DesignLibrary />} />
-              <Route path="design-library/item/:id" element={<DesignLibraryItem />} />
               <Route path="blanks" element={<BlanksList />} />
               <Route path="blanks/:id" element={<BlankDetail />} />
               <Route path="athletes" element={<AthletesList />} />

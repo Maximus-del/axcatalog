@@ -42,9 +42,11 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: () => void;
+  /** If provided, the design will be pre-assigned to this collection. */
+  defaultCollectionId?: string | null;
 }
 
-export function DesignFormDialog({ open, onOpenChange, onCreated }: Props) {
+export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollectionId }: Props) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [submitting, setSubmitting] = useState(false);
@@ -63,18 +65,22 @@ export function DesignFormDialog({ open, onOpenChange, onCreated }: Props) {
   const [tagIds, setTagIds] = useState<string[]>([]);
   const [newTag, setNewTag] = useState("");
   const [notes, setNotes] = useState("");
+  const [collectionId, setCollectionId] = useState<string>("none");
 
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [tags, setTags] = useState<TagOption[]>([]);
+  const [collections, setCollections] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (!open) return;
+    setCollectionId(defaultCollectionId ?? "none");
     void (async () => {
-      const [aRes, tRes, tagRes] = await Promise.all([
+      const [aRes, tRes, tagRes, cRes] = await Promise.all([
         supabase.from("athletes").select("id, first_name, last_name, full_name").order("last_name"),
         supabase.from("teams").select("id, name").order("name"),
         supabase.from("tags").select("id, name").order("name"),
+        supabase.from("design_collections").select("id, name").order("name"),
       ]);
       setAthletes(
         (aRes.data ?? []).map((a) => ({
@@ -84,8 +90,9 @@ export function DesignFormDialog({ open, onOpenChange, onCreated }: Props) {
       );
       setTeams((tRes.data ?? []) as TeamOption[]);
       setTags((tagRes.data ?? []) as TagOption[]);
+      setCollections((cRes.data ?? []) as Array<{ id: string; name: string }>);
     })();
-  }, [open]);
+  }, [open, defaultCollectionId]);
 
   useEffect(() => {
     if (!slugTouched) setSlug(slugify(title));
@@ -142,6 +149,7 @@ export function DesignFormDialog({ open, onOpenChange, onCreated }: Props) {
           season: season || null,
           campaign: campaign || null,
           notes: notes || null,
+          design_collection_id: collectionId === "none" ? null : collectionId,
         })
         .select("id")
         .single();
@@ -254,6 +262,22 @@ export function DesignFormDialog({ open, onOpenChange, onCreated }: Props) {
                   {DESIGN_STATUSES.map((s) => (
                     <SelectItem key={s} value={s} className="capitalize">
                       {formatDesignStatus(s)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Collection</Label>
+              <Select value={collectionId} onValueChange={setCollectionId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— Uncollected —</SelectItem>
+                  {collections.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
