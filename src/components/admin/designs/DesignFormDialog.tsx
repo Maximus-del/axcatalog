@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { CheckCircle2, Loader2, Upload, X, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,8 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { slugify } from "@/lib/slug";
 import { DESIGN_STATUSES, formatDesignStatus } from "@/lib/design-status";
+import { uploadDesignFromFile } from "@/lib/upload-design";
+import { cn } from "@/lib/utils";
 
 interface AthleteOption {
   id: string;
