@@ -74,6 +74,11 @@ export function DesignFormDialog({ open, onOpenChange, onCreated, defaultCollect
   const [tags, setTags] = useState<TagOption[]>([]);
   const [collections, setCollections] = useState<Array<{ id: string; name: string }>>([]);
 
+  // PNG file uploads. When present, EACH file creates its own design.
+  const [files, setFiles] = useState<File[]>([]);
+  type Status = "pending" | "uploading" | "ok" | "fail";
+  const [fileStatus, setFileStatus] = useState<Record<string, Status>>({});
+
   useEffect(() => {
     if (!open) return;
     setCollectionId(defaultCollectionId ?? "none");
