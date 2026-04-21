@@ -1,6 +1,6 @@
 // Mobile-first. Test at 375px before merging.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Download, Filter, Loader2, Plus, Search, SlidersHorizontal, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
