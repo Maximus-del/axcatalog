@@ -1159,25 +1159,34 @@ export type Database = {
           created_at: string
           design_id: string
           id: string
+          is_variation: boolean | null
           placement: Database["public"]["Enums"]["design_placement"]
           product_id: string
           sort_order: number
+          variation_label: string | null
+          variation_of: string | null
         }
         Insert: {
           created_at?: string
           design_id: string
           id?: string
+          is_variation?: boolean | null
           placement?: Database["public"]["Enums"]["design_placement"]
           product_id: string
           sort_order?: number
+          variation_label?: string | null
+          variation_of?: string | null
         }
         Update: {
           created_at?: string
           design_id?: string
           id?: string
+          is_variation?: boolean | null
           placement?: Database["public"]["Enums"]["design_placement"]
           product_id?: string
           sort_order?: number
+          variation_label?: string | null
+          variation_of?: string | null
         }
         Relationships: [
           {
@@ -1192,6 +1201,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_designs_variation_of_fkey"
+            columns: ["variation_of"]
+            isOneToOne: false
+            referencedRelation: "product_designs"
             referencedColumns: ["id"]
           },
         ]
