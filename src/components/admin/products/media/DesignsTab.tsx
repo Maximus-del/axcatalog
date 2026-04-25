@@ -1,21 +1,24 @@
 // Mobile-first. Test at 375px before merging.
 //
-// Designs tab: linked designs, with a picker (link existing) and a
-// direct upload flow (creates a new design + design_files row, links
-// to this product). Each tile shows a thumbnail (signed URL from the
-// design's primary file), title, placement, and per-tile actions.
+// Designs tab: shows linked designs in two sections — Primary Designs and
+// Variations (grouped by their primary). Supports multi-select linking,
+// editing a link (placement / variation toggle / variation_of / label),
+// and unlinking with smart cascade for primaries that have variations.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Layers, Link2, Loader2, Plus, Trash2, Upload } from "lucide-react";
+import {
+  Download,
+  Layers,
+  Link2,
+  Loader2,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -38,13 +41,17 @@ import { getSignedUrl } from "@/lib/storage";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
 import { DesignPickerDialog } from "./DesignPickerDialog";
-import { PLACEMENT_OPTIONS, formatPlacement, type DesignPlacement } from "./placements";
+import { EditLinkDialog } from "./EditLinkDialog";
+import { formatPlacement, type DesignPlacement } from "./placements";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 
-interface LinkRow {
+export interface LinkRow {
   id: string; // product_designs.id
   design_id: string;
   placement: DesignPlacement;
+  is_variation: boolean;
+  variation_of: string | null; // product_designs.id of the primary
+  variation_label: string | null;
   design: {
     id: string;
     title: string;
@@ -67,10 +74,25 @@ interface Props {
 
 const DESIGN_BUCKET = "design-files";
 
+function placementShortCode(p: DesignPlacement): string | null {
+  if (p === "front" || p === "chest" || p === "pocket") return "F";
+  if (p === "back") return "B";
+  if (p === "left_sleeve" || p === "right_sleeve" || p === "sleeve_wrap") return "S";
+  if (p === "hood") return "H";
+  return null;
+}
+
+function variationBadge(p: DesignPlacement): string {
+  const code = placementShortCode(p);
+  return code ? `${code}-Variation` : "Variation";
+}
+
 export function DesignsTab({ productId, organizationId, productTitle, onCountChange }: Props) {
   const [rows, setRows] = useState<LinkRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerVariation, setPickerVariation] = useState(false);
+  const [editing, setEditing] = useState<LinkRow | null>(null);
   const [uploading, setUploading] = useState(false);
   const [unlinkConfirm, setUnlinkConfirm] = useState<LinkRow | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +114,7 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
     const { data, error } = await supabase
       .from("product_designs")
       .select(
-        `id, design_id, placement,
+        `id, design_id, placement, is_variation, variation_of, variation_label,
          design:designs!product_designs_design_id_fkey(id, title, slug,
            design_files(id, storage_bucket, storage_path, file_name, file_type, mime_type, is_primary, sort_order)
          )`,
@@ -137,6 +159,9 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
           id: r.id,
           design_id: r.design_id,
           placement: r.placement as DesignPlacement,
+          is_variation: !!r.is_variation,
+          variation_of: r.variation_of ?? null,
+          variation_label: r.variation_label ?? null,
           design: {
             id: d?.id ?? r.design_id,
             title: d?.title ?? "Untitled design",
@@ -165,31 +190,50 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
   }, [productId]);
 
   const linkedIds = useMemo(() => new Set((rows ?? []).map((r) => r.design_id)), [rows]);
+  const primaries = useMemo(
+    () => (rows ?? []).filter((r) => !r.is_variation),
+    [rows],
+  );
+  const variations = useMemo(
+    () => (rows ?? []).filter((r) => r.is_variation),
+    [rows],
+  );
 
-  async function changePlacement(row: LinkRow, next: DesignPlacement) {
-    setRows((rs) =>
-      rs ? rs.map((r) => (r.id === row.id ? { ...r, placement: next } : r)) : rs,
-    );
-    const { error } = await supabase
-      .from("product_designs")
-      .update({ placement: next })
-      .eq("id", row.id);
-    if (error) {
-      toast.error("Failed to update placement");
-      load();
-    } else {
-      toast.success("Placement updated");
+  // Group variations: by their primary (when variation_of points to a primary on this product),
+  // plus a separate "Unlinked variations" group for orphans.
+  const variationGroups = useMemo(() => {
+    const primaryIds = new Set(primaries.map((p) => p.id));
+    const groups = new Map<string, LinkRow[]>();
+    const unlinked: LinkRow[] = [];
+    for (const v of variations) {
+      if (v.variation_of && primaryIds.has(v.variation_of)) {
+        const arr = groups.get(v.variation_of) ?? [];
+        arr.push(v);
+        groups.set(v.variation_of, arr);
+      } else {
+        unlinked.push(v);
+      }
     }
-  }
+    return { groups, unlinked };
+  }, [variations, primaries]);
 
-  async function unlink(row: LinkRow) {
+  async function unlink(row: LinkRow, includeVariations: boolean) {
     setUnlinkConfirm(null);
-    const { error } = await supabase.from("product_designs").delete().eq("id", row.id);
+    const ids = [row.id];
+    if (includeVariations && !row.is_variation) {
+      const childIds = variations
+        .filter((v) => v.variation_of === row.id)
+        .map((v) => v.id);
+      ids.push(...childIds);
+    }
+    const { error } = await supabase.from("product_designs").delete().in("id", ids);
     if (error) {
       toast.error("Failed to unlink design");
       return;
     }
-    toast.success("Design unlinked");
+    toast.success(
+      ids.length > 1 ? `Unlinked ${ids.length} designs` : "Design unlinked",
+    );
     load();
   }
 
@@ -227,7 +271,6 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
         const ext = file.name.match(/\.([^.]+)$/)?.[1]?.toLowerCase() ?? null;
         const isImage = (file.type || "").startsWith("image/");
 
-        // 1) Create design record
         const designTitle = `${productTitle} — ${baseName}`;
         const designSlug = `${slugify(designTitle)}-${Date.now()}`;
         const { data: design, error: dErr } = await supabase
@@ -246,7 +289,6 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
           continue;
         }
 
-        // 2) Upload file to design-files bucket
         const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
         const path = `${design.id}/${Date.now()}-${safeName}`;
         const { error: upErr } = await supabase.storage
@@ -255,12 +297,10 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
         if (upErr) {
           failed++;
           console.error("Upload failed:", upErr);
-          // Roll back the design row to avoid orphans
           await supabase.from("designs").delete().eq("id", design.id);
           continue;
         }
 
-        // 3) Insert design_files row
         const { error: fErr } = await supabase.from("design_files").insert({
           design_id: design.id,
           storage_bucket: DESIGN_BUCKET,
@@ -280,7 +320,6 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
           continue;
         }
 
-        // 4) Link design to product
         const { error: lErr } = await supabase.from("product_designs").insert({
           product_id: productId,
           design_id: design.id,
@@ -301,17 +340,28 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
     }
   }
 
+  function openPicker(asVariation: boolean) {
+    setPickerVariation(asVariation);
+    setPickerOpen(true);
+  }
+
+  const primaryOptions = useMemo(
+    () => primaries.map((p) => ({ id: p.id, design_title: p.design.title })),
+    [primaries],
+  );
+
   return (
-    <div className="space-y-4 relative" {...dropProps}>
+    <div className="space-y-6 relative" {...dropProps}>
       {isOver && (
         <div className="absolute inset-0 z-20 rounded-lg border-2 border-dashed border-accent bg-accent/10 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
           <div className="flex flex-col items-center gap-2 text-accent">
             <Upload className="h-8 w-8" />
-            <div className="text-sm font-medium">Drop to upload as new design{" "}</div>
+            <div className="text-sm font-medium">Drop to upload as new design</div>
             <div className="text-xs text-accent/80">Images, PDF, AI, PSD, SVG</div>
           </div>
         </div>
       )}
+
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">
           Designs linked to this product. Stored privately in the{" "}
@@ -319,15 +369,9 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
         </p>
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
-            onClick={() => setPickerOpen(true)}
-            className="gap-2 h-10"
-          >
-            <Link2 className="h-4 w-4" /> Link existing
-          </Button>
-          <Button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
+            variant="outline"
             className="gap-2 h-10"
           >
             {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
@@ -354,106 +398,331 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
         <div className="ax-card p-12 text-center space-y-3">
           <Layers className="h-10 w-10 text-muted-foreground mx-auto" />
           <p className="text-sm text-muted-foreground">No designs linked.</p>
-          <p className="text-xs text-muted-foreground">
-            Link an existing design or upload a new one to get started.
-          </p>
+          <Button onClick={() => openPicker(false)} className="gap-2 mt-2">
+            <Link2 className="h-4 w-4" /> Link your first design
+          </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {(rows ?? []).map((r, i) => (
-            <div
-              key={r.id}
-              className="ax-card p-2 space-y-2 stagger-fade"
-              style={{ ["--i" as string]: i }}
-            >
-              <div className="relative aspect-square rounded-md overflow-hidden bg-muted">
-                {r.thumb_url ? (
-                  <img
-                    src={r.thumb_url}
-                    alt={r.design.title}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-                    No preview
-                  </div>
-                )}
-                <span className="absolute top-1.5 left-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] bg-dark/80 text-white border border-white/10 capitalize">
-                  {formatPlacement(r.placement)}
+        <>
+          {/* Primary section */}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold">Primary Designs</h3>
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium tabular-nums">
+                  {primaries.length}
                 </span>
               </div>
-
-              <div className="text-xs font-medium truncate" title={r.design.title}>
-                {r.design.title}
-              </div>
-
-              <div className="flex items-center justify-between gap-1">
-                <Select
-                  value={r.placement}
-                  onValueChange={(v) => changePlacement(r, v as DesignPlacement)}
-                >
-                  <SelectTrigger className="h-7 text-xs px-2 max-w-[110px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PLACEMENT_OPTIONS.map((p) => (
-                      <SelectItem key={p.value} value={p.value} className="text-xs">
-                        {p.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="ghost" className="h-7 px-2 text-xs">
-                      ⋯
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => downloadFile(r)} disabled={!r.primary_file}>
-                      <Download className="h-4 w-4 mr-2" /> Download file
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onSelect={() => setUnlinkConfirm(r)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" /> Unlink from product
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              <Button
+                size="sm"
+                onClick={() => openPicker(false)}
+                className="gap-1.5 h-8"
+              >
+                <Plus className="h-3.5 w-3.5" /> Link Design
+              </Button>
             </div>
-          ))}
-        </div>
+
+            {primaries.length === 0 ? (
+              <div className="ax-card p-6 text-center text-xs text-muted-foreground">
+                No primary designs yet. Click <span className="font-medium">Link Design</span> to add some.
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {primaries.map((r, i) => (
+                  <DesignTile
+                    key={r.id}
+                    row={r}
+                    index={i}
+                    onEdit={() => setEditing(r)}
+                    onUnlink={() => setUnlinkConfirm(r)}
+                    onDownload={() => downloadFile(r)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Variations section — only shown if any exist */}
+          {variations.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold">Variations</h3>
+                  <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-muted text-[11px] font-medium tabular-nums">
+                    {variations.length}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openPicker(true)}
+                  className="gap-1.5 h-8"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Variation
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                {primaries.map((p) => {
+                  const kids = variationGroups.groups.get(p.id) ?? [];
+                  if (kids.length === 0) return null;
+                  return (
+                    <div key={p.id} className="space-y-2">
+                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="h-px flex-1 bg-border" />
+                        <span>
+                          Variations of <span className="text-foreground font-medium">{p.design.title}</span>
+                        </span>
+                        <span className="h-px flex-1 bg-border" />
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                        {kids.map((v, i) => (
+                          <DesignTile
+                            key={v.id}
+                            row={v}
+                            index={i}
+                            variation
+                            onEdit={() => setEditing(v)}
+                            onUnlink={() => setUnlinkConfirm(v)}
+                            onDownload={() => downloadFile(v)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {variationGroups.unlinked.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <span className="h-px flex-1 bg-border" />
+                      <span>Unlinked variations</span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                      {variationGroups.unlinked.map((v, i) => (
+                        <DesignTile
+                          key={v.id}
+                          row={v}
+                          index={i}
+                          variation
+                          onEdit={() => setEditing(v)}
+                          onUnlink={() => setUnlinkConfirm(v)}
+                          onDownload={() => downloadFile(v)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       <DesignPickerDialog
         open={pickerOpen}
         productId={productId}
         excludedDesignIds={linkedIds}
+        primaryOptions={primaryOptions}
+        defaultAsVariation={pickerVariation}
         onOpenChange={setPickerOpen}
         onLinked={load}
       />
 
-      <AlertDialog open={!!unlinkConfirm} onOpenChange={(o) => !o && setUnlinkConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Unlink "{unlinkConfirm?.design.title}"?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes the link between this product and the design. The design itself
-              and its files are not deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => unlinkConfirm && unlink(unlinkConfirm)}>
-              Unlink
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <EditLinkDialog
+        open={!!editing}
+        row={editing}
+        primaryOptions={primaryOptions}
+        onOpenChange={(o) => !o && setEditing(null)}
+        onSaved={() => {
+          setEditing(null);
+          load();
+        }}
+      />
+
+      <UnlinkConfirmDialog
+        row={unlinkConfirm}
+        childCount={
+          unlinkConfirm && !unlinkConfirm.is_variation
+            ? variations.filter((v) => v.variation_of === unlinkConfirm.id).length
+            : 0
+        }
+        onCancel={() => setUnlinkConfirm(null)}
+        onConfirm={(includeVariations) => unlinkConfirm && unlink(unlinkConfirm, includeVariations)}
+      />
     </div>
+  );
+}
+
+/* ----------------------------- Tile component ----------------------------- */
+
+function DesignTile({
+  row,
+  index,
+  variation = false,
+  onEdit,
+  onUnlink,
+  onDownload,
+}: {
+  row: LinkRow;
+  index: number;
+  variation?: boolean;
+  onEdit: () => void;
+  onUnlink: () => void;
+  onDownload: () => void;
+}) {
+  const label = variation
+    ? row.variation_label?.trim() || row.design.title
+    : row.design.title;
+
+  return (
+    <div
+      className={cn(
+        "ax-card p-2 space-y-1.5 stagger-fade group relative",
+        variation && "opacity-80 hover:opacity-100 transition-opacity",
+      )}
+      style={{ ["--i" as string]: index }}
+    >
+      <div className="relative aspect-square rounded-md overflow-hidden bg-muted">
+        {row.thumb_url ? (
+          <img
+            src={row.thumb_url}
+            alt={label}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+            No preview
+          </div>
+        )}
+        <span
+          className={cn(
+            "absolute top-1.5 left-1.5 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] border capitalize",
+            variation
+              ? "bg-accent/80 text-white border-accent/40"
+              : "bg-dark/80 text-white border-white/10",
+          )}
+        >
+          {variation ? variationBadge(row.placement) : formatPlacement(row.placement)}
+        </span>
+
+        {/* Hover actions (desktop) */}
+        <div className="absolute bottom-1.5 right-1.5 hidden sm:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={onEdit}
+            aria-label="Edit link"
+            className="h-6 w-6 rounded-md bg-background/90 border border-border flex items-center justify-center hover:bg-background"
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onUnlink}
+            aria-label="Unlink"
+            className="h-6 w-6 rounded-md bg-background/90 border border-border flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground"
+          >
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+
+        {/* Mobile menu */}
+        <div className="absolute bottom-1.5 right-1.5 sm:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="More"
+                className="h-6 w-6 rounded-md bg-background/90 border border-border flex items-center justify-center"
+              >
+                <MoreVertical className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={onEdit}>
+                <Pencil className="h-4 w-4 mr-2" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={onDownload} disabled={!row.primary_file}>
+                <Download className="h-4 w-4 mr-2" /> Download file
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={onUnlink}
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Unlink
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <div
+        className={cn("font-medium truncate", variation ? "text-[11px]" : "text-xs")}
+        title={label}
+      >
+        {label}
+      </div>
+      {variation && row.variation_label && row.variation_label !== row.design.title && (
+        <div className="text-[10px] text-muted-foreground truncate" title={row.design.title}>
+          {row.design.title}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------- Smart unlink confirmation ------------------------- */
+
+function UnlinkConfirmDialog({
+  row,
+  childCount,
+  onCancel,
+  onConfirm,
+}: {
+  row: LinkRow | null;
+  childCount: number;
+  onCancel: () => void;
+  onConfirm: (includeVariations: boolean) => void;
+}) {
+  const open = !!row;
+  const hasChildren = childCount > 0;
+
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => !o && onCancel()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Unlink "{row?.design.title}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            {hasChildren ? (
+              <>
+                This primary has <span className="font-medium">{childCount}</span>{" "}
+                variation{childCount === 1 ? "" : "s"} linked to it. The design file
+                remains in your library either way.
+              </>
+            ) : (
+              <>Unlink this design from the product? The design file remains in your library.</>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className={hasChildren ? "sm:justify-between" : undefined}>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          {hasChildren ? (
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => onConfirm(false)}>
+                Just primary
+              </Button>
+              <AlertDialogAction onClick={() => onConfirm(true)}>
+                Primary + variations
+              </AlertDialogAction>
+            </div>
+          ) : (
+            <AlertDialogAction onClick={() => onConfirm(false)}>Unlink</AlertDialogAction>
+          )}
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
