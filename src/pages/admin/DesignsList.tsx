@@ -61,9 +61,13 @@ import {
   formatDesignStatus,
 } from "@/lib/design-status";
 import { DesignFormDialog } from "@/components/admin/designs/DesignFormDialog";
+import { DesignBulkTagBar } from "@/components/admin/designs/DesignBulkTagBar";
 import { useAuth } from "@/auth/AuthProvider";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { uploadDesignsBatch, getCurrentUserOrgId } from "@/lib/upload-design";
+import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
+import { runMooneySweep } from "@/lib/mooney-sweep";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function DesignsList() {
