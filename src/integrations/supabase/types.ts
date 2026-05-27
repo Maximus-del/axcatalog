@@ -1018,6 +1018,24 @@ export type Database = {
           },
         ]
       }
+      org_pricing_config: {
+        Row: {
+          base_markup_pct: number
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          base_markup_pct?: number
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          base_markup_pct?: number
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       organizations: {
         Row: {
           created_at: string
@@ -1057,6 +1075,27 @@ export type Database = {
           shopify_webhook_secret?: string | null
           slug?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      portal_hidden_products: {
+        Row: {
+          athlete_id: string
+          hidden_at: string
+          hidden_by: string | null
+          product_id: string
+        }
+        Insert: {
+          athlete_id: string
+          hidden_at?: string
+          hidden_by?: string | null
+          product_id: string
+        }
+        Update: {
+          athlete_id?: string
+          hidden_at?: string
+          hidden_by?: string | null
+          product_id?: string
         }
         Relationships: []
       }
@@ -1258,6 +1297,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      product_social_assets: {
+        Row: {
+          athlete_id: string | null
+          caption: string | null
+          created_at: string
+          file_name: string | null
+          file_size_bytes: number | null
+          id: string
+          mime_type: string | null
+          organization_id: string
+          product_id: string
+          sort_order: number
+          storage_bucket: string
+          storage_path: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          athlete_id?: string | null
+          caption?: string | null
+          created_at?: string
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          organization_id: string
+          product_id: string
+          sort_order?: number
+          storage_bucket?: string
+          storage_path: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          athlete_id?: string | null
+          caption?: string | null
+          created_at?: string
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          organization_id?: string
+          product_id?: string
+          sort_order?: number
+          storage_bucket?: string
+          storage_path?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
       }
       product_tags: {
         Row: {
@@ -2449,6 +2536,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      volume_discount_tiers: {
+        Row: {
+          created_at: string
+          discount_pct: number
+          id: string
+          min_qty: number
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          discount_pct: number
+          id?: string
+          min_qty: number
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          discount_pct?: number
+          id?: string
+          min_qty?: number
+          organization_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
