@@ -67,7 +67,7 @@ export async function runMooneySweep(): Promise<SweepResult> {
       const rows = toInsert.map((pid) => ({
         product_id: pid,
         athlete_id: athlete.id,
-        role: hasPrimary.has(pid) ? ("additional" as const) : ("primary" as const),
+        role: hasPrimary.has(pid) ? ("featured" as const) : ("primary" as const),
       }));
       const { error: insErr } = await supabase.from("product_athletes").insert(rows);
       if (insErr) errors.push(`product_athletes: ${insErr.message}`);
