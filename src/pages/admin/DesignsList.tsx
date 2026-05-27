@@ -493,6 +493,23 @@ function CollectionView({
   const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const marquee = useMarqueeSelection({
+    selected,
+    onChange: setSelected,
+  });
+
+  function toggleSelected(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
