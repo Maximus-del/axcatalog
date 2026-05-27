@@ -89,6 +89,35 @@ export default function DesignsList() {
   );
 }
 
+function MooneySweepButton({ onDone }: { onDone?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="outline"
+      disabled={busy}
+      className="gap-2"
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const r = await runMooneySweep();
+          const msg = `Linked Mooney → ${r.productsLinked}/${r.productsScanned} products, ${r.designsLinked}/${r.designsScanned} designs`;
+          if (r.errors.length) toast.error(`${msg} (${r.errors.join("; ")})`);
+          else toast.success(msg);
+          onDone?.();
+        } catch (e: any) {
+          toast.error(`Sweep failed: ${e?.message ?? e}`);
+        } finally {
+          setBusy(false);
+        }
+      }}
+      title="Auto-link Darnell Mooney to anything mentioning Mooney, Mooney World, or MWrld"
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+      Auto-link Mooney
+    </Button>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Collections overview                                                        */
 /* -------------------------------------------------------------------------- */
