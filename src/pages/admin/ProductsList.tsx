@@ -572,6 +572,8 @@ export default function ProductsList() {
             setSelected(new Set());
             load();
           }}
+          athleteOptions={allAthletes}
+          teamOptions={allTeams}
         />
       )}
 
@@ -587,6 +589,18 @@ export default function ProductsList() {
           <Button onClick={() => setImportOpen(true)} className="gap-2 h-11 md:h-10 pressable">
             <Download className="h-4 w-4" /> <span className="hidden sm:inline">Import URL</span>
           </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={handleMooneySweep}
+              disabled={sweepBusy}
+              className="gap-2 h-11 md:h-10 pressable"
+              title="Auto-link Darnell Mooney to any product/design mentioning Mooney, Mooney World, or MWrld"
+            >
+              {sweepBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <span className="hidden md:inline">Auto-link Mooney</span>
+            </Button>
+          )}
         </div>
       </header>
 
