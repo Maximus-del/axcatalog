@@ -131,6 +131,34 @@ export function BulkTagBar({ selectedIds, onCancel, onApplied, athleteOptions = 
             {selectedIds.length} {selectedIds.length === 1 ? "product" : "products"} selected
           </span>
         </div>
+        {athleteOptions.length > 0 && (
+          <Select value="" onValueChange={addAthlete}>
+            <SelectTrigger className="w-[180px] h-9">
+              <SelectValue placeholder="+ Athlete tag" />
+            </SelectTrigger>
+            <SelectContent>
+              {athleteOptions.map((a) => (
+                <SelectItem key={a.id} value={a.slug}>
+                  {a.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {teamOptions.length > 0 && (
+          <Select value="" onValueChange={addTeam}>
+            <SelectTrigger className="w-[160px] h-9">
+              <SelectValue placeholder="+ Team tag" />
+            </SelectTrigger>
+            <SelectContent>
+              {teamOptions.map((t) => (
+                <SelectItem key={t.id} value={t.slug}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <div className="flex-1 min-w-[260px]">
           <TagChipInput
             tags={tags}
