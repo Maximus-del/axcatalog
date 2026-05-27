@@ -150,6 +150,16 @@ export default function ProductsList() {
   const detailOpen = !!detailId && !bulkMode;
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Marquee (drag-rectangle) selection. Enters bulk mode on first drag.
+  const marquee = useMarqueeSelection({
+    selected,
+    onChange: setSelected,
+    onActivate: () => {
+      if (!bulkMode) setBulkMode(true);
+      haptic.tap();
+    },
+  });
+
   // Pull-to-refresh on touch devices
   const { pullPx, refreshing } = usePullToRefresh({
     onRefresh: async () => {
