@@ -1,7 +1,7 @@
 // Mobile-first. Test at 375px before merging.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Download, Filter, Loader2, Plus, Search, SlidersHorizontal, Tag, X } from "lucide-react";
+import { Download, Filter, Loader2, Plus, Search, SlidersHorizontal, Sparkles, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,8 @@ import type { ProductStatus } from "@/lib/product-status";
 import { cn } from "@/lib/utils";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { haptic } from "@/lib/haptics";
+import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
+import { runMooneySweep } from "@/lib/mooney-sweep";
 
 interface ProductRow {
   id: string;
