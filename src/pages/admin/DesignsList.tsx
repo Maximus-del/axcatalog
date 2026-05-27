@@ -904,12 +904,30 @@ function CollectionView({
         )}
 
         {!loading && rows && rows.length > 0 && view === "grid" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {paged.map((d) => (
-              <button
+          <div
+            ref={marquee.containerRef}
+            className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 select-none"
+          >
+            {marquee.overlay}
+            {paged.map((d) => {
+              const isSel = selected.has(d.id);
+              return (
+              <div
                 key={d.id}
-                onClick={() => navigate(`/admin/designs/${d.id}`)}
-                className="ax-card p-0 overflow-hidden text-left transition-all duration-200 hover:border-accent hover:-translate-y-1 group"
+                data-marquee-id={d.id}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  if (selected.size > 0 || e.shiftKey || e.metaKey || e.ctrlKey) {
+                    toggleSelected(d.id);
+                  } else {
+                    navigate(`/admin/designs/${d.id}`);
+                  }
+                }}
+                className={cn(
+                  "ax-card p-0 overflow-hidden text-left transition-all duration-200 hover:-translate-y-1 group cursor-pointer",
+                  isSel ? "border-accent ring-2 ring-accent/40" : "hover:border-accent",
+                )}
               >
                 <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
                   {d.thumb_url ? (
@@ -954,8 +972,9 @@ function CollectionView({
                     </span>
                   </div>
                 </div>
-              </button>
-            ))}
+              </div>
+              );
+            })}
           </div>
         )}
 
