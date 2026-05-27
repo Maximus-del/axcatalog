@@ -1,7 +1,7 @@
 // Mobile-first. Test at 375px before merging.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Download, Filter, Loader2, Plus, Search, SlidersHorizontal, Tag, X } from "lucide-react";
+import { Download, Filter, Loader2, Plus, Search, SlidersHorizontal, Sparkles, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,8 @@ import type { ProductStatus } from "@/lib/product-status";
 import { cn } from "@/lib/utils";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { haptic } from "@/lib/haptics";
+import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
+import { runMooneySweep } from "@/lib/mooney-sweep";
 
 interface ProductRow {
   id: string;
@@ -139,11 +141,24 @@ export default function ProductsList() {
   const [editTitleFor, setEditTitleFor] = useState<{ id: string; title: string } | null>(null);
   const [archiveFor, setArchiveFor] = useState<{ id: string; title: string } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [allAthletes, setAllAthletes] = useState<Array<{ id: string; slug: string; name: string }>>([]);
+  const [allTeams, setAllTeams] = useState<Array<{ id: string; slug: string; name: string }>>([]);
+  const [sweepBusy, setSweepBusy] = useState(false);
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const detailId = params.id ?? null;
   const detailOpen = !!detailId && !bulkMode;
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Marquee (drag-rectangle) selection. Enters bulk mode on first drag.
+  const marquee = useMarqueeSelection({
+    selected,
+    onChange: setSelected,
+    onActivate: () => {
+      if (!bulkMode) setBulkMode(true);
+      haptic.tap();
+    },
+  });
 
   // Pull-to-refresh on touch devices
   const { pullPx, refreshing } = usePullToRefresh({
@@ -276,6 +291,40 @@ export default function ProductsList() {
   useEffect(() => {
     load();
   }, []);
+
+  // Athlete + team option lists (with slugs) for the bulk tag bar quick-pick.
+  useEffect(() => {
+    void (async () => {
+      const [aRes, tRes] = await Promise.all([
+        supabase.from("athletes").select("id, slug, first_name, last_name, full_name").order("last_name"),
+        supabase.from("teams").select("id, slug, name").order("name"),
+      ]);
+      setAllAthletes(
+        (aRes.data ?? []).map((a) => ({
+          id: a.id,
+          slug: a.slug,
+          name: a.full_name ?? `${a.first_name} ${a.last_name}`,
+        })),
+      );
+      setAllTeams((tRes.data ?? []) as Array<{ id: string; slug: string; name: string }>);
+    })();
+  }, []);
+
+  async function handleMooneySweep() {
+    if (sweepBusy) return;
+    setSweepBusy(true);
+    try {
+      const res = await runMooneySweep();
+      const msg = `Linked Mooney → ${res.productsLinked}/${res.productsScanned} products, ${res.designsLinked}/${res.designsScanned} designs`;
+      if (res.errors.length) toast.error(`${msg} (errors: ${res.errors.join("; ")})`);
+      else toast.success(msg);
+      await load();
+    } catch (e: any) {
+      toast.error(`Sweep failed: ${e?.message ?? e}`);
+    } finally {
+      setSweepBusy(false);
+    }
+  }
 
   // Keep ?search= in the URL in sync with the search box. We use replace
   // so each keystroke doesn't pollute browser history — only the final
@@ -533,6 +582,8 @@ export default function ProductsList() {
             setSelected(new Set());
             load();
           }}
+          athleteOptions={allAthletes}
+          teamOptions={allTeams}
         />
       )}
 
@@ -548,6 +599,18 @@ export default function ProductsList() {
           <Button onClick={() => setImportOpen(true)} className="gap-2 h-11 md:h-10 pressable">
             <Download className="h-4 w-4" /> <span className="hidden sm:inline">Import URL</span>
           </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={handleMooneySweep}
+              disabled={sweepBusy}
+              className="gap-2 h-11 md:h-10 pressable"
+              title="Auto-link Darnell Mooney to any product/design mentioning Mooney, Mooney World, or MWrld"
+            >
+              {sweepBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              <span className="hidden md:inline">Auto-link Mooney</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -789,8 +852,13 @@ export default function ProductsList() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+              <div
+                ref={marquee.containerRef}
+                className="relative grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 select-none"
+              >
+                {marquee.overlay}
                 {filtered.map((r) => (
+                  <div key={r.id} data-marquee-id={r.id}>
                   <ProductCard
                     key={r.id}
                     id={r.id}
@@ -813,6 +881,7 @@ export default function ProductsList() {
                     onEditTitle={() => setEditTitleFor({ id: r.id, title: r.title })}
                     onArchive={() => setArchiveFor({ id: r.id, title: r.title })}
                   />
+                  </div>
                 ))}
               </div>
             )}

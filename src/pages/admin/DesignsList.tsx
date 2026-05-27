@@ -61,9 +61,13 @@ import {
   formatDesignStatus,
 } from "@/lib/design-status";
 import { DesignFormDialog } from "@/components/admin/designs/DesignFormDialog";
+import { DesignBulkTagBar } from "@/components/admin/designs/DesignBulkTagBar";
 import { useAuth } from "@/auth/AuthProvider";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { uploadDesignsBatch, getCurrentUserOrgId } from "@/lib/upload-design";
+import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
+import { runMooneySweep } from "@/lib/mooney-sweep";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function DesignsList() {
@@ -82,6 +86,35 @@ export default function DesignsList() {
     <CollectionsOverview
       onOpen={(id) => setSearchParams({ c: id })}
     />
+  );
+}
+
+function MooneySweepButton({ onDone }: { onDone?: () => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="outline"
+      disabled={busy}
+      className="gap-2"
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const r = await runMooneySweep();
+          const msg = `Linked Mooney → ${r.productsLinked}/${r.productsScanned} products, ${r.designsLinked}/${r.designsScanned} designs`;
+          if (r.errors.length) toast.error(`${msg} (${r.errors.join("; ")})`);
+          else toast.success(msg);
+          onDone?.();
+        } catch (e: any) {
+          toast.error(`Sweep failed: ${e?.message ?? e}`);
+        } finally {
+          setBusy(false);
+        }
+      }}
+      title="Auto-link Darnell Mooney to anything mentioning Mooney, Mooney World, or MWrld"
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+      Auto-link Mooney
+    </Button>
   );
 }
 
@@ -239,6 +272,7 @@ function CollectionsOverview({ onOpen }: { onOpen: (id: string) => void }) {
             className="pl-9"
           />
         </div>
+        <MooneySweepButton onDone={() => void load()} />
       </div>
 
       {loading && (
@@ -459,6 +493,23 @@ function CollectionView({
   const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const marquee = useMarqueeSelection({
+    selected,
+    onChange: setSelected,
+  });
+
+  function toggleSelected(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function clearSelection() {
+    setSelected(new Set());
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -671,6 +722,18 @@ function CollectionView({
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+      {selected.size > 0 && (
+        <DesignBulkTagBar
+          selectedIds={Array.from(selected)}
+          athletes={athletes}
+          teams={teams}
+          onCancel={clearSelection}
+          onApplied={() => {
+            clearSelection();
+            void load();
+          }}
+        />
+      )}
       <div className="flex items-center gap-2 text-sm">
         <button
           onClick={onBack}
@@ -841,12 +904,30 @@ function CollectionView({
         )}
 
         {!loading && rows && rows.length > 0 && view === "grid" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {paged.map((d) => (
-              <button
+          <div
+            ref={marquee.containerRef}
+            className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 select-none"
+          >
+            {marquee.overlay}
+            {paged.map((d) => {
+              const isSel = selected.has(d.id);
+              return (
+              <div
                 key={d.id}
-                onClick={() => navigate(`/admin/designs/${d.id}`)}
-                className="ax-card p-0 overflow-hidden text-left transition-all duration-200 hover:border-accent hover:-translate-y-1 group"
+                data-marquee-id={d.id}
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  if (selected.size > 0 || e.shiftKey || e.metaKey || e.ctrlKey) {
+                    toggleSelected(d.id);
+                  } else {
+                    navigate(`/admin/designs/${d.id}`);
+                  }
+                }}
+                className={cn(
+                  "ax-card p-0 overflow-hidden text-left transition-all duration-200 hover:-translate-y-1 group cursor-pointer",
+                  isSel ? "border-accent ring-2 ring-accent/40" : "hover:border-accent",
+                )}
               >
                 <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
                   {d.thumb_url ? (
@@ -891,8 +972,9 @@ function CollectionView({
                     </span>
                   </div>
                 </div>
-              </button>
-            ))}
+              </div>
+              );
+            })}
           </div>
         )}
 
