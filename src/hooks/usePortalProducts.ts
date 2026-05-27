@@ -111,9 +111,14 @@ export function usePortalProducts(athleteId: string | null): State {
             (a.sort_order ?? 0) - (b.sort_order ?? 0),
         );
         const top = sortedImgs[0];
-        const url = top
-          ? supabase.storage.from(top.storage_bucket).getPublicUrl(top.storage_path).data.publicUrl
-          : null;
+        let url: string | null = null;
+        if (top) {
+          if (top.storage_bucket === "external" || /^https?:\/\//i.test(top.storage_path)) {
+            url = top.storage_path;
+          } else {
+            url = supabase.storage.from(top.storage_bucket).getPublicUrl(top.storage_path).data.publicUrl;
+          }
+        }
         return {
           id: p.id,
           title: p.title,
