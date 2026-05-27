@@ -61,7 +61,10 @@ export function DesignBulkTagBar({
     }
     setBusy(true);
     try {
-      const update: Record<string, string> = {};
+      const update: {
+        primary_athlete_id?: string;
+        primary_team_id?: string;
+      } = {};
       if (athleteId) update.primary_athlete_id = athleteId;
       if (teamId) update.primary_team_id = teamId;
       const { error: upErr } = await supabase
