@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Minus, Plus, Loader2, Shirt } from "lucide-react";
+import { ChevronUp, ChevronDown, Loader2, Shirt } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -78,23 +78,13 @@ export function BulkOrderSheet({
     return ts.find((t) => totalUnits < t.min_qty) ?? null;
   }, [config.tiers, totalUnits]);
 
-  // Distinct columns we'll show across the table:
-  // standard sizes that any non-one-size product offers, plus a "One Size" column if any one-size product exists.
-  const { sizeCols, hasOneSize } = useMemo(() => {
-    const cols = new Set<string>();
-    let hasOne = false;
-    for (const p of products) {
-      if (isOneSize(p)) {
-        hasOne = true;
-        continue;
-      }
-      for (const s of p.sizes) cols.add(s);
-    }
-    // Order standard sizes first, then any extras alphabetically
-    const ordered = STANDARD_SIZES.filter((s) => cols.has(s));
-    const extras = [...cols].filter((s) => !STANDARD_SIZES.includes(s as typeof STANDARD_SIZES[number])).sort();
-    return { sizeCols: [...ordered, ...extras], hasOneSize: hasOne };
-  }, [products]);
+  const orderSizes = (sizes: string[]): string[] => {
+    const std = STANDARD_SIZES.filter((s) => sizes.includes(s));
+    const extras = sizes
+      .filter((s) => !STANDARD_SIZES.includes(s as typeof STANDARD_SIZES[number]))
+      .sort();
+    return [...std, ...extras];
+  };
 
   const handleSubmit = async () => {
     if (impersonating) {
@@ -172,38 +162,64 @@ export function BulkOrderSheet({
     }
   };
 
-  const renderQtyCell = (productId: string, size: string) => {
+  const SizeStepper = ({
+    productId,
+    size,
+    label,
+  }: {
+    productId: string;
+    size: string;
+    label: string;
+  }) => {
     const qty = draft[productId]?.[size] ?? 0;
+    const active = qty > 0;
     return (
-      <div className="flex items-center justify-center gap-1">
-        <button
-          type="button"
-          onClick={() => setQty(productId, size, Math.max(0, qty - 1))}
-          className="h-6 w-6 rounded border border-border hover:border-accent flex items-center justify-center"
-          aria-label={`Decrease ${size}`}
+      <div
+        className={cn(
+          "flex items-center gap-1 rounded border bg-background px-1.5 py-0.5",
+          active ? "border-accent" : "border-border",
+        )}
+      >
+        <span
+          className={cn(
+            "text-[10px] font-semibold uppercase tracking-wider w-7 text-center",
+            active ? "text-accent" : "text-muted-foreground",
+          )}
         >
-          <Minus className="h-3 w-3" />
-        </button>
+          {label}
+        </span>
         <input
           type="number"
           min={0}
-          value={qty}
+          value={qty || ""}
+          placeholder="0"
           onChange={(e) =>
             setQty(productId, size, Math.max(0, parseInt(e.target.value || "0", 10) || 0))
           }
+          onFocus={(e) => e.currentTarget.select()}
           className={cn(
-            "h-6 w-12 text-center text-xs rounded bg-background border border-border",
-            qty > 0 && "border-accent text-accent font-semibold",
+            "h-6 w-9 text-center text-xs rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+            active && "text-accent font-semibold",
           )}
         />
-        <button
-          type="button"
-          onClick={() => setQty(productId, size, qty + 1)}
-          className="h-6 w-6 rounded border border-border hover:border-accent flex items-center justify-center"
-          aria-label={`Increase ${size}`}
-        >
-          <Plus className="h-3 w-3" />
-        </button>
+        <div className="flex flex-col -my-0.5">
+          <button
+            type="button"
+            onClick={() => setQty(productId, size, qty + 1)}
+            className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent"
+            aria-label={`Increase ${label}`}
+          >
+            <ChevronUp className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setQty(productId, size, Math.max(0, qty - 1))}
+            className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent"
+            aria-label={`Decrease ${label}`}
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        </div>
       </div>
     );
   };
@@ -235,71 +251,54 @@ export function BulkOrderSheet({
               </p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-card z-10 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-3 ax-label">Product</th>
-                  {sizeCols.map((s) => (
-                    <th key={s} className="text-center px-2 py-3 ax-label">
-                      {s}
-                    </th>
-                  ))}
-                  {hasOneSize && (
-                    <th className="text-center px-2 py-3 ax-label whitespace-nowrap">
-                      One Size
-                    </th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => {
-                  const oneSize = isOneSize(p);
-                  return (
-                    <tr key={p.id} className="border-b border-border/60 hover:bg-accent/5">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3 min-w-[180px]">
-                          <div className="h-10 w-10 rounded bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden shrink-0">
-                            {p.primary_image_url ? (
-                              <img
-                                src={p.primary_image_url}
-                                alt=""
-                                className="max-h-full max-w-full object-contain"
-                              />
-                            ) : (
-                              <Shirt
-                                className="h-5 w-5 text-muted-foreground/40"
-                                strokeWidth={1.5}
-                              />
-                            )}
-                          </div>
-                          <span className="text-sm truncate max-w-[180px]" title={p.title}>
-                            {p.title}
-                          </span>
-                        </div>
-                      </td>
-                      {sizeCols.map((s) => (
-                        <td key={s} className="px-2 py-2">
-                          {!oneSize && p.sizes.includes(s) ? (
-                            renderQtyCell(p.id, s)
-                          ) : (
-                            <div className="text-center text-muted-foreground/30 text-xs">—</div>
-                          )}
-                        </td>
-                      ))}
-                      {hasOneSize && (
-                        <td className="px-2 py-2">
-                          {oneSize ? (
-                            renderQtyCell(p.id, p.sizes[0] ?? "ONE")
-                          ) : (
-                            <div className="text-center text-muted-foreground/30 text-xs">—</div>
-                          )}
-                        </td>
+            <ul className="divide-y divide-border/60">
+              {products.map((p) => {
+                const oneSize = isOneSize(p);
+                const sizes = oneSize ? [p.sizes[0] ?? "ONE"] : orderSizes(p.sizes);
+                const productTotal = Object.values(draft[p.id] ?? {}).reduce(
+                  (a, b) => a + b,
+                  0,
+                );
+                return (
+                  <li key={p.id} className="px-4 py-2.5 hover:bg-accent/5">
+                    <div className="flex items-center gap-3 mb-1.5">
+                      <div className="h-9 w-9 rounded bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden shrink-0">
+                        {p.primary_image_url ? (
+                          <img
+                            src={p.primary_image_url}
+                            alt=""
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        ) : (
+                          <Shirt
+                            className="h-4 w-4 text-muted-foreground/40"
+                            strokeWidth={1.5}
+                          />
+                        )}
+                      </div>
+                      <span className="text-sm truncate flex-1" title={p.title}>
+                        {p.title}
+                      </span>
+                      {productTotal > 0 && (
+                        <span className="text-[11px] uppercase tracking-wider text-accent font-semibold shrink-0">
+                          {productTotal} pcs
+                        </span>
                       )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                    </div>
+                    <div className="flex flex-wrap gap-1 pl-12">
+                      {sizes.map((s) => (
+                        <SizeStepper
+                          key={s}
+                          productId={p.id}
+                          size={s}
+                          label={oneSize ? "OS" : s}
+                        />
+                      ))}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
 
