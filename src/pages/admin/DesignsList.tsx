@@ -243,6 +243,7 @@ function CollectionsOverview({ onOpen }: { onOpen: (id: string) => void }) {
             className="pl-9"
           />
         </div>
+        <MooneySweepButton onDone={() => void load()} />
       </div>
 
       {loading && (
