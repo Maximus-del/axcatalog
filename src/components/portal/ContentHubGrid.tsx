@@ -1,14 +1,18 @@
 // Mobile-first. Test at 375px before merging.
-import { Copy, Download, ExternalLink, Shirt } from "lucide-react";
+import { useState } from "react";
+import { Copy, Download, ExternalLink, ImagePlus, Shirt } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { shopifyImg } from "@/lib/shopify-image";
+import { ProductGalleryDialog } from "./ProductGalleryDialog";
 
 interface Props {
   products: PortalProduct[];
   loading: boolean;
+  athleteId: string;
+  organizationId: string;
 }
 
 function shareUrl(p: PortalProduct): string {
@@ -35,7 +39,8 @@ async function downloadImage(url: string, filename: string) {
   }
 }
 
-export function ContentHubGrid({ products, loading }: Props) {
+export function ContentHubGrid({ products, loading, athleteId, organizationId }: Props) {
+  const [galleryProduct, setGalleryProduct] = useState<PortalProduct | null>(null);
   if (loading) {
     return (
       <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
@@ -57,12 +62,18 @@ export function ContentHubGrid({ products, loading }: Props) {
   }
 
   return (
+    <>
     <div className="grid gap-4 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
       {top.map((p) => {
         const url = shareUrl(p);
         return (
           <div key={p.id} className="ax-card p-3 flex flex-col gap-3">
-            <div className="relative h-56 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setGalleryProduct(p)}
+              className="relative h-56 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden group focus:outline-none focus:ring-2 focus:ring-accent"
+              aria-label={`Open gallery for ${p.title}`}
+            >
               {p.primary_image_url ? (
                 <img
                   src={shopifyImg(p.primary_image_url, 600) ?? p.primary_image_url}
@@ -76,7 +87,12 @@ export function ContentHubGrid({ products, loading }: Props) {
               <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-accent/90 text-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                 Available Now
               </div>
-            </div>
+              <div className="absolute inset-0 bg-background/70 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-accent">
+                  <ImagePlus className="h-4 w-4" /> Open gallery
+                </span>
+              </div>
+            </button>
             <div className="px-1">
               <h3 className="text-sm font-semibold truncate" title={p.title}>
                 {p.title}
@@ -120,5 +136,13 @@ export function ContentHubGrid({ products, loading }: Props) {
         );
       })}
     </div>
+    <ProductGalleryDialog
+      open={!!galleryProduct}
+      onOpenChange={(v) => !v && setGalleryProduct(null)}
+      product={galleryProduct}
+      athleteId={athleteId}
+      organizationId={organizationId}
+    />
+    </>
   );
 }

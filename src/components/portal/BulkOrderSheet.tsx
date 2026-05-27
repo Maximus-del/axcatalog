@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
+import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
@@ -57,6 +58,7 @@ export function BulkOrderSheet({
   const { user } = useAuth();
   const { draft, setQty, clear } = useOrderDraft();
   const [submitting, setSubmitting] = useState(false);
+  const { config } = usePortalPricing(organizationId);
 
   const totalUnits = useMemo(
     () =>
@@ -66,6 +68,15 @@ export function BulkOrderSheet({
       ),
     [draft],
   );
+
+  const discountPct = pickDiscount(config.tiers, totalUnits);
+  const markupMult = 1 + config.base_markup_pct / 100;
+  const discountMult = 1 - discountPct / 100;
+
+  const nextTier = useMemo(() => {
+    const ts = [...config.tiers].sort((a, b) => a.min_qty - b.min_qty);
+    return ts.find((t) => totalUnits < t.min_qty) ?? null;
+  }, [config.tiers, totalUnits]);
 
   // Distinct columns we'll show across the table:
   // standard sizes that any non-one-size product offers, plus a "One Size" column if any one-size product exists.
@@ -296,6 +307,16 @@ export function BulkOrderSheet({
           <div className="text-sm">
             <span className="ax-label">Total Units</span>
             <div className="text-2xl font-bold text-accent leading-none mt-1">{totalUnits}</div>
+            {discountPct > 0 && (
+              <div className="text-[11px] text-accent uppercase tracking-wider mt-1">
+                {discountPct}% volume discount
+              </div>
+            )}
+            {nextTier && (
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                +{nextTier.min_qty - totalUnits} more for {nextTier.discount_pct}% off
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
