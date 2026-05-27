@@ -722,6 +722,18 @@ function CollectionView({
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+      {selected.size > 0 && (
+        <DesignBulkTagBar
+          selectedIds={Array.from(selected)}
+          athletes={athletes}
+          teams={teams}
+          onCancel={clearSelection}
+          onApplied={() => {
+            clearSelection();
+            void load();
+          }}
+        />
+      )}
       <div className="flex items-center gap-2 text-sm">
         <button
           onClick={onBack}
