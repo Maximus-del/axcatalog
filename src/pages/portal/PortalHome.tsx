@@ -10,6 +10,7 @@ import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { usePortalStats } from "@/hooks/usePortalStats";
 import { usePortalProducts } from "@/hooks/usePortalProducts";
 import { usePortalOrders } from "@/hooks/usePortalOrders";
+import { usePortalHiddenProducts } from "@/hooks/usePortalHiddenProducts";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ImpersonationBanner } from "@/components/portal/ImpersonationBanner";
 import { ImpersonationGuardModal } from "@/components/portal/ImpersonationGuardModal";
@@ -43,6 +44,7 @@ function PortalHomeInner() {
   const { orders, loading: ordersLoading, refetch: refetchOrders } = usePortalOrders(
     athlete?.id ?? null,
   );
+  const { hiddenIds, hide, unhide } = usePortalHiddenProducts(athlete?.id ?? null);
 
   const [navOpen, setNavOpen] = useState(false);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
@@ -180,40 +182,6 @@ function PortalHomeInner() {
           />
         </div>
 
-        {/* This Week's Recommendations — swipeable on mobile */}
-        <section
-          aria-labelledby="sec-recs-h"
-          className="stagger-fade space-y-3"
-          style={{ ["--i" as string]: 2 }}
-        >
-          <h2
-            id="sec-recs-h"
-            className="ax-section-header"
-            style={{ letterSpacing: "0.22em" }}
-          >
-            This Week's Recommendations
-          </h2>
-          <RecommendationsCarousel />
-        </section>
-
-        {/* Era Comparison — only renders if 2+ memberships */}
-        <section
-          aria-labelledby="sec-era-h"
-          className="stagger-fade space-y-3"
-          style={{ ["--i" as string]: 3 }}
-        >
-          <h2
-            id="sec-era-h"
-            className="ax-section-header"
-            style={{ letterSpacing: "0.22em" }}
-          >
-            Era Comparison
-          </h2>
-          <EraComparison athleteId={athlete.id} />
-        </section>
-
-        <div className="h-px bg-accent/30" />
-
         <PortalSection
           id="sec-products"
           title="Your Product Lineup"
@@ -227,7 +195,13 @@ function PortalHomeInner() {
             </Button>
           }
         >
-          <MyProductsGrid products={products} loading={productsLoading} />
+          <MyProductsGrid
+            products={products}
+            loading={productsLoading}
+            hiddenIds={hiddenIds}
+            onHide={hide}
+            onUnhide={unhide}
+          />
         </PortalSection>
 
         <PortalSection id="sec-analytics" title="Analytics" defaultOpen={false}>
@@ -261,7 +235,12 @@ function PortalHomeInner() {
           defaultOpen={false}
           description="Ready-to-post graphics for your collections. Save and share."
         >
-          <ContentHubGrid products={products} loading={productsLoading} />
+          <ContentHubGrid
+            products={products}
+            loading={productsLoading}
+            athleteId={athlete.id}
+            organizationId={athlete.organization_id}
+          />
         </PortalSection>
 
         <PortalSection
@@ -270,6 +249,24 @@ function PortalHomeInner() {
           defaultOpen={false}
         >
           <UpcomingDrops />
+        </PortalSection>
+
+        <div className="h-px bg-accent/30" />
+
+        <PortalSection
+          id="sec-recs"
+          title="This Week's Recommendations"
+          defaultOpen={false}
+        >
+          <RecommendationsCarousel />
+        </PortalSection>
+
+        <PortalSection
+          id="sec-era"
+          title="AR / Era Comparison"
+          defaultOpen={false}
+        >
+          <EraComparison athleteId={athlete.id} />
         </PortalSection>
       </main>
 
