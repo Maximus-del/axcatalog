@@ -852,8 +852,13 @@ export default function ProductsList() {
                 )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+              <div
+                ref={marquee.containerRef}
+                className="relative grid grid-cols-1 min-[380px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4 select-none"
+              >
+                {marquee.overlay}
                 {filtered.map((r) => (
+                  <div key={r.id} data-marquee-id={r.id}>
                   <ProductCard
                     key={r.id}
                     id={r.id}
@@ -876,6 +881,7 @@ export default function ProductsList() {
                     onEditTitle={() => setEditTitleFor({ id: r.id, title: r.title })}
                     onArchive={() => setArchiveFor({ id: r.id, title: r.title })}
                   />
+                  </div>
                 ))}
               </div>
             )}
