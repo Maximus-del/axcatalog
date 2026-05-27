@@ -141,6 +141,9 @@ export default function ProductsList() {
   const [editTitleFor, setEditTitleFor] = useState<{ id: string; title: string } | null>(null);
   const [archiveFor, setArchiveFor] = useState<{ id: string; title: string } | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [allAthletes, setAllAthletes] = useState<Array<{ id: string; slug: string; name: string }>>([]);
+  const [allTeams, setAllTeams] = useState<Array<{ id: string; slug: string; name: string }>>([]);
+  const [sweepBusy, setSweepBusy] = useState(false);
   const { role } = useAuth();
   const isAdmin = role === "admin";
   const detailId = params.id ?? null;
@@ -278,6 +281,40 @@ export default function ProductsList() {
   useEffect(() => {
     load();
   }, []);
+
+  // Athlete + team option lists (with slugs) for the bulk tag bar quick-pick.
+  useEffect(() => {
+    void (async () => {
+      const [aRes, tRes] = await Promise.all([
+        supabase.from("athletes").select("id, slug, first_name, last_name, full_name").order("last_name"),
+        supabase.from("teams").select("id, slug, name").order("name"),
+      ]);
+      setAllAthletes(
+        (aRes.data ?? []).map((a) => ({
+          id: a.id,
+          slug: a.slug,
+          name: a.full_name ?? `${a.first_name} ${a.last_name}`,
+        })),
+      );
+      setAllTeams((tRes.data ?? []) as Array<{ id: string; slug: string; name: string }>);
+    })();
+  }, []);
+
+  async function handleMooneySweep() {
+    if (sweepBusy) return;
+    setSweepBusy(true);
+    try {
+      const res = await runMooneySweep();
+      const msg = `Linked Mooney → ${res.productsLinked}/${res.productsScanned} products, ${res.designsLinked}/${res.designsScanned} designs`;
+      if (res.errors.length) toast.error(`${msg} (errors: ${res.errors.join("; ")})`);
+      else toast.success(msg);
+      await load();
+    } catch (e: any) {
+      toast.error(`Sweep failed: ${e?.message ?? e}`);
+    } finally {
+      setSweepBusy(false);
+    }
+  }
 
   // Keep ?search= in the URL in sync with the search box. We use replace
   // so each keystroke doesn't pollute browser history — only the final
