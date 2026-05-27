@@ -8,11 +8,21 @@ import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Props {
   selectedIds: string[];
   onCancel: () => void;
   onApplied: (result: ApplyResult) => void;
+  /** Optional quick-pick lists; selecting one appends athlete:slug/team:slug to the tags array. */
+  athleteOptions?: Array<{ id: string; slug: string; name: string }>;
+  teamOptions?: Array<{ id: string; slug: string; name: string }>;
 }
 
 /**
@@ -22,11 +32,22 @@ interface Props {
  *   bottom tab nav, with a stacked layout so the tag input gets the
  *   full width.
  */
-export function BulkTagBar({ selectedIds, onCancel, onApplied }: Props) {
+export function BulkTagBar({ selectedIds, onCancel, onApplied, athleteOptions = [], teamOptions = [] }: Props) {
   const [tags, setTags] = useState<string[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const busy = !!progress;
   const isMobile = useIsMobile();
+
+  function addAthlete(slug: string) {
+    const tag = `athlete:${slug}`;
+    if (tags.includes(tag)) return;
+    setTags([...tags, tag]);
+  }
+  function addTeam(slug: string) {
+    const tag = `team:${slug}`;
+    if (tags.includes(tag)) return;
+    setTags([...tags, tag]);
+  }
 
   async function handleApply() {
     if (tags.length === 0 || selectedIds.length === 0) return;
