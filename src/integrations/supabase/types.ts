@@ -250,34 +250,43 @@ export type Database = {
           color: string | null
           created_at: string
           id: string
+          line_subtotal: number | null
           notes: string | null
           order_request_id: string
           product_id: string | null
           product_name_snapshot: string
           quantity: number
           size: string
+          unit_retail_price: number | null
+          unit_wholesale_price: number | null
         }
         Insert: {
           color?: string | null
           created_at?: string
           id?: string
+          line_subtotal?: number | null
           notes?: string | null
           order_request_id: string
           product_id?: string | null
           product_name_snapshot: string
           quantity: number
           size: string
+          unit_retail_price?: number | null
+          unit_wholesale_price?: number | null
         }
         Update: {
           color?: string | null
           created_at?: string
           id?: string
+          line_subtotal?: number | null
           notes?: string | null
           order_request_id?: string
           product_id?: string | null
           product_name_snapshot?: string
           quantity?: number
           size?: string
+          unit_retail_price?: number | null
+          unit_wholesale_price?: number | null
         }
         Relationships: [
           {
@@ -309,13 +318,16 @@ export type Database = {
           organization_id: string
           priority: string
           requested_by: string
+          retail_equivalent: number
           shipped_at: string | null
           shipping_carrier: string | null
           status: Database["public"]["Enums"]["bulk_order_status"]
           team_id: string | null
+          total_savings: number
           total_units: number
           tracking_number: string | null
           updated_at: string
+          wholesale_subtotal: number
         }
         Insert: {
           acknowledged_at?: string | null
@@ -329,13 +341,16 @@ export type Database = {
           organization_id: string
           priority?: string
           requested_by: string
+          retail_equivalent?: number
           shipped_at?: string | null
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["bulk_order_status"]
           team_id?: string | null
+          total_savings?: number
           total_units?: number
           tracking_number?: string | null
           updated_at?: string
+          wholesale_subtotal?: number
         }
         Update: {
           acknowledged_at?: string | null
@@ -349,13 +364,16 @@ export type Database = {
           organization_id?: string
           priority?: string
           requested_by?: string
+          retail_equivalent?: number
           shipped_at?: string | null
           shipping_carrier?: string | null
           status?: Database["public"]["Enums"]["bulk_order_status"]
           team_id?: string | null
+          total_savings?: number
           total_units?: number
           tracking_number?: string | null
           updated_at?: string
+          wholesale_subtotal?: number
         }
         Relationships: [
           {
@@ -1527,6 +1545,7 @@ export type Database = {
           status: Database["public"]["Enums"]["product_status"]
           title: string
           updated_at: string
+          wholesale_price: number | null
         }
         Insert: {
           ai_confidence_score?: number | null
@@ -1553,6 +1572,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           title: string
           updated_at?: string
+          wholesale_price?: number | null
         }
         Update: {
           ai_confidence_score?: number | null
@@ -1579,6 +1599,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           title?: string
           updated_at?: string
+          wholesale_price?: number | null
         }
         Relationships: [
           {
