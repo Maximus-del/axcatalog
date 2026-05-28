@@ -78,14 +78,18 @@ Deno.serve(async (req) => {
     if (prodErr) throw prodErr;
     if (!prod) return jsonRes({ ok: false, error: "product not found" }, 404);
 
-    // Verify caller is in the same org.
+    // Verify caller is an admin in the same org.
     const { data: profile } = await admin
       .from("user_profiles")
-      .select("organization_id")
+      .select("organization_id, role")
       .eq("id", userData.user.id)
       .maybeSingle();
-    if (!profile || profile.organization_id !== prod.organization_id) {
-      return jsonRes({ ok: false, error: "Forbidden" }, 403);
+    if (
+      !profile ||
+      profile.organization_id !== prod.organization_id ||
+      profile.role !== "admin"
+    ) {
+      return jsonRes({ ok: false, error: "Forbidden — admin only" }, 403);
     }
 
     if (!prod.shopify_product_id) {

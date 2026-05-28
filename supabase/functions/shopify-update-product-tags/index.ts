@@ -130,8 +130,12 @@ Deno.serve(async (req) => {
       .select("organization_id, role")
       .eq("id", userData.user.id)
       .maybeSingle();
-    if (!profile || !orgIds.every((o) => o === profile.organization_id)) {
-      return jsonRes({ error: "Forbidden" }, 403);
+    if (
+      !profile ||
+      profile.role !== "admin" ||
+      !orgIds.every((o) => o === profile.organization_id)
+    ) {
+      return jsonRes({ error: "Forbidden — admin only" }, 403);
     }
 
     const { data: orgs, error: orgErr } = await admin
