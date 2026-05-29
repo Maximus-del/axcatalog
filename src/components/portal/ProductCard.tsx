@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { distributeByCurve, useSizeDistributionCurve } from "@/hooks/useSizeDistributionCurve";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 
@@ -47,6 +48,7 @@ export function ProductCard({ product }: Props) {
   const { user } = useAuth();
   const { athlete, isImpersonating } = useCurrentAthlete();
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
+  const curve = useSizeDistributionCurve(athlete?.organization_id ?? null);
 
   const url = buildShareUrl(product);
 
@@ -55,21 +57,10 @@ export function ProductCard({ product }: Props) {
 
   const effectiveQtys = qtys;
 
-  const distribute = (total: number): Record<string, number> => {
-    const n = sizes.length;
-    const base = Math.floor(total / n);
-    const rem = total - base * n;
-    const out: Record<string, number> = {};
-    sizes.forEach((s, i) => {
-      out[s] = base + (i < rem ? 1 : 0);
-    });
-    return out;
-  };
-
   const applyAutoTotal = (total: number) => {
     const clamped = Math.max(0, Math.min(500, Math.floor(total)));
     setAutoTotal(clamped);
-    setQtys(distribute(clamped));
+    setQtys(distributeByCurve(clamped, sizes, curve));
   };
 
   const totalUnits = useMemo(
@@ -258,10 +249,6 @@ export function ProductCard({ product }: Props) {
                   checked={autoDistribute}
                   onCheckedChange={(v) => {
                     setAutoDistribute(v);
-                    if (v) {
-                      const cur = Object.values(qtys).reduce((a, b) => a + (b || 0), 0);
-                      setAutoTotal(cur);
-                    }
                   }}
                 />
               </div>
