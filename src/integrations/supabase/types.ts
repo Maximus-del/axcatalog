@@ -1521,13 +1521,23 @@ export type Database = {
       }
       products: {
         Row: {
+          additional_cost: number
           ai_confidence_score: number | null
+          blank_cost: number | null
           blank_id: string | null
+          blank_sku: string | null
+          blank_supplier: string | null
+          blank_url: string | null
           compare_at_price: number | null
+          cost_last_updated: string | null
           created_at: string
+          decoration_cost: number
           description: string | null
+          fabric: string | null
+          garment_title: string | null
           id: string
           is_hidden_from_dashboard: boolean
+          markup_multiplier: number
           metadata: Json
           needs_review: boolean
           notes: string | null
@@ -1546,15 +1556,26 @@ export type Database = {
           title: string
           updated_at: string
           wholesale_price: number | null
+          wholesale_price_source: string
         }
         Insert: {
+          additional_cost?: number
           ai_confidence_score?: number | null
+          blank_cost?: number | null
           blank_id?: string | null
+          blank_sku?: string | null
+          blank_supplier?: string | null
+          blank_url?: string | null
           compare_at_price?: number | null
+          cost_last_updated?: string | null
           created_at?: string
+          decoration_cost?: number
           description?: string | null
+          fabric?: string | null
+          garment_title?: string | null
           id?: string
           is_hidden_from_dashboard?: boolean
+          markup_multiplier?: number
           metadata?: Json
           needs_review?: boolean
           notes?: string | null
@@ -1573,15 +1594,26 @@ export type Database = {
           title: string
           updated_at?: string
           wholesale_price?: number | null
+          wholesale_price_source?: string
         }
         Update: {
+          additional_cost?: number
           ai_confidence_score?: number | null
+          blank_cost?: number | null
           blank_id?: string | null
+          blank_sku?: string | null
+          blank_supplier?: string | null
+          blank_url?: string | null
           compare_at_price?: number | null
+          cost_last_updated?: string | null
           created_at?: string
+          decoration_cost?: number
           description?: string | null
+          fabric?: string | null
+          garment_title?: string | null
           id?: string
           is_hidden_from_dashboard?: boolean
+          markup_multiplier?: number
           metadata?: Json
           needs_review?: boolean
           notes?: string | null
@@ -1600,6 +1632,7 @@ export type Database = {
           title?: string
           updated_at?: string
           wholesale_price?: number | null
+          wholesale_price_source?: string
         }
         Relationships: [
           {
