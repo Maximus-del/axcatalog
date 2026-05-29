@@ -10,6 +10,8 @@ export interface PortalProduct {
   shopify_handle: string | null;
   blank_id: string | null;
   primary_image_url: string | null;
+  price: number | null;
+  wholesale_price: number | null;
   /** Available sizes from the linked blank, in sort_order. */
   sizes: string[];
   created_at: string;
@@ -50,7 +52,7 @@ export function usePortalProducts(athleteId: string | null): State {
         .from("product_athletes")
         .select(
           `product:products!inner(
-             id, title, slug, status, product_type, shopify_handle, blank_id, created_at,
+             id, title, slug, status, product_type, shopify_handle, blank_id, price, wholesale_price, created_at,
              images:product_images(storage_bucket, storage_path, is_primary, sort_order)
            )`,
         )
@@ -75,6 +77,8 @@ export function usePortalProducts(athleteId: string | null): State {
         product_type: string;
         shopify_handle: string | null;
         blank_id: string | null;
+        price: number | null;
+        wholesale_price: number | null;
         created_at: string;
         images: Array<{
           storage_bucket: string;
@@ -128,6 +132,8 @@ export function usePortalProducts(athleteId: string | null): State {
           shopify_handle: p.shopify_handle,
           blank_id: p.blank_id,
           primary_image_url: url,
+          price: p.price != null ? Number(p.price) : null,
+          wholesale_price: p.wholesale_price != null ? Number(p.wholesale_price) : null,
           sizes: p.blank_id ? (sizesByBlank.get(p.blank_id) ?? []) : [],
           created_at: p.created_at,
         };
