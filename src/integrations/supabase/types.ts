@@ -169,63 +169,99 @@ export type Database = {
       }
       blanks: {
         Row: {
+          additional_cost: number
           availability_status: Database["public"]["Enums"]["blank_availability"]
+          blank_cost: number | null
           brand: string | null
+          color: string | null
           cost: number | null
+          cost_last_updated: string | null
           created_at: string
+          decoration_cost: number
+          fabric: string | null
           fabric_specs: Json
+          garment_title: string | null
           garment_type: Database["public"]["Enums"]["garment_type"]
           id: string
+          image_url: string | null
           internal_only: boolean
+          markup_multiplier: number
           metadata: Json
           moq: number | null
           name: string
           notes: string | null
           organization_id: string
           sellable_as_blank: boolean
+          sku: string | null
           slug: string
           style_number: string | null
+          supplier: string | null
           updated_at: string
+          url: string | null
           vendor: string | null
         }
         Insert: {
+          additional_cost?: number
           availability_status?: Database["public"]["Enums"]["blank_availability"]
+          blank_cost?: number | null
           brand?: string | null
+          color?: string | null
           cost?: number | null
+          cost_last_updated?: string | null
           created_at?: string
+          decoration_cost?: number
+          fabric?: string | null
           fabric_specs?: Json
+          garment_title?: string | null
           garment_type?: Database["public"]["Enums"]["garment_type"]
           id?: string
+          image_url?: string | null
           internal_only?: boolean
+          markup_multiplier?: number
           metadata?: Json
           moq?: number | null
           name: string
           notes?: string | null
           organization_id: string
           sellable_as_blank?: boolean
+          sku?: string | null
           slug: string
           style_number?: string | null
+          supplier?: string | null
           updated_at?: string
+          url?: string | null
           vendor?: string | null
         }
         Update: {
+          additional_cost?: number
           availability_status?: Database["public"]["Enums"]["blank_availability"]
+          blank_cost?: number | null
           brand?: string | null
+          color?: string | null
           cost?: number | null
+          cost_last_updated?: string | null
           created_at?: string
+          decoration_cost?: number
+          fabric?: string | null
           fabric_specs?: Json
+          garment_title?: string | null
           garment_type?: Database["public"]["Enums"]["garment_type"]
           id?: string
+          image_url?: string | null
           internal_only?: boolean
+          markup_multiplier?: number
           metadata?: Json
           moq?: number | null
           name?: string
           notes?: string | null
           organization_id?: string
           sellable_as_blank?: boolean
+          sku?: string | null
           slug?: string
           style_number?: string | null
+          supplier?: string | null
           updated_at?: string
+          url?: string | null
           vendor?: string | null
         }
         Relationships: [
@@ -1521,23 +1557,13 @@ export type Database = {
       }
       products: {
         Row: {
-          additional_cost: number
           ai_confidence_score: number | null
-          blank_cost: number | null
           blank_id: string | null
-          blank_sku: string | null
-          blank_supplier: string | null
-          blank_url: string | null
           compare_at_price: number | null
-          cost_last_updated: string | null
           created_at: string
-          decoration_cost: number
           description: string | null
-          fabric: string | null
-          garment_title: string | null
           id: string
           is_hidden_from_dashboard: boolean
-          markup_multiplier: number
           metadata: Json
           needs_review: boolean
           notes: string | null
@@ -1559,23 +1585,13 @@ export type Database = {
           wholesale_price_source: string
         }
         Insert: {
-          additional_cost?: number
           ai_confidence_score?: number | null
-          blank_cost?: number | null
           blank_id?: string | null
-          blank_sku?: string | null
-          blank_supplier?: string | null
-          blank_url?: string | null
           compare_at_price?: number | null
-          cost_last_updated?: string | null
           created_at?: string
-          decoration_cost?: number
           description?: string | null
-          fabric?: string | null
-          garment_title?: string | null
           id?: string
           is_hidden_from_dashboard?: boolean
-          markup_multiplier?: number
           metadata?: Json
           needs_review?: boolean
           notes?: string | null
@@ -1597,23 +1613,13 @@ export type Database = {
           wholesale_price_source?: string
         }
         Update: {
-          additional_cost?: number
           ai_confidence_score?: number | null
-          blank_cost?: number | null
           blank_id?: string | null
-          blank_sku?: string | null
-          blank_supplier?: string | null
-          blank_url?: string | null
           compare_at_price?: number | null
-          cost_last_updated?: string | null
           created_at?: string
-          decoration_cost?: number
           description?: string | null
-          fabric?: string | null
-          garment_title?: string | null
           id?: string
           is_hidden_from_dashboard?: boolean
-          markup_multiplier?: number
           metadata?: Json
           needs_review?: boolean
           notes?: string | null
