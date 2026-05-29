@@ -2272,6 +2272,36 @@ export type Database = {
           },
         ]
       }
+      size_distribution_curves: {
+        Row: {
+          created_at: string
+          curve: Json
+          id: string
+          is_default: boolean
+          name: string
+          organization_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          curve: Json
+          id?: string
+          is_default?: boolean
+          name?: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          curve?: Json
+          id?: string
+          is_default?: boolean
+          name?: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tags: {
         Row: {
           category: Database["public"]["Enums"]["tag_category"]
