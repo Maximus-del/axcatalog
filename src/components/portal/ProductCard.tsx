@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { shopifyImg } from "@/lib/shopify-image";
@@ -52,17 +53,24 @@ export function ProductCard({ product }: Props) {
   // Always offer S–3XL regardless of variant linkage.
   const sizes = STANDARD_SIZES;
 
-  const effectiveQtys = useMemo<Record<string, number>>(() => {
-    if (!autoDistribute) return qtys;
+  const effectiveQtys = qtys;
+
+  const distribute = (total: number): Record<string, number> => {
     const n = sizes.length;
-    const base = Math.floor(autoTotal / n);
-    const rem = autoTotal - base * n;
+    const base = Math.floor(total / n);
+    const rem = total - base * n;
     const out: Record<string, number> = {};
     sizes.forEach((s, i) => {
       out[s] = base + (i < rem ? 1 : 0);
     });
     return out;
-  }, [autoDistribute, autoTotal, qtys, sizes]);
+  };
+
+  const applyAutoTotal = (total: number) => {
+    const clamped = Math.max(0, Math.min(500, Math.floor(total)));
+    setAutoTotal(clamped);
+    setQtys(distribute(clamped));
+  };
 
   const totalUnits = useMemo(
     () => Object.values(effectiveQtys).reduce((a, b) => a + (b || 0), 0),
@@ -91,7 +99,6 @@ export function ProductCard({ product }: Props) {
   };
 
   const bumpQty = (size: string, delta: number) => {
-    setAutoDistribute(false);
     setQtys((p) => ({ ...p, [size]: Math.max(0, (p[size] ?? 0) + delta) }));
   };
 
@@ -236,29 +243,16 @@ export function ProductCard({ product }: Props) {
 
           <div className="px-6 pb-4 space-y-4">
             {/* Auto-distribute */}
-            <div className="flex items-center justify-between rounded-md border border-border/60 bg-[hsl(var(--dark))]/40 px-3 py-2">
-              <div className="flex flex-col">
-                <Label htmlFor={`auto-${product.id}`} className="text-xs uppercase tracking-wider">
-                  Auto-distribute
-                </Label>
-                <span className="text-[11px] text-muted-foreground">
-                  Split a total evenly across S–3XL
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {autoDistribute && (
-                  <input
-                    type="number"
-                    min={0}
-                    value={autoTotal || ""}
-                    placeholder="0"
-                    onChange={(e) =>
-                      setAutoTotal(Math.max(0, parseInt(e.target.value || "0", 10) || 0))
-                    }
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="h-7 w-16 text-center text-sm rounded bg-background border border-border focus:outline-none focus:border-accent"
-                  />
-                )}
+            <div className="rounded-md border border-border/60 bg-[hsl(var(--dark))]/40 px-3 py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <Label htmlFor={`auto-${product.id}`} className="text-xs uppercase tracking-wider">
+                    Auto-distribute
+                  </Label>
+                  <span className="text-[11px] text-muted-foreground">
+                    Slide a total to split evenly across S–3XL
+                  </span>
+                </div>
                 <Switch
                   id={`auto-${product.id}`}
                   checked={autoDistribute}
@@ -271,6 +265,39 @@ export function ProductCard({ product }: Props) {
                   }}
                 />
               </div>
+              {autoDistribute && (
+                <div className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-bold text-accent leading-none tabular-nums">
+                        {autoTotal}
+                      </span>
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">
+                        units
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      min={0}
+                      max={500}
+                      value={autoTotal || ""}
+                      placeholder="0"
+                      onChange={(e) =>
+                        applyAutoTotal(parseInt(e.target.value || "0", 10) || 0)
+                      }
+                      onFocus={(e) => e.currentTarget.select()}
+                      className="h-7 w-20 text-center text-sm rounded bg-background border border-border focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <Slider
+                    min={0}
+                    max={500}
+                    step={1}
+                    value={[autoTotal]}
+                    onValueChange={(v) => applyAutoTotal(v[0] ?? 0)}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Size grid */}
@@ -300,7 +327,6 @@ export function ProductCard({ product }: Props) {
                         min={0}
                         value={qty || ""}
                         placeholder="0"
-                        disabled={autoDistribute}
                         onChange={(e) =>
                           setQtys((p) => ({
                             ...p,
@@ -316,7 +342,6 @@ export function ProductCard({ product }: Props) {
                       <div className="flex flex-col">
                         <button
                           type="button"
-                          disabled={autoDistribute}
                           onClick={() => bumpQty(size, +1)}
                           className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent disabled:opacity-40"
                           aria-label={`Increase ${size}`}
@@ -325,7 +350,6 @@ export function ProductCard({ product }: Props) {
                         </button>
                         <button
                           type="button"
-                          disabled={autoDistribute}
                           onClick={() => bumpQty(size, -1)}
                           className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent disabled:opacity-40"
                           aria-label={`Decrease ${size}`}
