@@ -185,7 +185,6 @@ export type Database = {
           id: string
           image_url: string | null
           internal_only: boolean
-          markup_multiplier: number
           metadata: Json
           moq: number | null
           name: string
@@ -217,7 +216,6 @@ export type Database = {
           id?: string
           image_url?: string | null
           internal_only?: boolean
-          markup_multiplier?: number
           metadata?: Json
           moq?: number | null
           name: string
@@ -249,7 +247,6 @@ export type Database = {
           id?: string
           image_url?: string | null
           internal_only?: boolean
-          markup_multiplier?: number
           metadata?: Json
           moq?: number | null
           name?: string
@@ -1095,6 +1092,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          pricing_tier_id: string | null
           shopify_access_token: string | null
           shopify_connected: boolean
           shopify_connected_at: string | null
@@ -1108,6 +1106,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          pricing_tier_id?: string | null
           shopify_access_token?: string | null
           shopify_connected?: boolean
           shopify_connected_at?: string | null
@@ -1121,6 +1120,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          pricing_tier_id?: string | null
           shopify_access_token?: string | null
           shopify_connected?: boolean
           shopify_connected_at?: string | null
@@ -1130,7 +1130,15 @@ export type Database = {
           slug?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_pricing_tier_id_fkey"
+            columns: ["pricing_tier_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       portal_hidden_products: {
         Row: {
@@ -1150,6 +1158,33 @@ export type Database = {
           hidden_at?: string
           hidden_by?: string | null
           product_id?: string
+        }
+        Relationships: []
+      }
+      pricing_tiers: {
+        Row: {
+          base_markup_multiplier: number
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          base_markup_multiplier: number
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          base_markup_multiplier?: number
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          sort_order?: number
         }
         Relationships: []
       }
@@ -2627,6 +2662,38 @@ export type Database = {
           },
         ]
       }
+      volume_discount_breaks: {
+        Row: {
+          created_at: string
+          discount_percent: number
+          id: string
+          min_units: number
+          pricing_tier_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          discount_percent: number
+          id?: string
+          min_units: number
+          pricing_tier_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          discount_percent?: number
+          id?: string
+          min_units?: number
+          pricing_tier_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "volume_discount_breaks_pricing_tier_id_fkey"
+            columns: ["pricing_tier_id"]
+            isOneToOne: false
+            referencedRelation: "pricing_tiers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       volume_discount_tiers: {
         Row: {
           created_at: string
@@ -2773,6 +2840,20 @@ export type Database = {
       }
     }
     Functions: {
+      compute_wholesale_price: {
+        Args: {
+          _organization_id: string
+          _product_id: string
+          _unit_count: number
+        }
+        Returns: {
+          base_tier_price: number
+          tier_name: string
+          true_cost: number
+          unit_price: number
+          volume_discount_percent: number
+        }[]
+      }
       current_user_is_admin: { Args: never; Returns: boolean }
       current_user_org_id: { Args: never; Returns: string }
     }
