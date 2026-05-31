@@ -27,6 +27,9 @@ interface ProductCardProps {
   onViewDetails?: () => void;
   onEditTitle?: () => void;
   onArchive?: () => void;
+  /** Optional "Fetch image" quick action — typically passed when hasImageWarning is true. */
+  onFetchImage?: () => void;
+  fetchImageBusy?: boolean;
 }
 
 export function ProductCard({
@@ -46,6 +49,8 @@ export function ProductCard({
   onViewDetails,
   onEditTitle,
   onArchive,
+  onFetchImage,
+  fetchImageBusy = false,
 }: ProductCardProps) {
   const isMobile = useIsMobile();
   // Swipe-to-archive only makes sense for admins on touch devices,
@@ -148,6 +153,8 @@ export function ProductCard({
             onManageTags={onOpenTagPopover}
             onToggleHidden={onToggleHidden}
             onArchive={onArchive}
+            onFetchImage={hasImageWarning && onFetchImage ? onFetchImage : undefined}
+            fetchImageBusy={fetchImageBusy}
           />
         )}
 
