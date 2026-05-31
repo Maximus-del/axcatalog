@@ -51,7 +51,7 @@ import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { haptic } from "@/lib/haptics";
 import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
 import { runMooneySweep } from "@/lib/mooney-sweep";
-import { refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
+import { fetchShopifyPrimaryImage, refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
 
 interface ProductRow {
   id: string;
@@ -352,6 +352,49 @@ export default function ProductsList() {
       toast.error(`Refresh failed: ${e?.message ?? e}`, { id: t });
     } finally {
       setRefreshBusy(false);
+    }
+  }
+
+  const [fetchImageBusyId, setFetchImageBusyId] = useState<string | null>(null);
+  async function handleFetchImage(productId: string) {
+    if (fetchImageBusyId) return;
+    setFetchImageBusyId(productId);
+    const t = toast.loading("Fetching primary image from Shopify…");
+    try {
+      const res = await fetchShopifyPrimaryImage({ product_id: productId });
+      if (res.ok && res.url) {
+        toast.success("Image updated", { id: t });
+        // Optimistically update the row's image + clear the warning pill.
+        setRows((rs) =>
+          rs
+            ? rs.map((r) =>
+                r.id === productId
+                  ? { ...r, primary_image_url: res.url!, has_image_warning: false }
+                  : r,
+              )
+            : rs,
+        );
+      } else if (res.no_image && res.shopify_admin_url) {
+        toast.error("No image found in Shopify — re-upload there first", {
+          id: t,
+          action: {
+            label: "Open Shopify",
+            onClick: () => window.open(res.shopify_admin_url!, "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        toast.error(res.message ?? "Fetch failed", { id: t });
+      }
+    } catch (e: any) {
+      const url = e?.shopifyAdminUrl;
+      toast.error(`Fetch failed: ${e?.message ?? e}`, {
+        id: t,
+        action: url
+          ? { label: "Open Shopify", onClick: () => window.open(url, "_blank", "noopener,noreferrer") }
+          : undefined,
+      });
+    } finally {
+      setFetchImageBusyId(null);
     }
   }
 
@@ -922,6 +965,8 @@ export default function ProductsList() {
                     onViewDetails={() => openDetail(r.id)}
                     onEditTitle={() => setEditTitleFor({ id: r.id, title: r.title })}
                     onArchive={() => setArchiveFor({ id: r.id, title: r.title })}
+                    onFetchImage={() => handleFetchImage(r.id)}
+                    fetchImageBusy={fetchImageBusyId === r.id}
                   />
                   </div>
                 ))}

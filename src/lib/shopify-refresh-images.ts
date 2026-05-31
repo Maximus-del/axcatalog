@@ -50,3 +50,33 @@ export function summarizeRefresh(r: ImageRefreshResult): string {
   ].filter(Boolean);
   return parts.join(" · ");
 }
+
+/**
+ * "Fetch image" — surgical action that grabs the current primary image
+ * from Shopify for a single product. Returns the new URL on success, or
+ * a `no_image` flag + Shopify admin URL when Shopify has no image yet.
+ */
+export interface FetchPrimaryImageResult {
+  ok: boolean;
+  url?: string;
+  shopify_image_id?: string;
+  shopify_admin_url?: string;
+  no_image?: boolean;
+  message?: string;
+}
+
+export async function fetchShopifyPrimaryImage(opts: {
+  product_id: string;
+}): Promise<FetchPrimaryImageResult> {
+  const { data, error } = await supabase.functions.invoke(
+    "shopify-sync-product-images",
+    { body: { product_id: opts.product_id, mode: "fetch_primary_only" } },
+  );
+  if (error) throw new Error(error.message);
+  if (data?.error) {
+    const err = new Error(String(data.error)) as Error & { shopifyAdminUrl?: string };
+    err.shopifyAdminUrl = data.shopify_admin_url;
+    throw err;
+  }
+  return data as FetchPrimaryImageResult;
+}
