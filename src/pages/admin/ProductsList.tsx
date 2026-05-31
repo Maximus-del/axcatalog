@@ -1,7 +1,7 @@
 // Mobile-first. Test at 375px before merging.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Download, Filter, Loader2, Plus, Search, SlidersHorizontal, Sparkles, Tag, X } from "lucide-react";
+import { Download, Filter, Loader2, Plus, RefreshCw, Search, SlidersHorizontal, Sparkles, Tag, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,7 @@ import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { haptic } from "@/lib/haptics";
 import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
 import { runMooneySweep } from "@/lib/mooney-sweep";
+import { refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
 
 interface ProductRow {
   id: string;
@@ -61,6 +62,7 @@ interface ProductRow {
   created_at: string;
   updated_at: string;
   primary_image_url: string | null;
+  has_image_warning: boolean;
   category: ProductCategory;
   is_hidden_from_dashboard: boolean;
   athletes: Array<{ id: string; name: string }>;
@@ -197,7 +199,7 @@ export default function ProductsList() {
       const [imagesRes, athletesLinkRes, teamsLinkRes, tagsLinkRes] = await Promise.all([
         supabase
           .from("product_images")
-          .select("product_id, storage_path, is_primary, sort_order")
+          .select("product_id, storage_path, is_primary, sort_order, metadata")
           .in("product_id", ids),
         supabase
           .from("product_athletes")
@@ -227,6 +229,7 @@ export default function ProductsList() {
         imagesByProduct.set(img.product_id, arr);
       });
       const imageMap = new Map<string, string>();
+      const warningSet = new Set<string>();
       imagesByProduct.forEach((imgs, productId) => {
         const primary = imgs.find((i) => i.is_primary);
         const fallback = [...imgs].sort(
@@ -234,6 +237,15 @@ export default function ProductsList() {
         )[0];
         const chosen = primary ?? fallback;
         if (chosen?.storage_path) imageMap.set(productId, chosen.storage_path);
+        if (
+          imgs.some(
+            (i) =>
+              (i as any).metadata?.shopify_orphaned === true ||
+              (i as any).metadata?.last_refresh_failed === true,
+          )
+        ) {
+          warningSet.add(productId);
+        }
       });
 
       const athletesByProduct = new Map<string, Array<{ id: string; name: string }>>();
@@ -275,6 +287,7 @@ export default function ProductsList() {
           updated_at: p.updated_at,
           is_hidden_from_dashboard: (p as any).is_hidden_from_dashboard ?? false,
           primary_image_url: imageMap.get(p.id) ?? null,
+          has_image_warning: warningSet.has(p.id),
           category: detectCategory(p.title, tagsByProduct.get(p.id) ?? []),
           athletes: athletesByProduct.get(p.id) ?? [],
           teams: teamsByProduct.get(p.id) ?? [],
@@ -323,6 +336,22 @@ export default function ProductsList() {
       toast.error(`Sweep failed: ${e?.message ?? e}`);
     } finally {
       setSweepBusy(false);
+    }
+  }
+
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  async function handleRefreshAllImages() {
+    if (refreshBusy) return;
+    setRefreshBusy(true);
+    const t = toast.loading("Refreshing Shopify images…");
+    try {
+      const res = await refreshShopifyImages();
+      toast.success(summarizeRefresh(res), { id: t });
+      await load();
+    } catch (e: any) {
+      toast.error(`Refresh failed: ${e?.message ?? e}`, { id: t });
+    } finally {
+      setRefreshBusy(false);
     }
   }
 
@@ -611,6 +640,18 @@ export default function ProductsList() {
               <span className="hidden md:inline">Auto-link Mooney</span>
             </Button>
           )}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={handleRefreshAllImages}
+              disabled={refreshBusy}
+              className="gap-2 h-11 md:h-10 pressable"
+              title="Pull fresh image URLs from Shopify for every product in this org"
+            >
+              {refreshBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="hidden md:inline">Refresh Images</span>
+            </Button>
+          )}
         </div>
       </header>
 
@@ -868,6 +909,7 @@ export default function ProductsList() {
                     status={r.status}
                     imageUrl={r.primary_image_url}
                     isHidden={r.is_hidden_from_dashboard}
+                    hasImageWarning={r.has_image_warning}
                     isAdmin={isAdmin}
                     bulkMode={bulkMode}
                     selected={selected.has(r.id)}
