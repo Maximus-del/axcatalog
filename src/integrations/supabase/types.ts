@@ -190,6 +190,9 @@ export type Database = {
           name: string
           notes: string | null
           organization_id: string
+          price_athlete: number | null
+          price_corporate: number | null
+          price_standard: number | null
           sellable_as_blank: boolean
           sku: string | null
           slug: string
@@ -221,6 +224,9 @@ export type Database = {
           name: string
           notes?: string | null
           organization_id: string
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
           sellable_as_blank?: boolean
           sku?: string | null
           slug: string
@@ -252,6 +258,9 @@ export type Database = {
           name?: string
           notes?: string | null
           organization_id?: string
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
           sellable_as_blank?: boolean
           sku?: string | null
           slug?: string
@@ -1163,7 +1172,6 @@ export type Database = {
       }
       pricing_tiers: {
         Row: {
-          base_markup_multiplier: number
           created_at: string
           id: string
           is_default: boolean
@@ -1171,7 +1179,6 @@ export type Database = {
           sort_order: number
         }
         Insert: {
-          base_markup_multiplier: number
           created_at?: string
           id?: string
           is_default?: boolean
@@ -1179,7 +1186,6 @@ export type Database = {
           sort_order?: number
         }
         Update: {
-          base_markup_multiplier?: number
           created_at?: string
           id?: string
           is_default?: boolean
@@ -2376,6 +2382,24 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       tags: {
         Row: {
           category: Database["public"]["Enums"]["tag_category"]
@@ -2667,6 +2691,8 @@ export type Database = {
           created_at: string
           discount_percent: number
           id: string
+          label: string | null
+          max_units: number | null
           min_units: number
           pricing_tier_id: string | null
         }
@@ -2674,6 +2700,8 @@ export type Database = {
           created_at?: string
           discount_percent: number
           id?: string
+          label?: string | null
+          max_units?: number | null
           min_units: number
           pricing_tier_id?: string | null
         }
@@ -2681,6 +2709,8 @@ export type Database = {
           created_at?: string
           discount_percent?: number
           id?: string
+          label?: string | null
+          max_units?: number | null
           min_units?: number
           pricing_tier_id?: string | null
         }
@@ -2847,11 +2877,15 @@ export type Database = {
           _unit_count: number
         }
         Returns: {
-          base_tier_price: number
+          margin_per_unit: number
+          margin_percent: number
+          pricing_incomplete: boolean
+          tier_moq_price: number
           tier_name: string
           true_cost: number
           unit_price: number
-          volume_discount_percent: number
+          volume_break_label: string
+          volume_modifier_percent: number
         }[]
       }
       current_user_is_admin: { Args: never; Returns: boolean }
