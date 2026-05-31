@@ -5,9 +5,10 @@
 // in ProductDetailDrawer for now — a "Quick edit" button opens it here.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ImageIcon, Layers, Loader2, Pencil, RefreshCw, Video as VideoIcon } from "lucide-react";
+import { ArrowLeft, Download, ImageIcon, Layers, Loader2, Pencil, RefreshCw, Video as VideoIcon } from "lucide-react";
 import { toast } from "sonner";
-import { refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
+import { fetchShopifyPrimaryImage, refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -38,6 +39,7 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
+  const [fetchBusy, setFetchBusy] = useState(false);
 
   const [counts, setCounts] = useState({ mockups: 0, designs: 0, videos: 0 });
   const [tab, setTab] = useState<"mockups" | "designs" | "videos">("mockups");
@@ -85,6 +87,39 @@ export default function ProductDetail() {
     }
   }
 
+  async function handleFetchImage() {
+    if (!product || fetchBusy) return;
+    setFetchBusy(true);
+    const t = toast.loading("Fetching primary image from Shopify…");
+    try {
+      const res = await fetchShopifyPrimaryImage({ product_id: product.id });
+      if (res.ok) {
+        toast.success("Image updated", { id: t });
+        await load();
+      } else if (res.no_image && res.shopify_admin_url) {
+        toast.error("No image found in Shopify — re-upload there first", {
+          id: t,
+          action: {
+            label: "Open Shopify",
+            onClick: () => window.open(res.shopify_admin_url!, "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        toast.error(res.message ?? "Fetch failed", { id: t });
+      }
+    } catch (e: any) {
+      const url = e?.shopifyAdminUrl;
+      toast.error(`Fetch failed: ${e?.message ?? e}`, {
+        id: t,
+        action: url
+          ? { label: "Open Shopify", onClick: () => window.open(url, "_blank", "noopener,noreferrer") }
+          : undefined,
+      });
+    } finally {
+      setFetchBusy(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-6">
@@ -119,20 +154,44 @@ export default function ProductDetail() {
         </Button>
         <div className="flex items-center gap-2">
           {product.shopify_product_id && (
-            <Button
-              variant="outline"
-              onClick={handleRefreshImages}
-              disabled={refreshBusy}
-              className="gap-2"
-              title="Pull fresh image URLs from Shopify for this product"
-            >
-              {refreshBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Refresh images
-            </Button>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={handleFetchImage}
+                    disabled={fetchBusy || refreshBusy}
+                    className="gap-2"
+                  >
+                    {fetchBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Fetch image
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Pull the current primary image from Shopify for this product.</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={handleRefreshImages}
+                    disabled={refreshBusy || fetchBusy}
+                    className="gap-2"
+                  >
+                    {refreshBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Refresh images
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Full sync of all images for this product.</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
           <Button variant="outline" onClick={() => setDrawerOpen(true)} className="gap-2">
             <Pencil className="h-4 w-4" /> Quick edit
