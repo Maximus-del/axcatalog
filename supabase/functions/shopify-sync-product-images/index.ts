@@ -53,6 +53,18 @@ const PRODUCT_IMAGES_QUERY = `
   }
 `;
 
+// Lightweight query for the "Fetch image" action — only the primary
+// (first / featuredImage) image and its id/url.
+const PRODUCT_PRIMARY_IMAGE_QUERY = `
+  query getPrimaryImage($id: ID!) {
+    product(id: $id) {
+      id
+      handle
+      featuredImage { id url altText }
+    }
+  }
+`;
+
 async function gql(domain: string, token: string, query: string, variables: unknown) {
   const res = await fetch(`https://${domain}/admin/api/2024-10/graphql.json`, {
     method: "POST",
@@ -252,6 +264,7 @@ Deno.serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as {
       product_id?: string;
       organization_id?: string;
+      mode?: "fetch_primary_only";
     };
     // organization_id from body is informational; we always scope to the caller's org.
     if (body.organization_id && body.organization_id !== orgId) {
@@ -268,6 +281,116 @@ Deno.serve(async (req) => {
         { error: `Shopify credentials not configured for ${org?.name ?? "organization"}` },
         400,
       );
+    }
+
+    // ---- fetch_primary_only: surgical "grab the current primary image now" ----
+    if (body.mode === "fetch_primary_only") {
+      if (!body.product_id) {
+        return jsonRes({ error: "product_id is required for fetch_primary_only" }, 400);
+      }
+      const { data: prod } = await admin
+        .from("products")
+        .select("id, shopify_product_id, organization_id")
+        .eq("id", body.product_id)
+        .maybeSingle();
+      if (!prod || (prod as any).organization_id !== orgId) {
+        return jsonRes({ error: "Product not found" }, 404);
+      }
+      const shopifyId = (prod as any).shopify_product_id as string | null;
+      if (!shopifyId) {
+        return jsonRes({ error: "Product is not linked to Shopify" }, 400);
+      }
+      const shopifyAdminUrl = `https://${org.shopify_shop_domain}/admin/products/${idFromGid(shopifyId)}`;
+
+      let data;
+      try {
+        data = await gql(
+          org.shopify_shop_domain,
+          org.shopify_access_token,
+          PRODUCT_PRIMARY_IMAGE_QUERY,
+          { id: toGid(shopifyId) },
+        );
+      } catch (e) {
+        return jsonRes(
+          { error: e instanceof Error ? e.message : String(e), shopify_admin_url: shopifyAdminUrl },
+          502,
+        );
+      }
+      const featured = data?.product?.featuredImage;
+      if (!featured?.url) {
+        return jsonRes(
+          {
+            ok: false,
+            no_image: true,
+            shopify_admin_url: shopifyAdminUrl,
+            message: "No image found in Shopify for this product",
+          },
+          200,
+        );
+      }
+      const imgId = idFromGid(featured.id as string);
+      const nowIso = new Date().toISOString();
+
+      // Find existing row by shopify_image_id, else by current primary, else create.
+      const { data: imgs } = await admin
+        .from("product_images")
+        .select("id, metadata, is_primary, storage_path, sort_order")
+        .eq("product_id", (prod as any).id);
+      let row = (imgs ?? []).find(
+        (r: any) => r.metadata?.shopify_image_id === imgId,
+      ) as any;
+      if (!row) row = (imgs ?? []).find((r: any) => r.is_primary) as any;
+
+      if (row) {
+        const newMeta = {
+          ...(row.metadata ?? {}),
+          shopify_image_id: imgId,
+          shopify_updated_at: nowIso,
+          shopify_position: 1,
+          shopify_orphaned: false,
+          last_refresh_failed: false,
+        };
+        delete (newMeta as any).last_refresh_error;
+        const { error: upErr } = await admin
+          .from("product_images")
+          .update({
+            storage_path: featured.url,
+            storage_bucket: "external",
+            is_primary: true,
+            alt_text: featured.altText ?? null,
+            metadata: newMeta,
+          })
+          .eq("id", row.id);
+        if (upErr) {
+          return jsonRes({ error: upErr.message, shopify_admin_url: shopifyAdminUrl }, 500);
+        }
+      } else {
+        const { error: insErr } = await admin.from("product_images").insert({
+          product_id: (prod as any).id,
+          storage_bucket: "external",
+          storage_path: featured.url,
+          file_name: (featured.url as string).split("/").pop()?.split("?")[0] ?? null,
+          alt_text: featured.altText ?? null,
+          sort_order: 0,
+          is_primary: true,
+          metadata: {
+            shopify_image_id: imgId,
+            shopify_updated_at: nowIso,
+            shopify_position: 1,
+            shopify_orphaned: false,
+          },
+        });
+        if (insErr) {
+          return jsonRes({ error: insErr.message, shopify_admin_url: shopifyAdminUrl }, 500);
+        }
+      }
+
+      return jsonRes({
+        ok: true,
+        url: featured.url,
+        shopify_image_id: imgId,
+        shopify_admin_url: shopifyAdminUrl,
+      });
     }
 
     let q = admin
