@@ -339,6 +339,22 @@ export default function ProductsList() {
     }
   }
 
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  async function handleRefreshAllImages() {
+    if (refreshBusy) return;
+    setRefreshBusy(true);
+    const t = toast.loading("Refreshing Shopify images…");
+    try {
+      const res = await refreshShopifyImages();
+      toast.success(summarizeRefresh(res), { id: t });
+      await load();
+    } catch (e: any) {
+      toast.error(`Refresh failed: ${e?.message ?? e}`, { id: t });
+    } finally {
+      setRefreshBusy(false);
+    }
+  }
+
   // Keep ?search= in the URL in sync with the search box. We use replace
   // so each keystroke doesn't pollute browser history — only the final
   // value is what back/forward restores.
