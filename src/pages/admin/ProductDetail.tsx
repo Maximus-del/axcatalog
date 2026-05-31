@@ -5,7 +5,9 @@
 // in ProductDetailDrawer for now — a "Quick edit" button opens it here.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ImageIcon, Layers, Pencil, Video as VideoIcon } from "lucide-react";
+import { ArrowLeft, ImageIcon, Layers, Loader2, Pencil, RefreshCw, Video as VideoIcon } from "lucide-react";
+import { toast } from "sonner";
+import { refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +37,7 @@ export default function ProductDetail() {
   const [shopDomain, setShopDomain] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
 
   const [counts, setCounts] = useState({ mockups: 0, designs: 0, videos: 0 });
   const [tab, setTab] = useState<"mockups" | "designs" | "videos">("mockups");
@@ -66,6 +69,21 @@ export default function ProductDetail() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function handleRefreshImages() {
+    if (!product || refreshBusy) return;
+    setRefreshBusy(true);
+    const t = toast.loading("Refreshing images from Shopify…");
+    try {
+      const res = await refreshShopifyImages({ product_id: product.id });
+      toast.success(summarizeRefresh(res), { id: t });
+      await load();
+    } catch (e: any) {
+      toast.error(`Refresh failed: ${e?.message ?? e}`, { id: t });
+    } finally {
+      setRefreshBusy(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -99,9 +117,27 @@ export default function ProductDetail() {
         <Button variant="ghost" onClick={() => navigate("/admin/products")} className="gap-2 -ml-2">
           <ArrowLeft className="h-4 w-4" /> Products
         </Button>
-        <Button variant="outline" onClick={() => setDrawerOpen(true)} className="gap-2">
-          <Pencil className="h-4 w-4" /> Quick edit
-        </Button>
+        <div className="flex items-center gap-2">
+          {product.shopify_product_id && (
+            <Button
+              variant="outline"
+              onClick={handleRefreshImages}
+              disabled={refreshBusy}
+              className="gap-2"
+              title="Pull fresh image URLs from Shopify for this product"
+            >
+              {refreshBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              Refresh images
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setDrawerOpen(true)} className="gap-2">
+            <Pencil className="h-4 w-4" /> Quick edit
+          </Button>
+        </div>
       </div>
 
       {/* Hero */}
