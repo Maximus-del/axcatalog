@@ -17,17 +17,18 @@ interface Props {
 }
 
 export function MyProductsGrid({ products, loading, hiddenIds, onHide, onUnhide }: Props) {
+  const safeHidden = hiddenIds ?? new Set<string>();
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showHiddenTray, setShowHiddenTray] = useState(false);
 
   const visible = useMemo(
-    () => products.filter((p) => !hiddenIds.has(p.id)),
-    [products, hiddenIds],
+    () => products.filter((p) => !safeHidden.has(p.id)),
+    [products, safeHidden],
   );
   const hidden = useMemo(
-    () => products.filter((p) => hiddenIds.has(p.id)),
-    [products, hiddenIds],
+    () => products.filter((p) => safeHidden.has(p.id)),
+    [products, safeHidden],
   );
 
   const toggle = (id: string) =>
