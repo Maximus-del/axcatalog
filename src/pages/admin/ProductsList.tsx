@@ -640,6 +640,18 @@ export default function ProductsList() {
               <span className="hidden md:inline">Auto-link Mooney</span>
             </Button>
           )}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={handleRefreshAllImages}
+              disabled={refreshBusy}
+              className="gap-2 h-11 md:h-10 pressable"
+              title="Pull fresh image URLs from Shopify for every product in this org"
+            >
+              {refreshBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="hidden md:inline">Refresh Images</span>
+            </Button>
+          )}
         </div>
       </header>
 
