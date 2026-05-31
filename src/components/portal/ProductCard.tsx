@@ -1,205 +1,83 @@
 // Mobile-first. Test at 375px before merging.
-import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Copy, ExternalLink, Loader2, Plus, Shirt } from "lucide-react";
+//
+// Athlete-portal product card. Thin presentation wrapper around the
+// shared ProductImage so rendering can't drift from the admin grid.
+// "View" navigates to the in-portal detail page; "Order" opens the
+// shared bulk-order dialog; "Copy" copies the public storefront link.
+import { useState } from "react";
+import { Copy, Eye, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
-import { shopifyImg } from "@/lib/shopify-image";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/auth/AuthProvider";
-import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
-import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
-import { distributeByCurve, useSizeDistributionCurve } from "@/hooks/useSizeDistributionCurve";
-import { MilestoneSlider } from "./MilestoneSlider";
-
-const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
+import { ProductImage } from "@/components/shared/ProductImage";
+import { ProductOrderDialog } from "./ProductOrderDialog";
 
 interface Props {
   product: PortalProduct;
 }
 
-function buildShareUrl(p: PortalProduct): string {
+export function buildShareUrl(p: PortalProduct): string {
   if (p.shopify_handle) return `https://www.athletexclusive.com/products/${p.shopify_handle}`;
   return `https://www.athletexclusive.com/products/${p.slug}`;
 }
 
-function generateOrderNumber(): string {
-  const year = new Date().getFullYear();
-  const rand = Math.floor(Math.random() * 900 + 100);
-  return `BR-${year}-${rand}`;
-}
-
 export function ProductCard({ product }: Props) {
   const [orderOpen, setOrderOpen] = useState(false);
-  const [qtys, setQtys] = useState<Record<string, number>>({});
-  const [autoDistribute, setAutoDistribute] = useState(false);
-  const [autoTotal, setAutoTotal] = useState<number>(0);
-  const [submitting, setSubmitting] = useState(false);
-  // Track whether the primary image failed to load (stale Shopify CDN URLs,
-  // missing storage objects, etc.) so we can fall back to the Shirt icon
-  // instead of showing a broken <img> with alt text.
-  const [imgFailed, setImgFailed] = useState(false);
-  const { user } = useAuth();
-  const { athlete, isImpersonating } = useCurrentAthlete();
-  const { config } = usePortalPricing(athlete?.organization_id ?? null);
-  const curve = useSizeDistributionCurve(athlete?.organization_id ?? null);
-
-  const url = buildShareUrl(product);
-
-  // Always offer S–3XL regardless of variant linkage.
-  const sizes = STANDARD_SIZES;
-
-  const effectiveQtys = qtys;
-
-  const applyAutoTotal = (total: number) => {
-    const clamped = Math.max(0, Math.min(500, Math.floor(total)));
-    setAutoTotal(clamped);
-    setQtys(distributeByCurve(clamped, sizes, curve));
-  };
-
-  const totalUnits = useMemo(
-    () => Object.values(effectiveQtys).reduce((a, b) => a + (b || 0), 0),
-    [effectiveQtys],
-  );
-
-  // Wholesale unit price: prefer explicit wholesale_price; otherwise derive from retail / markup.
-  const markupMult = 1 + (config.base_markup_pct ?? 50) / 100;
-  const unitWholesale = useMemo(() => {
-    if (product.wholesale_price != null) return product.wholesale_price;
-    if (product.price != null && markupMult > 0) return product.price / markupMult;
-    return null;
-  }, [product.price, product.wholesale_price, markupMult]);
-
-  const discountPct = pickDiscount(config.tiers, totalUnits);
-  const subtotal =
-    unitWholesale != null ? unitWholesale * totalUnits * (1 - discountPct / 100) : null;
+  const navigate = useNavigate();
+  const shareUrl = buildShareUrl(product);
+  const unitWholesale = product.athlete_unit_price ?? product.wholesale_price ?? null;
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(shareUrl);
       toast.success("Link copied");
     } catch {
       toast.error("Couldn't copy — try again");
     }
   };
 
-  const bumpQty = (size: string, delta: number) => {
-    setQtys((p) => ({ ...p, [size]: Math.max(0, (p[size] ?? 0) + delta) }));
-  };
-
-  const handleSubmit = async () => {
-    if (isImpersonating) {
-      toast.error("Submission blocked while impersonating");
-      return;
-    }
-    if (totalUnits <= 0) {
-      toast.error("Enter at least one quantity");
-      return;
-    }
-    if (!user || !athlete) {
-      toast.error("You must be signed in to submit an order");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const orderNumber = generateOrderNumber();
-      const { data: orderRow, error: orderErr } = await supabase
-        .from("bulk_order_requests")
-        .insert({
-          organization_id: athlete.organization_id,
-          athlete_id: athlete.id,
-          requested_by: user.id,
-          status: "submitted",
-          order_number: orderNumber,
-        })
-        .select("id, order_number")
-        .single();
-      if (orderErr || !orderRow) throw orderErr ?? new Error("Insert failed");
-
-      const items = Object.entries(effectiveQtys)
-        .filter(([, qty]) => qty > 0)
-        .map(([size, qty]) => ({
-          order_request_id: orderRow.id,
-          product_id: product.id,
-          product_name_snapshot: product.title,
-          size,
-          quantity: qty,
-          unit_wholesale_price: unitWholesale,
-          unit_retail_price: product.price,
-        }));
-
-      if (items.length) {
-        const { error: itemsErr } = await supabase.from("bulk_order_items").insert(items);
-        if (itemsErr) throw itemsErr;
-      }
-
-      toast.success(`Order ${orderRow.order_number ?? ""} submitted — we'll be in touch`);
-      setQtys({});
-      setAutoTotal(0);
-      setAutoDistribute(false);
-      setOrderOpen(false);
-    } catch (err) {
-      console.error("Order submit error", err);
-      toast.error(err instanceof Error ? err.message : "Submit failed");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
     <div className="ax-card p-3 flex flex-col gap-3">
-      {/* Image */}
-      <div className="relative h-40 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
-        {product.primary_image_url && !imgFailed ? (
-          <img
-            src={shopifyImg(product.primary_image_url, 400) ?? product.primary_image_url}
-            alt={product.title}
-            className="max-h-full max-w-full object-contain p-3"
-            loading="lazy"
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <Shirt className="h-12 w-12 text-muted-foreground/40" strokeWidth={1.5} />
-        )}
-      </div>
+      {/* Image — shared rendering path with admin grid. */}
+      <button
+        type="button"
+        onClick={() => navigate(`/portal/products/${product.id}`)}
+        className="relative h-40 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        aria-label={`View ${product.title}`}
+      >
+        <ProductImage
+          images={product.images}
+          url={product.primary_image_url}
+          alt={product.title}
+          viewMode="athlete"
+          size="card"
+          imgClassName="max-h-full max-w-full object-contain p-3"
+        />
+      </button>
 
-      {/* Title + stub stats */}
+      {/* Title + athlete-tier price */}
       <div className="px-1">
         <h3 className="text-sm font-semibold truncate" title={product.title}>
           {product.title}
         </h3>
-        <p className="text-xs text-muted-foreground mt-1">— sold · $—</p>
+        <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+          {unitWholesale != null ? `$${unitWholesale.toFixed(2)} / unit` : "Price coming soon"}
+        </p>
       </div>
 
       {/* Actions */}
       <div className="grid grid-cols-3 gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCopy}
-          className="h-8 text-xs"
-        >
+        <Button variant="outline" size="sm" onClick={handleCopy} className="h-8 text-xs">
           <Copy className="h-3 w-3 mr-1" /> Copy
         </Button>
         <Button
           variant="outline"
           size="sm"
-          asChild
+          onClick={() => navigate(`/portal/products/${product.id}`)}
           className="h-8 text-xs"
         >
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="h-3 w-3 mr-1" /> View
-          </a>
+          <Eye className="h-3 w-3 mr-1" /> View
         </Button>
         <Button
           size="sm"
@@ -210,7 +88,6 @@ export function ProductCard({ product }: Props) {
         </Button>
       </div>
 
-      <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
         <DialogContent className="max-w-lg p-0 bg-card border-border overflow-hidden">
           <div className="h-56 bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
             {product.primary_image_url && !imgFailed ? (
