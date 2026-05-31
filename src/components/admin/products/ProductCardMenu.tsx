@@ -1,6 +1,6 @@
 // Mobile-first. Test at 375px before merging.
 import { useRef, useState } from "react";
-import { Archive, Edit3, Eye, EyeOff, MoreHorizontal, Tag } from "lucide-react";
+import { Archive, Download, Edit3, Eye, EyeOff, MoreHorizontal, Tag } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +27,9 @@ interface Props {
   onManageTags: (anchor: HTMLElement) => void;
   onToggleHidden: () => void;
   onArchive: () => void;
+  /** When provided, shows a "Fetch image" action (used for products with image issues). */
+  onFetchImage?: () => void;
+  fetchImageBusy?: boolean;
 }
 
 /**
@@ -46,6 +49,8 @@ export function ProductCardMenu({
   onManageTags,
   onToggleHidden,
   onArchive,
+  onFetchImage,
+  fetchImageBusy = false,
 }: Props) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const isMobile = useIsMobile();
@@ -126,6 +131,19 @@ export function ProductCardMenu({
                   Manage tags
                 </button>
               </li>
+              {isAdmin && onFetchImage && (
+                <li>
+                  <button
+                    type="button"
+                    disabled={fetchImageBusy}
+                    onClick={() => callAndClose(onFetchImage)}
+                    className="pressable w-full h-14 flex items-center gap-3 px-1 text-base text-foreground disabled:opacity-60"
+                  >
+                    <Download className="h-5 w-5 text-muted-foreground" />
+                    {fetchImageBusy ? "Fetching…" : "Fetch image"}
+                  </button>
+                </li>
+              )}
               {isAdmin && (
                 <>
                   <li>
@@ -196,6 +214,15 @@ export function ProductCardMenu({
         >
           <Tag className="h-4 w-4 mr-2" /> Manage tags
         </DropdownMenuItem>
+        {isAdmin && onFetchImage && (
+          <DropdownMenuItem
+            disabled={fetchImageBusy}
+            onSelect={onFetchImage}
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {fetchImageBusy ? "Fetching…" : "Fetch image"}
+          </DropdownMenuItem>
+        )}
         {isAdmin && (
           <>
             <DropdownMenuSeparator />
