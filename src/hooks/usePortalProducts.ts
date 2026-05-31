@@ -1,6 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+export interface PortalImage {
+  id: string;
+  url: string;
+  is_primary: boolean;
+  sort_order: number;
+}
+
 export interface PortalProduct {
   id: string;
   title: string;
@@ -10,8 +17,15 @@ export interface PortalProduct {
   shopify_handle: string | null;
   blank_id: string | null;
   primary_image_url: string | null;
+  /** Full ordered image list, primary first. Used for fallback chain + gallery. */
+  images: PortalImage[];
   price: number | null;
   wholesale_price: number | null;
+  /**
+   * Athlete-tier MOQ unit price from compute_wholesale_price(_, _, 10).
+   * null when the linked blank has no tier price set yet.
+   */
+  athlete_unit_price: number | null;
   /** Available sizes from the linked blank, in sort_order. */
   sizes: string[];
   created_at: string;
@@ -47,13 +61,21 @@ export function usePortalProducts(athleteId: string | null): State {
     setError(null);
 
     void (async () => {
+      // Need the athlete's organization to price at their tier.
+      const { data: athleteRow } = await supabase
+        .from("athletes")
+        .select("organization_id")
+        .eq("id", athleteId)
+        .maybeSingle();
+      const organizationId = athleteRow?.organization_id ?? null;
+
       // 1) Pull product_athletes joined to products (filter status)
       const { data, error: err } = await supabase
         .from("product_athletes")
         .select(
           `product:products!inner(
              id, title, slug, status, product_type, shopify_handle, blank_id, price, wholesale_price, created_at,
-             images:product_images(storage_bucket, storage_path, is_primary, sort_order)
+             images:product_images(id, storage_bucket, storage_path, is_primary, sort_order)
            )`,
         )
         .eq("athlete_id", athleteId)
@@ -81,6 +103,7 @@ export function usePortalProducts(athleteId: string | null): State {
         wholesale_price: number | null;
         created_at: string;
         images: Array<{
+          id: string;
           storage_bucket: string;
           storage_path: string;
           is_primary: boolean;
@@ -107,22 +130,38 @@ export function usePortalProducts(athleteId: string | null): State {
         });
       }
 
-      // 3) Resolve primary image URL (sort: is_primary desc, sort_order asc)
-      const result: PortalProduct[] = rawProducts.map((p) => {
+      const resolveUrl = (img: {
+        storage_bucket: string;
+        storage_path: string;
+      }): string | null => {
+        if (!img?.storage_path) return null;
+        if (img.storage_bucket === "external" || /^https?:\/\//i.test(img.storage_path)) {
+          return img.storage_path;
+        }
+        return supabase.storage.from(img.storage_bucket).getPublicUrl(img.storage_path).data
+          .publicUrl;
+      };
+
+      // 3) Resolve all images (primary first), then derive primary URL.
+      const baseResult = rawProducts.map((p) => {
         const sortedImgs = [...(p.images ?? [])].sort(
           (a, b) =>
             Number(b.is_primary) - Number(a.is_primary) ||
             (a.sort_order ?? 0) - (b.sort_order ?? 0),
         );
-        const top = sortedImgs[0];
-        let url: string | null = null;
-        if (top) {
-          if (top.storage_bucket === "external" || /^https?:\/\//i.test(top.storage_path)) {
-            url = top.storage_path;
-          } else {
-            url = supabase.storage.from(top.storage_bucket).getPublicUrl(top.storage_path).data.publicUrl;
-          }
-        }
+        const images: PortalImage[] = sortedImgs
+          .map((i) => {
+            const url = resolveUrl(i);
+            return url
+              ? {
+                  id: i.id,
+                  url,
+                  is_primary: !!i.is_primary,
+                  sort_order: i.sort_order ?? 0,
+                }
+              : null;
+          })
+          .filter((x): x is PortalImage => !!x);
         return {
           id: p.id,
           title: p.title,
@@ -131,15 +170,41 @@ export function usePortalProducts(athleteId: string | null): State {
           product_type: p.product_type,
           shopify_handle: p.shopify_handle,
           blank_id: p.blank_id,
-          primary_image_url: url,
+          primary_image_url: images[0]?.url ?? null,
+          images,
           price: p.price != null ? Number(p.price) : null,
           wholesale_price: p.wholesale_price != null ? Number(p.wholesale_price) : null,
+          athlete_unit_price: null as number | null,
           sizes: p.blank_id ? (sizesByBlank.get(p.blank_id) ?? []) : [],
           created_at: p.created_at,
         };
       });
 
-      // Sort: created_at desc
+      // 4) Athlete-tier unit price (MOQ=10) via RPC, parallel per product.
+      if (organizationId && baseResult.length) {
+        const priced = await Promise.all(
+          baseResult.map(async (p) => {
+            try {
+              const { data: priceRow } = await supabase.rpc("compute_wholesale_price", {
+                _product_id: p.id,
+                _organization_id: organizationId,
+                _unit_count: 10,
+              });
+              const row = Array.isArray(priceRow) ? priceRow[0] : priceRow;
+              const unit = row?.unit_price ?? row?.tier_moq_price ?? null;
+              return { ...p, athlete_unit_price: unit != null ? Number(unit) : null };
+            } catch {
+              return p;
+            }
+          }),
+        );
+        priced.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setProducts(priced);
+        setLoading(false);
+        return;
+      }
+
+      const result = baseResult;
       result.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
       setProducts(result);
