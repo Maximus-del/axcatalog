@@ -199,6 +199,7 @@ export function usePortalProducts(athleteId: string | null): State {
           }),
         );
         priced.sort((a, b) => b.created_at.localeCompare(a.created_at));
+        if (cancelled) return;
         setProducts(priced);
         setLoading(false);
         return;
