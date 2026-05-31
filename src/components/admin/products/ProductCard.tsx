@@ -8,6 +8,7 @@ import { ProductCardMenu } from "./ProductCardMenu";
 import { Swipeable } from "@/components/mobile/Swipeable";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { haptic } from "@/lib/haptics";
+import { ProductImage } from "@/components/shared/ProductImage";
 
 interface ProductCardProps {
   id: string;
@@ -94,12 +95,12 @@ export function ProductCard({
 
       <div className="relative aspect-square overflow-hidden bg-muted">
         {imageUrl ? (
-          <img
-            src={imageUrl}
+          <ProductImage
+            url={imageUrl}
             alt={title}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            viewMode="admin"
+            size="card"
+            imgClassName="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div

@@ -29,6 +29,7 @@ import PricingMaster from "./pages/admin/PricingMaster";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
+import PortalProductDetail from "./pages/portal/PortalProductDetail";
 
 const queryClient = new QueryClient();
 
@@ -81,6 +82,7 @@ const App = () => (
               }
             >
               <Route index element={<PortalHome />} />
+              <Route path="products/:id" element={<PortalProductDetail />} />
             </Route>
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
