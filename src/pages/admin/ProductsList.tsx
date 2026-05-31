@@ -909,6 +909,7 @@ export default function ProductsList() {
                     status={r.status}
                     imageUrl={r.primary_image_url}
                     isHidden={r.is_hidden_from_dashboard}
+                    hasImageWarning={r.has_image_warning}
                     isAdmin={isAdmin}
                     bulkMode={bulkMode}
                     selected={selected.has(r.id)}
