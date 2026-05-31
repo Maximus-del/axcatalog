@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { shopifyImg } from "@/lib/shopify-image";
@@ -21,6 +20,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 import { distributeByCurve, useSizeDistributionCurve } from "@/hooks/useSizeDistributionCurve";
+import { MilestoneSlider } from "./MilestoneSlider";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 
@@ -276,12 +276,13 @@ export function ProductCard({ product }: Props) {
                       className="h-7 w-20 text-center text-sm rounded bg-background border border-border focus:outline-none focus:border-accent"
                     />
                   </div>
-                  <Slider
+                  <MilestoneSlider
                     min={0}
                     max={500}
                     step={1}
-                    value={[autoTotal]}
-                    onValueChange={(v) => applyAutoTotal(v[0] ?? 0)}
+                    value={autoTotal}
+                    onValueChange={(v) => applyAutoTotal(v)}
+                    organizationId={athlete?.organization_id ?? null}
                   />
                 </div>
               )}
