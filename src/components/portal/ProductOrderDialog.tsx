@@ -3,7 +3,7 @@
 // Bulk order dialog for a single product. Extracted from the portal
 // ProductCard so the same flow is reused on the product detail page.
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Loader2, Shirt } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -299,6 +299,3 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     </Dialog>
   );
 }
-
-// Re-export the unused Shirt icon to keep tree-shaking honest if needed.
-export { Shirt };
