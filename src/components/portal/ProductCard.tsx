@@ -45,6 +45,10 @@ export function ProductCard({ product }: Props) {
   const [autoDistribute, setAutoDistribute] = useState(false);
   const [autoTotal, setAutoTotal] = useState<number>(0);
   const [submitting, setSubmitting] = useState(false);
+  // Track whether the primary image failed to load (stale Shopify CDN URLs,
+  // missing storage objects, etc.) so we can fall back to the Shirt icon
+  // instead of showing a broken <img> with alt text.
+  const [imgFailed, setImgFailed] = useState(false);
   const { user } = useAuth();
   const { athlete, isImpersonating } = useCurrentAthlete();
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
@@ -156,12 +160,13 @@ export function ProductCard({ product }: Props) {
     <div className="ax-card p-3 flex flex-col gap-3">
       {/* Image */}
       <div className="relative h-40 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
-        {product.primary_image_url ? (
+        {product.primary_image_url && !imgFailed ? (
           <img
             src={shopifyImg(product.primary_image_url, 400) ?? product.primary_image_url}
             alt={product.title}
             className="max-h-full max-w-full object-contain p-3"
             loading="lazy"
+            onError={() => setImgFailed(true)}
           />
         ) : (
           <Shirt className="h-12 w-12 text-muted-foreground/40" strokeWidth={1.5} />
@@ -208,11 +213,12 @@ export function ProductCard({ product }: Props) {
       <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
         <DialogContent className="max-w-lg p-0 bg-card border-border overflow-hidden">
           <div className="h-56 bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
-            {product.primary_image_url ? (
+            {product.primary_image_url && !imgFailed ? (
               <img
                 src={shopifyImg(product.primary_image_url, 800) ?? product.primary_image_url}
                 alt={product.title}
                 className="max-h-full max-w-full object-contain p-4"
+                onError={() => setImgFailed(true)}
               />
             ) : (
               <Shirt className="h-16 w-16 text-muted-foreground/40" strokeWidth={1.5} />
