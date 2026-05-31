@@ -58,6 +58,7 @@ import {
 import { formatBytes, getSignedUrl } from "@/lib/storage";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
+import { BlankPricingFields } from "@/components/admin/blanks/BlankPricingFields";
 
 interface BlankRow {
   id: string;
@@ -69,6 +70,9 @@ interface BlankRow {
   garment_type: GarmentType;
   fabric_specs: Record<string, string | number>;
   cost: number | null;
+  price_athlete: number | null;
+  price_corporate: number | null;
+  price_standard: number | null;
   moq: number | null;
   sellable_as_blank: boolean;
   internal_only: boolean;
@@ -134,6 +138,9 @@ export default function BlankDetail() {
         garment_type: bRes.data.garment_type as GarmentType,
         fabric_specs: (bRes.data.fabric_specs as Record<string, string | number>) ?? {},
         cost: bRes.data.cost,
+        price_athlete: bRes.data.price_athlete,
+        price_corporate: bRes.data.price_corporate,
+        price_standard: bRes.data.price_standard,
         moq: bRes.data.moq,
         sellable_as_blank: bRes.data.sellable_as_blank,
         internal_only: bRes.data.internal_only,
