@@ -25,6 +25,7 @@ import BlanksList from "./pages/admin/BlanksList";
 import BlankDetail from "./pages/admin/BlankDetail";
 import OrdersList from "./pages/admin/OrdersList";
 import OrderDetail from "./pages/admin/OrderDetail";
+import PricingMaster from "./pages/admin/PricingMaster";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -67,6 +68,7 @@ const App = () => (
               <Route path="ingestion/:id" element={<IngestionQueue />} />
               <Route path="orders" element={<OrdersList />} />
               <Route path="orders/:id" element={<OrderDetail />} />
+              <Route path="pricing" element={<PricingMaster />} />
             </Route>
 
             {/* Portal */}
