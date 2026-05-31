@@ -87,7 +87,11 @@ export default function PricingMaster() {
     setRows((rs) =>
       rs ? rs.map((r) => (r.id === id ? { ...r, [field]: value } : r)) : rs,
     );
-    const { error } = await supabase.from("blanks").update({ [field]: value }).eq("id", id);
+    const patch: Record<string, number | null> = { [field]: value };
+    const { error } = await supabase
+      .from("blanks")
+      .update(patch as never)
+      .eq("id", id);
     if (error) {
       toast.error("Save failed");
       setRows(prev);
