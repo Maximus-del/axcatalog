@@ -30,6 +30,7 @@ import {
   formatAvailability,
   formatGarmentType,
 } from "@/lib/blank-status";
+import { BlankPricingFields } from "./BlankPricingFields";
 
 interface Props {
   open: boolean;
@@ -77,6 +78,9 @@ export function BlankFormDialog({ open, onOpenChange, onCreated }: Props) {
   const [garmentType, setGarmentType] = useState<string>("tee");
   const [specs, setSpecs] = useState<SpecRow[]>(DEFAULT_SPECS);
   const [cost, setCost] = useState("");
+  const [priceAthlete, setPriceAthlete] = useState<number | null>(null);
+  const [priceCorporate, setPriceCorporate] = useState<number | null>(null);
+  const [priceStandard, setPriceStandard] = useState<number | null>(null);
   const [moq, setMoq] = useState("");
   const [sellable, setSellable] = useState(false);
   const [internal, setInternal] = useState(true);
@@ -99,6 +103,9 @@ export function BlankFormDialog({ open, onOpenChange, onCreated }: Props) {
     setGarmentType("tee");
     setSpecs(DEFAULT_SPECS);
     setCost("");
+    setPriceAthlete(null);
+    setPriceCorporate(null);
+    setPriceStandard(null);
     setMoq("");
     setSellable(false);
     setInternal(true);
@@ -159,6 +166,9 @@ export function BlankFormDialog({ open, onOpenChange, onCreated }: Props) {
             | "other",
           fabric_specs: fabricSpecs,
           cost: cost ? Number(cost) : null,
+          price_athlete: priceAthlete,
+          price_corporate: priceCorporate,
+          price_standard: priceStandard,
           moq: moq ? Math.floor(Number(moq)) : null,
           sellable_as_blank: sellable,
           internal_only: internal,
@@ -309,16 +319,21 @@ export function BlankFormDialog({ open, onOpenChange, onCreated }: Props) {
           </Section>
 
           <Section title="Pricing & Ordering">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Cost</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
-                />
-              </div>
+            <BlankPricingFields
+              value={{
+                cost: cost ? Number(cost) : null,
+                price_athlete: priceAthlete,
+                price_corporate: priceCorporate,
+                price_standard: priceStandard,
+              }}
+              onChange={(patch) => {
+                if ("cost" in patch) setCost(patch.cost == null ? "" : String(patch.cost));
+                if ("price_athlete" in patch) setPriceAthlete(patch.price_athlete ?? null);
+                if ("price_corporate" in patch) setPriceCorporate(patch.price_corporate ?? null);
+                if ("price_standard" in patch) setPriceStandard(patch.price_standard ?? null);
+              }}
+            />
+            <div className="grid grid-cols-2 gap-3 mt-4">
               <div className="space-y-2">
                 <Label>MOQ</Label>
                 <Input

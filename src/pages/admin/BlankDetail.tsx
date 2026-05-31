@@ -58,6 +58,7 @@ import {
 import { formatBytes, getSignedUrl } from "@/lib/storage";
 import { slugify } from "@/lib/slug";
 import { cn } from "@/lib/utils";
+import { BlankPricingFields } from "@/components/admin/blanks/BlankPricingFields";
 
 interface BlankRow {
   id: string;
@@ -69,6 +70,9 @@ interface BlankRow {
   garment_type: GarmentType;
   fabric_specs: Record<string, string | number>;
   cost: number | null;
+  price_athlete: number | null;
+  price_corporate: number | null;
+  price_standard: number | null;
   moq: number | null;
   sellable_as_blank: boolean;
   internal_only: boolean;
@@ -134,6 +138,9 @@ export default function BlankDetail() {
         garment_type: bRes.data.garment_type as GarmentType,
         fabric_specs: (bRes.data.fabric_specs as Record<string, string | number>) ?? {},
         cost: bRes.data.cost,
+        price_athlete: bRes.data.price_athlete,
+        price_corporate: bRes.data.price_corporate,
+        price_standard: bRes.data.price_standard,
         moq: bRes.data.moq,
         sellable_as_blank: bRes.data.sellable_as_blank,
         internal_only: bRes.data.internal_only,
@@ -417,20 +424,18 @@ export default function BlankDetail() {
 
           <div className="ax-card space-y-4">
             <h3 className="font-semibold">Pricing & Availability</h3>
+            <BlankPricingFields
+              value={{
+                cost: blank.cost,
+                price_athlete: blank.price_athlete,
+                price_corporate: blank.price_corporate,
+                price_standard: blank.price_standard,
+              }}
+              onChange={(patch) => setBlank({ ...blank, ...patch })}
+              onCommit={(patch) => patchBlank(patch)}
+            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Cost</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={blank.cost ?? ""}
-                  onChange={(e) =>
-                    setBlank({ ...blank, cost: e.target.value ? Number(e.target.value) : null })
-                  }
-                  onBlur={() => patchBlank({ cost: blank.cost })}
-                />
-              </div>
-              <div className="space-y-2">
+              <div className="space-y-2 sm:col-span-2">
                 <Label>MOQ</Label>
                 <Input
                   type="number"
