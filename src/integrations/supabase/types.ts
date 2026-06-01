@@ -995,6 +995,63 @@ export type Database = {
           },
         ]
       }
+      import_batches: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_log: Json
+          file_name: string
+          id: string
+          line_items_attributed: number
+          line_items_imported: number
+          line_items_unattributed: number
+          orders_imported: number
+          orders_skipped: number
+          organization_id: string
+          status: string
+          total_rows: number
+          updated_at: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_log?: Json
+          file_name: string
+          id?: string
+          line_items_attributed?: number
+          line_items_imported?: number
+          line_items_unattributed?: number
+          orders_imported?: number
+          orders_skipped?: number
+          organization_id: string
+          status?: string
+          total_rows?: number
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_log?: Json
+          file_name?: string
+          id?: string
+          line_items_attributed?: number
+          line_items_imported?: number
+          line_items_unattributed?: number
+          orders_imported?: number
+          orders_skipped?: number
+          organization_id?: string
+          status?: string
+          total_rows?: number
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: []
+      }
       ingestion_jobs: {
         Row: {
           applied_at: string | null
@@ -1077,6 +1134,144 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      order_line_items: {
+        Row: {
+          attributed_org_id: string | null
+          attribution_confidence: string
+          attribution_rule_id: string | null
+          created_at: string
+          id: string
+          line_total: number | null
+          order_id: string
+          organization_id: string
+          product_id: string | null
+          product_title: string
+          quantity: number
+          raw_csv_row: Json | null
+          shopify_line_item_id: string | null
+          sku: string | null
+          unit_price: number | null
+          updated_at: string
+          variant_title: string | null
+        }
+        Insert: {
+          attributed_org_id?: string | null
+          attribution_confidence?: string
+          attribution_rule_id?: string | null
+          created_at?: string
+          id?: string
+          line_total?: number | null
+          order_id: string
+          organization_id: string
+          product_id?: string | null
+          product_title: string
+          quantity?: number
+          raw_csv_row?: Json | null
+          shopify_line_item_id?: string | null
+          sku?: string | null
+          unit_price?: number | null
+          updated_at?: string
+          variant_title?: string | null
+        }
+        Update: {
+          attributed_org_id?: string | null
+          attribution_confidence?: string
+          attribution_rule_id?: string | null
+          created_at?: string
+          id?: string
+          line_total?: number | null
+          order_id?: string
+          organization_id?: string
+          product_id?: string | null
+          product_title?: string
+          quantity?: number
+          raw_csv_row?: Json | null
+          shopify_line_item_id?: string | null
+          sku?: string | null
+          unit_price?: number | null
+          updated_at?: string
+          variant_title?: string | null
+        }
+        Relationships: []
+      }
+      orders: {
+        Row: {
+          attributed_org_id: string | null
+          created_at: string
+          currency: string
+          customer_email: string | null
+          customer_name: string | null
+          discount: number | null
+          financial_status: string | null
+          fulfillment_status: string | null
+          id: string
+          import_batch_id: string | null
+          imported_at: string
+          is_refund: boolean
+          is_test: boolean
+          order_date: string | null
+          organization_id: string
+          raw_csv_row: Json | null
+          shipping: number | null
+          shopify_order_id: string | null
+          shopify_order_name: string | null
+          subtotal: number | null
+          tax: number | null
+          total: number | null
+          updated_at: string
+        }
+        Insert: {
+          attributed_org_id?: string | null
+          created_at?: string
+          currency?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          discount?: number | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id?: string
+          import_batch_id?: string | null
+          imported_at?: string
+          is_refund?: boolean
+          is_test?: boolean
+          order_date?: string | null
+          organization_id: string
+          raw_csv_row?: Json | null
+          shipping?: number | null
+          shopify_order_id?: string | null
+          shopify_order_name?: string | null
+          subtotal?: number | null
+          tax?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Update: {
+          attributed_org_id?: string | null
+          created_at?: string
+          currency?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          discount?: number | null
+          financial_status?: string | null
+          fulfillment_status?: string | null
+          id?: string
+          import_batch_id?: string | null
+          imported_at?: string
+          is_refund?: boolean
+          is_test?: boolean
+          order_date?: string | null
+          organization_id?: string
+          raw_csv_row?: Json | null
+          shipping?: number | null
+          shopify_order_id?: string | null
+          shopify_order_name?: string | null
+          subtotal?: number | null
+          tax?: number | null
+          total?: number | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       org_pricing_config: {
         Row: {
@@ -1263,6 +1458,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      product_attribution_rules: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          match_pattern: string
+          match_type: string
+          notes: string | null
+          organization_id: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_pattern: string
+          match_type: string
+          notes?: string | null
+          organization_id: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          match_pattern?: string
+          match_type?: string
+          notes?: string | null
+          organization_id?: string
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       product_collections: {
         Row: {
