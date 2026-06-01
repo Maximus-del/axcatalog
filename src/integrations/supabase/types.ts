@@ -1142,6 +1142,7 @@ export type Database = {
           attribution_rule_id: string | null
           created_at: string
           id: string
+          is_upcharge: boolean
           line_total: number | null
           order_id: string
           organization_id: string
@@ -1161,6 +1162,7 @@ export type Database = {
           attribution_rule_id?: string | null
           created_at?: string
           id?: string
+          is_upcharge?: boolean
           line_total?: number | null
           order_id: string
           organization_id: string
@@ -1180,6 +1182,7 @@ export type Database = {
           attribution_rule_id?: string | null
           created_at?: string
           id?: string
+          is_upcharge?: boolean
           line_total?: number | null
           order_id?: string
           organization_id?: string
