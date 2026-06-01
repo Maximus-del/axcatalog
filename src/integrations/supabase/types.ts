@@ -2878,6 +2878,7 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          is_platform_admin: boolean
           organization_id: string
           role: string
           updated_at: string
@@ -2887,6 +2888,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          is_platform_admin?: boolean
           organization_id: string
           role?: string
           updated_at?: string
@@ -2896,6 +2898,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          is_platform_admin?: boolean
           organization_id?: string
           role?: string
           updated_at?: string
@@ -3120,7 +3123,9 @@ export type Database = {
         }[]
       }
       current_user_is_admin: { Args: never; Returns: boolean }
+      current_user_is_platform_admin: { Args: never; Returns: boolean }
       current_user_org_id: { Args: never; Returns: string }
+      is_org_accessible: { Args: { _org_id: string }; Returns: boolean }
     }
     Enums: {
       athlete_role: "primary" | "featured" | "collab"
