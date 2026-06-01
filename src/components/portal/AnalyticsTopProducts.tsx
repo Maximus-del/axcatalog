@@ -1,19 +1,29 @@
 import { Shirt } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
+import type { ProductSales } from "@/hooks/usePortalSales";
 import { shopifyImg } from "@/lib/shopify-image";
 
 interface Props {
   products: PortalProduct[];
   loading: boolean;
+  salesByProduct?: Map<string, ProductSales>;
 }
 
 /**
- * Top products by created_at (no sales data yet).
- * Bars rendered at 0% with a clear "Sales data populates after Shopify sync" note.
+ * Top products ranked by attributed revenue. Falls back to created_at order
+ * when no sales data is available.
  */
-export function AnalyticsTopProducts({ products, loading }: Props) {
-  const top = products.slice(0, 4);
+export function AnalyticsTopProducts({ products, loading, salesByProduct }: Props) {
+  const getSales = (id: string): ProductSales =>
+    salesByProduct?.get(id) ?? { quantity: 0, revenue: 0 };
+  const sorted = [...products].sort(
+    (a, b) => getSales(b.id).revenue - getSales(a.id).revenue,
+  );
+  const top = sorted.slice(0, 4);
+  const maxRev = Math.max(1, ...top.map((p) => getSales(p.id).revenue));
+  const fmtMoney = (n: number) =>
+    n === 0 ? "$0" : `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
   if (loading) {
     return (
@@ -27,9 +37,6 @@ export function AnalyticsTopProducts({ products, loading }: Props) {
 
   return (
     <div className="ax-card p-4">
-      <p className="text-xs text-muted-foreground mb-4">
-        Sales data will populate after Shopify sync is configured.
-      </p>
       {top.length === 0 ? (
         <div className="py-8 text-center text-sm text-muted-foreground">
           No products linked yet.
@@ -59,7 +66,9 @@ export function AnalyticsTopProducts({ products, loading }: Props) {
                 <div className="p-2.5">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="ax-label">#{i + 1}</span>
-                    <span className="text-xs text-muted-foreground">— sold</span>
+                    <span className="text-xs text-muted-foreground">
+                      {getSales(p.id).quantity} sold
+                    </span>
                   </div>
                   <p className="text-sm font-medium leading-tight line-clamp-2" title={p.title}>
                     {p.title}
@@ -71,7 +80,10 @@ export function AnalyticsTopProducts({ products, loading }: Props) {
 
           {/* Desktop: list */}
           <div className="hidden md:block space-y-2">
-            {top.map((p, i) => (
+            {top.map((p, i) => {
+              const s = getSales(p.id);
+              const pct = (s.revenue / maxRev) * 100;
+              return (
               <div key={p.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-accent/5">
                 <div className="ax-label w-6 text-center">{i + 1}</div>
                 <div className="h-10 w-10 rounded bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden shrink-0">
@@ -88,14 +100,18 @@ export function AnalyticsTopProducts({ products, loading }: Props) {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{p.title}</div>
-                  <div className="text-xs text-muted-foreground">— sold</div>
+                  <div className="text-xs text-muted-foreground">{s.quantity} sold</div>
                   <div className="mt-1 h-1.5 w-full bg-muted rounded">
-                    <div className="h-full w-0 rounded bg-accent" />
+                    <div
+                      className="h-full rounded bg-accent"
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </div>
-                <div className="text-sm text-muted-foreground tabular-nums">$—</div>
+                <div className="text-sm tabular-nums">{fmtMoney(s.revenue)}</div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
