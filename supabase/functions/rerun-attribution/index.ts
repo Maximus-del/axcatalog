@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
         await db.from("order_line_items").update({
           attributed_org_id: attributed,
           attribution_rule_id: ruleId,
-          attribution_confidence: ruleId ? "rule_match" : "product_match",
+          attribution_confidence: "matched",
           product_id: productId,
         }).eq("id", li.id);
         updated++;
