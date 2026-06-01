@@ -168,6 +168,11 @@ export default function ImportBatchDetail() {
             {" "}{batch.orders_imported} orders ({batch.orders_skipped} dupes skipped) ·
             {" "}{batch.line_items_imported} line items
           </p>
+          {upchargeStats.count > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Upcharge line items skipped: {upchargeStats.count} (${upchargeStats.total.toFixed(2)} total)
+            </p>
+          )}
         </div>
         <Button onClick={handleRerun} disabled={rerunning} variant="outline">
           <RefreshCw className={`h-4 w-4 mr-2 ${rerunning ? "animate-spin" : ""}`} />
