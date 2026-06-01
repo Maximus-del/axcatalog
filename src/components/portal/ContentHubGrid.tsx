@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
+import type { ProductSales } from "@/hooks/usePortalSales";
 import { shopifyImg } from "@/lib/shopify-image";
 import { ProductGalleryDialog } from "./ProductGalleryDialog";
 
@@ -13,6 +14,7 @@ interface Props {
   loading: boolean;
   athleteId: string;
   organizationId: string;
+  salesByProduct?: Map<string, ProductSales>;
 }
 
 function shareUrl(p: PortalProduct): string {
@@ -39,7 +41,7 @@ async function downloadImage(url: string, filename: string) {
   }
 }
 
-export function ContentHubGrid({ products, loading, athleteId, organizationId }: Props) {
+export function ContentHubGrid({ products, loading, athleteId, organizationId, salesByProduct }: Props) {
   const [galleryProduct, setGalleryProduct] = useState<PortalProduct | null>(null);
   if (loading) {
     return (
@@ -97,7 +99,14 @@ export function ContentHubGrid({ products, loading, athleteId, organizationId }:
               <h3 className="text-sm font-semibold truncate" title={p.title}>
                 {p.title}
               </h3>
-              <p className="text-xs text-muted-foreground mt-1">— sold</p>
+              <p className="text-xs text-muted-foreground mt-1 tabular-nums">
+                {(() => {
+                  const s = salesByProduct?.get(p.id);
+                  const qty = s?.quantity ?? 0;
+                  const rev = s?.revenue ?? 0;
+                  return `${qty} sold · $${rev.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+                })()}
+              </p>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <Button
