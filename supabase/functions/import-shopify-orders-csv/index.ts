@@ -317,9 +317,7 @@ Deno.serve(async (req) => {
           line_total: lineTotal,
           attributed_org_id: attributedOrg,
           attribution_rule_id: rule_id,
-          attribution_confidence: attributedOrg
-            ? (rule_id ? "rule_match" : "product_match")
-            : "unattributed",
+          attribution_confidence: attributedOrg ? "matched" : "unattributed",
           raw_csv_row: r,
         };
         lineItems.push(li);
