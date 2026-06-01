@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { usePortalStats } from "@/hooks/usePortalStats";
+import { usePortalSales } from "@/hooks/usePortalSales";
 import { usePortalProducts } from "@/hooks/usePortalProducts";
 import { usePortalOrders } from "@/hooks/usePortalOrders";
 import { usePortalHiddenProducts } from "@/hooks/usePortalHiddenProducts";
@@ -39,6 +40,7 @@ function PortalHomeInner() {
   const { productsLive, activeDesigns, loading: statsLoading } = usePortalStats(
     athlete?.id ?? null,
   );
+  const sales = usePortalSales(athlete?.organization_id ?? null);
   const { products, loading: productsLoading, refetch: refetchProducts } =
     usePortalProducts(athlete?.id ?? null);
   const { orders, loading: ordersLoading, refetch: refetchOrders } = usePortalOrders(
@@ -152,7 +154,7 @@ function PortalHomeInner() {
       <MobileHeader
         firstName={athlete.first_name}
         lastName={athlete.last_name}
-        lifetimeRevenue={null}
+        lifetimeRevenue={sales.loading ? null : sales.lifetimeRevenue}
         onMenuClick={() => setNavOpen(true)}
       />
 
@@ -179,6 +181,9 @@ function PortalHomeInner() {
             productsLive={productsLive}
             activeDesigns={activeDesigns}
             loading={statsLoading}
+            lifetimeRevenue={sales.lifetimeRevenue}
+            totalOrders={sales.totalOrders}
+            salesLoading={sales.loading}
           />
         </div>
 
@@ -208,7 +213,11 @@ function PortalHomeInner() {
           <div className="space-y-6">
             <div>
               <div className="ax-label mb-3">Top Products</div>
-              <AnalyticsTopProducts products={products} loading={productsLoading} />
+              <AnalyticsTopProducts
+                products={products}
+                loading={productsLoading}
+                salesByProduct={sales.byProduct}
+              />
             </div>
             <div>
               <div className="ax-label mb-3">Revenue Over Time</div>
@@ -240,6 +249,7 @@ function PortalHomeInner() {
             loading={productsLoading}
             athleteId={athlete.id}
             organizationId={athlete.organization_id}
+            salesByProduct={sales.byProduct}
           />
         </PortalSection>
 

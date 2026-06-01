@@ -25,28 +25,38 @@ interface Props {
   productsLive: number | null;
   activeDesigns: number | null;
   loading: boolean;
+  lifetimeRevenue?: number | null;
+  totalOrders?: number | null;
+  salesLoading?: boolean;
 }
 
-export function PortalStatsRow({ productsLive, activeDesigns, loading }: Props) {
+export function PortalStatsRow({
+  productsLive,
+  activeDesigns,
+  loading,
+  lifetimeRevenue,
+  totalOrders,
+  salesLoading,
+}: Props) {
+  const fmtMoney = (n: number | null | undefined) =>
+    n == null ? "—" : `$${n.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <Stat
-        label="Total Revenue"
-        value="—"
-        hint="Revenue data coming soon"
-        loading={false}
+        label="Lifetime Revenue"
+        value={fmtMoney(lifetimeRevenue)}
+        loading={!!salesLoading}
+        accent
       />
       <Stat
         label="Total Orders"
-        value="—"
-        hint="Sales data coming soon"
-        loading={false}
+        value={totalOrders ?? 0}
+        loading={!!salesLoading}
       />
       <Stat
         label="Products Live"
         value={productsLive ?? 0}
         loading={loading}
-        accent
       />
       <Stat
         label="Active Designs"
