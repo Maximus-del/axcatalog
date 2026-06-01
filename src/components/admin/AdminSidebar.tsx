@@ -9,6 +9,7 @@ import {
   Download,
   ClipboardList,
   DollarSign,
+  Upload,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -35,6 +36,7 @@ const items = [
   { title: "Collections", url: "/admin/collections", icon: FolderKanban },
   { title: "Ingestion", url: "/admin/ingestion", icon: Download },
   { title: "Orders", url: "/admin/orders", icon: ClipboardList },
+  { title: "Imports", url: "/admin/imports/orders", icon: Upload },
   { title: "Pricing", url: "/admin/pricing", icon: DollarSign },
 ];
 
