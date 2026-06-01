@@ -26,6 +26,8 @@ import BlankDetail from "./pages/admin/BlankDetail";
 import OrdersList from "./pages/admin/OrdersList";
 import OrderDetail from "./pages/admin/OrderDetail";
 import PricingMaster from "./pages/admin/PricingMaster";
+import ImportsList from "./pages/admin/ImportsList";
+import ImportBatchDetail from "./pages/admin/ImportBatchDetail";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -70,6 +72,8 @@ const App = () => (
               <Route path="orders" element={<OrdersList />} />
               <Route path="orders/:id" element={<OrderDetail />} />
               <Route path="pricing" element={<PricingMaster />} />
+              <Route path="imports/orders" element={<ImportsList />} />
+              <Route path="imports/orders/:id" element={<ImportBatchDetail />} />
             </Route>
 
             {/* Portal */}
