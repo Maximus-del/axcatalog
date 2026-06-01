@@ -37,6 +37,7 @@ export default function ImportBatchDetail() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [rollup, setRollup] = useState<OrgRollup[]>([]);
   const [unattrib, setUnattrib] = useState<Unattrib[]>([]);
+  const [upchargeStats, setUpchargeStats] = useState<{ count: number; total: number }>({ count: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [rerunning, setRerunning] = useState(false);
   const [assignTarget, setAssignTarget] = useState<Unattrib | null>(null);
@@ -59,15 +60,22 @@ export default function ImportBatchDetail() {
       const ids = (orderIds ?? []).map((o: any) => o.id);
       if (ids.length) {
         const { data: lis } = await supabase.from("order_line_items")
-          .select("attributed_org_id, line_total")
+          .select("attributed_org_id, line_total, is_upcharge")
           .in("order_id", ids);
         const map = new Map<string, { line_items: number; revenue: number }>();
+        let upN = 0, upTotal = 0;
         for (const li of lis ?? []) {
+          if (li.is_upcharge) {
+            upN++;
+            upTotal += Number(li.line_total ?? 0);
+            continue;
+          }
           const k = li.attributed_org_id ?? "__un__";
           const cur = map.get(k) ?? { line_items: 0, revenue: 0 };
           cur.line_items++; cur.revenue += Number(li.line_total ?? 0);
           map.set(k, cur);
         }
+        setUpchargeStats({ count: upN, total: Math.round(upTotal * 100) / 100 });
         const orgMap = new Map((oData.data ?? []).map((o: any) => [o.id, o.name]));
         setRollup([...map.entries()].map(([k, v]) => ({
           org_id: k === "__un__" ? null : k,
@@ -77,6 +85,7 @@ export default function ImportBatchDetail() {
         })).sort((a, b) => b.revenue - a.revenue));
       } else {
         setRollup([]);
+        setUpchargeStats({ count: 0, total: 0 });
       }
     }
 
@@ -89,7 +98,8 @@ export default function ImportBatchDetail() {
         const { data: lis } = await supabase.from("order_line_items")
           .select("id, product_title, sku, quantity, line_total")
           .in("order_id", ids)
-          .is("attributed_org_id", null);
+          .is("attributed_org_id", null)
+          .eq("is_upcharge", false);
         const map = new Map<string, Unattrib>();
         for (const li of lis ?? []) {
           const key = (li.product_title ?? "").toLowerCase();
@@ -158,6 +168,11 @@ export default function ImportBatchDetail() {
             {" "}{batch.orders_imported} orders ({batch.orders_skipped} dupes skipped) ·
             {" "}{batch.line_items_imported} line items
           </p>
+          {upchargeStats.count > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Upcharge line items skipped: {upchargeStats.count} (${upchargeStats.total.toFixed(2)} total)
+            </p>
+          )}
         </div>
         <Button onClick={handleRerun} disabled={rerunning} variant="outline">
           <RefreshCw className={`h-4 w-4 mr-2 ${rerunning ? "animate-spin" : ""}`} />

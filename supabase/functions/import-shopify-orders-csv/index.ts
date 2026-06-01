@@ -45,6 +45,21 @@ interface Rule {
   priority: number;
 }
 
+// Upcharge / add-on SKUs that should be excluded from revenue attribution.
+// Matched case-insensitively against the line item title.
+const UPCHARGE_PATTERNS = [
+  "square",            // "1 Square", "3 Squares", "7 Squares"
+  "add-on",
+  "add on",
+  "upcharge",
+  "embroidery upgrade",
+  "expedited shipping",
+];
+function isUpchargeTitle(title: string): boolean {
+  const t = (title ?? "").toLowerCase();
+  return UPCHARGE_PATTERNS.some((p) => t.includes(p));
+}
+
 function clean(v: string | undefined | null): string {
   return (v ?? "").toString().trim();
 }
@@ -294,15 +309,18 @@ Deno.serve(async (req) => {
         // Run attribution rules (highest priority first; first match wins)
         let attributedOrg: string | null = null;
         let rule_id: string | null = null;
-        for (const rule of rules) {
-          if (matchesRule(rule, lineName, sku, tags)) {
-            attributedOrg = rule.organization_id;
-            rule_id = rule.id;
-            break;
+        const upcharge = isUpchargeTitle(lineName);
+        if (!upcharge) {
+          for (const rule of rules) {
+            if (matchesRule(rule, lineName, sku, tags)) {
+              attributedOrg = rule.organization_id;
+              rule_id = rule.id;
+              break;
+            }
           }
+          // Fallback: if matched product carries a clear org, use product's org.
+          if (!attributedOrg && prod?.org) attributedOrg = prod.org;
         }
-        // Fallback: if matched product carries a clear org, use product's org.
-        if (!attributedOrg && prod?.org) attributedOrg = prod.org;
 
         const li = {
           organization_id,
@@ -315,13 +333,18 @@ Deno.serve(async (req) => {
           quantity: qty,
           unit_price: price,
           line_total: lineTotal,
-          attributed_org_id: attributedOrg,
-          attribution_rule_id: rule_id,
-          attribution_confidence: attributedOrg ? "matched" : "unattributed",
+          attributed_org_id: upcharge ? null : attributedOrg,
+          attribution_rule_id: upcharge ? null : rule_id,
+          attribution_confidence: upcharge
+            ? "upcharge_skipped"
+            : (attributedOrg ? "matched" : "unattributed"),
+          is_upcharge: upcharge,
           raw_csv_row: r,
         };
         lineItems.push(li);
-        if (attributedOrg) {
+        if (upcharge) {
+          // Upcharge items don't count toward any org's attribution stats.
+        } else if (attributedOrg) {
           orgsHit.add(attributedOrg);
           line_items_attributed++;
           const cur = attrCounts.get(attributedOrg) ?? { line_items: 0, revenue: 0 };

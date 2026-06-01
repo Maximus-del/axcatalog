@@ -22,6 +22,15 @@ function jsonRes(payload: unknown, status = 200) {
 }
 function lc(v: string | null | undefined) { return (v ?? "").toString().trim().toLowerCase(); }
 
+const UPCHARGE_PATTERNS = [
+  "square", "add-on", "add on", "upcharge",
+  "embroidery upgrade", "expedited shipping",
+];
+function isUpchargeTitle(title: string): boolean {
+  const t = lc(title);
+  return UPCHARGE_PATTERNS.some((p) => t.includes(p));
+}
+
 interface Rule {
   id: string; organization_id: string; match_type: string;
   match_pattern: string; priority: number;
@@ -92,8 +101,9 @@ Deno.serve(async (req) => {
 
   while (true) {
     let q = db.from("order_line_items")
-      .select("id, order_id, product_id, product_title, sku, organization_id")
+      .select("id, order_id, product_id, product_title, sku, organization_id, is_upcharge")
       .is("attributed_org_id", null)
+      .eq("is_upcharge", false)
       .order("id", { ascending: true })
       .range(from, from + pageSize - 1);
     if (batch_id) {
@@ -119,6 +129,16 @@ Deno.serve(async (req) => {
 
     for (const li of page) {
       scanned++;
+      // Flag upcharge titles and skip attribution entirely.
+      if (isUpchargeTitle(li.product_title)) {
+        await db.from("order_line_items").update({
+          is_upcharge: true,
+          attributed_org_id: null,
+          attribution_rule_id: null,
+          attribution_confidence: "upcharge_skipped",
+        }).eq("id", li.id);
+        continue;
+      }
       const tags = tagsByOrder.get(li.order_id) ?? "";
       let attributed: string | null = null;
       let ruleId: string | null = null;
