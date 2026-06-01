@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -23,12 +23,19 @@ interface Batch {
 }
 
 export default function ImportsList() {
-  const { profile } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [batches, setBatches] = useState<Batch[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [drag, setDrag] = useState(false);
+  const [orgId, setOrgId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void supabase.from("user_profiles").select("organization_id").eq("id", user.id).maybeSingle()
+      .then(({ data }) => setOrgId(data?.organization_id ?? null));
+  }, [user?.id]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,7 +51,10 @@ export default function ImportsList() {
   useEffect(() => { void load(); }, [load]);
 
   const handleFile = async (file: File) => {
-    if (!file || !profile?.organization_id) return;
+    if (!file || !orgId) {
+      toast.error("Your profile org is not loaded yet");
+      return;
+    }
     if (!file.name.toLowerCase().endsWith(".csv")) {
       toast.error("Please upload a CSV file");
       return;
@@ -57,7 +67,7 @@ export default function ImportsList() {
         body: {
           csv_text,
           file_name: file.name,
-          organization_id: profile.organization_id,
+          organization_id: orgId,
         },
       });
       toast.dismiss(t);
