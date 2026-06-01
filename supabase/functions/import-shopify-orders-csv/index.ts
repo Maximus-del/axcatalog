@@ -45,6 +45,21 @@ interface Rule {
   priority: number;
 }
 
+// Upcharge / add-on SKUs that should be excluded from revenue attribution.
+// Matched case-insensitively against the line item title.
+const UPCHARGE_PATTERNS = [
+  "square",            // "1 Square", "3 Squares", "7 Squares"
+  "add-on",
+  "add on",
+  "upcharge",
+  "embroidery upgrade",
+  "expedited shipping",
+];
+function isUpchargeTitle(title: string): boolean {
+  const t = (title ?? "").toLowerCase();
+  return UPCHARGE_PATTERNS.some((p) => t.includes(p));
+}
+
 function clean(v: string | undefined | null): string {
   return (v ?? "").toString().trim();
 }
