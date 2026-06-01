@@ -44,20 +44,16 @@ export default function ImportBatchDetail() {
   const load = useCallback(async () => {
     if (!batchId) return;
     setLoading(true);
-    const [b, oData, rollData, unData] = await Promise.all([
+    const [b, oData] = await Promise.all([
       supabase.from("import_batches").select("*").eq("id", batchId).single(),
       supabase.from("organizations").select("id, name").order("name"),
-      supabase.rpc("import_batch_org_rollup", { _batch_id: batchId }).then((r) => r, () => ({ data: null })),
-      supabase.rpc("import_batch_unattributed", { _batch_id: batchId }).then((r) => r, () => ({ data: null })),
     ]);
 
     setBatch(b.data as Batch);
     setOrgs((oData.data ?? []) as Org[]);
 
-    // Fallback: compute rollup client-side if RPC missing
-    if (rollData?.data) {
-      setRollup(rollData.data as OrgRollup[]);
-    } else {
+    // Compute rollup client-side
+    {
       const { data: orderIds } = await supabase.from("orders")
         .select("id").eq("import_batch_id", batchId);
       const ids = (orderIds ?? []).map((o: any) => o.id);
@@ -84,10 +80,8 @@ export default function ImportBatchDetail() {
       }
     }
 
-    // Unattributed grouped by title (client side fallback if RPC missing)
-    if (unData?.data) {
-      setUnattrib(unData.data as Unattrib[]);
-    } else {
+    // Unattributed grouped by title (client side)
+    {
       const { data: orderIds } = await supabase.from("orders")
         .select("id").eq("import_batch_id", batchId);
       const ids = (orderIds ?? []).map((o: any) => o.id);
