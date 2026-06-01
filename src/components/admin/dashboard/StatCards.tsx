@@ -6,9 +6,11 @@ import { cn } from "@/lib/utils";
 
 interface StatData {
   activeProducts: number;
-  activeDesigns: number;
+  totalOrders: number;
+  lifetimeRevenue: number;
+  unattributedRevenue: number;
+  unattributedLineItems: number;
   openBulkOrders: number;
-  pendingIngestion: number;
   overdueSubmitted: boolean;
 }
 
@@ -21,23 +23,26 @@ export function StatCards() {
     let cancelled = false;
     (async () => {
       const overdueCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const [products, designs, orders, ingestion, overdue] = await Promise.all([
+      const [products, ordersCount, revenueRows, unattribRows, openBulk, overdue] = await Promise.all([
         supabase
           .from("products")
           .select("id", { count: "exact", head: true })
           .in("status", ["published", "internal"]),
         supabase
-          .from("designs")
+          .from("orders")
           .select("id", { count: "exact", head: true })
-          .in("status", ["approved", "production_ready"]),
+          .eq("is_test", false),
+        supabase
+          .from("order_line_items")
+          .select("line_total"),
+        supabase
+          .from("order_line_items")
+          .select("line_total", { count: "exact" })
+          .is("attributed_org_id", null),
         supabase
           .from("bulk_order_requests")
           .select("id", { count: "exact", head: true })
           .in("status", ["submitted", "acknowledged", "in_production"]),
-        supabase
-          .from("ingestion_jobs")
-          .select("id", { count: "exact", head: true })
-          .in("status", ["pending", "processing", "review"]),
         supabase
           .from("bulk_order_requests")
           .select("id", { count: "exact", head: true })
@@ -45,11 +50,19 @@ export function StatCards() {
           .lt("created_at", overdueCutoff),
       ]);
       if (cancelled) return;
+      const lifetime = (revenueRows.data ?? []).reduce(
+        (s: number, r: any) => s + Number(r.line_total ?? 0), 0,
+      );
+      const unattribRev = (unattribRows.data ?? []).reduce(
+        (s: number, r: any) => s + Number(r.line_total ?? 0), 0,
+      );
       setData({
         activeProducts: products.count ?? 0,
-        activeDesigns: designs.count ?? 0,
-        openBulkOrders: orders.count ?? 0,
-        pendingIngestion: ingestion.count ?? 0,
+        totalOrders: ordersCount.count ?? 0,
+        lifetimeRevenue: Math.round(lifetime * 100) / 100,
+        unattributedRevenue: Math.round(unattribRev * 100) / 100,
+        unattributedLineItems: unattribRows.count ?? 0,
+        openBulkOrders: openBulk.count ?? 0,
         overdueSubmitted: (overdue.count ?? 0) > 0,
       });
       setLoading(false);
@@ -59,24 +72,43 @@ export function StatCards() {
     };
   }, []);
 
+  const fmtMoney = (n?: number) =>
+    n == null ? "—" : `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   const cards = [
-    { label: "Active Products", value: data?.activeProducts, accent: true },
-    { label: "Active Designs", value: data?.activeDesigns },
     {
-      label: "Open Bulk Orders",
-      value: data?.openBulkOrders,
-      onClick: () => navigate("/admin/orders?tab=open"),
-      alert: data?.overdueSubmitted,
+      label: "Lifetime Revenue",
+      value: fmtMoney(data?.lifetimeRevenue),
+      accent: true,
     },
     {
-      label: "Pending Ingestion",
-      value: data?.pendingIngestion,
-      onClick: () => navigate("/admin/ingestion"),
+      label: "Total Orders",
+      value: data?.totalOrders?.toLocaleString(),
+      onClick: () => navigate("/admin/orders"),
+    },
+    {
+      label: "Products Live",
+      value: data?.activeProducts?.toLocaleString(),
+      onClick: () => navigate("/admin/products"),
+    },
+    {
+      label: "Unattributed",
+      value: fmtMoney(data?.unattributedRevenue),
+      sub: data?.unattributedLineItems
+        ? `${data.unattributedLineItems} line items`
+        : "All attributed",
+      onClick: () => navigate("/admin/imports/orders"),
+      alert: (data?.unattributedLineItems ?? 0) > 0,
+    },
+    {
+      label: "Open Bulk Orders",
+      value: data?.openBulkOrders?.toLocaleString(),
+      onClick: () => navigate("/admin/orders?tab=open"),
+      alert: data?.overdueSubmitted,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
       {cards.map((c) => {
         const clickable = !!c.onClick;
         return (
@@ -103,7 +135,12 @@ export function StatCards() {
             {loading ? (
               <Skeleton className="h-9 w-16" />
             ) : (
-              <div className={cn("ax-stat", c.accent && "text-accent")}>{c.value}</div>
+              <>
+                <div className={cn("ax-stat", c.accent && "text-accent")}>{c.value ?? "—"}</div>
+                {(c as any).sub && (
+                  <div className="text-[11px] text-muted-foreground mt-1">{(c as any).sub}</div>
+                )}
+              </>
             )}
           </div>
         );
