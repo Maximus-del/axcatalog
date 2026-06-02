@@ -17,6 +17,20 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  Tooltip,
+} from "recharts";
+
+type SparkPoint = { label: string; value: number };
+type ChartData =
+  | { kind: "area"; points: SparkPoint[] }
+  | { kind: "bars"; points: SparkPoint[] }
+  | { kind: "progress"; done: number; total: number };
 
 interface SectionDef {
   key: string;
@@ -26,11 +40,125 @@ interface SectionDef {
   enabled: boolean;
   statLabel?: string;
   load?: () => Promise<string | number | null>;
+  loadChart?: () => Promise<ChartData | null>;
   noStat?: boolean;
 }
 
 const fmtMoney = (n: number) =>
   `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+function dayKey(d: Date) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function weekKey(d: Date) {
+  // ISO-ish week bucket using Monday as start, UTC
+  const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() - (day - 1));
+  return dayKey(dt);
+}
+
+async function loadRevenueByDay(days = 14): Promise<ChartData> {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const buckets = new Map<string, number>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    buckets.set(dayKey(d), 0);
+  }
+  const pageSize = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("order_line_items")
+      .select("line_total, is_upcharge, orders!inner(is_test, order_date)")
+      .not("attributed_org_id", "is", null)
+      .eq("is_upcharge", false)
+      .eq("orders.is_test", false)
+      .gte("orders.order_date", start.toISOString())
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error || !data) break;
+    for (const r of data as Array<{ line_total: number | null; orders: { order_date: string | null } }>) {
+      const od = r.orders?.order_date;
+      if (!od) continue;
+      const k = dayKey(new Date(od));
+      if (buckets.has(k)) buckets.set(k, (buckets.get(k) ?? 0) + Number(r.line_total ?? 0));
+    }
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  const points: SparkPoint[] = [...buckets.entries()].map(([label, value]) => ({
+    label,
+    value: Math.round(value * 100) / 100,
+  }));
+  return { kind: "area", points };
+}
+
+async function loadCreatedByWeek(
+  table: "organizations" | "designs",
+  weeks = 8,
+): Promise<ChartData> {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() - weeks * 7);
+  const { data, error } = await supabase
+    .from(table)
+    .select("created_at")
+    .gte("created_at", start.toISOString());
+  const buckets = new Map<string, number>();
+  for (let i = 0; i < weeks; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i * 7);
+    buckets.set(weekKey(d), 0);
+  }
+  if (!error && data) {
+    for (const r of data as Array<{ created_at: string }>) {
+      const k = weekKey(new Date(r.created_at));
+      if (buckets.has(k)) buckets.set(k, (buckets.get(k) ?? 0) + 1);
+    }
+  }
+  const points = [...buckets.entries()].map(([label, value]) => ({ label, value }));
+  return { kind: "bars", points };
+}
+
+async function loadOrdersByDay(days = 14): Promise<ChartData> {
+  const start = new Date();
+  start.setUTCHours(0, 0, 0, 0);
+  start.setUTCDate(start.getUTCDate() - (days - 1));
+  const buckets = new Map<string, number>();
+  for (let i = 0; i < days; i++) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    buckets.set(dayKey(d), 0);
+  }
+  const { data } = await supabase
+    .from("orders")
+    .select("order_date")
+    .eq("is_test", false)
+    .gte("order_date", start.toISOString());
+  for (const r of (data ?? []) as Array<{ order_date: string | null }>) {
+    if (!r.order_date) continue;
+    const k = dayKey(new Date(r.order_date));
+    if (buckets.has(k)) buckets.set(k, (buckets.get(k) ?? 0) + 1);
+  }
+  const points = [...buckets.entries()].map(([label, value]) => ({ label, value }));
+  return { kind: "bars", points };
+}
+
+async function loadBlanksProgress(): Promise<ChartData> {
+  const total = await supabase.from("blanks").select("id", { count: "exact", head: true });
+  const missing = await supabase
+    .from("blanks")
+    .select("id", { count: "exact", head: true })
+    .or("price_standard.is.null,price_athlete.is.null,price_corporate.is.null");
+  const t = total.count ?? 0;
+  const m = missing.count ?? 0;
+  return { kind: "progress", done: Math.max(0, t - m), total: t };
+}
 
 async function loadTodayRevenue(): Promise<number> {
   const start = new Date();
@@ -156,6 +284,7 @@ const SECTIONS: SectionDef[] = [
     enabled: true,
     statLabel: "today",
     load: async () => fmtMoney(await loadTodayRevenue()),
+    loadChart: () => loadRevenueByDay(14),
   },
   {
     key: "athletes",
@@ -165,6 +294,7 @@ const SECTIONS: SectionDef[] = [
     enabled: true,
     statLabel: "active athletes",
     load: loadAthleteCount,
+    loadChart: () => loadCreatedByWeek("organizations", 8),
   },
   {
     key: "products",
@@ -183,6 +313,7 @@ const SECTIONS: SectionDef[] = [
     enabled: true,
     statLabel: "designs",
     load: loadDesignCount,
+    loadChart: () => loadCreatedByWeek("designs", 8),
   },
   {
     key: "blanks",
@@ -192,6 +323,7 @@ const SECTIONS: SectionDef[] = [
     enabled: true,
     statLabel: "need pricing",
     load: loadBlanksNeedPricing,
+    loadChart: loadBlanksProgress,
   },
   {
     key: "bulk",
@@ -210,6 +342,7 @@ const SECTIONS: SectionDef[] = [
     enabled: true,
     statLabel: "in last 30d",
     load: loadOrders30d,
+    loadChart: () => loadOrdersByDay(14),
   },
   {
     key: "pricing",
