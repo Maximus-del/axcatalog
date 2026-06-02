@@ -376,6 +376,7 @@ function SectionCard({ def }: { def: SectionDef }) {
   const navigate = useNavigate();
   const [value, setValue] = useState<string | number | null>(null);
   const [loading, setLoading] = useState<boolean>(!!def.load && def.enabled);
+  const [chart, setChart] = useState<ChartData | null>(null);
 
   useEffect(() => {
     if (!def.load || !def.enabled) return;
@@ -395,6 +396,20 @@ function SectionCard({ def }: { def: SectionDef }) {
           setLoading(false);
         }
       });
+    return () => {
+      cancelled = true;
+    };
+  }, [def]);
+
+  useEffect(() => {
+    if (!def.loadChart || !def.enabled) return;
+    let cancelled = false;
+    def
+      .loadChart()
+      .then((d) => {
+        if (!cancelled) setChart(d);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -420,7 +435,7 @@ function SectionCard({ def }: { def: SectionDef }) {
         }
       }}
       className={cn(
-        "ax-card group relative flex flex-col gap-4 min-h-[140px] transition-all",
+        "ax-card group relative flex flex-col gap-4 min-h-[180px] transition-all",
         disabled
           ? "opacity-50 cursor-not-allowed"
           : "cursor-pointer hover:border-accent hover:-translate-y-0.5",
@@ -454,8 +469,85 @@ function SectionCard({ def }: { def: SectionDef }) {
             )}
           </div>
         )}
+        {def.loadChart && !disabled && (
+          <div className="mt-3 h-10 -mx-1">
+            {chart ? <MiniChart data={chart} /> : <Skeleton className="h-full w-full" />}
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function MiniChart({ data }: { data: ChartData }) {
+  if (data.kind === "progress") {
+    const pct = data.total > 0 ? Math.round((data.done / data.total) * 100) : 0;
+    return (
+      <div className="flex flex-col gap-1.5 pt-2">
+        <div className="h-2 w-full rounded-full bg-[hsl(var(--muted))] overflow-hidden">
+          <div
+            className="h-full bg-accent transition-all"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="text-[10px] text-muted-foreground tabular-nums">
+          {data.done}/{data.total} priced · {pct}%
+        </div>
+      </div>
+    );
+  }
+  const points = data.points;
+  if (data.kind === "area") {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={points} margin={{ top: 2, right: 2, bottom: 0, left: 2 }}>
+          <defs>
+            <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--accent))" stopOpacity={0.45} />
+              <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Tooltip
+            cursor={false}
+            contentStyle={{
+              background: "hsl(var(--popover))",
+              border: "1px solid hsl(var(--border))",
+              borderRadius: 6,
+              fontSize: 11,
+              padding: "4px 8px",
+            }}
+            labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+            formatter={(v: number) => [`$${v.toLocaleString()}`, "Revenue"]}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="hsl(var(--accent))"
+            strokeWidth={1.5}
+            fill="url(#sparkGrad)"
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    );
+  }
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={points} margin={{ top: 2, right: 2, bottom: 0, left: 2 }}>
+        <Tooltip
+          cursor={{ fill: "hsl(var(--muted) / 0.4)" }}
+          contentStyle={{
+            background: "hsl(var(--popover))",
+            border: "1px solid hsl(var(--border))",
+            borderRadius: 6,
+            fontSize: 11,
+            padding: "4px 8px",
+          }}
+          labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+        />
+        <Bar dataKey="value" fill="hsl(var(--accent))" radius={[2, 2, 0, 0]} isAnimationActive={false} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
