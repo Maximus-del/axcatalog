@@ -105,7 +105,7 @@ async function loadCreatedByWeek(
   const start = new Date();
   start.setUTCHours(0, 0, 0, 0);
   start.setUTCDate(start.getUTCDate() - weeks * 7);
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from(table)
     .select("created_at")
     .gte("created_at", start.toISOString());
