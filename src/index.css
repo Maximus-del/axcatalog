@@ -14,7 +14,7 @@
     --background: 0 0% 10%;          /* #1a1a1a — page bg */
     --foreground: 0 0% 100%;         /* #ffffff */
 
-    --card: 0 0% 13%;                /* #222 */
+    --card: 0 0% 17%;                /* #2b2b2b — stands out from page bg */
     --card-foreground: 0 0% 100%;
 
     --popover: 0 0% 13%;
