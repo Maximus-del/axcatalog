@@ -1,5 +1,6 @@
 import { StatCards } from "@/components/admin/dashboard/StatCards";
 import { SectionsGrid } from "@/components/admin/dashboard/SectionsGrid";
+import { RevenueByOrg } from "@/components/admin/dashboard/RevenueByOrg";
 import { TopClients } from "@/components/admin/dashboard/TopClients";
 import { RecentActivity } from "@/components/admin/dashboard/RecentActivity";
 import { RecentBulkOrders } from "@/components/admin/dashboard/RecentBulkOrders";
@@ -17,6 +18,8 @@ export default function AdminDashboard() {
       <StatCards />
 
       <SectionsGrid />
+
+      <RevenueByOrg />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <TopClients />

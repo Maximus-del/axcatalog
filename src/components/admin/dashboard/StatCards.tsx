@@ -198,22 +198,6 @@ export function StatCards() {
       })}
     </div>
 
-      {data && data.orgBreakdown.length > 0 && (
-        <div className="ax-card">
-          <div className="ax-label mb-3">Revenue by Org</div>
-          <ul className="divide-y divide-border">
-            {data.orgBreakdown.map((o) => (
-              <li key={o.org_id} className="flex items-center justify-between py-2 text-sm">
-                <span className="truncate">{o.name}</span>
-                <span className="flex items-center gap-3 tabular-nums text-muted-foreground">
-                  <span className="text-[11px]">{o.line_items} items</span>
-                  <span className="text-foreground font-semibold">{fmtMoney(o.revenue)}</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </div>
   );
 }
