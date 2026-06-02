@@ -1196,7 +1196,29 @@ export type Database = {
           updated_at?: string
           variant_title?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "order_line_items_attributed_org_id_fkey"
+            columns: ["attributed_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_line_items_attributed_org_id_fkey"
+            columns: ["attributed_org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_line_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       orders: {
         Row: {
