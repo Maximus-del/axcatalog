@@ -74,6 +74,9 @@ export function RevenueByOrg() {
     };
   }, []);
 
+  const totalRevenue = rows?.reduce((s, r) => s + r.revenue, 0) ?? 0;
+  const previewRows = rows?.slice(0, 3) ?? [];
+
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="ax-card">
       <CollapsibleTrigger className="flex w-full items-center justify-between">
@@ -88,6 +91,40 @@ export function RevenueByOrg() {
           />
         </div>
       </CollapsibleTrigger>
+
+      {/* Collapsed preview */}
+      {!open && (
+        <div className="pt-3">
+          {!rows ? (
+            <Skeleton className="h-16 w-full" />
+          ) : rows.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No attributed revenue yet.</div>
+          ) : (
+            <div className="space-y-2">
+              {previewRows.map((o) => {
+                const pct = totalRevenue > 0 ? (o.revenue / totalRevenue) * 100 : 0;
+                return (
+                  <div key={o.org_id} className="flex items-center gap-3">
+                    <div className="w-20 truncate text-xs text-muted-foreground" title={o.name}>
+                      {o.name}
+                    </div>
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary/70 rounded-full"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="w-16 text-right text-xs font-semibold tabular-nums">
+                      {fmtMoney(o.revenue)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <CollapsibleContent className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down">
         <div className="pt-3">
           {!rows ? (
