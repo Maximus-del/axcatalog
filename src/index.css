@@ -42,8 +42,8 @@
 
     --warning: 33 100% 50%;          /* orange for pending badges */
 
-    --border: 0 0% 16%;              /* #2a2a2a */
-    --input: 0 0% 16%;
+    --border: 0 0% 21%;              /* #383838 — lighter than card for clear outline */
+    --input: 0 0% 21%;
     --ring: 145 63% 49%;
 
     --radius: 0.75rem;               /* 12px — cards land 10–14px */
