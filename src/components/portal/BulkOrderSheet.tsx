@@ -9,6 +9,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
@@ -17,6 +19,11 @@ import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 import { ProductPreviewDialog } from "./ProductPreviewDialog";
 import type { VolumeTier } from "@/hooks/usePortalPricing";
+import {
+  distributeByCurve,
+  useSizeDistributionCurve,
+} from "@/hooks/useSizeDistributionCurve";
+import { MilestoneSlider } from "./MilestoneSlider";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
@@ -175,9 +182,12 @@ export function BulkOrderSheet({
   const { draft, setQty, clear } = useOrderDraft();
   const [submitting, setSubmitting] = useState(false);
   const { config } = usePortalPricing(organizationId);
+  const curve = useSizeDistributionCurve(organizationId);
   const [previewProduct, setPreviewProduct] = useState<PortalProduct | null>(null);
   const [selectedColor, setSelectedColor] = useState<Record<string, string>>({});
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
+  const [autoOn, setAutoOn] = useState<Record<string, boolean>>({});
+  const [autoTotal, setAutoTotal] = useState<Record<string, number>>({});
 
   const visibleProducts = useMemo(
     () => products.filter((p) => !isExcluded(p.title)),
@@ -209,6 +219,20 @@ export function BulkOrderSheet({
       .filter((s) => !STANDARD_SIZES.includes(s as typeof STANDARD_SIZES[number]))
       .sort();
     return [...std, ...extras];
+  };
+
+  const applyAutoTotal = (
+    productId: string,
+    color: string,
+    total: number,
+  ) => {
+    const clamped = Math.max(0, Math.min(500, Math.floor(total)));
+    const key = `${productId}::${color}`;
+    setAutoTotal((prev) => ({ ...prev, [key]: clamped }));
+    const dist = distributeByCurve(clamped, [...STANDARD_SIZES], curve);
+    for (const s of STANDARD_SIZES) {
+      setQty(productId, s, dist[s] ?? 0, color);
+    }
   };
 
   const handleSubmit = async () => {
@@ -431,29 +455,10 @@ export function BulkOrderSheet({
                         </span>
                       )}
                     </button>
-                    <div className="flex items-start gap-6 pl-20">
-                      <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
-                        {sizes.map((s) => (
-                          <SizeStepper
-                            key={s}
-                            productId={p.id}
-                            size={s}
-                            label={s}
-                            color={activeColor}
-                          />
-                        ))}
-                      </div>
-                      <div className="flex-1 min-w-0 flex flex-col gap-2">
-                        <ProductAnalytics
-                          product={p}
-                          qty={productTotal}
-                          orderDiscountPct={discountPct}
-                          tiers={config.tiers}
-                          totalOrderUnits={totalUnits}
-                          nextTier={nextTier}
-                        />
+                    {(colorList.length > 0 || true) && (
+                      <div className="pl-20 mb-2 flex flex-wrap items-start gap-3">
                         {colorList.length > 0 && (
-                          <div className="rounded border border-border/60 bg-background/40 p-2.5">
+                          <div className="rounded border border-border/60 bg-background/40 p-2.5 flex-1 min-w-[200px]">
                             <div className="flex items-center justify-between mb-1.5">
                               <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
                                 Color{activeColor ? ` — ${activeColor}` : ""}
@@ -535,6 +540,93 @@ export function BulkOrderSheet({
                             </div>
                           </div>
                         )}
+                        {(() => {
+                          const autoKey = `${p.id}::${activeColor}`;
+                          const on = autoOn[autoKey] ?? false;
+                          const total = autoTotal[autoKey] ?? 0;
+                          return (
+                            <div className="rounded border border-border/60 bg-background/40 p-2.5 flex-1 min-w-[240px]">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <Label
+                                  htmlFor={`auto-${autoKey}`}
+                                  className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+                                >
+                                  Auto-distribute
+                                </Label>
+                                <Switch
+                                  id={`auto-${autoKey}`}
+                                  checked={on}
+                                  onCheckedChange={(v) =>
+                                    setAutoOn((prev) => ({ ...prev, [autoKey]: v }))
+                                  }
+                                />
+                              </div>
+                              {on && (
+                                <div className="space-y-2">
+                                  <div className="flex items-baseline justify-between gap-2">
+                                    <div className="flex items-baseline gap-1">
+                                      <span className="text-xl font-bold text-accent leading-none tabular-nums">
+                                        {total}
+                                      </span>
+                                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                        units
+                                      </span>
+                                    </div>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={500}
+                                      value={total || ""}
+                                      placeholder="0"
+                                      onChange={(e) =>
+                                        applyAutoTotal(
+                                          p.id,
+                                          activeColor,
+                                          parseInt(e.target.value || "0", 10) || 0,
+                                        )
+                                      }
+                                      onFocus={(e) => e.currentTarget.select()}
+                                      className="h-6 w-16 text-center text-xs rounded bg-background border border-border focus:outline-none focus:border-accent"
+                                    />
+                                  </div>
+                                  <MilestoneSlider
+                                    min={0}
+                                    max={500}
+                                    step={1}
+                                    value={total}
+                                    onValueChange={(v) =>
+                                      applyAutoTotal(p.id, activeColor, v)
+                                    }
+                                    organizationId={organizationId}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    <div className="flex items-start gap-6 pl-20">
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
+                        {sizes.map((s) => (
+                          <SizeStepper
+                            key={s}
+                            productId={p.id}
+                            size={s}
+                            label={s}
+                            color={activeColor}
+                          />
+                        ))}
+                      </div>
+                      <div className="flex-1 min-w-0 flex flex-col gap-2">
+                        <ProductAnalytics
+                          product={p}
+                          qty={productTotal}
+                          orderDiscountPct={discountPct}
+                          tiers={config.tiers}
+                          totalOrderUnits={totalUnits}
+                          nextTier={nextTier}
+                        />
                       </div>
                     </div>
                   </li>
