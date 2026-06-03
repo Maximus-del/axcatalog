@@ -358,6 +358,11 @@ export function BulkOrderSheet({
           </div>
         </div>
       </SheetContent>
+      <ProductPreviewDialog
+        open={!!previewProduct}
+        onOpenChange={(o) => !o && setPreviewProduct(null)}
+        product={previewProduct}
+      />
     </Sheet>
   );
 }
