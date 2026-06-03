@@ -627,6 +627,53 @@ export function BulkOrderSheet({
                           totalOrderUnits={totalUnits}
                           nextTier={nextTier}
                         />
+                        <div className="rounded border border-border/60 bg-background/40 p-2.5">
+                          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                            Available Colors
+                          </div>
+                          {colorList.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {colorList.map((c) => {
+                                const hasQty = sumSizes(productByColor[c.name]) > 0;
+                                const isActive = c.name === activeColor;
+                                return (
+                                  <button
+                                    key={c.name}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedColor((prev) => ({
+                                        ...prev,
+                                        [p.id]: c.name,
+                                      }))
+                                    }
+                                    title={c.name}
+                                    className={cn(
+                                      "relative h-6 w-6 rounded border shadow-sm transition",
+                                      isActive
+                                        ? "border-accent ring-2 ring-accent/40"
+                                        : "border-border hover:border-accent/60",
+                                    )}
+                                    style={{
+                                      backgroundColor: c.hex ?? "transparent",
+                                    }}
+                                  >
+                                    {hasQty && (
+                                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent text-accent-foreground flex items-center justify-center">
+                                        <Check className="h-2 w-2" strokeWidth={3} />
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="h-6 w-full rounded border border-dashed border-border/60 bg-muted/30 flex items-center justify-center">
+                              <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                                No colors available
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </li>
