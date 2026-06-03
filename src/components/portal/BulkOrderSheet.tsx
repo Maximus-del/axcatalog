@@ -258,8 +258,7 @@ export function BulkOrderSheet({
           ) : (
             <ul className="divide-y divide-border/60">
               {visibleProducts.map((p) => {
-                const oneSize = isOneSize(p);
-                const sizes = oneSize ? [p.sizes[0] ?? "ONE"] : orderSizes(p.sizes);
+                const sizes = [...STANDARD_SIZES];
                 const productTotal = Object.values(draft[p.id] ?? {}).reduce(
                   (a, b) => a + b,
                   0,
@@ -296,7 +295,7 @@ export function BulkOrderSheet({
                           key={s}
                           productId={p.id}
                           size={s}
-                          label={oneSize ? "OS" : s}
+                          label={s}
                         />
                       ))}
                     </div>
