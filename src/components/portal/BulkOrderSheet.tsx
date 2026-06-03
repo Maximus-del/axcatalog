@@ -201,28 +201,22 @@ export function BulkOrderSheet({
         >
           <Minus className="h-3 w-3" />
         </button>
-        <span
-          className={cn(
-            "text-[10px] font-semibold uppercase tracking-wider w-7 text-center",
-            active ? "text-accent" : "text-muted-foreground",
-          )}
-        >
-          {label}
-        </span>
-        <input
-          type="number"
-          min={0}
-          value={qty || ""}
-          placeholder="0"
-          onChange={(e) =>
-            setQty(productId, size, Math.max(0, parseInt(e.target.value || "0", 10) || 0))
-          }
-          onFocus={(e) => e.currentTarget.select()}
-          className={cn(
-            "h-6 w-9 text-center text-xs rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-            active && "text-accent font-semibold",
-          )}
-        />
+        {active ? (
+          <input
+            type="number"
+            min={0}
+            value={qty}
+            onChange={(e) =>
+              setQty(productId, size, Math.max(0, parseInt(e.target.value || "0", 10) || 0))
+            }
+            onFocus={(e) => e.currentTarget.select()}
+            className="h-6 w-10 text-center text-sm font-semibold text-accent rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+        ) : (
+          <span className="text-xs font-semibold uppercase tracking-wider w-10 text-center text-muted-foreground">
+            {label}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setQty(productId, size, qty + 1)}
@@ -271,9 +265,9 @@ export function BulkOrderSheet({
                   0,
                 );
                 return (
-                  <li key={p.id} className="px-4 py-2.5 hover:bg-accent/5">
-                    <div className="flex items-center gap-3 mb-1.5">
-                      <div className="h-9 w-9 rounded bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden shrink-0">
+                  <li key={p.id} className="px-5 py-3 hover:bg-accent/5">
+                    <div className="flex items-center gap-4 mb-2">
+                      <div className="h-16 w-16 rounded bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden shrink-0">
                         {p.primary_image_url ? (
                           <img
                             src={p.primary_image_url}
@@ -282,7 +276,7 @@ export function BulkOrderSheet({
                           />
                         ) : (
                           <Shirt
-                            className="h-4 w-4 text-muted-foreground/40"
+                            className="h-6 w-6 text-muted-foreground/40"
                             strokeWidth={1.5}
                           />
                         )}
@@ -296,7 +290,7 @@ export function BulkOrderSheet({
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap gap-1 pl-12">
+                    <div className="flex flex-wrap gap-1.5 pl-20">
                       {sizes.map((s) => (
                         <SizeStepper
                           key={s}
