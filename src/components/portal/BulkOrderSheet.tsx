@@ -317,23 +317,14 @@ export function BulkOrderSheet({
                           />
                         ))}
                       </div>
-                      {p.colors.length > 0 && (
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                            Colors
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {p.colors.map((c) => (
-                              <span
-                                key={c.name}
-                                title={c.name}
-                                className="h-5 w-5 rounded-full border border-border shadow-sm"
-                                style={{ backgroundColor: c.hex ?? "transparent" }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <ProductAnalytics
+                        product={p}
+                        qty={productTotal}
+                        orderDiscountPct={discountPct}
+                        tiers={config.tiers}
+                        totalOrderUnits={totalUnits}
+                        nextTier={nextTier}
+                      />
                     </div>
                   </li>
                 );
