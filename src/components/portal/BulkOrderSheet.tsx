@@ -250,21 +250,25 @@ export function BulkOrderSheet({
         product_name_snapshot: string;
         size: string;
         quantity: number;
+        color?: string | null;
       }> = [];
 
       const productById = new Map(products.map((p) => [p.id, p]));
-      for (const [productId, sizes] of Object.entries(draft)) {
+      for (const [productId, byColor] of Object.entries(draft)) {
         const p = productById.get(productId);
         if (!p) continue;
-        for (const [size, qty] of Object.entries(sizes)) {
-          if (qty > 0) {
-            items.push({
-              order_request_id: orderRow.id,
-              product_id: productId,
-              product_name_snapshot: p.title,
-              size,
-              quantity: qty,
-            });
+        for (const [color, sizes] of Object.entries(byColor)) {
+          for (const [size, qty] of Object.entries(sizes)) {
+            if (qty > 0) {
+              items.push({
+                order_request_id: orderRow.id,
+                product_id: productId,
+                product_name_snapshot: p.title,
+                size,
+                quantity: qty,
+                color: color || null,
+              });
+            }
           }
         }
       }
@@ -291,12 +295,14 @@ export function BulkOrderSheet({
     productId,
     size,
     label,
+    color,
   }: {
     productId: string;
     size: string;
     label: string;
+    color: string;
   }) => {
-    const qty = draft[productId]?.[size] ?? 0;
+    const qty = draft[productId]?.[color]?.[size] ?? 0;
     const active = qty > 0;
     return (
       <div className="flex flex-col items-center gap-0.5">
@@ -316,7 +322,7 @@ export function BulkOrderSheet({
         >
           <button
             type="button"
-            onClick={() => setQty(productId, size, Math.max(0, qty - 1))}
+            onClick={() => setQty(productId, size, Math.max(0, qty - 1), color)}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
             aria-label={`Decrease ${label}`}
           >
@@ -328,7 +334,12 @@ export function BulkOrderSheet({
               min={0}
               value={qty}
               onChange={(e) =>
-                setQty(productId, size, Math.max(0, parseInt(e.target.value || "0", 10) || 0))
+                setQty(
+                  productId,
+                  size,
+                  Math.max(0, parseInt(e.target.value || "0", 10) || 0),
+                  color,
+                )
               }
               onFocus={(e) => e.currentTarget.select()}
               className="h-6 w-10 text-center text-sm font-semibold text-accent rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -340,7 +351,7 @@ export function BulkOrderSheet({
           )}
           <button
             type="button"
-            onClick={() => setQty(productId, size, qty + 1)}
+            onClick={() => setQty(productId, size, qty + 1, color)}
             className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
             aria-label={`Increase ${label}`}
           >
@@ -381,10 +392,14 @@ export function BulkOrderSheet({
             <ul className="divide-y divide-border/60">
               {visibleProducts.map((p) => {
                 const sizes = [...STANDARD_SIZES];
-                const productTotal = Object.values(draft[p.id] ?? {}).reduce(
-                  (a, b) => a + b,
-                  0,
-                );
+                const productByColor = draft[p.id] ?? {};
+                const productTotal = sumProduct(productByColor);
+                const colorList = p.colors ?? [];
+                const activeColor =
+                  selectedColor[p.id] ??
+                  (colorList[0]?.name ?? "");
+                const activeColorQty = sumSizes(productByColor[activeColor]);
+                const justAddedKey = `${p.id}::${activeColor}`;
                 return (
                   <li key={p.id} className="px-5 py-3 hover:bg-accent/5">
                     <button
@@ -424,17 +439,103 @@ export function BulkOrderSheet({
                             productId={p.id}
                             size={s}
                             label={s}
+                            color={activeColor}
                           />
                         ))}
                       </div>
-                      <ProductAnalytics
-                        product={p}
-                        qty={productTotal}
-                        orderDiscountPct={discountPct}
-                        tiers={config.tiers}
-                        totalOrderUnits={totalUnits}
-                        nextTier={nextTier}
-                      />
+                      <div className="flex-1 min-w-0 flex flex-col gap-2">
+                        <ProductAnalytics
+                          product={p}
+                          qty={productTotal}
+                          orderDiscountPct={discountPct}
+                          tiers={config.tiers}
+                          totalOrderUnits={totalUnits}
+                          nextTier={nextTier}
+                        />
+                        {colorList.length > 0 && (
+                          <div className="rounded border border-border/60 bg-background/40 p-2.5">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                Color{activeColor ? ` — ${activeColor}` : ""}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (activeColorQty <= 0) {
+                                    toast.error("Add a quantity first");
+                                    return;
+                                  }
+                                  setRecentlyAdded(justAddedKey);
+                                  toast.success(
+                                    `${activeColor || "Item"} added to cart`,
+                                  );
+                                  setTimeout(
+                                    () =>
+                                      setRecentlyAdded((k) =>
+                                        k === justAddedKey ? null : k,
+                                      ),
+                                    1500,
+                                  );
+                                }}
+                                className={cn(
+                                  "h-6 w-6 flex items-center justify-center rounded border transition",
+                                  recentlyAdded === justAddedKey
+                                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
+                                    : activeColorQty > 0
+                                      ? "border-accent bg-accent/10 text-accent hover:bg-accent/20"
+                                      : "border-border text-muted-foreground/60",
+                                )}
+                                aria-label="Add to cart"
+                                title={
+                                  activeColorQty > 0
+                                    ? "Confirm this color"
+                                    : "Set a quantity first"
+                                }
+                              >
+                                {recentlyAdded === justAddedKey ? (
+                                  <Check className="h-3 w-3" />
+                                ) : (
+                                  <ShoppingCart className="h-3 w-3" />
+                                )}
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {colorList.map((c) => {
+                                const hasQty = sumSizes(productByColor[c.name]) > 0;
+                                const isActive = c.name === activeColor;
+                                return (
+                                  <button
+                                    key={c.name}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedColor((prev) => ({
+                                        ...prev,
+                                        [p.id]: c.name,
+                                      }))
+                                    }
+                                    title={c.name}
+                                    className={cn(
+                                      "relative h-6 w-6 rounded border shadow-sm transition",
+                                      isActive
+                                        ? "border-accent ring-2 ring-accent/40"
+                                        : "border-border hover:border-accent/60",
+                                    )}
+                                    style={{
+                                      backgroundColor: c.hex ?? "transparent",
+                                    }}
+                                  >
+                                    {hasQty && (
+                                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent text-accent-foreground flex items-center justify-center">
+                                        <Check className="h-2 w-2" strokeWidth={3} />
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </li>
                 );
