@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Minus, Loader2, Shirt } from "lucide-react";
+import { Plus, Minus, Loader2, Shirt, Check, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
