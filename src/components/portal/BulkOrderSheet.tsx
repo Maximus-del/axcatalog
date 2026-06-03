@@ -16,6 +16,7 @@ import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 import { ProductPreviewDialog } from "./ProductPreviewDialog";
+import type { VolumeTier } from "@/hooks/usePortalPricing";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
@@ -51,6 +52,112 @@ function isExcluded(title: string): boolean {
   const t = title.trim();
   return EXCLUDED_TITLE_PREFIXES.some((pre) =>
     t.toLowerCase().startsWith(pre.toLowerCase()),
+  );
+}
+
+function fmtMoney(n: number | null | undefined): string {
+  if (n == null || !isFinite(n)) return "—";
+  return `$${n.toFixed(2)}`;
+}
+
+function ProductAnalytics({
+  product,
+  qty,
+  orderDiscountPct,
+  tiers,
+  totalOrderUnits,
+  nextTier,
+}: {
+  product: PortalProduct;
+  qty: number;
+  orderDiscountPct: number;
+  tiers: VolumeTier[];
+  totalOrderUnits: number;
+  nextTier: VolumeTier | null;
+}) {
+  const base = product.athlete_unit_price ?? product.wholesale_price ?? null;
+  const retail = product.price ?? null;
+  const effectiveUnit =
+    base != null ? base * (1 - orderDiscountPct / 100) : null;
+  const subtotal = effectiveUnit != null ? effectiveUnit * qty : null;
+  const retailTotal = retail != null ? retail * qty : null;
+  const savings =
+    retailTotal != null && subtotal != null ? retailTotal - subtotal : null;
+
+  const sortedTiers = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
+
+  return (
+    <div className="flex-1 min-w-0 rounded border border-border/60 bg-background/40 p-2.5">
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Qty
+          </div>
+          <div className="text-sm font-bold text-foreground leading-tight">
+            {qty}
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Subtotal
+          </div>
+          <div className="text-sm font-bold text-accent leading-tight">
+            {qty > 0 ? fmtMoney(subtotal) : "—"}
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Saved vs Retail
+          </div>
+          <div
+            className={cn(
+              "text-sm font-bold leading-tight",
+              savings != null && savings > 0
+                ? "text-emerald-500"
+                : "text-muted-foreground",
+            )}
+          >
+            {qty > 0 && savings != null ? fmtMoney(savings) : "—"}
+          </div>
+        </div>
+      </div>
+
+      {sortedTiers.length > 0 && base != null && (
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+            Volume Pricing
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {sortedTiers.map((t) => {
+              const each = base * (1 - t.discount_pct / 100);
+              const hit = totalOrderUnits >= t.min_qty;
+              return (
+                <span
+                  key={t.min_qty}
+                  className={cn(
+                    "text-[10px] px-1.5 py-0.5 rounded border",
+                    hit
+                      ? "border-accent/60 bg-accent/10 text-accent"
+                      : "border-border text-muted-foreground",
+                  )}
+                  title={`${t.discount_pct}% off at ${t.min_qty}+`}
+                >
+                  {t.min_qty}+: {fmtMoney(each)}
+                </span>
+              );
+            })}
+          </div>
+          {nextTier && (
+            <div className="text-[10px] text-muted-foreground mt-1.5">
+              <span className="text-accent font-semibold">
+                +{nextTier.min_qty - totalOrderUnits}
+              </span>{" "}
+              more units unlocks {nextTier.discount_pct}% off
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -317,23 +424,14 @@ export function BulkOrderSheet({
                           />
                         ))}
                       </div>
-                      {p.colors.length > 0 && (
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-                            Colors
-                          </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {p.colors.map((c) => (
-                              <span
-                                key={c.name}
-                                title={c.name}
-                                className="h-5 w-5 rounded-full border border-border shadow-sm"
-                                style={{ backgroundColor: c.hex ?? "transparent" }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      <ProductAnalytics
+                        product={p}
+                        qty={productTotal}
+                        orderDiscountPct={discountPct}
+                        tiers={config.tiers}
+                        totalOrderUnits={totalUnits}
+                        nextTier={nextTier}
+                      />
                     </div>
                   </li>
                 );
