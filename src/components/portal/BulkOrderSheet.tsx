@@ -306,15 +306,34 @@ export function BulkOrderSheet({
                         </span>
                       )}
                     </button>
-                    <div className="flex flex-wrap gap-1.5 pl-20">
-                      {sizes.map((s) => (
-                        <SizeStepper
-                          key={s}
-                          productId={p.id}
-                          size={s}
-                          label={s}
-                        />
-                      ))}
+                    <div className="flex items-start gap-6 pl-20">
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
+                        {sizes.map((s) => (
+                          <SizeStepper
+                            key={s}
+                            productId={p.id}
+                            size={s}
+                            label={s}
+                          />
+                        ))}
+                      </div>
+                      {p.colors.length > 0 && (
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                            Colors
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {p.colors.map((c) => (
+                              <span
+                                key={c.name}
+                                title={c.name}
+                                className="h-5 w-5 rounded-full border border-border shadow-sm"
+                                style={{ backgroundColor: c.hex ?? "transparent" }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </li>
                 );
