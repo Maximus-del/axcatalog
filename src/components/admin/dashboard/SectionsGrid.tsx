@@ -441,16 +441,18 @@ function SectionCard({ def }: { def: SectionDef }) {
           : "cursor-pointer hover:border-accent hover:-translate-y-0.5",
       )}
     >
-      <div className="flex items-start justify-between">
+      <div className="flex items-center gap-3">
         <div className="h-9 w-9 rounded-lg flex items-center justify-center bg-[hsl(var(--accent)/0.08)]">
           <Icon className="h-5 w-5 text-accent" strokeWidth={2} />
         </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-foreground truncate">{def.label}</div>
+        </div>
         {!disabled && (
-          <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
         )}
       </div>
       <div className="mt-auto">
-        <div className="ax-label mb-2">{def.label}</div>
         {def.noStat ? (
           <div className="h-6" />
         ) : disabled ? (
