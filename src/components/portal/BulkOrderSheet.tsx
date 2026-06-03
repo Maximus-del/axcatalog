@@ -176,18 +176,21 @@ export function BulkOrderSheet({
   const [submitting, setSubmitting] = useState(false);
   const { config } = usePortalPricing(organizationId);
   const [previewProduct, setPreviewProduct] = useState<PortalProduct | null>(null);
+  const [selectedColor, setSelectedColor] = useState<Record<string, string>>({});
+  const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
 
   const visibleProducts = useMemo(
     () => products.filter((p) => !isExcluded(p.title)),
     [products],
   );
 
+  const sumSizes = (sizes: Record<string, number> | undefined) =>
+    sizes ? Object.values(sizes).reduce((a, b) => a + b, 0) : 0;
+  const sumProduct = (byColor: Record<string, Record<string, number>> | undefined) =>
+    byColor ? Object.values(byColor).reduce((s, sz) => s + sumSizes(sz), 0) : 0;
+
   const totalUnits = useMemo(
-    () =>
-      Object.values(draft).reduce(
-        (sum, sizes) => sum + Object.values(sizes).reduce((a, b) => a + b, 0),
-        0,
-      ),
+    () => Object.values(draft).reduce((sum, byColor) => sum + sumProduct(byColor), 0),
     [draft],
   );
 
