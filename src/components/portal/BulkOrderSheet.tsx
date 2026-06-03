@@ -457,89 +457,6 @@ export function BulkOrderSheet({
                     </button>
                     {(colorList.length > 0 || true) && (
                       <div className="pl-20 mb-2 flex flex-wrap items-start gap-3">
-                        {colorList.length > 0 && (
-                          <div className="rounded border border-border/60 bg-background/40 p-2.5 flex-1 min-w-[200px]">
-                            <div className="flex items-center justify-between mb-1.5">
-                              <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-                                Color{activeColor ? ` — ${activeColor}` : ""}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (activeColorQty <= 0) {
-                                    toast.error("Add a quantity first");
-                                    return;
-                                  }
-                                  setRecentlyAdded(justAddedKey);
-                                  toast.success(
-                                    `${activeColor || "Item"} added to cart`,
-                                  );
-                                  setTimeout(
-                                    () =>
-                                      setRecentlyAdded((k) =>
-                                        k === justAddedKey ? null : k,
-                                      ),
-                                    1500,
-                                  );
-                                }}
-                                className={cn(
-                                  "h-6 w-6 flex items-center justify-center rounded border transition",
-                                  recentlyAdded === justAddedKey
-                                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
-                                    : activeColorQty > 0
-                                      ? "border-accent bg-accent/10 text-accent hover:bg-accent/20"
-                                      : "border-border text-muted-foreground/60",
-                                )}
-                                aria-label="Add to cart"
-                                title={
-                                  activeColorQty > 0
-                                    ? "Confirm this color"
-                                    : "Set a quantity first"
-                                }
-                              >
-                                {recentlyAdded === justAddedKey ? (
-                                  <Check className="h-3 w-3" />
-                                ) : (
-                                  <ShoppingCart className="h-3 w-3" />
-                                )}
-                              </button>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {colorList.map((c) => {
-                                const hasQty = sumSizes(productByColor[c.name]) > 0;
-                                const isActive = c.name === activeColor;
-                                return (
-                                  <button
-                                    key={c.name}
-                                    type="button"
-                                    onClick={() =>
-                                      setSelectedColor((prev) => ({
-                                        ...prev,
-                                        [p.id]: c.name,
-                                      }))
-                                    }
-                                    title={c.name}
-                                    className={cn(
-                                      "relative h-6 w-6 rounded border shadow-sm transition",
-                                      isActive
-                                        ? "border-accent ring-2 ring-accent/40"
-                                        : "border-border hover:border-accent/60",
-                                    )}
-                                    style={{
-                                      backgroundColor: c.hex ?? "transparent",
-                                    }}
-                                  >
-                                    {hasQty && (
-                                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent text-accent-foreground flex items-center justify-center">
-                                        <Check className="h-2 w-2" strokeWidth={3} />
-                                      </span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
                         {(() => {
                           const autoKey = `${p.id}::${activeColor}`;
                           const on = autoOn[autoKey] ?? false;
@@ -604,6 +521,51 @@ export function BulkOrderSheet({
                             </div>
                           );
                         })()}
+                        <div className="rounded border border-border/60 bg-background/40 p-2.5 flex items-center gap-2">
+                          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            {activeColor || "Color"}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (activeColorQty <= 0) {
+                                toast.error("Add a quantity first");
+                                return;
+                              }
+                              setRecentlyAdded(justAddedKey);
+                              toast.success(
+                                `${activeColor || "Item"} added to cart`,
+                              );
+                              setTimeout(
+                                () =>
+                                  setRecentlyAdded((k) =>
+                                    k === justAddedKey ? null : k,
+                                  ),
+                                1500,
+                              );
+                            }}
+                            className={cn(
+                              "h-6 w-6 flex items-center justify-center rounded border transition",
+                              recentlyAdded === justAddedKey
+                                ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
+                                : activeColorQty > 0
+                                  ? "border-accent bg-accent/10 text-accent hover:bg-accent/20"
+                                  : "border-border text-muted-foreground/60",
+                            )}
+                            aria-label="Add to cart"
+                            title={
+                              activeColorQty > 0
+                                ? "Confirm this color"
+                                : "Set a quantity first"
+                            }
+                          >
+                            {recentlyAdded === justAddedKey ? (
+                              <Check className="h-3 w-3" />
+                            ) : (
+                              <ShoppingCart className="h-3 w-3" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     )}
                     <div className="flex items-start gap-6 pl-20">
@@ -627,6 +589,53 @@ export function BulkOrderSheet({
                           totalOrderUnits={totalUnits}
                           nextTier={nextTier}
                         />
+                        <div className="rounded border border-border/60 bg-background/40 p-2.5">
+                          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                            Available Colors
+                          </div>
+                          {colorList.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {colorList.map((c) => {
+                                const hasQty = sumSizes(productByColor[c.name]) > 0;
+                                const isActive = c.name === activeColor;
+                                return (
+                                  <button
+                                    key={c.name}
+                                    type="button"
+                                    onClick={() =>
+                                      setSelectedColor((prev) => ({
+                                        ...prev,
+                                        [p.id]: c.name,
+                                      }))
+                                    }
+                                    title={c.name}
+                                    className={cn(
+                                      "relative h-6 w-6 rounded border shadow-sm transition",
+                                      isActive
+                                        ? "border-accent ring-2 ring-accent/40"
+                                        : "border-border hover:border-accent/60",
+                                    )}
+                                    style={{
+                                      backgroundColor: c.hex ?? "transparent",
+                                    }}
+                                  >
+                                    {hasQty && (
+                                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-accent text-accent-foreground flex items-center justify-center">
+                                        <Check className="h-2 w-2" strokeWidth={3} />
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="h-6 w-full rounded border border-dashed border-border/60 bg-muted/30 flex items-center justify-center">
+                              <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                                No colors available
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </li>
