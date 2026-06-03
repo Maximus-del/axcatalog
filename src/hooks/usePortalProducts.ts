@@ -28,6 +28,8 @@ export interface PortalProduct {
   athlete_unit_price: number | null;
   /** Available sizes from the linked blank, in sort_order. */
   sizes: string[];
+  /** Available colors from the linked blank, in sort_order. */
+  colors: Array<{ name: string; hex: string | null }>;
   created_at: string;
 }
 
@@ -130,6 +132,21 @@ export function usePortalProducts(athleteId: string | null): State {
         });
       }
 
+      const colorsByBlank = new Map<string, Array<{ name: string; hex: string | null }>>();
+      if (blankIds.length) {
+        const { data: cData } = await supabase
+          .from("blank_colors")
+          .select("blank_id, color_name, hex_code, sort_order, available")
+          .in("blank_id", blankIds)
+          .eq("available", true)
+          .order("sort_order", { ascending: true });
+        (cData ?? []).forEach((c) => {
+          const arr = colorsByBlank.get(c.blank_id) ?? [];
+          arr.push({ name: c.color_name, hex: c.hex_code });
+          colorsByBlank.set(c.blank_id, arr);
+        });
+      }
+
       const resolveUrl = (img: {
         storage_bucket: string;
         storage_path: string;
@@ -176,6 +193,7 @@ export function usePortalProducts(athleteId: string | null): State {
           wholesale_price: p.wholesale_price != null ? Number(p.wholesale_price) : null,
           athlete_unit_price: null as number | null,
           sizes: p.blank_id ? (sizesByBlank.get(p.blank_id) ?? []) : [],
+          colors: p.blank_id ? (colorsByBlank.get(p.blank_id) ?? []) : [],
           created_at: p.created_at,
         };
       });
