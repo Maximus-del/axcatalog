@@ -1,15 +1,16 @@
 import { createContext, useCallback, useContext, useMemo, useState, ReactNode } from "react";
 
 /**
- * In-memory order draft. Maps productId -> { size -> qty }.
+ * In-memory order draft. productId -> colorKey -> size -> qty.
+ * colorKey is the color name, or "" when the product has no color choice.
  * Cleared on refresh (per design decision).
  */
-type DraftMap = Record<string, Record<string, number>>;
+type DraftMap = Record<string, Record<string, Record<string, number>>>;
 
 interface DraftCtx {
   draft: DraftMap;
-  setQty: (productId: string, size: string, qty: number) => void;
-  bulkSet: (productId: string, sizes: Record<string, number>) => void;
+  setQty: (productId: string, size: string, qty: number, color?: string) => void;
+  clearProductColor: (productId: string, color?: string) => void;
   clear: () => void;
   itemCount: number;
   unitCount: number;
@@ -20,41 +21,41 @@ const Ctx = createContext<DraftCtx | undefined>(undefined);
 export function OrderDraftProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState<DraftMap>({});
 
-  const setQty = useCallback((productId: string, size: string, qty: number) => {
-    setDraft((prev) => {
-      const next = { ...prev };
-      const product = { ...(next[productId] ?? {}) };
-      if (!qty || qty <= 0) {
-        delete product[size];
-      } else {
-        product[size] = qty;
-      }
-      if (Object.keys(product).length === 0) {
-        delete next[productId];
-      } else {
-        next[productId] = product;
-      }
-      return next;
-    });
-  }, []);
-
-  const bulkSet = useCallback((productId: string, sizes: Record<string, number>) => {
-    setDraft((prev) => {
-      const next = { ...prev };
-      const cleaned: Record<string, number> = {};
-      for (const [size, qty] of Object.entries(sizes)) {
-        if (qty > 0) cleaned[size] = qty;
-      }
-      if (Object.keys(cleaned).length === 0) {
-        delete next[productId];
-      } else {
-        next[productId] = { ...(next[productId] ?? {}), ...cleaned };
-        // Re-clean zeroes
-        for (const [s, q] of Object.entries(next[productId])) {
-          if (q <= 0) delete next[productId][s];
+  const setQty = useCallback(
+    (productId: string, size: string, qty: number, color = "") => {
+      setDraft((prev) => {
+        const next = { ...prev };
+        const byColor = { ...(next[productId] ?? {}) };
+        const sizes = { ...(byColor[color] ?? {}) };
+        if (!qty || qty <= 0) {
+          delete sizes[size];
+        } else {
+          sizes[size] = qty;
         }
-        if (Object.keys(next[productId]).length === 0) delete next[productId];
-      }
+        if (Object.keys(sizes).length === 0) {
+          delete byColor[color];
+        } else {
+          byColor[color] = sizes;
+        }
+        if (Object.keys(byColor).length === 0) {
+          delete next[productId];
+        } else {
+          next[productId] = byColor;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const clearProductColor = useCallback((productId: string, color = "") => {
+    setDraft((prev) => {
+      if (!prev[productId]?.[color]) return prev;
+      const next = { ...prev };
+      const byColor = { ...next[productId] };
+      delete byColor[color];
+      if (Object.keys(byColor).length === 0) delete next[productId];
+      else next[productId] = byColor;
       return next;
     });
   }, []);
@@ -64,11 +65,13 @@ export function OrderDraftProvider({ children }: { children: ReactNode }) {
   const { itemCount, unitCount } = useMemo(() => {
     let units = 0;
     let items = 0;
-    for (const product of Object.values(draft)) {
-      for (const qty of Object.values(product)) {
-        if (qty > 0) {
-          units += qty;
-          items += 1;
+    for (const byColor of Object.values(draft)) {
+      for (const sizes of Object.values(byColor)) {
+        for (const qty of Object.values(sizes)) {
+          if (qty > 0) {
+            units += qty;
+            items += 1;
+          }
         }
       }
     }
@@ -76,8 +79,8 @@ export function OrderDraftProvider({ children }: { children: ReactNode }) {
   }, [draft]);
 
   const value = useMemo<DraftCtx>(
-    () => ({ draft, setQty, bulkSet, clear, itemCount, unitCount }),
-    [draft, setQty, bulkSet, clear, itemCount, unitCount],
+    () => ({ draft, setQty, clearProductColor, clear, itemCount, unitCount }),
+    [draft, setQty, clearProductColor, clear, itemCount, unitCount],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
