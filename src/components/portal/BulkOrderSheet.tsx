@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronUp, ChevronDown, Loader2, Shirt } from "lucide-react";
+import { Plus, Minus, Loader2, Shirt } from "lucide-react";
 import { toast } from "sonner";
 import {
   Sheet,
@@ -41,8 +41,16 @@ function isOneSize(p: PortalProduct): boolean {
   // Heuristic: hat/beanie product types use a single One Size column.
   // Also: if the linked blank only exposes a single size, treat as one-size.
   if (ONE_SIZE_TYPES.has(p.product_type)) return true;
-  if (p.sizes.length === 1) return true;
+  if (p.sizes.length <= 1) return true;
   return false;
+}
+
+const EXCLUDED_TITLE_PREFIXES = ["ATL", "WR", "Rise Up"];
+function isExcluded(title: string): boolean {
+  const t = title.trim();
+  return EXCLUDED_TITLE_PREFIXES.some((pre) =>
+    t.toLowerCase().startsWith(pre.toLowerCase()),
+  );
 }
 
 export function BulkOrderSheet({
@@ -59,6 +67,11 @@ export function BulkOrderSheet({
   const { draft, setQty, clear } = useOrderDraft();
   const [submitting, setSubmitting] = useState(false);
   const { config } = usePortalPricing(organizationId);
+
+  const visibleProducts = useMemo(
+    () => products.filter((p) => !isExcluded(p.title)),
+    [products],
+  );
 
   const totalUnits = useMemo(
     () =>
@@ -176,10 +189,18 @@ export function BulkOrderSheet({
     return (
       <div
         className={cn(
-          "flex items-center gap-1 rounded border bg-background px-1.5 py-0.5",
+          "flex items-center gap-1 rounded border bg-background pl-0.5 pr-0.5 py-0.5",
           active ? "border-accent" : "border-border",
         )}
       >
+        <button
+          type="button"
+          onClick={() => setQty(productId, size, Math.max(0, qty - 1))}
+          className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+          aria-label={`Decrease ${label}`}
+        >
+          <Minus className="h-3 w-3" />
+        </button>
         <span
           className={cn(
             "text-[10px] font-semibold uppercase tracking-wider w-7 text-center",
@@ -202,24 +223,14 @@ export function BulkOrderSheet({
             active && "text-accent font-semibold",
           )}
         />
-        <div className="flex flex-col -my-0.5">
-          <button
-            type="button"
-            onClick={() => setQty(productId, size, qty + 1)}
-            className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent"
-            aria-label={`Increase ${label}`}
-          >
-            <ChevronUp className="h-3 w-3" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setQty(productId, size, Math.max(0, qty - 1))}
-            className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent"
-            aria-label={`Decrease ${label}`}
-          >
-            <ChevronDown className="h-3 w-3" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setQty(productId, size, qty + 1)}
+          className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+          aria-label={`Increase ${label}`}
+        >
+          <Plus className="h-3 w-3" />
+        </button>
       </div>
     );
   };
@@ -240,7 +251,7 @@ export function BulkOrderSheet({
         </SheetHeader>
 
         <div className="flex-1 overflow-auto">
-          {products.length === 0 ? (
+          {visibleProducts.length === 0 ? (
             <div className="p-12 text-center">
               <Shirt
                 className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3"
@@ -252,7 +263,7 @@ export function BulkOrderSheet({
             </div>
           ) : (
             <ul className="divide-y divide-border/60">
-              {products.map((p) => {
+              {visibleProducts.map((p) => {
                 const oneSize = isOneSize(p);
                 const sizes = oneSize ? [p.sizes[0] ?? "ONE"] : orderSizes(p.sizes);
                 const productTotal = Object.values(draft[p.id] ?? {}).reduce(
