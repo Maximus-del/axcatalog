@@ -9,6 +9,8 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
@@ -17,6 +19,11 @@ import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 import { ProductPreviewDialog } from "./ProductPreviewDialog";
 import type { VolumeTier } from "@/hooks/usePortalPricing";
+import {
+  distributeByCurve,
+  useSizeDistributionCurve,
+} from "@/hooks/useSizeDistributionCurve";
+import { MilestoneSlider } from "./MilestoneSlider";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
@@ -175,9 +182,12 @@ export function BulkOrderSheet({
   const { draft, setQty, clear } = useOrderDraft();
   const [submitting, setSubmitting] = useState(false);
   const { config } = usePortalPricing(organizationId);
+  const curve = useSizeDistributionCurve(organizationId);
   const [previewProduct, setPreviewProduct] = useState<PortalProduct | null>(null);
   const [selectedColor, setSelectedColor] = useState<Record<string, string>>({});
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
+  const [autoOn, setAutoOn] = useState<Record<string, boolean>>({});
+  const [autoTotal, setAutoTotal] = useState<Record<string, number>>({});
 
   const visibleProducts = useMemo(
     () => products.filter((p) => !isExcluded(p.title)),
@@ -209,6 +219,20 @@ export function BulkOrderSheet({
       .filter((s) => !STANDARD_SIZES.includes(s as typeof STANDARD_SIZES[number]))
       .sort();
     return [...std, ...extras];
+  };
+
+  const applyAutoTotal = (
+    productId: string,
+    color: string,
+    total: number,
+  ) => {
+    const clamped = Math.max(0, Math.min(500, Math.floor(total)));
+    const key = `${productId}::${color}`;
+    setAutoTotal((prev) => ({ ...prev, [key]: clamped }));
+    const dist = distributeByCurve(clamped, [...STANDARD_SIZES], curve);
+    for (const s of STANDARD_SIZES) {
+      setQty(productId, s, dist[s] ?? 0, color);
+    }
   };
 
   const handleSubmit = async () => {
