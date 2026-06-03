@@ -15,6 +15,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { ProductPreviewDialog } from "./ProductPreviewDialog";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
@@ -67,6 +68,7 @@ export function BulkOrderSheet({
   const { draft, setQty, clear } = useOrderDraft();
   const [submitting, setSubmitting] = useState(false);
   const { config } = usePortalPricing(organizationId);
+  const [previewProduct, setPreviewProduct] = useState<PortalProduct | null>(null);
 
   const visibleProducts = useMemo(
     () => products.filter((p) => !isExcluded(p.title)),
@@ -187,44 +189,54 @@ export function BulkOrderSheet({
     const qty = draft[productId]?.[size] ?? 0;
     const active = qty > 0;
     return (
-      <div
-        className={cn(
-          "flex items-center gap-1 rounded border bg-background pl-0.5 pr-0.5 py-0.5",
-          active ? "border-accent" : "border-border",
-        )}
-      >
-        <button
-          type="button"
-          onClick={() => setQty(productId, size, Math.max(0, qty - 1))}
-          className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
-          aria-label={`Decrease ${label}`}
+      <div className="flex flex-col items-center gap-0.5">
+        <span
+          className={cn(
+            "text-[10px] font-semibold uppercase tracking-wider h-3.5 leading-none",
+            active ? "text-accent" : "text-transparent",
+          )}
         >
-          <Minus className="h-3 w-3" />
-        </button>
-        {active ? (
-          <input
-            type="number"
-            min={0}
-            value={qty}
-            onChange={(e) =>
-              setQty(productId, size, Math.max(0, parseInt(e.target.value || "0", 10) || 0))
-            }
-            onFocus={(e) => e.currentTarget.select()}
-            className="h-6 w-10 text-center text-sm font-semibold text-accent rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-          />
-        ) : (
-          <span className="text-xs font-semibold uppercase tracking-wider w-10 text-center text-muted-foreground">
-            {label}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => setQty(productId, size, qty + 1)}
-          className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
-          aria-label={`Increase ${label}`}
+          {label}
+        </span>
+        <div
+          className={cn(
+            "flex items-center gap-1 rounded border bg-background pl-0.5 pr-0.5 py-0.5",
+            active ? "border-accent" : "border-border",
+          )}
         >
-          <Plus className="h-3 w-3" />
-        </button>
+          <button
+            type="button"
+            onClick={() => setQty(productId, size, Math.max(0, qty - 1))}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+            aria-label={`Decrease ${label}`}
+          >
+            <Minus className="h-3 w-3" />
+          </button>
+          {active ? (
+            <input
+              type="number"
+              min={0}
+              value={qty}
+              onChange={(e) =>
+                setQty(productId, size, Math.max(0, parseInt(e.target.value || "0", 10) || 0))
+              }
+              onFocus={(e) => e.currentTarget.select()}
+              className="h-6 w-10 text-center text-sm font-semibold text-accent rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          ) : (
+            <span className="text-xs font-semibold uppercase tracking-wider w-10 text-center text-muted-foreground">
+              {label}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setQty(productId, size, qty + 1)}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+            aria-label={`Increase ${label}`}
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        </div>
       </div>
     );
   };
@@ -265,8 +277,13 @@ export function BulkOrderSheet({
                 );
                 return (
                   <li key={p.id} className="px-5 py-3 hover:bg-accent/5">
-                    <div className="flex items-center gap-4 mb-2">
-                      <div className="h-16 w-16 rounded bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewProduct(p)}
+                      className="flex items-center gap-4 mb-2 w-full text-left group"
+                      aria-label={`Preview ${p.title}`}
+                    >
+                      <div className="h-16 w-16 rounded bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-transparent group-hover:ring-accent/40 transition">
                         {p.primary_image_url ? (
                           <img
                             src={p.primary_image_url}
@@ -280,7 +297,7 @@ export function BulkOrderSheet({
                           />
                         )}
                       </div>
-                      <span className="text-sm truncate flex-1" title={p.title}>
+                      <span className="text-sm truncate flex-1 group-hover:text-accent transition" title={p.title}>
                         {p.title}
                       </span>
                       {productTotal > 0 && (
@@ -288,7 +305,7 @@ export function BulkOrderSheet({
                           {productTotal} pcs
                         </span>
                       )}
-                    </div>
+                    </button>
                     <div className="flex flex-wrap gap-1.5 pl-20">
                       {sizes.map((s) => (
                         <SizeStepper
@@ -341,6 +358,11 @@ export function BulkOrderSheet({
           </div>
         </div>
       </SheetContent>
+      <ProductPreviewDialog
+        open={!!previewProduct}
+        onOpenChange={(o) => !o && setPreviewProduct(null)}
+        product={previewProduct}
+      />
     </Sheet>
   );
 }
