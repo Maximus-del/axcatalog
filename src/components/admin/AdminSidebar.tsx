@@ -12,6 +12,7 @@ import {
   Upload,
   Wallet,
   Handshake,
+  ClipboardEdit,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -42,6 +43,7 @@ const items = [
   { title: "Pricing", url: "/admin/pricing", icon: DollarSign },
   { title: "Credits", url: "/admin/credits", icon: Wallet },
   { title: "Affiliates", url: "/admin/affiliates", icon: Handshake },
+  { title: "Questionnaires", url: "/admin/questionnaires", icon: ClipboardEdit },
 ];
 
 export function AdminSidebar() {

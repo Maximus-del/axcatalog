@@ -30,6 +30,9 @@ import ImportsList from "./pages/admin/ImportsList";
 import ImportBatchDetail from "./pages/admin/ImportBatchDetail";
 import AthleteCredits from "./pages/admin/AthleteCredits";
 import AffiliatesList from "./pages/admin/AffiliatesList";
+import QuestionnairesList from "./pages/admin/QuestionnairesList";
+import QuestionnaireEditor from "./pages/admin/QuestionnaireEditor";
+import QuestionnairePublic from "./pages/QuestionnairePublic";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -61,6 +64,7 @@ const App = () => (
             <Route path="/" element={<RootRedirect />} />
             <Route path="/login" element={<Login />} />
             <Route path="/pending-access" element={<PendingAccess />} />
+            <Route path="/q/:slug" element={<QuestionnairePublic />} />
 
             {/* Admin */}
             <Route
@@ -89,6 +93,8 @@ const App = () => (
               <Route path="pricing" element={<PricingMaster />} />
               <Route path="credits" element={<AthleteCredits />} />
               <Route path="affiliates" element={<AffiliatesList />} />
+              <Route path="questionnaires" element={<QuestionnairesList />} />
+              <Route path="questionnaires/:id" element={<QuestionnaireEditor />} />
               <Route path="imports/orders" element={<ImportsList />} />
               <Route path="imports/orders/:id" element={<ImportBatchDetail />} />
             </Route>
