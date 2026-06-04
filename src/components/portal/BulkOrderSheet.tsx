@@ -67,6 +67,33 @@ function fmtMoney(n: number | null | undefined): string {
   return `$${n.toFixed(2)}`;
 }
 
+/**
+ * Athlete-tier pricing model.
+ * True costs (incl. shipping + overhead): t-shirt $12, hoodie $23.50.
+ * Athlete tier markup: 50% on both → t-shirt $18, hoodie $35.25.
+ * Middle (next) tier markup: t-shirt 75% → $21, hoodie 70% → $39.95.
+ * "Saved vs Retail" compares athlete-effective unit to the middle-tier price.
+ */
+function productPricing(p: PortalProduct): {
+  trueCost: number | null;
+  athleteUnit: number | null;
+  midUnit: number | null;
+} {
+  const t = (p.product_type || "").toLowerCase();
+  const isHoodie = t.includes("hood");
+  const isTee =
+    t.includes("tee") || t.includes("tshirt") || t === "t-shirt" || t.includes("shirt");
+  if (isHoodie) {
+    return { trueCost: 23.5, athleteUnit: 23.5 * 1.5, midUnit: 23.5 * 1.7 };
+  }
+  if (isTee) {
+    return { trueCost: 12, athleteUnit: 12 * 1.5, midUnit: 12 * 1.75 };
+  }
+  // Fallback to DB-driven values when type isn't a known category.
+  const athlete = p.athlete_unit_price ?? p.wholesale_price ?? null;
+  return { trueCost: null, athleteUnit: athlete, midUnit: p.price ?? null };
+}
+
 function ProductAnalytics({
   product,
   qty,
@@ -82,20 +109,20 @@ function ProductAnalytics({
   totalOrderUnits: number;
   nextTier: VolumeTier | null;
 }) {
-  const base = product.athlete_unit_price ?? product.wholesale_price ?? null;
-  const retail = product.price ?? null;
+  const { athleteUnit: base, midUnit } = productPricing(product);
   const effectiveUnit =
     base != null ? base * (1 - orderDiscountPct / 100) : null;
   const subtotal = effectiveUnit != null ? effectiveUnit * qty : null;
-  const retailTotal = retail != null ? retail * qty : null;
   const savings =
-    retailTotal != null && subtotal != null ? retailTotal - subtotal : null;
+    midUnit != null && effectiveUnit != null
+      ? (midUnit - effectiveUnit) * qty
+      : null;
 
   const sortedTiers = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
 
   return (
     <div className="flex-1 min-w-0 rounded border border-border/60 bg-background/40 p-2.5">
-      <div className="grid grid-cols-3 gap-2 mb-2">
+      <div className="grid grid-cols-4 gap-2 mb-2">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
             Qty
@@ -106,7 +133,15 @@ function ProductAnalytics({
         </div>
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Subtotal
+            Unit
+          </div>
+          <div className="text-sm font-bold text-foreground leading-tight">
+            {fmtMoney(effectiveUnit)}
+          </div>
+        </div>
+        <div>
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Total
           </div>
           <div className="text-sm font-bold text-accent leading-tight">
             {qty > 0 ? fmtMoney(subtotal) : "—"}
