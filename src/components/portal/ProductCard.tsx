@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
 import { ProductOrderDialog } from "./ProductOrderDialog";
+import { ProductImageLightbox } from "./ProductImageLightbox";
 
 interface Props {
   product: PortalProduct;
@@ -24,6 +25,7 @@ export function buildShareUrl(p: PortalProduct): string {
 
 export function ProductCard({ product }: Props) {
   const [orderOpen, setOrderOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const navigate = useNavigate();
   const shareUrl = buildShareUrl(product);
   const unitWholesale = product.athlete_unit_price ?? product.wholesale_price ?? null;
@@ -39,12 +41,12 @@ export function ProductCard({ product }: Props) {
 
   return (
     <div className="ax-card p-3 flex flex-col gap-3">
-      {/* Image — shared rendering path with admin grid. */}
+      {/* Image — opens lightbox on click */}
       <button
         type="button"
-        onClick={() => navigate(`/portal/products/${product.id}`)}
+        onClick={() => setLightboxOpen(true)}
         className="relative h-40 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        aria-label={`View ${product.title}`}
+        aria-label={`View images of ${product.title}`}
       >
         <ProductImage
           images={product.images}
@@ -89,6 +91,11 @@ export function ProductCard({ product }: Props) {
       </div>
 
       <ProductOrderDialog product={product} open={orderOpen} onOpenChange={setOrderOpen} />
+      <ProductImageLightbox
+        product={product}
+        open={lightboxOpen}
+        onOpenChange={setLightboxOpen}
+      />
     </div>
   );
 }
