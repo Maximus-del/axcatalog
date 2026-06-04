@@ -729,27 +729,19 @@ export function BulkOrderSheet({
                         </div>
                       </div>
                     )}
-                    <div className="flex items-start gap-6 pl-20">
-                      <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
-                        {sizes.map((s) => (
-                          <SizeStepper
-                            key={s}
-                            productId={p.id}
-                            size={s}
-                            label={s}
-                            color={activeColor}
-                          />
-                        ))}
-                      </div>
-                      <div className="flex-1 min-w-0 flex flex-col gap-2">
-                        <ProductAnalytics
-                          product={p}
-                          qty={productTotal}
-                          orderDiscountPct={discountPct}
-                          tiers={config.tiers}
-                          totalOrderUnits={totalUnits}
-                          nextTier={nextTier}
-                        />
+                    <div className="flex items-stretch gap-6 pl-20">
+                      <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
+                          {sizes.map((s) => (
+                            <SizeStepper
+                              key={s}
+                              productId={p.id}
+                              size={s}
+                              label={s}
+                              color={activeColor}
+                            />
+                          ))}
+                        </div>
                         <div className="rounded border border-border/60 bg-background/40 p-2.5">
                           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
                             Available Colors
@@ -797,6 +789,16 @@ export function BulkOrderSheet({
                             </div>
                           )}
                         </div>
+                      </div>
+                      <div className="flex-1 min-w-0 flex">
+                        <ProductAnalytics
+                          product={p}
+                          qty={productTotal}
+                          orderDiscountPct={discountPct}
+                          tiers={config.tiers}
+                          totalOrderUnits={totalUnits}
+                          nextTier={nextTier}
+                        />
                       </div>
                     </div>
                   </li>
