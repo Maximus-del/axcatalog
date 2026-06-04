@@ -17,7 +17,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
-import { ProductPreviewDialog } from "./ProductPreviewDialog";
+import { ProductImageLightbox } from "./ProductImageLightbox";
 import type { VolumeTier } from "@/hooks/usePortalPricing";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import {
@@ -894,7 +894,7 @@ export function BulkOrderSheet({
           </div>
         </div>
       </SheetContent>
-      <ProductPreviewDialog
+      <ProductImageLightbox
         open={!!previewProduct}
         onOpenChange={(o) => !o && setPreviewProduct(null)}
         product={previewProduct}
