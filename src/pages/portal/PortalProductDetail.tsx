@@ -189,6 +189,11 @@ export default function PortalProductDetail() {
       </div>
 
       <ProductOrderDialog product={product} open={orderOpen} onOpenChange={setOrderOpen} />
+      <ProductImageLightbox
+        product={product}
+        open={lightboxOpen}
+        onOpenChange={setLightboxOpen}
+      />
     </div>
   );
 }
