@@ -10,8 +10,7 @@ import AffiliateSignupCTA from "@/components/affiliate/AffiliateSignupCTA";
 interface ProductRow {
   id: string;
   title: string;
-  primary_image_url: string | null;
-  status: string | null;
+  image_url: string | null;
 }
 
 interface RequestRow {
@@ -33,8 +32,8 @@ export default function AffiliateProducts() {
     const [{ data: prods }, { data: reqs }] = await Promise.all([
       supabase
         .from("products")
-        .select("id, title, primary_image_url, status")
-        .eq("status", "active")
+        .select("id, title, images:product_images(storage_bucket, storage_path, is_primary, sort_order)")
+        .eq("status", "published")
         .order("title")
         .limit(200),
       supabase
@@ -42,7 +41,21 @@ export default function AffiliateProducts() {
         .select("id, product_id, status")
         .eq("affiliate_id", affiliate.id),
     ]);
-    setProducts((prods ?? []) as ProductRow[]);
+    const mapped: ProductRow[] = ((prods ?? []) as Array<{
+      id: string;
+      title: string;
+      images: Array<{ storage_bucket: string; storage_path: string; is_primary: boolean; sort_order: number }>;
+    }>).map((p) => {
+      const sorted = [...(p.images ?? [])].sort((a, b) =>
+        a.is_primary === b.is_primary ? a.sort_order - b.sort_order : a.is_primary ? -1 : 1,
+      );
+      const first = sorted[0];
+      const url = first
+        ? supabase.storage.from(first.storage_bucket).getPublicUrl(first.storage_path).data.publicUrl
+        : null;
+      return { id: p.id, title: p.title, image_url: url };
+    });
+    setProducts(mapped);
     setRequests((reqs ?? []) as RequestRow[]);
     setLoading(false);
   };
@@ -98,8 +111,8 @@ export default function AffiliateProducts() {
             return (
               <div key={p.id} className="ax-card overflow-hidden flex flex-col">
                 <div className="aspect-square bg-muted">
-                  {p.primary_image_url ? (
-                    <img src={p.primary_image_url} alt={p.title} className="w-full h-full object-cover" />
+                  {p.image_url ? (
+                    <img src={p.image_url} alt={p.title} className="w-full h-full object-cover" />
                   ) : null}
                 </div>
                 <div className="p-3 flex-1 flex flex-col gap-2">
