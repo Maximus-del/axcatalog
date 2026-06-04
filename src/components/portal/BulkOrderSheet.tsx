@@ -130,7 +130,7 @@ function ProductAnalytics({
   const sortedTiers = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
 
   return (
-    <div className="flex-1 min-w-0 rounded border border-border/60 bg-background/40 p-2.5">
+    <div className="flex-1 min-w-0 self-stretch rounded border border-border/60 bg-background/40 p-2.5">
       {/* Current Discount + Next Tier */}
       <div className="flex items-center gap-2 mb-2">
         <div className="flex-1 rounded bg-accent/10 border border-accent/30 px-2 py-1">
@@ -165,7 +165,7 @@ function ProductAnalytics({
         )}
       </div>
 
-      <div className="grid grid-cols-4 gap-2 mb-2">
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
             Qty
@@ -178,8 +178,15 @@ function ProductAnalytics({
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
             Unit
           </div>
-          <div className="text-sm font-bold text-foreground leading-tight">
+          <div className="text-sm font-bold text-foreground leading-tight flex items-baseline gap-1.5">
             {fmtMoney(effectiveUnit)}
+            {wholesaleUnit != null &&
+              effectiveUnit != null &&
+              wholesaleUnit > effectiveUnit && (
+                <span className="text-[10px] font-medium text-muted-foreground line-through">
+                  {fmtMoney(wholesaleUnit)}
+                </span>
+              )}
           </div>
         </div>
         <div>
@@ -190,37 +197,37 @@ function ProductAnalytics({
             {qty > 0 ? fmtMoney(subtotal) : fmtMoney(effectiveUnit)}
           </div>
         </div>
-        <div>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Saved vs Wholesale
-          </div>
-          <div
-            className={cn(
-              "text-sm font-bold leading-tight",
-              savings != null && savings > 0
-                ? "text-emerald-500"
-                : "text-muted-foreground",
-            )}
-          >
-            {savings != null ? (
-              <>
-                {fmtMoney(
-                  qty > 0
-                    ? savings
-                    : wholesaleUnit != null && effectiveUnit != null
-                      ? wholesaleUnit - effectiveUnit
-                      : 0,
-                )}
-                {savingsPct != null && savingsPct > 0 && (
-                  <span className="ml-1 text-[10px] font-semibold text-muted-foreground">
-                    ({savingsPct.toFixed(0)}%)
-                  </span>
-                )}
-              </>
-            ) : (
-              "—"
-            )}
-          </div>
+      </div>
+      <div className="mb-2">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Saved vs Wholesale
+        </div>
+        <div
+          className={cn(
+            "text-sm font-bold leading-tight",
+            savings != null && savings > 0
+              ? "text-emerald-500"
+              : "text-muted-foreground",
+          )}
+        >
+          {savings != null ? (
+            <>
+              {fmtMoney(
+                qty > 0
+                  ? savings
+                  : wholesaleUnit != null && effectiveUnit != null
+                    ? wholesaleUnit - effectiveUnit
+                    : 0,
+              )}
+              {savingsPct != null && savingsPct > 0 && (
+                <span className="ml-1 text-[10px] font-semibold text-muted-foreground">
+                  ({savingsPct.toFixed(0)}%)
+                </span>
+              )}
+            </>
+          ) : (
+            "—"
+          )}
         </div>
       </div>
 
@@ -722,27 +729,19 @@ export function BulkOrderSheet({
                         </div>
                       </div>
                     )}
-                    <div className="flex items-start gap-6 pl-20">
-                      <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
-                        {sizes.map((s) => (
-                          <SizeStepper
-                            key={s}
-                            productId={p.id}
-                            size={s}
-                            label={s}
-                            color={activeColor}
-                          />
-                        ))}
-                      </div>
-                      <div className="flex-1 min-w-0 flex flex-col gap-2">
-                        <ProductAnalytics
-                          product={p}
-                          qty={productTotal}
-                          orderDiscountPct={discountPct}
-                          tiers={config.tiers}
-                          totalOrderUnits={totalUnits}
-                          nextTier={nextTier}
-                        />
+                    <div className="flex items-stretch gap-6 pl-20">
+                      <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
+                          {sizes.map((s) => (
+                            <SizeStepper
+                              key={s}
+                              productId={p.id}
+                              size={s}
+                              label={s}
+                              color={activeColor}
+                            />
+                          ))}
+                        </div>
                         <div className="rounded border border-border/60 bg-background/40 p-2.5">
                           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
                             Available Colors
@@ -790,6 +789,16 @@ export function BulkOrderSheet({
                             </div>
                           )}
                         </div>
+                      </div>
+                      <div className="flex-1 min-w-0 flex">
+                        <ProductAnalytics
+                          product={p}
+                          qty={productTotal}
+                          orderDiscountPct={discountPct}
+                          tiers={config.tiers}
+                          totalOrderUnits={totalUnits}
+                          nextTier={nextTier}
+                        />
                       </div>
                     </div>
                   </li>
