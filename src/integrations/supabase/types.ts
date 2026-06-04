@@ -14,6 +14,223 @@ export type Database = {
   }
   public: {
     Tables: {
+      affiliate_payouts: {
+        Row: {
+          affiliate_id: string
+          amount: number
+          created_at: string
+          id: string
+          method: Database["public"]["Enums"]["affiliate_payout_method"]
+          notes: string | null
+          paid_at: string
+          paid_by: string | null
+          reference: string | null
+        }
+        Insert: {
+          affiliate_id: string
+          amount: number
+          created_at?: string
+          id?: string
+          method?: Database["public"]["Enums"]["affiliate_payout_method"]
+          notes?: string | null
+          paid_at?: string
+          paid_by?: string | null
+          reference?: string | null
+        }
+        Update: {
+          affiliate_id?: string
+          amount?: number
+          created_at?: string
+          id?: string
+          method?: Database["public"]["Enums"]["affiliate_payout_method"]
+          notes?: string | null
+          paid_at?: string
+          paid_by?: string | null
+          reference?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_payouts_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_product_requests: {
+        Row: {
+          affiliate_id: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          notes: string | null
+          product_id: string
+          requested_at: string
+          status: Database["public"]["Enums"]["affiliate_request_status"]
+        }
+        Insert: {
+          affiliate_id: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          notes?: string | null
+          product_id: string
+          requested_at?: string
+          status?: Database["public"]["Enums"]["affiliate_request_status"]
+        }
+        Update: {
+          affiliate_id?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          notes?: string | null
+          product_id?: string
+          requested_at?: string
+          status?: Database["public"]["Enums"]["affiliate_request_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_product_requests_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_product_requests_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliate_sales: {
+        Row: {
+          affiliate_id: string
+          attributed_at: string
+          code: string
+          commission_amount: number
+          gross_amount: number
+          id: string
+          notes: string | null
+          product_id: string | null
+          shopify_order_line_item_id: string | null
+          shopify_order_uuid: string | null
+          status: Database["public"]["Enums"]["affiliate_sale_status"]
+        }
+        Insert: {
+          affiliate_id: string
+          attributed_at?: string
+          code: string
+          commission_amount?: number
+          gross_amount?: number
+          id?: string
+          notes?: string | null
+          product_id?: string | null
+          shopify_order_line_item_id?: string | null
+          shopify_order_uuid?: string | null
+          status?: Database["public"]["Enums"]["affiliate_sale_status"]
+        }
+        Update: {
+          affiliate_id?: string
+          attributed_at?: string
+          code?: string
+          commission_amount?: number
+          gross_amount?: number
+          id?: string
+          notes?: string | null
+          product_id?: string | null
+          shopify_order_line_item_id?: string | null
+          shopify_order_uuid?: string | null
+          status?: Database["public"]["Enums"]["affiliate_sale_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_sales_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_sales_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_sales_shopify_order_line_item_id_fkey"
+            columns: ["shopify_order_line_item_id"]
+            isOneToOne: true
+            referencedRelation: "shopify_order_line_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_sales_shopify_order_uuid_fkey"
+            columns: ["shopify_order_uuid"]
+            isOneToOne: false
+            referencedRelation: "shopify_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliates: {
+        Row: {
+          balance_owed: number
+          buyer_discount_percent: number
+          code: string
+          commission_percent: number
+          created_at: string
+          display_name: string
+          email: string | null
+          id: string
+          notes: string | null
+          payout_method_notes: string | null
+          status: Database["public"]["Enums"]["affiliate_status"]
+          total_earned: number
+          total_paid: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_owed?: number
+          buyer_discount_percent?: number
+          code: string
+          commission_percent?: number
+          created_at?: string
+          display_name: string
+          email?: string | null
+          id?: string
+          notes?: string | null
+          payout_method_notes?: string | null
+          status?: Database["public"]["Enums"]["affiliate_status"]
+          total_earned?: number
+          total_paid?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_owed?: number
+          buyer_discount_percent?: number
+          code?: string
+          commission_percent?: number
+          created_at?: string
+          display_name?: string
+          email?: string | null
+          id?: string
+          notes?: string | null
+          payout_method_notes?: string | null
+          status?: Database["public"]["Enums"]["affiliate_status"]
+          total_earned?: number
+          total_paid?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       athlete_credit_transactions: {
         Row: {
           amount: number
@@ -3279,6 +3496,10 @@ export type Database = {
         Args: { _amount: number; _athlete_id: string; _notes: string }
         Returns: number
       }
+      affiliate_signup: {
+        Args: { _display_name: string; _email?: string; _payout_notes?: string }
+        Returns: string
+      }
       apply_credit_to_order: {
         Args: { _amount: number; _order_id: string }
         Returns: number
@@ -3304,14 +3525,51 @@ export type Database = {
       current_user_is_admin: { Args: never; Returns: boolean }
       current_user_is_platform_admin: { Args: never; Returns: boolean }
       current_user_org_id: { Args: never; Returns: string }
+      decide_affiliate_request: {
+        Args: { _approve: boolean; _notes?: string; _request_id: string }
+        Returns: undefined
+      }
+      generate_affiliate_code: { Args: { _name: string }; Returns: string }
       is_org_accessible: { Args: { _org_id: string }; Returns: boolean }
+      record_affiliate_payout: {
+        Args: {
+          _affiliate_id: string
+          _amount: number
+          _method: Database["public"]["Enums"]["affiliate_payout_method"]
+          _notes?: string
+          _reference?: string
+        }
+        Returns: string
+      }
+      record_affiliate_sale: {
+        Args: {
+          _code: string
+          _gross_amount: number
+          _product_id: string
+          _shopify_order_line_item_id: string
+          _shopify_order_uuid: string
+        }
+        Returns: string
+      }
       refund_order_credit: { Args: { _order_id: string }; Returns: number }
       refund_order_credit_partial: {
         Args: { _amount: number; _notes?: string; _order_id: string }
         Returns: number
       }
+      set_affiliate_status: {
+        Args: {
+          _affiliate_id: string
+          _status: Database["public"]["Enums"]["affiliate_status"]
+        }
+        Returns: undefined
+      }
+      void_affiliate_sale: { Args: { _sale_id: string }; Returns: undefined }
     }
     Enums: {
+      affiliate_payout_method: "venmo" | "ach" | "paypal" | "other"
+      affiliate_request_status: "pending" | "approved" | "rejected"
+      affiliate_sale_status: "pending" | "approved" | "paid" | "void"
+      affiliate_status: "pending" | "active" | "paused" | "rejected"
       athlete_role: "primary" | "featured" | "collab"
       athlete_status: "active" | "inactive" | "archived"
       blank_availability:
@@ -3587,6 +3845,10 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      affiliate_payout_method: ["venmo", "ach", "paypal", "other"],
+      affiliate_request_status: ["pending", "approved", "rejected"],
+      affiliate_sale_status: ["pending", "approved", "paid", "void"],
+      affiliate_status: ["pending", "active", "paused", "rejected"],
       athlete_role: ["primary", "featured", "collab"],
       athlete_status: ["active", "inactive", "archived"],
       blank_availability: [
