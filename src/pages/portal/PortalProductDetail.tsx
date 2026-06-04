@@ -25,6 +25,7 @@ export default function PortalProductDetail() {
   const { athlete } = useCurrentAthlete();
   const { products, loading } = usePortalProducts(athlete?.id ?? null);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [heroIdx, setHeroIdx] = useState(0);
   const [description, setDescription] = useState<string | null>(null);
 
