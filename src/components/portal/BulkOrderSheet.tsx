@@ -88,8 +88,11 @@ function productPricing(p: PortalProduct): {
     return { athleteUnit: 18, wholesaleUnit: 21 };
   }
   // Fallback to DB-driven values when type isn't a known category.
-  const athlete = p.athlete_unit_price ?? p.wholesale_price ?? null;
-  return { athleteUnit: athlete, wholesaleUnit: p.price ?? null };
+  // Athlete tier = athlete_unit_price. Wholesale comparison = wholesale_price
+  // (fall back to retail only if no wholesale is set).
+  const athlete = p.athlete_unit_price ?? null;
+  const wholesale = p.wholesale_price ?? p.price ?? null;
+  return { athleteUnit: athlete, wholesaleUnit: wholesale };
 }
 
 function ProductAnalytics({
@@ -113,7 +116,11 @@ function ProductAnalytics({
   const subtotal = effectiveUnit != null ? effectiveUnit * qty : null;
   const savings =
     wholesaleUnit != null && effectiveUnit != null
-      ? (wholesaleUnit - effectiveUnit) * qty
+      ? Math.max(0, (wholesaleUnit - effectiveUnit) * qty)
+      : null;
+  const savingsPct =
+    wholesaleUnit != null && effectiveUnit != null && wholesaleUnit > 0
+      ? Math.max(0, ((wholesaleUnit - effectiveUnit) / wholesaleUnit) * 100)
       : null;
 
   const sortedTiers = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
@@ -157,7 +164,18 @@ function ProductAnalytics({
                 : "text-muted-foreground",
             )}
           >
-            {qty > 0 && savings != null ? fmtMoney(savings) : "—"}
+            {qty > 0 && savings != null ? (
+              <>
+                {fmtMoney(savings)}
+                {savingsPct != null && savingsPct > 0 && (
+                  <span className="ml-1 text-[10px] font-semibold text-muted-foreground">
+                    ({savingsPct.toFixed(0)}%)
+                  </span>
+                )}
+              </>
+            ) : (
+              "—"
+            )}
           </div>
         </div>
       </div>
