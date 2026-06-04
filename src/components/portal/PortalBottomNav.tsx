@@ -4,7 +4,7 @@
 // are sections within a single page, so we use anchor scrolls for
 // in-page tabs and route to /portal for Home.
 
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   BarChart3,
   Home,
@@ -41,13 +41,14 @@ const SLOTS: Slot[] = [
 
 export function PortalBottomNav() {
   const navigate = useNavigate();
+  const { search } = useLocation();
   const { user, signOut } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
 
   function activate(slot: Slot) {
     haptic.tap();
     if (slot.to) {
-      navigate(slot.to);
+      navigate({ pathname: slot.to, search });
       return;
     }
     if (!slot.scrollTo) {
