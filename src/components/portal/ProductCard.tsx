@@ -54,7 +54,7 @@ export function ProductCard({ product }: Props) {
           alt={product.title}
           viewMode="athlete"
           size="card"
-          imgClassName="max-h-full max-w-full object-contain p-3"
+          imgClassName="p-3"
         />
       </button>
 

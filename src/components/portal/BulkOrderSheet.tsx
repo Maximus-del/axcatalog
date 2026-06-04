@@ -598,7 +598,7 @@ export function BulkOrderSheet({
                           <img
                             src={p.primary_image_url}
                             alt=""
-                            className="max-h-full max-w-full object-contain"
+                            className="h-full w-full object-contain p-1"
                           />
                         ) : (
                           <Shirt

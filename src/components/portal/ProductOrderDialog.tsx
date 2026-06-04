@@ -141,7 +141,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
             alt={product.title}
             viewMode="athlete"
             size="hero"
-            imgClassName="max-h-full max-w-full object-contain p-4"
+            imgClassName="p-4"
           />
         </div>
 
