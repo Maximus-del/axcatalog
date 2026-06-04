@@ -1,6 +1,6 @@
 // Mobile-first. Test at 375px before merging.
 import { useCallback, useState } from "react";
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet } from "react-router-dom";
 import { LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,7 +15,6 @@ import { BulkOrderSheet } from "./BulkOrderSheet";
 import { OrderDraftBar } from "./OrderDraftBar";
 import { OrderDraftProvider } from "./OrderDraftContext";
 import { PortalBottomNav } from "./PortalBottomNav";
-import { PortalSubNav } from "./PortalSubNav";
 import { PortalDataProvider, usePortalData } from "./PortalDataContext";
 
 function BulkOrderSheetBridge({
@@ -47,7 +46,6 @@ function OrderDraftBarBridge({ onOpen }: { onOpen: () => void }) {
 export default function PortalLayout() {
   const { user, signOut } = useAuth();
   const { athlete, loading, isImpersonating, noAccess } = useCurrentAthlete();
-  const { pathname } = useLocation();
 
   const [navOpen, setNavOpen] = useState(false);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
@@ -81,9 +79,6 @@ export default function PortalLayout() {
       </div>
     );
   }
-
-  // Show the sub-nav on every portal route except the home landing.
-  const showSubNav = pathname !== "/portal" && pathname !== "/portal/";
 
   return (
     <OrderDraftProvider>
@@ -139,8 +134,6 @@ export default function PortalLayout() {
               <span className="hidden sm:inline">Sign out</span>
             </Button>
           </div>
-
-          {showSubNav && <PortalSubNav />}
 
           <div className="pb-bottom-nav md:pb-0">
             <Outlet />
