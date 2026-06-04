@@ -1,4 +1,13 @@
 import { useEffect } from "react";
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  BarChart3,
+  Home,
+  Layers,
+  Shirt,
+  Sparkles,
+  Image,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -7,13 +16,17 @@ interface Props {
 }
 
 const LINKS = [
-  { href: "#sec-home", label: "Home", icon: "🏠" },
-  { href: "#sec-analytics", label: "Analytics", icon: "📊" },
-  { href: "#sec-products", label: "My Products", icon: "👕" },
-  { href: "#sec-content", label: "Content Hub", icon: "📸" },
+  { to: "/portal", label: "Home", icon: Home, end: true },
+  { to: "/portal/products", label: "Product Lineup", icon: Shirt },
+  { to: "/portal/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/portal/content", label: "Social Content", icon: Image },
+  { to: "/portal/drops", label: "Upcoming Drops", icon: Sparkles },
+  { to: "/portal/era", label: "AR / Era", icon: Layers },
 ];
 
 export function PortalNavDrawer({ open, onClose }: Props) {
+  const { pathname } = useLocation();
+
   // Lock body scroll while open
   useEffect(() => {
     if (!open) return;
@@ -56,19 +69,29 @@ export function PortalNavDrawer({ open, onClose }: Props) {
         <div className="p-6">
           <div className="ax-label mb-6">Navigate</div>
           <nav className="flex flex-col gap-1">
-            {LINKS.map((l) => (
-              <a
-                key={l.href}
-                href={l.href}
-                onClick={onClose}
-                className="flex items-center gap-3 px-3 py-3 rounded-md text-base text-foreground hover:bg-accent/10 hover:text-accent transition-colors"
-              >
-                <span className="text-xl" aria-hidden>
-                  {l.icon}
-                </span>
-                <span className="font-medium">{l.label}</span>
-              </a>
-            ))}
+            {LINKS.map((l) => {
+              const Icon = l.icon;
+              const isActive = l.end
+                ? pathname === l.to
+                : pathname.startsWith(l.to);
+              return (
+                <NavLink
+                  key={l.to}
+                  to={l.to}
+                  end={l.end}
+                  onClick={onClose}
+                  className={cn(
+                    "flex items-center gap-3 px-3 py-3 rounded-md text-base transition-colors",
+                    isActive
+                      ? "bg-accent/10 text-accent font-medium"
+                      : "text-foreground hover:bg-accent/10 hover:text-accent",
+                  )}
+                >
+                  <Icon className="h-5 w-5" aria-hidden />
+                  <span>{l.label}</span>
+                </NavLink>
+              );
+            })}
           </nav>
         </div>
       </aside>
