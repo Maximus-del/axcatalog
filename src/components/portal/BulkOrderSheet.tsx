@@ -275,6 +275,8 @@ export function BulkOrderSheet({
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
   const [autoOn, setAutoOn] = useState<Record<string, boolean>>({});
   const [autoTotal, setAutoTotal] = useState<Record<string, number>>({});
+  const { wallet, refetch: refetchWallet } = useAthleteCredit(athleteId);
+  const [creditInput, setCreditInput] = useState<string>("");
 
   const visibleProducts = useMemo(
     () => products.filter((p) => !isExcluded(p.title)),
@@ -306,6 +308,29 @@ export function BulkOrderSheet({
     () => VOLUME_TIERS.find((t) => totalUnits < t.min_qty) ?? null,
     [totalUnits],
   );
+
+  // Order subtotal (post-discount) across all products in the draft.
+  const orderSubtotal = useMemo(() => {
+    let sum = 0;
+    const byId = new Map(products.map((p) => [p.id, p]));
+    for (const [pid, byColor] of Object.entries(draft)) {
+      const p = byId.get(pid);
+      if (!p) continue;
+      const { athleteUnit } = productPricing(p);
+      if (athleteUnit == null) continue;
+      const qty = sumProduct(byColor);
+      sum += athleteUnit * qty * discountMult;
+    }
+    return sum;
+  }, [draft, products, discountMult]);
+
+  const availableCredit = wallet?.balance ?? 0;
+  const maxApplicable = Math.min(availableCredit, orderSubtotal);
+  const creditToApply = Math.max(
+    0,
+    Math.min(maxApplicable, parseFloat(creditInput || "0") || 0),
+  );
+  const amountDue = Math.max(0, orderSubtotal - creditToApply);
 
   const orderSizes = (sizes: string[]): string[] => {
     const std = STANDARD_SIZES.filter((s) => sizes.includes(s));
