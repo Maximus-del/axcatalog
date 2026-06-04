@@ -519,7 +519,17 @@ function ResponseDialog({
             return (
               <div key={q.id} className="border-b border-border pb-3">
                 <div className="text-xs text-muted-foreground mb-1">{q.prompt}</div>
-                {q.type === "image_choice" ? (
+                {q.type === "image_upload" ? (
+                  (a?.uploaded_file_urls ?? []).length ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      {(a.uploaded_file_urls as string[]).map((url: string) => (
+                        <a key={url} href={url} target="_blank" rel="noreferrer" className="ax-card overflow-hidden block">
+                          <img src={url} className="w-full aspect-square object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  ) : <span className="text-muted-foreground italic text-sm">No uploads</span>
+                ) : q.type === "image_choice" ? (
                   <div className="grid grid-cols-3 gap-2">
                     {(a?.selected_option_ids ?? []).map((oid: string) => {
                       const opt = q.options.find((o) => o.id === oid);
