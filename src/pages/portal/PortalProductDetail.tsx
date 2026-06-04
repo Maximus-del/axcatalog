@@ -100,7 +100,12 @@ export default function PortalProductDetail() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Hero + gallery */}
         <div className="space-y-3">
-          <div className="aspect-[4/3] rounded-xl bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(true)}
+            className="w-full aspect-[4/3] rounded-xl bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            aria-label={`View images of ${product.title}`}
+          >
             <ProductImage
               images={heroImage ? [heroImage] : product.images}
               alt={product.title}
@@ -108,14 +113,17 @@ export default function PortalProductDetail() {
               size="hero"
               imgClassName="max-h-full max-w-full object-contain p-6"
             />
-          </div>
+          </button>
           {product.images.length > 1 && (
             <div className="grid grid-cols-5 gap-2">
               {product.images.map((img, i) => (
                 <button
                   key={img.id}
                   type="button"
-                  onClick={() => setHeroIdx(i)}
+                  onClick={() => {
+                    setHeroIdx(i);
+                    setLightboxOpen(true);
+                  }}
                   className={cn(
                     "aspect-square rounded-md bg-[hsl(var(--dark))] overflow-hidden border-2 flex items-center justify-center",
                     i === heroIdx ? "border-accent" : "border-transparent hover:border-border",
