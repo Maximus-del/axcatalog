@@ -1,6 +1,7 @@
 // Mobile-first. Test at 375px before merging.
 import { useState } from "react";
 import { ImagePlus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import type { ProductSales } from "@/hooks/usePortalSales";
