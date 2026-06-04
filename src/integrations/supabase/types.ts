@@ -2331,6 +2331,7 @@ export type Database = {
           response_id: string
           selected_option_ids: string[]
           text_value: string | null
+          uploaded_file_urls: string[]
         }
         Insert: {
           created_at?: string
@@ -2339,6 +2340,7 @@ export type Database = {
           response_id: string
           selected_option_ids?: string[]
           text_value?: string | null
+          uploaded_file_urls?: string[]
         }
         Update: {
           created_at?: string
@@ -2347,6 +2349,7 @@ export type Database = {
           response_id?: string
           selected_option_ids?: string[]
           text_value?: string | null
+          uploaded_file_urls?: string[]
         }
         Relationships: [
           {
@@ -3887,6 +3890,7 @@ export type Database = {
         | "single_choice"
         | "multi_choice"
         | "image_choice"
+        | "image_upload"
       shopify_financial_status:
         | "pending"
         | "authorized"
@@ -4173,6 +4177,7 @@ export const Constants = {
         "single_choice",
         "multi_choice",
         "image_choice",
+        "image_upload",
       ],
       shopify_financial_status: [
         "pending",
