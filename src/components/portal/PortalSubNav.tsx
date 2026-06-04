@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -10,6 +10,7 @@ const LINKS = [
 ];
 
 export function PortalSubNav() {
+  const { search } = useLocation();
   return (
     <nav
       className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/70 sticky top-0 z-30"
@@ -20,7 +21,7 @@ export function PortalSubNav() {
           {LINKS.map((l) => (
             <li key={l.to} className="flex-shrink-0">
               <NavLink
-                to={l.to}
+                to={{ pathname: l.to, search }}
                 end
                 className={({ isActive }) =>
                   cn(
