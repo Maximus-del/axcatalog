@@ -68,30 +68,28 @@ function fmtMoney(n: number | null | undefined): string {
 }
 
 /**
- * Athlete-tier pricing model.
- * True costs (incl. shipping + overhead): t-shirt $12, hoodie $23.50.
- * Athlete tier markup: 50% on both → t-shirt $18, hoodie $35.25.
- * Middle (next) tier markup: t-shirt 75% → $21, hoodie 70% → $39.95.
- * "Saved vs Retail" compares athlete-effective unit to the middle-tier price.
+ * Athlete-facing pricing model.
+ * Athlete tier (what they pay): t-shirt $18, hoodie $35.25.
+ * Wholesale comparison price (what they'd pay elsewhere): t-shirt $21, hoodie $40.
+ * "Saved vs Wholesale" compares their effective unit to the wholesale price.
  */
 function productPricing(p: PortalProduct): {
-  trueCost: number | null;
   athleteUnit: number | null;
-  midUnit: number | null;
+  wholesaleUnit: number | null;
 } {
   const t = (p.product_type || "").toLowerCase();
   const isHoodie = t.includes("hood");
   const isTee =
     t.includes("tee") || t.includes("tshirt") || t === "t-shirt" || t.includes("shirt");
   if (isHoodie) {
-    return { trueCost: 23.5, athleteUnit: 23.5 * 1.5, midUnit: 23.5 * 1.7 };
+    return { athleteUnit: 35.25, wholesaleUnit: 40 };
   }
   if (isTee) {
-    return { trueCost: 12, athleteUnit: 12 * 1.5, midUnit: 12 * 1.75 };
+    return { athleteUnit: 18, wholesaleUnit: 21 };
   }
   // Fallback to DB-driven values when type isn't a known category.
   const athlete = p.athlete_unit_price ?? p.wholesale_price ?? null;
-  return { trueCost: null, athleteUnit: athlete, midUnit: p.price ?? null };
+  return { athleteUnit: athlete, wholesaleUnit: p.price ?? null };
 }
 
 function ProductAnalytics({
@@ -109,13 +107,13 @@ function ProductAnalytics({
   totalOrderUnits: number;
   nextTier: VolumeTier | null;
 }) {
-  const { athleteUnit: base, midUnit } = productPricing(product);
+  const { athleteUnit: base, wholesaleUnit } = productPricing(product);
   const effectiveUnit =
     base != null ? base * (1 - orderDiscountPct / 100) : null;
   const subtotal = effectiveUnit != null ? effectiveUnit * qty : null;
   const savings =
-    midUnit != null && effectiveUnit != null
-      ? (midUnit - effectiveUnit) * qty
+    wholesaleUnit != null && effectiveUnit != null
+      ? (wholesaleUnit - effectiveUnit) * qty
       : null;
 
   const sortedTiers = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
@@ -149,7 +147,7 @@ function ProductAnalytics({
         </div>
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Saved vs Retail
+            Saved vs Wholesale
           </div>
           <div
             className={cn(
