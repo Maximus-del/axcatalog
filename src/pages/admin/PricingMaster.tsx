@@ -39,7 +39,10 @@ const TIERS: { key: TierKey; field: PriceField; label: string }[] = [
 ];
 
 function trueCost(r: Row) {
-  return (r.blank_cost ?? 0) + (r.decoration_cost ?? 0) + (r.additional_cost ?? 0);
+  // Decoration fee placeholder: $10 (front+back @ $5/side) when not explicitly set.
+  // Single-side ($5) products can override decoration_cost per row.
+  const decoration = r.decoration_cost ?? 10;
+  return (r.blank_cost ?? 0) + decoration + (r.additional_cost ?? 0);
 }
 function isComplete(r: Row) {
   return r.price_athlete != null && r.price_corporate != null && r.price_standard != null;
