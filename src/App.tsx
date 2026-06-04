@@ -29,6 +29,7 @@ import PricingMaster from "./pages/admin/PricingMaster";
 import ImportsList from "./pages/admin/ImportsList";
 import ImportBatchDetail from "./pages/admin/ImportBatchDetail";
 import AthleteCredits from "./pages/admin/AthleteCredits";
+import AffiliatesList from "./pages/admin/AffiliatesList";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -38,6 +39,14 @@ import PortalAnalytics from "./pages/portal/PortalAnalytics";
 import PortalContent from "./pages/portal/PortalContent";
 import PortalDrops from "./pages/portal/PortalDrops";
 import PortalEra from "./pages/portal/PortalEra";
+
+import { RequireAffiliate } from "@/auth/guards";
+import AffiliateLayout from "@/components/affiliate/AffiliateLayout";
+import AffiliateSignup from "./pages/affiliate/AffiliateSignup";
+import AffiliateHome from "./pages/affiliate/AffiliateHome";
+import AffiliateProducts from "./pages/affiliate/AffiliateProducts";
+import AffiliateSales from "./pages/affiliate/AffiliateSales";
+import AffiliatePayouts from "./pages/affiliate/AffiliatePayouts";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +88,7 @@ const App = () => (
               <Route path="orders/:id" element={<OrderDetail />} />
               <Route path="pricing" element={<PricingMaster />} />
               <Route path="credits" element={<AthleteCredits />} />
+              <Route path="affiliates" element={<AffiliatesList />} />
               <Route path="imports/orders" element={<ImportsList />} />
               <Route path="imports/orders/:id" element={<ImportBatchDetail />} />
             </Route>
@@ -99,6 +109,22 @@ const App = () => (
               <Route path="drops" element={<PortalDrops />} />
               <Route path="era" element={<PortalEra />} />
               <Route path="products/:id" element={<PortalProductDetail />} />
+            </Route>
+
+            {/* Affiliate */}
+            <Route path="/affiliate/signup" element={<AffiliateSignup />} />
+            <Route
+              path="/affiliate"
+              element={
+                <RequireAffiliate>
+                  <AffiliateLayout />
+                </RequireAffiliate>
+              }
+            >
+              <Route index element={<AffiliateHome />} />
+              <Route path="products" element={<AffiliateProducts />} />
+              <Route path="sales" element={<AffiliateSales />} />
+              <Route path="payouts" element={<AffiliatePayouts />} />
             </Route>
 
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

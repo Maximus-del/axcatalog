@@ -28,3 +28,10 @@ export function RequirePortal({ children }: { children: ReactNode }) {
   if (linkedAthleteIds.length === 0) return <Navigate to="/pending-access" replace />;
   return <>{children}</>;
 }
+
+export function RequireAffiliate({ children }: { children: ReactNode }) {
+  const { session, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!session) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
