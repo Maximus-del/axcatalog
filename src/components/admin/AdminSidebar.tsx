@@ -11,6 +11,7 @@ import {
   DollarSign,
   Upload,
   Wallet,
+  Handshake,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { NavLink } from "@/components/NavLink";
@@ -40,6 +41,7 @@ const items = [
   { title: "Imports", url: "/admin/imports/orders", icon: Upload },
   { title: "Pricing", url: "/admin/pricing", icon: DollarSign },
   { title: "Credits", url: "/admin/credits", icon: Wallet },
+  { title: "Affiliates", url: "/admin/affiliates", icon: Handshake },
 ];
 
 export function AdminSidebar() {
