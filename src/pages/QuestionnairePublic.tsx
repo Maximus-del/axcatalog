@@ -9,8 +9,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Upload, X } from "lucide-react";
 
-type QType = "short_text" | "long_text" | "single_choice" | "multi_choice" | "image_choice";
+type QType = "short_text" | "long_text" | "single_choice" | "multi_choice" | "image_choice" | "image_upload";
 
 interface Q {
   id: string;
@@ -39,6 +40,8 @@ export default function QuestionnairePublic() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [answers, setAnswers] = useState<Record<string, { text?: string; options?: string[] }>>({});
+  const [uploads, setUploads] = useState<Record<string, string[]>>({});
+  const [uploadingQid, setUploadingQid] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -88,6 +91,31 @@ export default function QuestionnairePublic() {
     });
   };
 
+  const handleUpload = async (qid: string, files: FileList | null) => {
+    if (!files || !files.length) return;
+    setUploadingQid(qid);
+    try {
+      const urls: string[] = [];
+      for (const file of Array.from(files)) {
+        const ext = file.name.split(".").pop() || "bin";
+        const path = `${slug ?? "anon"}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage.from("questionnaire-uploads").upload(path, file, { upsert: false });
+        if (error) throw error;
+        const { data } = supabase.storage.from("questionnaire-uploads").getPublicUrl(path);
+        urls.push(data.publicUrl);
+      }
+      setUploads((p) => ({ ...p, [qid]: [...(p[qid] ?? []), ...urls] }));
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setUploadingQid(null);
+    }
+  };
+
+  const removeUpload = (qid: string, url: string) => {
+    setUploads((p) => ({ ...p, [qid]: (p[qid] ?? []).filter((u) => u !== url) }));
+  };
+
   const submit = async () => {
     if (!q) return;
     for (const question of questions) {
@@ -95,6 +123,8 @@ export default function QuestionnairePublic() {
       const a = answers[question.id];
       if (question.type === "short_text" || question.type === "long_text") {
         if (!a?.text?.trim()) return toast({ title: `"${question.prompt}" is required`, variant: "destructive" });
+      } else if (question.type === "image_upload") {
+        if (!(uploads[question.id]?.length)) return toast({ title: `"${question.prompt}" is required`, variant: "destructive" });
       } else {
         if (!a?.options?.length) return toast({ title: `"${question.prompt}" is required`, variant: "destructive" });
       }
@@ -114,6 +144,7 @@ export default function QuestionnairePublic() {
           question_id: qu.id,
           text_value: a.text ?? null,
           selected_option_ids: a.options ?? [],
+          uploaded_file_urls: uploads[qu.id] ?? [],
         };
       });
       if (rows.length) {
@@ -225,6 +256,39 @@ export default function QuestionnairePublic() {
                     </button>
                   );
                 })}
+              </div>
+            )}
+            {question.type === "image_upload" && (
+              <div className="space-y-3">
+                {(uploads[question.id]?.length ?? 0) > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {uploads[question.id].map((url) => (
+                      <div key={url} className="ax-card overflow-hidden relative group">
+                        <img src={url} alt="" className="w-full aspect-square object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeUpload(question.id, url)}
+                          className="absolute top-1 right-1 bg-background/80 rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                          aria-label="Remove"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <label className="ax-card border-dashed p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2 cursor-pointer hover:bg-muted/30 transition">
+                  <Upload className="h-6 w-6" />
+                  <div>{uploadingQid === question.id ? "Uploading…" : "Click to upload images"}</div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    disabled={uploadingQid === question.id}
+                    onChange={(e) => void handleUpload(question.id, e.target.files)}
+                  />
+                </label>
               </div>
             )}
           </div>
