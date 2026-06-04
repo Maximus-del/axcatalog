@@ -19,6 +19,7 @@ import { PortalNavDrawer } from "@/components/portal/PortalNavDrawer";
 import { MobileHeader } from "@/components/portal/home/MobileHeader";
 import { HubCardsRow, type HubCardKey } from "@/components/portal/HubCardsRow";
 import { PortalStatsRow } from "@/components/portal/PortalStatsRow";
+import { CreditWalletCard } from "@/components/portal/CreditWalletCard";
 import { PortalSection } from "@/components/portal/PortalSection";
 import { MyProductsGrid } from "@/components/portal/MyProductsGrid";
 import { BulkOrderSheet } from "@/components/portal/BulkOrderSheet";
@@ -174,6 +175,13 @@ function PortalHomeInner() {
       <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-8 pb-bottom-nav md:pb-32">
         <div className="stagger-fade" style={{ ["--i" as string]: 0 }}>
           <HubCardsRow onSelect={handleHubSelect} />
+        </div>
+
+        <div className="stagger-fade" style={{ ["--i" as string]: 1 }}>
+          <CreditWalletCard
+            athleteId={athlete.id}
+            onUseCredit={() => setOrderSheetOpen(true)}
+          />
         </div>
 
         <div className="stagger-fade" style={{ ["--i" as string]: 1 }}>

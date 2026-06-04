@@ -14,6 +14,142 @@ export type Database = {
   }
   public: {
     Tables: {
+      athlete_credit_transactions: {
+        Row: {
+          amount: number
+          athlete_id: string
+          balance_after: number
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          order_request_id: string | null
+          type: Database["public"]["Enums"]["credit_txn_type"]
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          athlete_id: string
+          balance_after: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          order_request_id?: string | null
+          type: Database["public"]["Enums"]["credit_txn_type"]
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          athlete_id?: string
+          balance_after?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          order_request_id?: string | null
+          type?: Database["public"]["Enums"]["credit_txn_type"]
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_credit_transactions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "athlete_credit_transactions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "athlete_credit_transactions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_credit_transactions_order_request_id_fkey"
+            columns: ["order_request_id"]
+            isOneToOne: false
+            referencedRelation: "bulk_order_requests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_credit_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_credit_wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_credit_wallets: {
+        Row: {
+          athlete_id: string
+          balance: number
+          created_at: string
+          id: string
+          last_accrual_at: string | null
+          max_balance: number
+          monthly_credit: number
+          total_earned: number
+          total_used: number
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: string
+          balance?: number
+          created_at?: string
+          id?: string
+          last_accrual_at?: string | null
+          max_balance?: number
+          monthly_credit?: number
+          total_earned?: number
+          total_used?: number
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string
+          balance?: number
+          created_at?: string
+          id?: string
+          last_accrual_at?: string | null
+          max_balance?: number
+          monthly_credit?: number
+          total_earned?: number
+          total_used?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_credit_wallets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: true
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "athlete_credit_wallets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: true
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "athlete_credit_wallets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: true
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       athletes: {
         Row: {
           created_at: string
@@ -351,13 +487,16 @@ export type Database = {
         Row: {
           acknowledged_at: string | null
           admin_notes: string | null
+          amount_due: number | null
           athlete_id: string | null
           completed_at: string | null
           created_at: string
+          credit_applied: number
           id: string
           notes: string | null
           order_number: string | null
           organization_id: string
+          payment_method: string
           priority: string
           requested_by: string
           retail_equivalent: number
@@ -374,13 +513,16 @@ export type Database = {
         Insert: {
           acknowledged_at?: string | null
           admin_notes?: string | null
+          amount_due?: number | null
           athlete_id?: string | null
           completed_at?: string | null
           created_at?: string
+          credit_applied?: number
           id?: string
           notes?: string | null
           order_number?: string | null
           organization_id: string
+          payment_method?: string
           priority?: string
           requested_by: string
           retail_equivalent?: number
@@ -397,13 +539,16 @@ export type Database = {
         Update: {
           acknowledged_at?: string | null
           admin_notes?: string | null
+          amount_due?: number | null
           athlete_id?: string | null
           completed_at?: string | null
           created_at?: string
+          credit_applied?: number
           id?: string
           notes?: string | null
           order_number?: string | null
           organization_id?: string
+          payment_method?: string
           priority?: string
           requested_by?: string
           retail_equivalent?: number
@@ -3129,6 +3274,15 @@ export type Database = {
       }
     }
     Functions: {
+      accrue_monthly_credits: { Args: never; Returns: number }
+      admin_adjust_credit: {
+        Args: { _amount: number; _athlete_id: string; _notes: string }
+        Returns: number
+      }
+      apply_credit_to_order: {
+        Args: { _amount: number; _order_id: string }
+        Returns: number
+      }
       compute_wholesale_price: {
         Args: {
           _organization_id: string
@@ -3151,6 +3305,7 @@ export type Database = {
       current_user_is_platform_admin: { Args: never; Returns: boolean }
       current_user_org_id: { Args: never; Returns: string }
       is_org_accessible: { Args: { _org_id: string }; Returns: boolean }
+      refund_order_credit: { Args: { _order_id: string }; Returns: number }
     }
     Enums: {
       athlete_role: "primary" | "featured" | "collab"
@@ -3176,6 +3331,7 @@ export type Database = {
         | "campaign"
         | "capsule"
         | "other"
+      credit_txn_type: "accrual" | "used" | "adjustment" | "refund"
       design_file_type: "source" | "export" | "mockup" | "backup" | "reference"
       design_placement:
         | "front"
@@ -3453,6 +3609,7 @@ export const Constants = {
         "capsule",
         "other",
       ],
+      credit_txn_type: ["accrual", "used", "adjustment", "refund"],
       design_file_type: ["source", "export", "mockup", "backup", "reference"],
       design_placement: [
         "front",

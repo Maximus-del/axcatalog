@@ -19,6 +19,7 @@ import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 import { ProductPreviewDialog } from "./ProductPreviewDialog";
 import type { VolumeTier } from "@/hooks/usePortalPricing";
+import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import {
   distributeByCurve,
   useSizeDistributionCurve,
@@ -274,6 +275,8 @@ export function BulkOrderSheet({
   const [recentlyAdded, setRecentlyAdded] = useState<string | null>(null);
   const [autoOn, setAutoOn] = useState<Record<string, boolean>>({});
   const [autoTotal, setAutoTotal] = useState<Record<string, number>>({});
+  const { wallet, refetch: refetchWallet } = useAthleteCredit(athleteId);
+  const [creditInput, setCreditInput] = useState<string>("");
 
   const visibleProducts = useMemo(
     () => products.filter((p) => !isExcluded(p.title)),
@@ -305,6 +308,29 @@ export function BulkOrderSheet({
     () => VOLUME_TIERS.find((t) => totalUnits < t.min_qty) ?? null,
     [totalUnits],
   );
+
+  // Order subtotal (post-discount) across all products in the draft.
+  const orderSubtotal = useMemo(() => {
+    let sum = 0;
+    const byId = new Map(products.map((p) => [p.id, p]));
+    for (const [pid, byColor] of Object.entries(draft)) {
+      const p = byId.get(pid);
+      if (!p) continue;
+      const { athleteUnit } = productPricing(p);
+      if (athleteUnit == null) continue;
+      const qty = sumProduct(byColor);
+      sum += athleteUnit * qty * discountMult;
+    }
+    return sum;
+  }, [draft, products, discountMult]);
+
+  const availableCredit = wallet?.balance ?? 0;
+  const maxApplicable = Math.min(availableCredit, orderSubtotal);
+  const creditToApply = Math.max(
+    0,
+    Math.min(maxApplicable, parseFloat(creditInput || "0") || 0),
+  );
+  const amountDue = Math.max(0, orderSubtotal - creditToApply);
 
   const orderSizes = (sizes: string[]): string[] => {
     const std = STANDARD_SIZES.filter((s) => sizes.includes(s));
@@ -395,8 +421,33 @@ export function BulkOrderSheet({
         if (itemsErr) throw itemsErr;
       }
 
+      // Apply credit if user opted in
+      if (creditToApply > 0) {
+        const { error: creditErr } = await supabase.rpc("apply_credit_to_order", {
+          _order_id: orderRow.id,
+          _amount: creditToApply,
+        });
+        if (creditErr) {
+          toast.error(`Credit not applied: ${creditErr.message}`);
+        } else {
+          await refetchWallet();
+        }
+      }
+
+      const paymentMethod =
+        creditToApply <= 0
+          ? "invoice"
+          : amountDue <= 0.01
+            ? "credit"
+            : "split";
+      await supabase
+        .from("bulk_order_requests")
+        .update({ payment_method: paymentMethod, amount_due: amountDue })
+        .eq("id", orderRow.id);
+
       toast.success(`Order ${orderRow.order_number ?? ""} submitted — we'll be in touch`);
       clear();
+      setCreditInput("");
       onOpenChange(false);
       onSubmitted?.();
     } catch (err) {
@@ -748,22 +799,82 @@ export function BulkOrderSheet({
           )}
         </div>
 
-        <div className="border-t border-border px-6 py-4 flex items-center justify-between gap-3 bg-[hsl(var(--dark))]">
-          <div className="text-sm">
-            <span className="ax-label">Total Units</span>
-            <div className="text-2xl font-bold text-accent leading-none mt-1">{totalUnits}</div>
-            {discountPct > 0 && (
-              <div className="text-[11px] text-accent uppercase tracking-wider mt-1">
-                {discountPct}% volume discount
+        <div className="border-t border-border px-6 py-4 bg-[hsl(var(--dark))] space-y-3">
+          {availableCredit > 0 && orderSubtotal > 0 && (
+            <div className="rounded border border-accent/30 bg-accent/5 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="ax-label text-[10px]">Credit Balance</div>
+                  <div className="text-sm font-semibold text-accent">
+                    ${availableCredit.toFixed(2)} available
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="credit-apply" className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    Apply
+                  </Label>
+                  <input
+                    id="credit-apply"
+                    type="number"
+                    min={0}
+                    max={maxApplicable}
+                    step="0.01"
+                    value={creditInput}
+                    placeholder="0.00"
+                    onChange={(e) => setCreditInput(e.target.value)}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="h-8 w-24 text-right text-sm rounded bg-background border border-border px-2 focus:outline-none focus:border-accent"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-[10px] uppercase tracking-wider"
+                    onClick={() => setCreditInput(maxApplicable.toFixed(2))}
+                  >
+                    Max
+                  </Button>
+                </div>
               </div>
-            )}
-            {nextTier && (
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                +{nextTier.min_qty - totalUnits} more for {nextTier.discount_pct}% off
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm">
+              <span className="ax-label">Total Units</span>
+              <div className="text-2xl font-bold text-accent leading-none mt-1">{totalUnits}</div>
+              {discountPct > 0 && (
+                <div className="text-[11px] text-accent uppercase tracking-wider mt-1">
+                  {discountPct}% volume discount
+                </div>
+              )}
+              {nextTier && (
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  +{nextTier.min_qty - totalUnits} more for {nextTier.discount_pct}% off
+                </div>
+              )}
+            </div>
+            {orderSubtotal > 0 && (
+              <div className="text-right text-xs space-y-0.5">
+                <div className="flex justify-between gap-6">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="font-semibold">${orderSubtotal.toFixed(2)}</span>
+                </div>
+                {creditToApply > 0 && (
+                  <div className="flex justify-between gap-6 text-accent">
+                    <span>Credit</span>
+                    <span className="font-semibold">−${creditToApply.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-6 pt-1 border-t border-border/60">
+                  <span className="text-muted-foreground uppercase tracking-wider text-[10px]">Due</span>
+                  <span className="text-sm font-bold text-foreground">${amountDue.toFixed(2)}</span>
+                </div>
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex gap-2 justify-end">
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
