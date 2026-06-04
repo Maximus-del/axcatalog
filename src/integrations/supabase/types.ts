@@ -3306,6 +3306,10 @@ export type Database = {
       current_user_org_id: { Args: never; Returns: string }
       is_org_accessible: { Args: { _org_id: string }; Returns: boolean }
       refund_order_credit: { Args: { _order_id: string }; Returns: number }
+      refund_order_credit_partial: {
+        Args: { _amount: number; _notes?: string; _order_id: string }
+        Returns: number
+      }
     }
     Enums: {
       athlete_role: "primary" | "featured" | "collab"
