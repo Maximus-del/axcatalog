@@ -130,103 +130,14 @@ function ProductAnalytics({
 
   return (
     <div className="flex-1 min-w-0 rounded border border-border/60 bg-background/40 p-2.5">
-      <div className="grid grid-cols-4 gap-2 mb-2">
-        <div>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Qty
-          </div>
-          <div className="text-sm font-bold text-foreground leading-tight">
-            {qty}
-          </div>
-        </div>
-        <div>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Unit
-          </div>
-          <div className="text-sm font-bold text-foreground leading-tight">
-            {fmtMoney(effectiveUnit)}
-          </div>
-        </div>
-        <div>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Total
+      {/* Current Discount + Next Tier */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1 rounded bg-accent/10 border border-accent/30 px-2 py-1">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-accent">
+            Current Discount
           </div>
           <div className="text-sm font-bold text-accent leading-tight">
-            {qty > 0 ? fmtMoney(subtotal) : fmtMoney(effectiveUnit)}
-          </div>
-        </div>
-        <div>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Saved vs Wholesale
-          </div>
-          <div
-            className={cn(
-              "text-sm font-bold leading-tight",
-              savings != null && savings > 0
-                ? "text-emerald-500"
-                : "text-muted-foreground",
-            )}
-          >
-            {savings != null ? (
-              <>
-                {fmtMoney(
-                  qty > 0
-                    ? savings
-                    : wholesaleUnit != null && effectiveUnit != null
-                      ? wholesaleUnit - effectiveUnit
-                      : 0,
-                )}
-                {savingsPct != null && savingsPct > 0 && (
-                  <span className="ml-1 text-[10px] font-semibold text-muted-foreground">
-                    ({savingsPct.toFixed(0)}%)
-                  </span>
-                )}
-              </>
-            ) : (
-              "—"
-            )}
-          </div>
-        </div>
-      </div>
-
-      {sortedTiers.length > 0 && base != null && (
-        <div>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-            Volume Pricing
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {sortedTiers.map((t) => {
-              const each = base * (1 - t.discount_pct / 100);
-              const hit = totalOrderUnits >= t.min_qty;
-              return (
-                <span
-                  key={t.min_qty}
-                  className={cn(
-                    "text-[10px] px-1.5 py-0.5 rounded border",
-                    hit
-                      ? "border-accent/60 bg-accent/10 text-accent"
-                      : "border-border text-muted-foreground",
-                  )}
-                  title={`${t.discount_pct}% off at ${t.min_qty}+`}
-                >
-                  {t.min_qty}+: {fmtMoney(each)}
-                </span>
-              );
-            })}
-          </div>
-          {nextTier && (
-            <div className="text-[10px] text-muted-foreground mt-1.5">
-              <span className="text-accent font-semibold">
-                +{nextTier.min_qty - totalOrderUnits}
-              </span>{" "}
-              more units unlocks {nextTier.discount_pct}% off
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+            {orderDiscountPct > 0 ? `${orderDiscountPct}% off` : 
 
 export function BulkOrderSheet({
   open,
