@@ -69,8 +69,8 @@ function fmtMoney(n: number | null | undefined): string {
 
 /**
  * Athlete-facing pricing model.
- * Athlete tier (what they pay): t-shirt $18, hoodie $35.25.
- * Wholesale comparison price (what they'd pay elsewhere): t-shirt $21, hoodie $40.
+ * Athlete tier (what they pay): t-shirt $18, hoodie $35.
+ * Wholesale comparison price (what they'd pay elsewhere): t-shirt $25, hoodie $48.
  * "Saved vs Wholesale" compares their effective unit to the wholesale price.
  */
 function productPricing(p: PortalProduct): {
@@ -82,10 +82,10 @@ function productPricing(p: PortalProduct): {
   const isTee =
     t.includes("tee") || t.includes("tshirt") || t === "t-shirt" || t.includes("shirt");
   if (isHoodie) {
-    return { athleteUnit: 35.25, wholesaleUnit: 40 };
+    return { athleteUnit: 35, wholesaleUnit: 48 };
   }
   if (isTee) {
-    return { athleteUnit: 18, wholesaleUnit: 21 };
+    return { athleteUnit: 18, wholesaleUnit: 25 };
   }
   // Fallback to DB-driven values when type isn't a known category.
   // Athlete tier = athlete_unit_price. Wholesale comparison = wholesale_price
