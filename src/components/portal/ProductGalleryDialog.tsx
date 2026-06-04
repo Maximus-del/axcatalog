@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Loader2, Trash2, Upload, X } from "lucide-react";
+import { Loader2, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,10 @@ interface Asset {
   uploaded_by: string | null;
   url: string;
 }
+
+type GalleryItem =
+  | { id: string; url: string; label: string; kind: "image"; source: "product" }
+  | (Asset & { label: string; kind: "image" | "video"; source: "uploaded" });
 
 interface Props {
   open: boolean;
@@ -104,6 +108,33 @@ export function ProductGalleryDialog({
     }
   };
 
+  const productImages: GalleryItem[] = product
+    ? (product.images?.length
+        ? product.images
+        : product.primary_image_url
+          ? [{ id: "primary", url: product.primary_image_url }]
+          : []
+      ).map((img, index) => ({
+        id: img.id ?? `product-${index}`,
+        url: img.url,
+        label: `${product.title} image ${index + 1}`,
+        kind: "image" as const,
+        source: "product" as const,
+      }))
+    : [];
+
+  const uploadedItems: GalleryItem[] = assets.map((a) => ({
+    ...a,
+    label: a.file_name ?? "Uploaded asset",
+    kind: a.mime_type?.startsWith("video/") ? "video" : "image",
+    source: "uploaded",
+  }));
+
+  const groups = [
+    { title: "Product Images", items: productImages },
+    { title: "Uploaded Content", items: uploadedItems },
+  ].filter((group) => group.items.length > 0);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl bg-card border-border">
@@ -143,21 +174,31 @@ export function ProductGalleryDialog({
         <div className="max-h-[60vh] overflow-y-auto pt-3">
           {loading ? (
             <div className="text-xs text-muted-foreground text-center py-8">Loading…</div>
-          ) : assets.length === 0 ? (
+          ) : groups.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-12">
               No content yet. Click Upload to add photos or videos.
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {assets.map((a) => {
-                const isVideo = a.mime_type?.startsWith("video/");
-                const canDelete = a.uploaded_by === user?.id;
+            <div className="space-y-5">
+              {groups.map((group) => (
+                <section key={group.title} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      {group.title}
+                    </h3>
+                    <span className="text-[10px] tabular-nums text-muted-foreground">
+                      {group.items.length}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {group.items.map((a) => {
+                      const canDelete = a.source === "uploaded" && a.uploaded_by === user?.id;
                 return (
                   <div key={a.id} className="relative group rounded-md overflow-hidden bg-[hsl(var(--dark))] aspect-square">
-                    {isVideo ? (
-                      <video src={a.url} className="h-full w-full object-cover" controls />
+                    {a.kind === "video" ? (
+                      <video src={a.url} className="h-full w-full object-contain" controls />
                     ) : (
-                      <img src={a.url} alt={a.file_name ?? ""} className="h-full w-full object-cover" loading="lazy" />
+                      <img src={a.url} alt={a.label} className="h-full w-full object-contain p-2" loading="lazy" />
                     )}
                     {canDelete && (
                       <button
@@ -171,7 +212,10 @@ export function ProductGalleryDialog({
                     )}
                   </div>
                 );
-              })}
+                    })}
+                  </div>
+                </section>
+              ))}
             </div>
           )}
         </div>

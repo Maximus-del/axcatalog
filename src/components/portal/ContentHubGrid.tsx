@@ -1,6 +1,6 @@
 // Mobile-first. Test at 375px before merging.
 import { useState } from "react";
-import { Copy, Download, ExternalLink, ImagePlus, Shirt } from "lucide-react";
+import { Copy, Download, ExternalLink, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
