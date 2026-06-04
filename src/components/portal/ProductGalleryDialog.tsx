@@ -200,7 +200,7 @@ export function ProductGalleryDialog({
                     ) : (
                       <img src={a.url} alt={a.label} className="h-full w-full object-contain p-2" loading="lazy" />
                     )}
-                    {canDelete && (
+                    {a.source === "uploaded" && a.uploaded_by === user?.id && (
                       <button
                         type="button"
                         onClick={() => remove(a)}
