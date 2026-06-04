@@ -33,10 +33,10 @@ interface Slot {
 }
 
 const SLOTS: Slot[] = [
-  { label: "Home", icon: Home, scrollTo: "" /* top */ },
-  { label: "Products", icon: ShoppingBag, scrollTo: "sec-products" },
-  { label: "Sales", icon: BarChart3, scrollTo: "sec-analytics" },
-  { label: "Drops", icon: Sparkles, scrollTo: "sec-content" },
+  { label: "Home", icon: Home, to: "/portal" },
+  { label: "Products", icon: ShoppingBag, to: "/portal/products" },
+  { label: "Sales", icon: BarChart3, to: "/portal/analytics" },
+  { label: "Drops", icon: Sparkles, to: "/portal/drops" },
 ];
 
 export function PortalBottomNav() {
