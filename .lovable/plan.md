@@ -1,85 +1,64 @@
-## Athlete Credit System
+## Affiliate Program
 
-Add a monthly merchandise-credit wallet for each athlete ($500/mo, $3,000 cap) with checkout integration, admin controls, and transaction history.
+A standalone surface that lives next to the athlete portal but does not pollute it. Anyone can sign up, request products to promote, share a unique discount code, and earn 20% commission tracked toward manual cash payouts.
 
-### 1. Database (single migration)
+### Surfaces
 
-**`athlete_credit_wallets`**
-- `athlete_id` (unique FK → athletes)
-- `balance` numeric (default 0)
-- `monthly_credit` numeric (default 500)
-- `max_balance` numeric (default 3000)
-- `total_earned` numeric (default 0)
-- `total_used` numeric (default 0)
-- `last_accrual_at` timestamptz
-- timestamps
+```text
+/affiliate/signup         public signup
+/affiliate                affiliate dashboard (their stats, code, products, payouts)
+/affiliate/products       browse live catalog + request to promote
+/admin/affiliates         admin: approve affiliates, approve product requests, mark payouts paid
+```
 
-**`athlete_credit_transactions`**
-- `wallet_id`, `athlete_id`
-- `order_request_id` (nullable FK → bulk_order_requests)
-- `type` enum: `accrual` | `used` | `adjustment` | `refund`
-- `amount` numeric (signed: + adds, − uses)
-- `balance_after` numeric
-- `notes` text
-- `created_by` (admin user id, nullable for system accruals)
-- `created_at`
+Athlete portal stays untouched. An athlete can optionally also have an affiliate profile, but the two are independent records.
 
-**`bulk_order_requests` additions**
-- `credit_applied` numeric default 0
-- `payment_method` text default `'invoice'` (`credit` | `invoice` | `card` | `split`)
-- `amount_due` numeric (computed at submit)
+### Database (one migration)
 
-**RLS + GRANTS**
-- Athletes (via `user_athlete_links`) can read their own wallet + transactions.
-- Admins (`current_user_is_admin`) full access.
-- service_role full access for cron + edge functions.
+- `affiliates` — `user_id` (unique FK auth.users), `display_name`, `code` (unique, auto-generated NAME + 4 digits), `status` (`pending` | `active` | `paused`), `commission_percent` default 20, `payout_method_notes`, `total_earned`, `total_paid`, `balance_owed`.
+- `affiliate_product_requests` — `affiliate_id`, `product_id`, `status` (`pending` | `approved` | `rejected`), `requested_at`, `decided_at`, `decided_by`, `notes`. Unique on (affiliate_id, product_id).
+- `affiliate_sales` — `affiliate_id`, `code`, `shopify_order_id` (nullable FK), `order_line_item_id` (nullable), `product_id`, `gross_amount`, `commission_amount`, `status` (`pending` | `approved` | `paid` | `void`), `attributed_at`.
+- `affiliate_payouts` — `affiliate_id`, `amount`, `method` (`venmo` | `ach` | `paypal` | `other`), `reference`, `notes`, `paid_at`, `paid_by`. Trigger updates `total_paid` + `balance_owed`.
+- RLS: affiliate sees only their own rows; admin full access; service_role full access for the Shopify webhook handler. Service-definer `approve_affiliate_request`, `record_affiliate_sale`, `record_affiliate_payout` for safe writes.
 
-**Functions**
-- `accrue_monthly_credits()` — adds monthly_credit to each wallet capped at max_balance; writes accrual transactions; sets `last_accrual_at`. Idempotent per calendar month.
-- `apply_credit_to_order(_order_id, _amount)` — security-definer: validates athlete owns order, subtracts from wallet, inserts `used` transaction, updates order row.
-- `refund_order_credit(_order_id)` — on cancellation reverses credit (capped at max_balance).
-- Trigger: auto-create wallet row when athlete is inserted; backfill existing athletes.
+### Attribution
 
-**Cron (separate insert, not migration)**
-- `pg_cron` job 1st of month 00:05 UTC → calls `accrue_monthly_credits()`.
+Shopify discount codes are the source of truth. On affiliate approval we provision a Shopify price-rule + discount code (e.g. `JORDAN1284-10` for 10% off buyer) via a new `affiliate-provision-code` edge function. Existing Shopify order webhook is extended: when an incoming order's `discount_codes[]` matches an affiliate's code, we call `record_affiliate_sale` per line item, recording 20% of line subtotal as commission in `pending` status. Refunds flip the row to `void`.
 
-### 2. Edge functions
-None required initially — all logic via Postgres functions invoked from client with RLS gating. (Admin adjustments go through `apply_credit_to_order`/direct insert with admin policy.)
+### Affiliate dashboard (`/affiliate`)
 
-### 3. Frontend — Athlete portal
+- Header card: code, share link `https://shop.xyz/?ref=CODE`, copy button, status badge.
+- Stat cards: balance owed, lifetime earned, lifetime paid, sales this month.
+- Products tab: requested + approved products with per-product sales + commission.
+- Sales tab: line-item table with status chips.
+- Payouts tab: history with date, method, amount, reference.
 
-**`src/hooks/useAthleteCredit.ts`** — fetch wallet + recent transactions, realtime subscribe.
+### Admin (`/admin/affiliates`)
 
-**`src/components/portal/CreditWalletCard.tsx`** — dashboard card showing Available / Monthly / Max with progress bar + "Use Credit on New Order" button (scrolls to bulk sheet).
+- Affiliates list with status filter, inline approve/pause.
+- Detail drawer: edit commission %, view sales, "Mark Payout" dialog (amount, method, reference) → inserts payout row.
+- Product requests queue across all affiliates with bulk approve/reject.
+- Nav entry added to `AdminSidebar` ("Affiliates", Handshake icon).
 
-Mount in `PortalHome.tsx` above HubCardsRow.
+### Public signup (`/affiliate/signup`)
 
-**Checkout integration** in `BulkOrderSheet.tsx` and `ProductOrderDialog.tsx`:
-- Payment method selector: Credit / Invoice / Split
-- Credit slider/input (max = min(balance, subtotal))
-- Show: Subtotal, Credit applied, Amount due
-- On submit: insert order, then call `apply_credit_to_order` RPC.
-
-### 4. Frontend — Admin
-
-**`src/pages/admin/AthleteCredits.tsx`** — table of all athletes with balance, monthly, max, last accrual; row actions:
-- Add / Subtract credit (dialog → insert adjustment transaction)
-- Edit monthly amount + max
-- View full transaction history (drawer)
-- View orders paid with credit (link to OrdersList filtered)
-
-Add nav entry in `AdminSidebar` + route in `App.tsx`.
-
-**`OrderDetail.tsx`** — show Credit Applied / Amount Due / Payment Method block.
-
-### 5. Rules enforced
-- Cap at $3,000 in accrual + adjustment functions.
-- `apply_credit_to_order` rejects amount > balance or > order total.
-- Cancellation handler (existing order status change) calls `refund_order_credit`.
-- Credit-only (no cash withdrawal) — no UI surface for withdrawal.
+Email + password (Supabase auth) → creates `affiliates` row in `pending` with auto-generated code from display name + 4-digit hash. After signup user lands on dashboard with "Pending approval" banner; product browsing locked until admin approves.
 
 ### Technical notes
-- Numeric(10,2) for money columns.
-- All money math server-side via SECURITY DEFINER functions to prevent tampering.
-- `volume_discount_tiers` already drive the subtotal — credit applies after discount on final subtotal.
-- Pg_cron + pg_net required; enable in migration if not already.
+
+- New tables follow the standard GRANT block; all writes via SECURITY DEFINER functions.
+- Code generation: `slugify(display_name).slice(0,8).toUpperCase() + random 4 digits`, regen on collision.
+- Buyer discount % (Shopify side) is configurable per affiliate but defaults to 10% off — separate from the 20% commission.
+- Webhook attribution is idempotent (unique on `shopify_order_line_item_id`).
+- No Stripe Connect, no automated payouts — admin records each payout manually; balance_owed is computed `total_earned - total_paid` via trigger.
+- Phase 2 (not in this build): affiliate-branded storefront page, leaderboards, tiered commissions.
+
+### Files to add/edit
+
+- migration: tables + RLS + functions
+- edge: `supabase/functions/affiliate-provision-code/index.ts`, extend existing Shopify order webhook handler
+- `src/pages/affiliate/AffiliateSignup.tsx`, `AffiliateDashboard.tsx`, `AffiliateProducts.tsx`
+- `src/components/affiliate/*` (StatCards, SalesTable, PayoutsTable, ProductRequestCard)
+- `src/pages/admin/AffiliatesList.tsx`, `AffiliateDetail.tsx`, `ProductRequestsQueue.tsx`
+- `src/hooks/useAffiliate.ts`, `useAffiliateSales.ts`
+- routes in `App.tsx`, nav entry in `AdminSidebar.tsx`, guard `RequireAffiliate` in `auth/guards.tsx`
