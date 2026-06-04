@@ -19,6 +19,7 @@ import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 import { ProductPreviewDialog } from "./ProductPreviewDialog";
 import type { VolumeTier } from "@/hooks/usePortalPricing";
+import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import {
   distributeByCurve,
   useSizeDistributionCurve,
