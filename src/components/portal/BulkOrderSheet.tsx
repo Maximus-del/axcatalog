@@ -77,10 +77,13 @@ function productPricing(p: PortalProduct): {
   athleteUnit: number | null;
   wholesaleUnit: number | null;
 } {
-  const t = (p.product_type || "").toLowerCase();
-  const isHoodie = t.includes("hood");
+  const hay = `${p.product_type || ""} ${p.title || ""}`.toLowerCase();
+  const isHoodie = hay.includes("hood");
   const isTee =
-    t.includes("tee") || t.includes("tshirt") || t === "t-shirt" || t.includes("shirt");
+    hay.includes("tee") ||
+    hay.includes("tshirt") ||
+    hay.includes("t-shirt") ||
+    hay.includes("shirt");
   if (isHoodie) {
     return { athleteUnit: 35, wholesaleUnit: 48 };
   }
@@ -88,10 +91,10 @@ function productPricing(p: PortalProduct): {
     return { athleteUnit: 18, wholesaleUnit: 25 };
   }
   // Fallback to DB-driven values when type isn't a known category.
-  // Athlete tier = athlete_unit_price. Wholesale comparison = wholesale_price
-  // (fall back to retail only if no wholesale is set).
-  const athlete = p.athlete_unit_price ?? null;
-  const wholesale = p.wholesale_price ?? p.price ?? null;
+  // Default to t-shirt pricing if nothing is configured, so the
+  // analytics panel never goes blank.
+  const athlete = p.athlete_unit_price ?? 18;
+  const wholesale = p.wholesale_price ?? p.price ?? 25;
   return { athleteUnit: athlete, wholesaleUnit: wholesale };
 }
 
@@ -149,7 +152,7 @@ function ProductAnalytics({
             Total
           </div>
           <div className="text-sm font-bold text-accent leading-tight">
-            {qty > 0 ? fmtMoney(subtotal) : "—"}
+            {qty > 0 ? fmtMoney(subtotal) : fmtMoney(effectiveUnit)}
           </div>
         </div>
         <div>
@@ -164,9 +167,15 @@ function ProductAnalytics({
                 : "text-muted-foreground",
             )}
           >
-            {qty > 0 && savings != null ? (
+            {savings != null ? (
               <>
-                {fmtMoney(savings)}
+                {fmtMoney(
+                  qty > 0
+                    ? savings
+                    : wholesaleUnit != null && effectiveUnit != null
+                      ? wholesaleUnit - effectiveUnit
+                      : 0,
+                )}
                 {savingsPct != null && savingsPct > 0 && (
                   <span className="ml-1 text-[10px] font-semibold text-muted-foreground">
                     ({savingsPct.toFixed(0)}%)
