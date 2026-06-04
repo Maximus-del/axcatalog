@@ -421,8 +421,33 @@ export function BulkOrderSheet({
         if (itemsErr) throw itemsErr;
       }
 
+      // Apply credit if user opted in
+      if (creditToApply > 0) {
+        const { error: creditErr } = await supabase.rpc("apply_credit_to_order", {
+          _order_id: orderRow.id,
+          _amount: creditToApply,
+        });
+        if (creditErr) {
+          toast.error(`Credit not applied: ${creditErr.message}`);
+        } else {
+          await refetchWallet();
+        }
+      }
+
+      const paymentMethod =
+        creditToApply <= 0
+          ? "invoice"
+          : amountDue <= 0.01
+            ? "credit"
+            : "split";
+      await supabase
+        .from("bulk_order_requests")
+        .update({ payment_method: paymentMethod, amount_due: amountDue })
+        .eq("id", orderRow.id);
+
       toast.success(`Order ${orderRow.order_number ?? ""} submitted — we'll be in touch`);
       clear();
+      setCreditInput("");
       onOpenChange(false);
       onSubmitted?.();
     } catch (err) {
