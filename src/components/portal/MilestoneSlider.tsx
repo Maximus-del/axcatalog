@@ -95,19 +95,29 @@ export function MilestoneSlider({
           onValueChange={(v) => onValueChange(v[0] ?? 0)}
         />
         {/* Tick overlay — vertical lines on track. Track is 8px tall, centered vertically. */}
-        <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0">
           {visibleTicks.map((t) => {
             const left = ((t - min) / range) * 100;
             const active = value >= t;
             return (
-              <span
+              <button
                 key={`line-${t}`}
+                type="button"
+                onClick={() => onValueChange(t)}
                 className={cn(
-                  "absolute top-1/2 -translate-y-1/2 w-px h-3",
-                  active ? "bg-accent" : "bg-muted-foreground/40",
+                  "absolute top-1/2 -translate-y-1/2 w-2 -ml-1 h-5 cursor-pointer",
+                  active ? "text-accent" : "text-muted-foreground/40",
                 )}
                 style={{ left: `${left}%` }}
-              />
+                aria-label={`Set quantity to ${t}`}
+              >
+                <span
+                  className={cn(
+                    "block mx-auto w-px h-3",
+                    active ? "bg-accent" : "bg-muted-foreground/40",
+                  )}
+                />
+              </button>
             );
           })}
         </div>
