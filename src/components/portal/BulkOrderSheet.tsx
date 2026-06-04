@@ -616,8 +616,7 @@ export function BulkOrderSheet({
                         </span>
                       )}
                     </button>
-                    {(colorList.length > 0 || true) && (
-                      <div className="pl-20 mb-2 flex flex-wrap items-start gap-3">
+                    <div className="pl-20 mb-2 flex flex-wrap items-start gap-3">
                         {(() => {
                           const autoKey = `${p.id}::${activeColor}`;
                           const on = autoOn[autoKey] ?? false;
@@ -727,8 +726,7 @@ export function BulkOrderSheet({
                             )}
                           </button>
                         </div>
-                      </div>
-                    )}
+                    </div>
                     <div className="flex items-stretch gap-6 pl-20">
                       <div className="flex flex-col gap-2">
                         <div className="grid grid-cols-3 gap-x-2 gap-y-1.5">
