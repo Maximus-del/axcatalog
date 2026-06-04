@@ -478,10 +478,20 @@ export function BulkOrderSheet({
                 const sizes = [...STANDARD_SIZES];
                 const productByColor = draft[p.id] ?? {};
                 const productTotal = sumProduct(productByColor);
-                const colorList = p.colors ?? [];
+                const rawColors = p.colors ?? [];
+                const hasBlack = rawColors.some(
+                  (c) => c.name.trim().toLowerCase() === "black",
+                );
+                const colorList = hasBlack
+                  ? rawColors
+                  : [{ name: "Black", hex: "#000000" }, ...rawColors];
                 const activeColor =
                   selectedColor[p.id] ??
-                  (colorList[0]?.name ?? "");
+                  (colorList.find(
+                    (c) => c.name.trim().toLowerCase() === "black",
+                  )?.name ??
+                    colorList[0]?.name ??
+                    "Black");
                 const activeColorQty = sumSizes(productByColor[activeColor]);
                 const justAddedKey = `${p.id}::${activeColor}`;
                 return (
