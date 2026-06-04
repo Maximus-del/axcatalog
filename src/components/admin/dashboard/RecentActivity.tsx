@@ -108,7 +108,7 @@ export function RecentActivity() {
       );
 
       merged.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
-      setItems(merged.slice(0, 10));
+      setItems(merged.slice(0, 4));
       setLoading(false);
     })();
     return () => {
@@ -124,7 +124,7 @@ export function RecentActivity() {
 
       <div className="divide-y divide-border">
         {loading &&
-          Array.from({ length: 5 }).map((_, i) => (
+          Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 px-5 py-3">
               <Skeleton className="h-8 w-8 rounded-md" />
               <div className="flex-1 space-y-2">
