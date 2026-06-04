@@ -51,7 +51,7 @@ export function ProductImageLightbox({ open, onOpenChange, product }: Props) {
             <img
               src={current.url}
               alt={product.title}
-              className="max-h-full max-w-full object-contain"
+              className="h-full w-full object-contain"
             />
           ) : (
             <div className="text-muted-foreground text-sm">No images available</div>
