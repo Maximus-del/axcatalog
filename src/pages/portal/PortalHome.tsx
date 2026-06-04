@@ -5,11 +5,12 @@ import { useNavigate } from "react-router-dom";
 import { HubCardsRow, type HubCardKey } from "@/components/portal/HubCardsRow";
 import { PortalStatsRow } from "@/components/portal/PortalStatsRow";
 import { CreditWalletCard } from "@/components/portal/CreditWalletCard";
+import { ProductPreviewSlider } from "@/components/portal/ProductPreviewSlider";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 
 export default function PortalHome() {
   const navigate = useNavigate();
-  const { athlete, stats, sales, openOrderSheet } = usePortalData();
+  const { athlete, stats, sales, products, productsLoading, openOrderSheet } = usePortalData();
 
   const handleHubSelect = (key: HubCardKey) => {
     if (key === "order") {
@@ -32,6 +33,13 @@ export default function PortalHome() {
       </div>
       <div className="stagger-fade" style={{ ["--i" as string]: 1 }}>
         <CreditWalletCard athleteId={athlete.id} onUseCredit={openOrderSheet} />
+      </div>
+      <div className="stagger-fade" style={{ ["--i" as string]: 2 }}>
+        <ProductPreviewSlider
+          products={products}
+          loading={productsLoading}
+          onViewAll={() => navigate("/portal/products")}
+        />
       </div>
       <div className="stagger-fade" style={{ ["--i" as string]: 1 }}>
         <PortalStatsRow
