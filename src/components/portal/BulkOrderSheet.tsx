@@ -130,6 +130,40 @@ function ProductAnalytics({
 
   return (
     <div className="flex-1 min-w-0 rounded border border-border/60 bg-background/40 p-2.5">
+      {/* Current Discount + Next Tier */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1 rounded bg-accent/10 border border-accent/30 px-2 py-1">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-accent">
+            Current Discount
+          </div>
+          <div className="text-sm font-bold text-accent leading-tight">
+            {orderDiscountPct > 0 ? `${orderDiscountPct}% off` : "No discount yet"}
+          </div>
+        </div>
+        {nextTier ? (
+          <div className="flex-1 rounded bg-muted/40 border border-border px-2 py-1">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Units to Next
+            </div>
+            <div className="text-sm font-bold text-foreground leading-tight">
+              <span className="text-accent">{nextTier.min_qty - totalOrderUnits}</span>{" "}
+              <span className="text-[10px] font-normal text-muted-foreground">
+                for {nextTier.discount_pct}% off
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-1">
+            <div className="text-[9px] font-semibold uppercase tracking-wider text-emerald-500">
+              Max Discount
+            </div>
+            <div className="text-sm font-bold text-emerald-500 leading-tight">
+              25% off unlocked
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-4 gap-2 mb-2">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -214,14 +248,6 @@ function ProductAnalytics({
               );
             })}
           </div>
-          {nextTier && (
-            <div className="text-[10px] text-muted-foreground mt-1.5">
-              <span className="text-accent font-semibold">
-                +{nextTier.min_qty - totalOrderUnits}
-              </span>{" "}
-              more units unlocks {nextTier.discount_pct}% off
-            </div>
-          )}
         </div>
       )}
     </div>
