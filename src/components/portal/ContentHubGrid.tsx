@@ -1,12 +1,12 @@
 // Mobile-first. Test at 375px before merging.
 import { useState } from "react";
-import { Copy, Download, ExternalLink, ImagePlus, Shirt } from "lucide-react";
+import { Copy, Download, ExternalLink, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import type { ProductSales } from "@/hooks/usePortalSales";
-import { shopifyImg } from "@/lib/shopify-image";
+import { ProductImage } from "@/components/shared/ProductImage";
 import { ProductGalleryDialog } from "./ProductGalleryDialog";
 
 interface Props {
@@ -76,16 +76,14 @@ export function ContentHubGrid({ products, loading, athleteId, organizationId, s
               className="relative h-56 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden group focus:outline-none focus:ring-2 focus:ring-accent"
               aria-label={`Open gallery for ${p.title}`}
             >
-              {p.primary_image_url ? (
-                <img
-                  src={shopifyImg(p.primary_image_url, 600) ?? p.primary_image_url}
-                  alt={p.title}
-                  className="max-h-full max-w-full object-contain p-3"
-                  loading="lazy"
-                />
-              ) : (
-                <Shirt className="h-12 w-12 text-muted-foreground/40" strokeWidth={1.5} />
-              )}
+              <ProductImage
+                images={p.images}
+                url={p.primary_image_url}
+                alt={p.title}
+                viewMode="athlete"
+                size="card"
+                imgClassName="p-3"
+              />
               <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-accent/90 text-accent-foreground text-[10px] font-bold uppercase tracking-wider">
                 Available Now
               </div>
