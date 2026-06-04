@@ -130,7 +130,7 @@ function ProductAnalytics({
   const sortedTiers = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
 
   return (
-    <div className="flex-1 min-w-0 rounded border border-border/60 bg-background/40 p-2.5">
+    <div className="flex-1 min-w-0 self-stretch rounded border border-border/60 bg-background/40 p-2.5">
       {/* Current Discount + Next Tier */}
       <div className="flex items-center gap-2 mb-2">
         <div className="flex-1 rounded bg-accent/10 border border-accent/30 px-2 py-1">
