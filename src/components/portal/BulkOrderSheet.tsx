@@ -264,14 +264,21 @@ export function BulkOrderSheet({
     [draft],
   );
 
-  const discountPct = pickDiscount(config.tiers, totalUnits);
+  // Volume discount tiers — applied to the order total based on total units.
+  const VOLUME_TIERS = [
+    { min_qty: 50, discount_pct: 10 },
+    { min_qty: 100, discount_pct: 15 },
+    { min_qty: 250, discount_pct: 20 },
+    { min_qty: 500, discount_pct: 25 },
+  ];
+  const discountPct = pickDiscount(VOLUME_TIERS, totalUnits);
   const markupMult = 1 + config.base_markup_pct / 100;
   const discountMult = 1 - discountPct / 100;
 
-  const nextTier = useMemo(() => {
-    const ts = [...config.tiers].sort((a, b) => a.min_qty - b.min_qty);
-    return ts.find((t) => totalUnits < t.min_qty) ?? null;
-  }, [config.tiers, totalUnits]);
+  const nextTier = useMemo(
+    () => VOLUME_TIERS.find((t) => totalUnits < t.min_qty) ?? null,
+    [totalUnits],
+  );
 
   const orderSizes = (sizes: string[]): string[] => {
     const std = STANDARD_SIZES.filter((s) => sizes.includes(s));
