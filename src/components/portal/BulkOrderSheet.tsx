@@ -88,8 +88,11 @@ function productPricing(p: PortalProduct): {
     return { athleteUnit: 18, wholesaleUnit: 21 };
   }
   // Fallback to DB-driven values when type isn't a known category.
-  const athlete = p.athlete_unit_price ?? p.wholesale_price ?? null;
-  return { athleteUnit: athlete, wholesaleUnit: p.price ?? null };
+  // Athlete tier = athlete_unit_price. Wholesale comparison = wholesale_price
+  // (fall back to retail only if no wholesale is set).
+  const athlete = p.athlete_unit_price ?? null;
+  const wholesale = p.wholesale_price ?? p.price ?? null;
+  return { athleteUnit: athlete, wholesaleUnit: wholesale };
 }
 
 function ProductAnalytics({
