@@ -1,10 +1,17 @@
-import { Wallet, Plus } from "lucide-react";
+import { Wallet, Plus, CalendarClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 
 function fmt(n: number) {
   return `$${n.toFixed(2)}`;
+}
+
+function daysUntilNextCredit(): number {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const ms = next.getTime() - now.getTime();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 }
 
 export function CreditWalletCard({
@@ -22,6 +29,8 @@ export function CreditWalletCard({
   const pct = wallet.max_balance > 0
     ? Math.min(100, (wallet.balance / wallet.max_balance) * 100)
     : 0;
+  const days = daysUntilNextCredit();
+  const atMax = wallet.balance >= wallet.max_balance;
 
   return (
     <div className="rounded-xl border border-accent/30 bg-gradient-to-br from-accent/10 via-card to-card p-4 sm:p-5">
@@ -37,16 +46,28 @@ export function CreditWalletCard({
             </div>
           </div>
         </div>
-        {onUseCredit && wallet.balance > 0 && (
-          <Button
-            size="sm"
-            onClick={onUseCredit}
-            className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider font-bold text-[11px]"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Use on New Order
-          </Button>
-        )}
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+            <CalendarClock className="h-3 w-3" />
+            {atMax ? (
+              <span>At max balance</span>
+            ) : (
+              <span>
+                Next credit in <span className="text-foreground tabular-nums">{days}</span> {days === 1 ? "day" : "days"}
+              </span>
+            )}
+          </div>
+          {onUseCredit && wallet.balance > 0 && (
+            <Button
+              size="sm"
+              onClick={onUseCredit}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider font-bold text-[11px]"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              Use on New Order
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="h-2 rounded-full bg-muted overflow-hidden mb-3">
