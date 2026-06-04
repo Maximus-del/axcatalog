@@ -2323,6 +2323,232 @@ export type Database = {
           },
         ]
       }
+      questionnaire_answers: {
+        Row: {
+          created_at: string
+          id: string
+          question_id: string
+          response_id: string
+          selected_option_ids: string[]
+          text_value: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          question_id: string
+          response_id: string
+          selected_option_ids?: string[]
+          text_value?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          question_id?: string
+          response_id?: string
+          selected_option_ids?: string[]
+          text_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaire_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaire_questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questionnaire_answers_response_id_fkey"
+            columns: ["response_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaire_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questionnaire_question_options: {
+        Row: {
+          created_at: string
+          design_id: string | null
+          id: string
+          image_url: string | null
+          label: string | null
+          position: number
+          question_id: string
+        }
+        Insert: {
+          created_at?: string
+          design_id?: string | null
+          id?: string
+          image_url?: string | null
+          label?: string | null
+          position?: number
+          question_id: string
+        }
+        Update: {
+          created_at?: string
+          design_id?: string | null
+          id?: string
+          image_url?: string | null
+          label?: string | null
+          position?: number
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaire_question_options_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questionnaire_question_options_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaire_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questionnaire_questions: {
+        Row: {
+          created_at: string
+          help_text: string | null
+          id: string
+          position: number
+          prompt: string
+          questionnaire_id: string
+          required: boolean
+          type: Database["public"]["Enums"]["questionnaire_question_type"]
+        }
+        Insert: {
+          created_at?: string
+          help_text?: string | null
+          id?: string
+          position?: number
+          prompt: string
+          questionnaire_id: string
+          required?: boolean
+          type: Database["public"]["Enums"]["questionnaire_question_type"]
+        }
+        Update: {
+          created_at?: string
+          help_text?: string | null
+          id?: string
+          position?: number
+          prompt?: string
+          questionnaire_id?: string
+          required?: boolean
+          type?: Database["public"]["Enums"]["questionnaire_question_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaire_questions_questionnaire_id_fkey"
+            columns: ["questionnaire_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questionnaire_responses: {
+        Row: {
+          athlete_id: string | null
+          created_at: string
+          id: string
+          questionnaire_id: string
+          respondent_email: string | null
+          respondent_name: string | null
+          submitted_at: string
+        }
+        Insert: {
+          athlete_id?: string | null
+          created_at?: string
+          id?: string
+          questionnaire_id: string
+          respondent_email?: string | null
+          respondent_name?: string | null
+          submitted_at?: string
+        }
+        Update: {
+          athlete_id?: string | null
+          created_at?: string
+          id?: string
+          questionnaire_id?: string
+          respondent_email?: string | null
+          respondent_name?: string | null
+          submitted_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaire_responses_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "questionnaire_responses_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "questionnaire_responses_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questionnaire_responses_questionnaire_id_fkey"
+            columns: ["questionnaire_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaires"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      questionnaires: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          intro_text: string | null
+          is_active: boolean
+          slug: string
+          thank_you_text: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          intro_text?: string | null
+          is_active?: boolean
+          slug: string
+          thank_you_text?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          intro_text?: string | null
+          is_active?: boolean
+          slug?: string
+          thank_you_text?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       revenue_splits: {
         Row: {
           athlete_id: string
@@ -3655,6 +3881,12 @@ export type Database = {
         | "blank_bulk"
         | "pod"
         | "other"
+      questionnaire_question_type:
+        | "short_text"
+        | "long_text"
+        | "single_choice"
+        | "multi_choice"
+        | "image_choice"
       shopify_financial_status:
         | "pending"
         | "authorized"
@@ -3934,6 +4166,13 @@ export const Constants = {
         "blank_bulk",
         "pod",
         "other",
+      ],
+      questionnaire_question_type: [
+        "short_text",
+        "long_text",
+        "single_choice",
+        "multi_choice",
+        "image_choice",
       ],
       shopify_financial_status: [
         "pending",
