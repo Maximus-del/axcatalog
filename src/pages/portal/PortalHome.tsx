@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
@@ -53,6 +54,7 @@ function PortalHomeInner() {
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const [guardOpen, setGuardOpen] = useState(false);
   const [teamName, setTeamName] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("products");
 
   // Pull-to-refresh on mobile — refetch products + orders.
   const handleRefresh = useCallback(async () => {
@@ -112,15 +114,21 @@ function PortalHomeInner() {
   const handleHubSelect = (key: HubCardKey) => {
     if (key === "order") {
       setOrderSheetOpen(true);
-      document.getElementById("sec-products")?.scrollIntoView({ behavior: "smooth" });
+      setActiveTab("products");
+      requestAnimationFrame(() => {
+        document.getElementById("sec-tabs")?.scrollIntoView({ behavior: "smooth" });
+      });
       return;
     }
-    const map: Record<Exclude<HubCardKey, "order">, string> = {
-      sales: "sec-analytics",
-      products: "sec-products",
-      content: "sec-content",
+    const tabMap: Record<Exclude<HubCardKey, "order">, string> = {
+      sales: "analytics",
+      products: "products",
+      content: "content",
     };
-    document.getElementById(map[key])?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setActiveTab(tabMap[key]);
+    requestAnimationFrame(() => {
+      document.getElementById("sec-tabs")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   };
 
   return (
@@ -195,97 +203,103 @@ function PortalHomeInner() {
           />
         </div>
 
-        <PortalSection
-          id="sec-products"
-          title="Your Product Lineup"
-          description="Your merch lineup — share, promote, and order."
-          actions={
-            <Button
-              onClick={() => setOrderSheetOpen(true)}
-              className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider font-bold tap-target w-full sm:w-auto"
-            >
-              Bulk Order Sheet
-            </Button>
-          }
-        >
-          <MyProductsGrid
-            products={products}
-            loading={productsLoading}
-            hiddenIds={hiddenIds}
-            onHide={hide}
-            onUnhide={unhide}
-          />
-        </PortalSection>
+        <div id="sec-tabs" className="scroll-mt-20">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full flex flex-wrap h-auto justify-start gap-1 bg-card border border-border p-1">
+              <TabsTrigger value="products" className="flex-1 min-w-[140px]">Product Lineup</TabsTrigger>
+              <TabsTrigger value="analytics" className="flex-1 min-w-[100px]">Analytics</TabsTrigger>
+              <TabsTrigger value="content" className="flex-1 min-w-[140px]">Social Content</TabsTrigger>
+              <TabsTrigger value="drops" className="flex-1 min-w-[120px]">Upcoming Drops</TabsTrigger>
+              <TabsTrigger value="era" className="flex-1 min-w-[140px]">AR / Era</TabsTrigger>
+            </TabsList>
 
-        <PortalSection id="sec-analytics" title="Analytics" defaultOpen={false}>
-          <div className="space-y-6">
-            <div>
-              <div className="ax-label mb-3">Top Products</div>
-              <AnalyticsTopProducts
-                products={products}
-                loading={productsLoading}
-                salesByProduct={sales.byProduct}
-              />
-            </div>
-            <div>
-              <div className="ax-label mb-3">Revenue Over Time</div>
-              <AnalyticsRevenueChart />
-            </div>
-            <div>
-              <div className="ax-label mb-3">Recent Orders</div>
-              <AnalyticsRecentOrders orders={orders} loading={ordersLoading} />
-            </div>
-            <div>
-              <div className="ax-label mb-3">Superfans</div>
-              <SuperfansCard />
-            </div>
-            <div>
-              <div className="ax-label mb-3">Fanbase Map</div>
-              <FanbaseMap />
-            </div>
-          </div>
-        </PortalSection>
+            <TabsContent value="products" className="mt-6">
+              <PortalSection
+                id="sec-products"
+                title="Your Product Lineup"
+                description="Your merch lineup — share, promote, and order."
+                actions={
+                  <Button
+                    onClick={() => setOrderSheetOpen(true)}
+                    className="bg-accent text-accent-foreground hover:bg-accent/90 uppercase tracking-wider font-bold tap-target w-full sm:w-auto"
+                  >
+                    Bulk Order Sheet
+                  </Button>
+                }
+              >
+                <MyProductsGrid
+                  products={products}
+                  loading={productsLoading}
+                  hiddenIds={hiddenIds}
+                  onHide={hide}
+                  onUnhide={unhide}
+                />
+              </PortalSection>
+            </TabsContent>
 
-        <PortalSection
-          id="sec-content"
-          title="Social Media Content"
-          defaultOpen={false}
-          description="Ready-to-post graphics for your collections. Save and share."
-        >
-          <ContentHubGrid
-            products={products}
-            loading={productsLoading}
-            athleteId={athlete.id}
-            organizationId={athlete.organization_id}
-            salesByProduct={sales.byProduct}
-          />
-        </PortalSection>
+            <TabsContent value="analytics" className="mt-6">
+              <PortalSection id="sec-analytics" title="Analytics">
+                <div className="space-y-6">
+                  <div>
+                    <div className="ax-label mb-3">Top Products</div>
+                    <AnalyticsTopProducts
+                      products={products}
+                      loading={productsLoading}
+                      salesByProduct={sales.byProduct}
+                    />
+                  </div>
+                  <div>
+                    <div className="ax-label mb-3">Revenue Over Time</div>
+                    <AnalyticsRevenueChart />
+                  </div>
+                  <div>
+                    <div className="ax-label mb-3">Recent Orders</div>
+                    <AnalyticsRecentOrders orders={orders} loading={ordersLoading} />
+                  </div>
+                  <div>
+                    <div className="ax-label mb-3">Superfans</div>
+                    <SuperfansCard />
+                  </div>
+                  <div>
+                    <div className="ax-label mb-3">Fanbase Map</div>
+                    <FanbaseMap />
+                  </div>
+                </div>
+              </PortalSection>
+            </TabsContent>
 
-        <PortalSection
-          id="sec-drops"
-          title="Upcoming Drops"
-          defaultOpen={false}
-        >
-          <UpcomingDrops />
-        </PortalSection>
+            <TabsContent value="content" className="mt-6">
+              <PortalSection
+                id="sec-content"
+                title="Social Media Content"
+                description="Ready-to-post graphics for your collections. Save and share."
+              >
+                <ContentHubGrid
+                  products={products}
+                  loading={productsLoading}
+                  athleteId={athlete.id}
+                  organizationId={athlete.organization_id}
+                  salesByProduct={sales.byProduct}
+                />
+              </PortalSection>
+            </TabsContent>
 
-        <div className="h-px bg-accent/30" />
+            <TabsContent value="drops" className="mt-6 space-y-8">
+              <PortalSection id="sec-drops" title="Upcoming Drops">
+                <UpcomingDrops />
+              </PortalSection>
+              <PortalSection id="sec-recs" title="This Week's Recommendations">
+                <RecommendationsCarousel />
+              </PortalSection>
+            </TabsContent>
 
-        <PortalSection
-          id="sec-recs"
-          title="This Week's Recommendations"
-          defaultOpen={false}
-        >
-          <RecommendationsCarousel />
-        </PortalSection>
-
-        <PortalSection
-          id="sec-era"
-          title="AR / Era Comparison"
-          defaultOpen={false}
-        >
-          <EraComparison athleteId={athlete.id} />
-        </PortalSection>
+            <TabsContent value="era" className="mt-6">
+              <PortalSection id="sec-era" title="AR / Era Comparison">
+                <EraComparison athleteId={athlete.id} />
+              </PortalSection>
+            </TabsContent>
+          </Tabs>
+        </div>
       </main>
 
       <BulkOrderSheet
