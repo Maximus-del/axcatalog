@@ -15,6 +15,7 @@ import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { usePortalProducts, type PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
 import { ProductOrderDialog } from "@/components/portal/ProductOrderDialog";
+import { ProductImageLightbox } from "@/components/portal/ProductImageLightbox";
 import { buildShareUrl } from "@/components/portal/ProductCard";
 import { cn } from "@/lib/utils";
 
