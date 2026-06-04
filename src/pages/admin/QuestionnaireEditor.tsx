@@ -11,9 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
-import { ArrowLeft, Copy, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, GripVertical, Plus, Trash2 } from "lucide-react";
+import QuestionnairePreview from "@/components/admin/QuestionnairePreview";
 
-type QType = "short_text" | "long_text" | "single_choice" | "multi_choice" | "image_choice";
+type QType = "short_text" | "long_text" | "single_choice" | "multi_choice" | "image_choice" | "image_upload";
 
 interface Q {
   id: string;
@@ -58,6 +59,7 @@ const TYPE_LABELS: Record<QType, string> = {
   single_choice: "Single choice",
   multi_choice: "Multiple choice",
   image_choice: "Image picker",
+  image_upload: "Image upload",
 };
 
 async function resolveDesignImage(designId: string): Promise<string | null> {
@@ -82,6 +84,8 @@ export default function QuestionnaireEditor() {
   const [responses, setResponses] = useState<Response[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewResponseId, setViewResponseId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   const publicUrl = useMemo(() => (q ? `${window.location.origin}/q/${q.slug}` : ""), [q]);
 
@@ -179,6 +183,23 @@ export default function QuestionnaireEditor() {
     toast({ title: "Link copied", description: publicUrl });
   };
 
+  const reorderQuestions = async (fromId: string, toId: string) => {
+    if (fromId === toId) return;
+    const fromIdx = questions.findIndex((x) => x.id === fromId);
+    const toIdx = questions.findIndex((x) => x.id === toId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const next = [...questions];
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    const renumbered = next.map((q, i) => ({ ...q, position: i }));
+    setQuestions(renumbered);
+    await Promise.all(
+      renumbered.map((q) =>
+        supabase.from("questionnaire_questions").update({ position: q.position }).eq("id", q.id),
+      ),
+    );
+  };
+
   if (loading || !q) return <div className="p-6 text-muted-foreground">Loading…</div>;
 
   return (
@@ -188,6 +209,7 @@ export default function QuestionnaireEditor() {
         <div className="flex items-center gap-3">
           <Badge variant={q.is_active ? "default" : "outline"}>{q.is_active ? "Active" : "Inactive"}</Badge>
           <Switch checked={q.is_active} onCheckedChange={(v) => void saveQuestionnaire({ is_active: v })} />
+          <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}><Eye className="h-4 w-4 mr-2" />Preview</Button>
           <Button variant="outline" size="sm" onClick={copyLink}><Copy className="h-4 w-4 mr-2" />Copy public link</Button>
         </div>
       </div>
@@ -206,6 +228,10 @@ export default function QuestionnaireEditor() {
               question={question}
               index={idx}
               designs={designs}
+              isDragging={dragId === question.id}
+              onDragStart={() => setDragId(question.id)}
+              onDragEnd={() => setDragId(null)}
+              onDropOn={() => { if (dragId) void reorderQuestions(dragId, question.id); setDragId(null); }}
               onChange={(patch) => void updateQuestion(question.id, patch)}
               onDelete={() => void deleteQuestion(question.id)}
               onAddOption={(designId) => void addOption(question, designId)}
@@ -291,29 +317,56 @@ export default function QuestionnaireEditor() {
         onClose={() => setViewResponseId(null)}
         onCollectionCreated={() => setViewResponseId(null)}
       />
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+          <DialogHeader className="px-6 pt-6">
+            <DialogTitle>Preview — what athletes will see</DialogTitle>
+          </DialogHeader>
+          <QuestionnairePreview questionnaire={q} questions={questions} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function QuestionEditor({
-  question, index, designs, onChange, onDelete, onAddOption, onUpdateOption, onDeleteOption,
+  question, index, designs, isDragging, onDragStart, onDragEnd, onDropOn,
+  onChange, onDelete, onAddOption, onUpdateOption, onDeleteOption,
 }: {
   question: Q; index: number; designs: DesignOption[];
+  isDragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDropOn: () => void;
   onChange: (patch: Partial<Q>) => void;
   onDelete: () => void;
   onAddOption: (designId?: string) => void;
   onUpdateOption: (oid: string, patch: Partial<Opt>) => void;
   onDeleteOption: (oid: string) => void;
 }) {
-  const [pickingDesign, setPickingDesign] = useState(false);
   const [designId, setDesignId] = useState("");
   const isChoice = question.type === "single_choice" || question.type === "multi_choice";
   const isImage = question.type === "image_choice";
 
   return (
-    <div className="ax-card p-4 space-y-3">
+    <div
+      className={`ax-card p-4 space-y-3 transition-opacity ${isDragging ? "opacity-50" : ""}`}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); onDropOn(); }}
+    >
       <div className="flex items-start gap-3">
-        <GripVertical className="h-5 w-5 text-muted-foreground mt-2" />
+        <button
+          type="button"
+          draggable
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          className="mt-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+          aria-label="Drag to reorder"
+          title="Drag to reorder"
+        >
+          <GripVertical className="h-5 w-5" />
+        </button>
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="outline">Q{index + 1}</Badge>
