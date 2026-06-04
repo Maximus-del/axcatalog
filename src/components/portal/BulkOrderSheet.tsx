@@ -165,7 +165,7 @@ function ProductAnalytics({
         )}
       </div>
 
-      <div className="grid grid-cols-4 gap-2 mb-2">
+      <div className="grid grid-cols-3 gap-2 mb-2">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
             Qty
@@ -178,8 +178,15 @@ function ProductAnalytics({
           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
             Unit
           </div>
-          <div className="text-sm font-bold text-foreground leading-tight">
+          <div className="text-sm font-bold text-foreground leading-tight flex items-baseline gap-1.5">
             {fmtMoney(effectiveUnit)}
+            {wholesaleUnit != null &&
+              effectiveUnit != null &&
+              wholesaleUnit > effectiveUnit && (
+                <span className="text-[10px] font-medium text-muted-foreground line-through">
+                  {fmtMoney(wholesaleUnit)}
+                </span>
+              )}
           </div>
         </div>
         <div>
@@ -190,37 +197,37 @@ function ProductAnalytics({
             {qty > 0 ? fmtMoney(subtotal) : fmtMoney(effectiveUnit)}
           </div>
         </div>
-        <div>
-          <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Saved vs Wholesale
-          </div>
-          <div
-            className={cn(
-              "text-sm font-bold leading-tight",
-              savings != null && savings > 0
-                ? "text-emerald-500"
-                : "text-muted-foreground",
-            )}
-          >
-            {savings != null ? (
-              <>
-                {fmtMoney(
-                  qty > 0
-                    ? savings
-                    : wholesaleUnit != null && effectiveUnit != null
-                      ? wholesaleUnit - effectiveUnit
-                      : 0,
-                )}
-                {savingsPct != null && savingsPct > 0 && (
-                  <span className="ml-1 text-[10px] font-semibold text-muted-foreground">
-                    ({savingsPct.toFixed(0)}%)
-                  </span>
-                )}
-              </>
-            ) : (
-              "—"
-            )}
-          </div>
+      </div>
+      <div className="mb-2">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Saved vs Wholesale
+        </div>
+        <div
+          className={cn(
+            "text-sm font-bold leading-tight",
+            savings != null && savings > 0
+              ? "text-emerald-500"
+              : "text-muted-foreground",
+          )}
+        >
+          {savings != null ? (
+            <>
+              {fmtMoney(
+                qty > 0
+                  ? savings
+                  : wholesaleUnit != null && effectiveUnit != null
+                    ? wholesaleUnit - effectiveUnit
+                    : 0,
+              )}
+              {savingsPct != null && savingsPct > 0 && (
+                <span className="ml-1 text-[10px] font-semibold text-muted-foreground">
+                  ({savingsPct.toFixed(0)}%)
+                </span>
+              )}
+            </>
+          ) : (
+            "—"
+          )}
         </div>
       </div>
 
