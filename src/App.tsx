@@ -33,6 +33,11 @@ import AthleteCredits from "./pages/admin/AthleteCredits";
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
 import PortalProductDetail from "./pages/portal/PortalProductDetail";
+import PortalProducts from "./pages/portal/PortalProducts";
+import PortalAnalytics from "./pages/portal/PortalAnalytics";
+import PortalContent from "./pages/portal/PortalContent";
+import PortalDrops from "./pages/portal/PortalDrops";
+import PortalEra from "./pages/portal/PortalEra";
 
 const queryClient = new QueryClient();
 
@@ -88,6 +93,11 @@ const App = () => (
               }
             >
               <Route index element={<PortalHome />} />
+              <Route path="products" element={<PortalProducts />} />
+              <Route path="analytics" element={<PortalAnalytics />} />
+              <Route path="content" element={<PortalContent />} />
+              <Route path="drops" element={<PortalDrops />} />
+              <Route path="era" element={<PortalEra />} />
               <Route path="products/:id" element={<PortalProductDetail />} />
             </Route>
 
