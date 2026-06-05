@@ -100,7 +100,7 @@ export function ProductCard({
             alt={title}
             viewMode="admin"
             size="card"
-            imgClassName="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            imgClassName="h-full w-full object-contain p-3 transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div
