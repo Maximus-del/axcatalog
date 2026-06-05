@@ -46,12 +46,12 @@ export function ProductImageLightbox({ open, onOpenChange, product }: Props) {
           </button>
         </DialogHeader>
 
-        <div className="relative bg-[hsl(var(--dark))] aspect-[4/3] flex items-center justify-center">
+        <div className="relative bg-[hsl(var(--dark))] w-full h-[60vh] max-h-[640px] flex items-center justify-center overflow-hidden">
           {current ? (
             <img
               src={current.url}
               alt={product.title}
-              className="h-full w-full object-contain"
+              className="max-h-full max-w-full w-auto h-auto object-contain"
             />
           ) : (
             <div className="text-muted-foreground text-sm">No images available</div>
