@@ -1,0 +1,1 @@
+UPDATE product_images SET metadata = metadata - 'shopify_orphaned' - 'last_refresh_failed' - 'last_render_failed' - 'last_render_failed_at' WHERE metadata ?| array['shopify_orphaned','last_refresh_failed','last_render_failed','last_render_failed_at'];
