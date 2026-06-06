@@ -284,7 +284,6 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
           </div>
         </div>
 
-        <div className="border-t border-border px-6 py-4 flex items-center justify-between gap-3 bg-[hsl(var(--dark))]">
         {totalUnits > 0 && (
           <button
             type="button"
