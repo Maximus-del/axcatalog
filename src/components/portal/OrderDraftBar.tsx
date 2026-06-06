@@ -15,7 +15,9 @@ export function OrderDraftBar({ onOpenSheet }: Props) {
   if (unitCount === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 left-4 sm:left-auto z-40 ax-card border-accent/40 shadow-2xl flex items-center gap-3 p-3 bg-card/95 backdrop-blur">
+    <div
+      className="fixed right-4 left-4 sm:left-auto z-40 ax-card border-accent/40 shadow-2xl flex items-center gap-3 p-3 bg-card/95 backdrop-blur bottom-[calc(env(safe-area-inset-bottom)+72px)] md:bottom-4"
+    >
       <div className="h-10 w-10 rounded-full bg-accent/15 flex items-center justify-center shrink-0">
         <ShoppingCart className="h-5 w-5 text-accent" />
       </div>

@@ -47,7 +47,7 @@ interface Props {
 
 export function HubCardsRow({ onSelect }: Props) {
   return (
-    <div className="-mx-6 px-6 sm:mx-0 sm:px-0">
+    <div className="-mx-4 px-4 sm:mx-0 sm:px-0">
       <div className="flex sm:grid sm:grid-cols-4 gap-3 overflow-x-auto sm:overflow-visible snap-x snap-mandatory pb-2 sm:pb-0">
         {CARDS.map((c) => {
           const Icon = c.icon;

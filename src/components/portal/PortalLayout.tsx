@@ -122,7 +122,7 @@ export default function PortalLayout() {
             onMenuClick={() => setNavOpen(true)}
           />
 
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-3 flex items-center justify-end gap-3">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-3 hidden md:flex items-center justify-end gap-3">
             <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>
             <Button
               variant="ghost"

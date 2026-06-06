@@ -188,6 +188,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                   </div>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     max={500}
                     value={autoTotal || ""}
@@ -196,7 +197,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                       applyAutoTotal(parseInt(e.target.value || "0", 10) || 0)
                     }
                     onFocus={(e) => e.currentTarget.select()}
-                    className="h-7 w-20 text-center text-sm rounded bg-background border border-border focus:outline-none focus:border-accent"
+                    className="h-8 w-20 text-center text-base sm:text-sm rounded bg-background border border-border focus:outline-none focus:border-accent"
                   />
                 </div>
                 <MilestoneSlider
@@ -234,6 +235,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                   <div className="flex items-center gap-0.5">
                     <input
                       type="number"
+                      inputMode="numeric"
                       min={0}
                       value={qty || ""}
                       placeholder="0"
@@ -245,7 +247,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                       }
                       onFocus={(e) => e.currentTarget.select()}
                       className={cn(
-                        "h-7 w-10 text-center text-sm rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70",
+                        "h-7 w-10 text-center text-base sm:text-sm rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70",
                         active && "text-accent font-semibold",
                       )}
                     />
