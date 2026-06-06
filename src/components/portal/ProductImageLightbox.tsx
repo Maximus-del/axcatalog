@@ -46,18 +46,15 @@ export function ProductImageLightbox({ open, onOpenChange, product }: Props) {
           </button>
         </DialogHeader>
 
-        <div className="relative bg-[hsl(var(--dark))] w-full h-[60vh] max-h-[640px] overflow-hidden">
+        <div className="relative bg-[hsl(var(--dark))] w-full h-[60vh] max-h-[640px] overflow-hidden flex items-center justify-center px-14 sm:px-20 py-4">
           {current ? (
             <img
               src={current.url}
               alt={product.title}
-              className="absolute inset-0 m-auto max-h-full max-w-full w-auto h-auto object-contain px-12 sm:px-16 py-4"
-              style={{ objectPosition: "center center" }}
+              className="max-h-full max-w-full w-auto h-auto object-contain"
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-muted-foreground text-sm">No images available</div>
-            </div>
           )}
 
           {images.length > 1 && (
