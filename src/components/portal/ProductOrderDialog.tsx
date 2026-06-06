@@ -44,6 +44,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const [autoDistribute, setAutoDistribute] = useState(false);
   const [autoTotal, setAutoTotal] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
   const { user } = useAuth();
   const { athlete, isImpersonating } = useCurrentAthlete();
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
@@ -67,6 +68,13 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const discountPct = pickDiscount(config.tiers, totalUnits);
   const subtotal =
     unitWholesale != null ? unitWholesale * totalUnits * (1 - discountPct / 100) : null;
+  const grossSubtotal =
+    unitWholesale != null ? unitWholesale * totalUnits : null;
+  const discountAmount =
+    grossSubtotal != null && subtotal != null ? grossSubtotal - subtotal : null;
+  const breakdownRows = sizes
+    .map((s) => ({ size: s, qty: qtys[s] ?? 0 }))
+    .filter((r) => r.qty > 0);
 
   const bumpQty = (size: string, delta: number) => {
     setQtys((p) => ({ ...p, [size]: Math.max(0, (p[size] ?? 0) + delta) }));
@@ -276,6 +284,73 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
           </div>
         </div>
 
+        <div className="border-t border-border px-6 py-4 flex items-center justify-between gap-3 bg-[hsl(var(--dark))]">
+        {totalUnits > 0 && (
+          <button
+            type="button"
+            onClick={() => setBreakdownOpen((v) => !v)}
+            className="w-full flex flex-col items-center gap-1 border-t border-border pt-2 pb-1 bg-[hsl(var(--dark))] text-muted-foreground hover:text-foreground transition-colors"
+            aria-expanded={breakdownOpen}
+            aria-label={breakdownOpen ? "Hide breakdown" : "Show breakdown"}
+          >
+            <span className="h-1 w-10 rounded-full bg-border" />
+            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider">
+              {breakdownOpen ? (
+                <>
+                  <ChevronDown className="h-3 w-3" /> Hide breakdown
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="h-3 w-3" /> Show breakdown
+                </>
+              )}
+            </span>
+          </button>
+        )}
+        {breakdownOpen && totalUnits > 0 && (
+          <div className="px-6 py-3 bg-[hsl(var(--dark))]/70 border-t border-border max-h-64 overflow-y-auto">
+            <div className="ax-label mb-2">Order breakdown</div>
+            <div className="space-y-1.5">
+              {breakdownRows.map((r) => {
+                const line = unitWholesale != null ? unitWholesale * r.qty : null;
+                return (
+                  <div
+                    key={r.size}
+                    className="flex items-center justify-between text-xs tabular-nums"
+                  >
+                    <span className="font-semibold w-10 uppercase tracking-wider">
+                      {r.size}
+                    </span>
+                    <span className="flex-1 text-muted-foreground text-right pr-3">
+                      {r.qty} × {unitWholesale != null ? `$${unitWholesale.toFixed(2)}` : "—"}
+                    </span>
+                    <span className="w-16 text-right font-semibold">
+                      {line != null ? `$${line.toFixed(2)}` : "—"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 pt-2 border-t border-border/60 space-y-1 text-xs tabular-nums">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Subtotal ({totalUnits} units)</span>
+                <span>{grossSubtotal != null ? `$${grossSubtotal.toFixed(2)}` : "—"}</span>
+              </div>
+              {discountPct > 0 && discountAmount != null && (
+                <div className="flex justify-between text-accent">
+                  <span>Volume discount ({discountPct}%)</span>
+                  <span>−${discountAmount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-sm pt-1">
+                <span>Total</span>
+                <span className="text-accent">
+                  {subtotal != null ? `$${subtotal.toFixed(2)}` : "—"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="border-t border-border px-6 py-4 flex items-center justify-between gap-3 bg-[hsl(var(--dark))]">
           <div>
             <div className="ax-label">Subtotal · {totalUnits} units</div>
