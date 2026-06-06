@@ -40,6 +40,7 @@ function generateOrderNumber(): string {
 }
 
 export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
+  // qtys keyed by `${color}|${size}` — color is "" for products without colorways.
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [autoDistribute, setAutoDistribute] = useState(false);
   const [autoTotal, setAutoTotal] = useState(0);
@@ -51,11 +52,29 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const curve = useSizeDistributionCurve(athlete?.organization_id ?? null);
 
   const sizes = STANDARD_SIZES;
+  const colorRows: Array<{ key: string; name: string; hex: string | null }> =
+    product.colors && product.colors.length
+      ? product.colors.map((c) => ({ key: c.name, name: c.name, hex: c.hex }))
+      : [{ key: "", name: "One color", hex: null }];
+
+  const cellKey = (color: string, size: string) => `${color}|${size}`;
 
   const applyAutoTotal = (total: number) => {
     const clamped = Math.max(0, Math.min(500, Math.floor(total)));
     setAutoTotal(clamped);
-    setQtys(distributeByCurve(clamped, sizes, curve));
+    // Split total evenly across color rows, then distribute by curve per row.
+    const next: Record<string, number> = {};
+    const n = colorRows.length;
+    const base = Math.floor(clamped / n);
+    const remainder = clamped - base * n;
+    colorRows.forEach((row, idx) => {
+      const rowTotal = base + (idx < remainder ? 1 : 0);
+      const rowDist = distributeByCurve(rowTotal, sizes, curve);
+      sizes.forEach((s) => {
+        next[cellKey(row.key, s)] = rowDist[s] ?? 0;
+      });
+    });
+    setQtys(next);
   };
 
   const totalUnits = useMemo(
@@ -72,12 +91,22 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     unitWholesale != null ? unitWholesale * totalUnits : null;
   const discountAmount =
     grossSubtotal != null && subtotal != null ? grossSubtotal - subtotal : null;
-  const breakdownRows = sizes
-    .map((s) => ({ size: s, qty: qtys[s] ?? 0 }))
-    .filter((r) => r.qty > 0);
+  const breakdownRows = colorRows.flatMap((row) =>
+    sizes
+      .map((s) => ({
+        color: row.name,
+        hex: row.hex,
+        size: s,
+        qty: qtys[cellKey(row.key, s)] ?? 0,
+      }))
+      .filter((r) => r.qty > 0),
+  );
 
-  const bumpQty = (size: string, delta: number) => {
-    setQtys((p) => ({ ...p, [size]: Math.max(0, (p[size] ?? 0) + delta) }));
+  const bumpQty = (color: string, size: string, delta: number) => {
+    setQtys((p) => ({
+      ...p,
+      [cellKey(color, size)]: Math.max(0, (p[cellKey(color, size)] ?? 0) + delta),
+    }));
   };
 
   const handleSubmit = async () => {
@@ -111,15 +140,19 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
 
       const items = Object.entries(qtys)
         .filter(([, qty]) => qty > 0)
-        .map(([size, qty]) => ({
-          order_request_id: orderRow.id,
-          product_id: product.id,
-          product_name_snapshot: product.title,
-          size,
-          quantity: qty,
-          unit_wholesale_price: unitWholesale,
-          unit_retail_price: product.price,
-        }));
+        .map(([key, qty]) => {
+          const [color, size] = key.split("|");
+          return {
+            order_request_id: orderRow.id,
+            product_id: product.id,
+            product_name_snapshot: product.title,
+            size,
+            color: color || null,
+            quantity: qty,
+            unit_wholesale_price: unitWholesale,
+            unit_retail_price: product.price,
+          };
+        });
 
       if (items.length) {
         const { error: itemsErr } = await supabase.from("bulk_order_items").insert(items);
@@ -220,64 +253,102 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
             )}
           </div>
 
-          <div className="grid grid-cols-6 gap-1.5">
-            {sizes.map((size) => {
-              const qty = qtys[size] ?? 0;
-              const active = qty > 0;
+          <div className="space-y-3">
+            {/* Header row with size labels */}
+            <div className="grid grid-cols-[88px_repeat(6,minmax(0,1fr))] gap-1.5 px-1">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Color
+              </span>
+              {sizes.map((s) => (
+                <span
+                  key={s}
+                  className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground text-center"
+                >
+                  {s}
+                </span>
+              ))}
+            </div>
+            {colorRows.map((row) => {
+              const rowTotal = sizes.reduce(
+                (sum, s) => sum + (qtys[cellKey(row.key, s)] ?? 0),
+                0,
+              );
               return (
                 <div
-                  key={size}
-                  className={cn(
-                    "flex flex-col items-center rounded border bg-background px-1 py-1.5 gap-1",
-                    active ? "border-accent" : "border-border",
-                  )}
+                  key={row.key || "default"}
+                  className="grid grid-cols-[88px_repeat(6,minmax(0,1fr))] gap-1.5 items-center"
                 >
-                  <span
-                    className={cn(
-                      "text-[10px] font-semibold uppercase tracking-wider",
-                      active ? "text-accent" : "text-muted-foreground",
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {row.hex && (
+                      <span
+                        className="h-4 w-4 rounded-full border border-border shrink-0"
+                        style={{ backgroundColor: row.hex }}
+                        aria-hidden
+                      />
                     )}
-                  >
-                    {size}
-                  </span>
-                  <div className="flex items-center gap-0.5">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      value={qty || ""}
-                      placeholder="0"
-                      onChange={(e) =>
-                        setQtys((p) => ({
-                          ...p,
-                          [size]: Math.max(0, parseInt(e.target.value || "0", 10) || 0),
-                        }))
-                      }
-                      onFocus={(e) => e.currentTarget.select()}
+                    <span
                       className={cn(
-                        "h-7 w-10 text-center text-base sm:text-sm rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70",
-                        active && "text-accent font-semibold",
+                        "text-xs font-semibold truncate",
+                        rowTotal > 0 ? "text-accent" : "text-foreground",
                       )}
-                    />
-                    <div className="flex flex-col">
-                      <button
-                        type="button"
-                        onClick={() => bumpQty(size, +1)}
-                        className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent"
-                        aria-label={`Increase ${size}`}
-                      >
-                        <ChevronUp className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => bumpQty(size, -1)}
-                        className="h-3 w-4 flex items-center justify-center text-muted-foreground hover:text-accent"
-                        aria-label={`Decrease ${size}`}
-                      >
-                        <ChevronDown className="h-3 w-3" />
-                      </button>
-                    </div>
+                      title={row.name}
+                    >
+                      {row.name}
+                    </span>
                   </div>
+                  {sizes.map((size) => {
+                    const qty = qtys[cellKey(row.key, size)] ?? 0;
+                    const active = qty > 0;
+                    return (
+                      <div
+                        key={size}
+                        className={cn(
+                          "flex items-center justify-center rounded border bg-background px-0.5 py-1",
+                          active ? "border-accent" : "border-border",
+                        )}
+                      >
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          value={qty || ""}
+                          placeholder="0"
+                          onChange={(e) =>
+                            setQtys((p) => ({
+                              ...p,
+                              [cellKey(row.key, size)]: Math.max(
+                                0,
+                                parseInt(e.target.value || "0", 10) || 0,
+                              ),
+                            }))
+                          }
+                          onFocus={(e) => e.currentTarget.select()}
+                          className={cn(
+                            "h-7 w-full text-center text-base sm:text-sm rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                            active && "text-accent font-semibold",
+                          )}
+                        />
+                        <div className="flex flex-col">
+                          <button
+                            type="button"
+                            onClick={() => bumpQty(row.key, size, +1)}
+                            className="h-3 w-3 flex items-center justify-center text-muted-foreground hover:text-accent"
+                            aria-label={`Increase ${row.name} ${size}`}
+                          >
+                            <ChevronUp className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => bumpQty(row.key, size, -1)}
+                            className="h-3 w-3 flex items-center justify-center text-muted-foreground hover:text-accent"
+                            aria-label={`Decrease ${row.name} ${size}`}
+                          >
+                            <ChevronDown className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -314,11 +385,21 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                 const line = unitWholesale != null ? unitWholesale * r.qty : null;
                 return (
                   <div
-                    key={r.size}
+                    key={`${r.color}-${r.size}`}
                     className="flex items-center justify-between text-xs tabular-nums"
                   >
-                    <span className="font-semibold w-10 uppercase tracking-wider">
-                      {r.size}
+                    <span className="font-semibold flex items-center gap-1.5 w-28 truncate">
+                      {r.hex && (
+                        <span
+                          className="h-2.5 w-2.5 rounded-full border border-border shrink-0"
+                          style={{ backgroundColor: r.hex }}
+                          aria-hidden
+                        />
+                      )}
+                      <span className="truncate">{r.color}</span>
+                      <span className="uppercase tracking-wider text-muted-foreground">
+                        {r.size}
+                      </span>
                     </span>
                     <span className="flex-1 text-muted-foreground text-right pr-3">
                       {r.qty} × {unitWholesale != null ? `$${unitWholesale.toFixed(2)}` : "—"}
