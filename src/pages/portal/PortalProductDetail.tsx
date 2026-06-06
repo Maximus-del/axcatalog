@@ -15,7 +15,6 @@ import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { usePortalProducts, type PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
 import { ProductOrderDialog } from "@/components/portal/ProductOrderDialog";
-import { ProductImageLightbox } from "@/components/portal/ProductImageLightbox";
 import { buildShareUrl } from "@/components/portal/ProductCard";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +24,6 @@ export default function PortalProductDetail() {
   const { athlete } = useCurrentAthlete();
   const { products, loading } = usePortalProducts(athlete?.id ?? null);
   const [orderOpen, setOrderOpen] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
   const [heroIdx, setHeroIdx] = useState(0);
   const [description, setDescription] = useState<string | null>(null);
 
@@ -100,11 +98,8 @@ export default function PortalProductDetail() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Hero + gallery */}
         <div className="space-y-3">
-          <button
-            type="button"
-            onClick={() => setLightboxOpen(true)}
-            className="w-full aspect-[4/3] rounded-xl bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            aria-label={`View images of ${product.title}`}
+          <div
+            className="w-full aspect-[4/3] rounded-xl bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden"
           >
             <ProductImage
               images={heroImage ? [heroImage] : product.images}
@@ -113,17 +108,14 @@ export default function PortalProductDetail() {
               size="hero"
               imgClassName="max-h-full max-w-full object-contain p-6"
             />
-          </button>
+          </div>
           {product.images.length > 1 && (
             <div className="grid grid-cols-5 gap-2">
               {product.images.map((img, i) => (
                 <button
                   key={img.id}
                   type="button"
-                  onClick={() => {
-                    setHeroIdx(i);
-                    setLightboxOpen(true);
-                  }}
+                  onClick={() => setHeroIdx(i)}
                   className={cn(
                     "aspect-square rounded-md bg-[hsl(var(--dark))] overflow-hidden border-2 flex items-center justify-center",
                     i === heroIdx ? "border-accent" : "border-transparent hover:border-border",
@@ -189,11 +181,6 @@ export default function PortalProductDetail() {
       </div>
 
       <ProductOrderDialog product={product} open={orderOpen} onOpenChange={setOrderOpen} />
-      <ProductImageLightbox
-        product={product}
-        open={lightboxOpen}
-        onOpenChange={setLightboxOpen}
-      />
     </div>
   );
 }
