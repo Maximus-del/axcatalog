@@ -45,7 +45,7 @@ export function ProductCard({ product }: Props) {
       <button
         type="button"
         onClick={() => setLightboxOpen(true)}
-        className="relative h-40 rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="relative aspect-square w-full rounded-md bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         aria-label={`View images of ${product.title}`}
       >
         <ProductImage
@@ -54,7 +54,7 @@ export function ProductCard({ product }: Props) {
           alt={product.title}
           viewMode="athlete"
           size="card"
-          imgClassName="p-3"
+          imgClassName="max-h-full max-w-full object-contain p-4"
         />
       </button>
 
