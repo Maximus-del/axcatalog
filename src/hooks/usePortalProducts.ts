@@ -76,7 +76,7 @@ export function usePortalProducts(athleteId: string | null): State {
         .from("product_athletes")
         .select(
           `product:products!inner(
-             id, title, slug, status, product_type, shopify_handle, blank_id, price, wholesale_price, created_at,
+             id, title, slug, status, product_type, shopify_handle, blank_id, price, wholesale_price, metadata, created_at,
              images:product_images(id, storage_bucket, storage_path, is_primary, sort_order)
            )`,
         )
@@ -103,6 +103,7 @@ export function usePortalProducts(athleteId: string | null): State {
         blank_id: string | null;
         price: number | null;
         wholesale_price: number | null;
+        metadata: Record<string, any> | null;
         created_at: string;
         images: Array<{
           id: string;
@@ -193,7 +194,20 @@ export function usePortalProducts(athleteId: string | null): State {
           wholesale_price: p.wholesale_price != null ? Number(p.wholesale_price) : null,
           athlete_unit_price: null as number | null,
           sizes: p.blank_id ? (sizesByBlank.get(p.blank_id) ?? []) : [],
-          colors: p.blank_id ? (colorsByBlank.get(p.blank_id) ?? []) : [],
+          colors: (() => {
+            const blankColors = p.blank_id ? (colorsByBlank.get(p.blank_id) ?? []) : [];
+            if (blankColors.length) return blankColors;
+            const metaColors = Array.isArray(p.metadata?.colors) ? p.metadata.colors : [];
+            return metaColors
+              .map((c: any) =>
+                typeof c === "string"
+                  ? { name: c, hex: null }
+                  : c && typeof c.name === "string"
+                  ? { name: c.name, hex: c.hex ?? null }
+                  : null,
+              )
+              .filter(Boolean) as Array<{ name: string; hex: string | null }>;
+          })(),
           created_at: p.created_at,
         };
       });
