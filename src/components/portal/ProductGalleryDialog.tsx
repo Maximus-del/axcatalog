@@ -50,10 +50,14 @@ export function ProductGalleryDialog({
       .select("id, storage_bucket, storage_path, file_name, mime_type, uploaded_by")
       .eq("product_id", product.id)
       .order("created_at", { ascending: false });
-    const mapped = (data ?? []).map((a) => ({
-      ...a,
-      url: supabase.storage.from(a.storage_bucket).getPublicUrl(a.storage_path).data.publicUrl,
-    })) as Asset[];
+    const mapped = await Promise.all(
+      (data ?? []).map(async (a) => {
+        const { data: signed } = await supabase.storage
+          .from(a.storage_bucket)
+          .createSignedUrl(a.storage_path, 3600);
+        return { ...a, url: signed?.signedUrl ?? "" } as Asset;
+      }),
+    );
     setAssets(mapped);
     setLoading(false);
   }, [product]);
