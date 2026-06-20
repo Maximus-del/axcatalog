@@ -54,7 +54,29 @@ export function ProductPreviewSlider({ products, loading, title = "Your Products
     ? Array.from({ length: 6 }, () => null)
     : products;
 
-  if (!loading && products.length === 0) return null;
+  if (!loading && products.length === 0) {
+    return (
+      <section className="space-y-3">
+        <div className="flex items-end justify-between px-1">
+          <div>
+            <h2 className="ax-label text-accent">{title}</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              Your products will appear here
+            </p>
+          </div>
+        </div>
+        <div className="ax-card p-8 flex flex-col items-center justify-center gap-2 text-center">
+          <Shirt className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.2} />
+          <p className="text-sm text-muted-foreground">
+            No products yet
+          </p>
+          <p className="text-xs text-muted-foreground/70">
+            Once your team adds products to your roster, they'll show up here.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-3">
