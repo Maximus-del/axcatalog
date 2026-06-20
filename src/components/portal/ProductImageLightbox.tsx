@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { ProductImage } from "@/components/shared/ProductImage";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 
 interface Props {
@@ -48,10 +49,12 @@ export function ProductImageLightbox({ open, onOpenChange, product }: Props) {
 
         <div className="relative bg-[hsl(var(--dark))] w-full h-[60vh] max-h-[640px] overflow-hidden flex items-center justify-center px-14 sm:px-20 py-4">
           {current ? (
-            <img
-              src={current.url}
+            <ProductImage
+              images={[current]}
               alt={product.title}
-              className="max-h-full max-w-full w-auto h-auto object-contain"
+              viewMode="athlete"
+              size="hero"
+              imgClassName="max-h-full max-w-full w-auto h-auto object-contain"
             />
           ) : (
             <div className="text-muted-foreground text-sm">No images available</div>
@@ -118,10 +121,13 @@ export function ProductImageLightbox({ open, onOpenChange, product }: Props) {
                     i === idx ? "border-accent" : "border-transparent hover:border-border",
                   )}
                 >
-                  <img
-                    src={img.url}
+                  <ProductImage
+                    images={[img]}
                     alt=""
-                    className="h-full w-full object-contain"
+                    viewMode="athlete"
+                    size="card"
+                    imgClassName="h-full w-full object-contain"
+                    flagFailures={false}
                   />
                 </button>
               ))}
