@@ -3,6 +3,7 @@ import { Shirt, ChevronLeft, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { ProductImage } from "@/components/shared/ProductImage";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 
 interface Props {
@@ -94,13 +95,18 @@ export function ProductPreviewDialog({ open, onOpenChange, product }: Props) {
         <div className="grid md:grid-cols-[1.2fr_1fr] gap-0">
           <div className="relative bg-[hsl(var(--dark))] aspect-square flex items-center justify-center">
             {current ? (
-              <img
-                src={current.url}
+              <ProductImage
+                images={[current]}
                 alt={product.title}
-                className="max-h-full max-w-full object-contain"
+                viewMode="athlete"
+                size="hero"
+                imgClassName="max-h-full max-w-full object-contain p-4"
               />
             ) : (
-              <Shirt className="h-16 w-16 text-muted-foreground/30" strokeWidth={1.2} />
+              <div className="flex flex-col items-center gap-2 text-muted-foreground/60">
+                <Shirt className="h-16 w-16 text-muted-foreground/30" strokeWidth={1.2} />
+                <span className="text-xs uppercase tracking-wider">No image</span>
+              </div>
             )}
             {images.length > 1 && (
               <>
@@ -173,10 +179,13 @@ export function ProductPreviewDialog({ open, onOpenChange, product }: Props) {
                         i === idx ? "border-accent" : "border-border",
                       )}
                     >
-                      <img
-                        src={img.url}
+                      <ProductImage
+                        images={[img]}
                         alt=""
-                        className="h-full w-full object-contain"
+                        viewMode="athlete"
+                        size="card"
+                        imgClassName="h-full w-full object-contain p-1"
+                        flagFailures={false}
                       />
                     </button>
                   ))}
