@@ -181,6 +181,59 @@ export function usePortalProducts(athleteId: string | null): State {
           .publicUrl;
       };
 
+      // 2.5) Batch-fetch real Shopify variants for all loaded products.
+      // Excludes soft-deleted (orphaned) variants via metadata.orphaned_at.
+      const productIds = rawProducts.map((p) => p.id);
+      const variantsByProduct = new Map<string, PortalVariant[]>();
+      if (productIds.length) {
+        const { data: vData, error: vErr } = await supabase
+          .from("product_variants")
+          .select(
+            "id, product_id, shopify_variant_id, sku, title, color, size, price, compare_at_price, available, inventory_quantity, inventory_policy, position, shopify_image_id, metadata, synced_at",
+          )
+          .in("product_id", productIds)
+          .order("product_id", { ascending: true })
+          .order("position", { ascending: true, nullsFirst: false })
+          .order("color", { ascending: true, nullsFirst: false })
+          .order("size", { ascending: true, nullsFirst: false });
+        if (vErr && import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.warn("[usePortalProducts] variant fetch failed:", vErr.message);
+        }
+        (vData ?? []).forEach((v: any) => {
+          const meta = (v.metadata ?? {}) as Record<string, any>;
+          // Skip soft-deleted (orphaned) variants.
+          if (meta.orphaned_at) return;
+          // Treat inventory_policy='continue' as available even when qty=0.
+          const policyContinues = v.inventory_policy === "continue";
+          const available =
+            v.available === true ||
+            policyContinues ||
+            (typeof v.inventory_quantity === "number" && v.inventory_quantity > 0);
+          const variant: PortalVariant = {
+            id: v.id,
+            productId: v.product_id,
+            shopifyVariantId: v.shopify_variant_id,
+            sku: v.sku ?? null,
+            title: v.title ?? null,
+            color: v.color ?? null,
+            size: v.size ?? null,
+            price: v.price != null ? Number(v.price) : null,
+            compareAtPrice: v.compare_at_price != null ? Number(v.compare_at_price) : null,
+            available,
+            inventoryQuantity: v.inventory_quantity ?? null,
+            inventoryPolicy: v.inventory_policy ?? null,
+            position: v.position ?? null,
+            shopifyImageId: v.shopify_image_id ?? null,
+            metadata: meta,
+            syncedAt: v.synced_at ?? null,
+          };
+          const arr = variantsByProduct.get(v.product_id) ?? [];
+          arr.push(variant);
+          variantsByProduct.set(v.product_id, arr);
+        });
+      }
+
       // 3) Resolve all images (primary first), then derive primary URL.
       const baseResult = rawProducts.map((p) => {
         const sortedImgs = [...(p.images ?? [])].sort(
@@ -201,6 +254,32 @@ export function usePortalProducts(athleteId: string | null): State {
               : null;
           })
           .filter((x): x is PortalImage => !!x);
+
+        const variants = variantsByProduct.get(p.id) ?? [];
+
+        // Derive colors/sizes from variants when present; preserve first-seen
+        // (Shopify position) order and drop null/empty values.
+        let derivedColors: Array<{ name: string; hex: string | null }> | null = null;
+        let derivedSizes: string[] | null = null;
+        if (variants.length) {
+          const seenColors = new Set<string>();
+          const colorList: Array<{ name: string; hex: string | null }> = [];
+          const seenSizes = new Set<string>();
+          const sizeList: string[] = [];
+          for (const v of variants) {
+            if (v.color && !seenColors.has(v.color)) {
+              seenColors.add(v.color);
+              colorList.push({ name: v.color, hex: null });
+            }
+            if (v.size && !seenSizes.has(v.size)) {
+              seenSizes.add(v.size);
+              sizeList.push(v.size);
+            }
+          }
+          derivedColors = colorList;
+          derivedSizes = sizeList;
+        }
+
         return {
           id: p.id,
           title: p.title,
@@ -214,8 +293,15 @@ export function usePortalProducts(athleteId: string | null): State {
           price: p.price != null ? Number(p.price) : null,
           wholesale_price: p.wholesale_price != null ? Number(p.wholesale_price) : null,
           athlete_unit_price: null as number | null,
-          sizes: p.blank_id ? (sizesByBlank.get(p.blank_id) ?? []) : [],
+          variants,
+          sizes:
+            derivedSizes && derivedSizes.length
+              ? derivedSizes
+              : p.blank_id
+              ? (sizesByBlank.get(p.blank_id) ?? [])
+              : [],
           colors: (() => {
+            if (derivedColors && derivedColors.length) return derivedColors;
             const blankColors = p.blank_id ? (colorsByBlank.get(p.blank_id) ?? []) : [];
             if (blankColors.length) return blankColors;
             const metaColors = Array.isArray(p.metadata?.colors) ? p.metadata.colors : [];
