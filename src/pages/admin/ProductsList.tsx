@@ -717,6 +717,18 @@ export default function ProductsList() {
               <span className="hidden md:inline">Refresh Images</span>
             </Button>
           )}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={handleRefreshAllVariants}
+              disabled={variantsBusy}
+              className="gap-2 h-11 md:h-10 pressable"
+              title="Pull colors, sizes, prices and inventory from Shopify for every product in this org"
+            >
+              {variantsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="hidden md:inline">Refresh Variants</span>
+            </Button>
+          )}
         </div>
       </header>
 
