@@ -2,7 +2,7 @@
 //
 // Bulk order dialog for a single product. Extracted from the portal
 // ProductCard so the same flow is reused on the product detail page.
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -51,25 +51,95 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
   const curve = useSizeDistributionCurve(athlete?.organization_id ?? null);
 
-  const sizes = STANDARD_SIZES;
-  const colorRows: Array<{ key: string; name: string; hex: string | null }> =
-    product.colors && product.colors.length
-      ? product.colors.map((c) => ({ key: c.name, name: c.name, hex: c.hex }))
-      : [{ key: "", name: "One color", hex: null }];
+  const hasVariants = product.variants && product.variants.length > 0;
+
+  // Color rows: when real variants exist, derive from them so we never mix
+  // generic blank colors with real Shopify colorways.
+  const colorRows: Array<{ key: string; name: string; hex: string | null }> = hasVariants
+    ? (() => {
+        const seen = new Set<string>();
+        const rows: Array<{ key: string; name: string; hex: string | null }> = [];
+        for (const v of product.variants) {
+          const name = v.color ?? "";
+          if (seen.has(name)) continue;
+          seen.add(name);
+          const hex =
+            product.colors.find((c) => c.name === name)?.hex ?? null;
+          rows.push({ key: name, name: name || "One color", hex });
+        }
+        return rows;
+      })()
+    : product.colors && product.colors.length
+    ? product.colors.map((c) => ({ key: c.name, name: c.name, hex: c.hex }))
+    : [{ key: "", name: "One color", hex: null }];
+
+  // Size set: union of variant sizes (in first-seen order) when variants exist,
+  // else the standard size set so manual/non-Shopify products still work.
+  const sizes = useMemo<readonly string[]>(() => {
+    if (!hasVariants) return STANDARD_SIZES;
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const v of product.variants) {
+      const s = v.size ?? "";
+      if (!s || seen.has(s)) continue;
+      seen.add(s);
+      out.push(s);
+    }
+    return out.length ? out : STANDARD_SIZES;
+  }, [hasVariants, product.variants]);
+
+  // Lookup: variant by `${color}|${size}` (color is "" when null).
+  const variantByCell = useMemo(() => {
+    const m = new Map<string, (typeof product.variants)[number]>();
+    if (hasVariants) {
+      for (const v of product.variants) {
+        m.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
+      }
+    }
+    return m;
+  }, [hasVariants, product.variants]);
+
+  // When variants exist, prefer per-color image (shopifyImageId → product.images).
+  const [activeColor, setActiveColor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open) setActiveColor(null);
+  }, [open]);
+
+  const heroImages = useMemo(() => {
+    if (hasVariants && activeColor != null) {
+      const v = product.variants.find(
+        (x) => (x.color ?? "") === activeColor && x.shopifyImageId,
+      );
+      const match = v
+        ? product.images.find((i) => i.shopifyImageId && i.shopifyImageId === v.shopifyImageId)
+        : null;
+      if (match) return [match];
+    }
+    return product.images;
+  }, [hasVariants, activeColor, product.variants, product.images]);
 
   const cellKey = (color: string, size: string) => `${color}|${size}`;
+
+  const isCellAvailable = (color: string, size: string): boolean => {
+    if (!hasVariants) return true;
+    const v = variantByCell.get(cellKey(color, size));
+    return !!v && v.available === true;
+  };
 
   const applyAutoTotal = (total: number) => {
     const clamped = Math.max(0, Math.min(500, Math.floor(total)));
     setAutoTotal(clamped);
     // Split total evenly across color rows, then distribute by curve per row.
+    // When variants exist, skip cells that aren't available.
     const next: Record<string, number> = {};
     const n = colorRows.length;
     const base = Math.floor(clamped / n);
     const remainder = clamped - base * n;
     colorRows.forEach((row, idx) => {
       const rowTotal = base + (idx < remainder ? 1 : 0);
-      const rowDist = distributeByCurve(rowTotal, sizes, curve);
+      const availSizes = sizes.filter((s) => isCellAvailable(row.key, s));
+      const targetSizes = availSizes.length ? availSizes : (sizes as readonly string[]);
+      const rowDist = distributeByCurve(rowTotal, targetSizes as string[], curve);
       sizes.forEach((s) => {
         next[cellKey(row.key, s)] = rowDist[s] ?? 0;
       });
@@ -103,6 +173,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   );
 
   const bumpQty = (color: string, size: string, delta: number) => {
+    if (delta > 0 && !isCellAvailable(color, size)) return;
     setQtys((p) => ({
       ...p,
       [cellKey(color, size)]: Math.max(0, (p[cellKey(color, size)] ?? 0) + delta),
@@ -117,6 +188,18 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     if (totalUnits <= 0) {
       toast.error("Enter at least one quantity");
       return;
+    }
+    // Block submission of any unavailable variant.
+    if (hasVariants) {
+      const bad = Object.entries(qtys).find(([k, q]) => {
+        if (!q || q <= 0) return false;
+        const [c, s] = k.split("|");
+        return !isCellAvailable(c, s);
+      });
+      if (bad) {
+        toast.error("Remove quantities on out-of-stock sizes before submitting");
+        return;
+      }
     }
     if (!user || !athlete) {
       toast.error("You must be signed in to submit an order");
@@ -142,6 +225,14 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
         .filter(([, qty]) => qty > 0)
         .map(([key, qty]) => {
           const [color, size] = key.split("|");
+          const variant = hasVariants ? variantByCell.get(cellKey(color, size)) : undefined;
+          const variantPrice = variant?.price ?? null;
+          const notes = variant
+            ? JSON.stringify({
+                shopify_variant_id: variant.shopifyVariantId,
+                sku: variant.sku ?? null,
+              })
+            : null;
           return {
             order_request_id: orderRow.id,
             product_id: product.id,
@@ -150,7 +241,8 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
             color: color || null,
             quantity: qty,
             unit_wholesale_price: unitWholesale,
-            unit_retail_price: product.price,
+            unit_retail_price: variantPrice ?? product.price,
+            notes,
           };
         });
 
@@ -177,8 +269,8 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
       <DialogContent className="max-w-lg p-0 bg-card border-border overflow-hidden">
         <div className="h-56 bg-[hsl(var(--dark))] flex items-center justify-center overflow-hidden">
           <ProductImage
-            images={product.images}
-            url={product.primary_image_url}
+            images={heroImages}
+            url={heroImages[0]?.url ?? product.primary_image_url}
             alt={product.title}
             viewMode="athlete"
             size="hero"
@@ -255,7 +347,10 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
 
           <div className="space-y-3">
             {/* Header row with size labels */}
-            <div className="grid grid-cols-[88px_repeat(6,minmax(0,1fr))] gap-1.5 px-1">
+            <div
+              className="grid gap-1.5 px-1"
+              style={{ gridTemplateColumns: `88px repeat(${sizes.length}, minmax(0,1fr))` }}
+            >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Color
               </span>
@@ -273,12 +368,24 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                 (sum, s) => sum + (qtys[cellKey(row.key, s)] ?? 0),
                 0,
               );
+              const rowHasAnyAvailable = hasVariants
+                ? sizes.some((s) => isCellAvailable(row.key, s))
+                : true;
               return (
                 <div
                   key={row.key || "default"}
                   className="grid grid-cols-[88px_repeat(6,minmax(0,1fr))] gap-1.5 items-center"
+                  style={{
+                    gridTemplateColumns: `88px repeat(${sizes.length}, minmax(0,1fr))`,
+                  }}
+                  onMouseEnter={() => hasVariants && setActiveColor(row.key)}
                 >
-                  <div className="flex items-center gap-1.5 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => hasVariants && setActiveColor(row.key)}
+                    className="flex items-center gap-1.5 min-w-0 text-left"
+                    aria-label={`Show ${row.name} image`}
+                  >
                     {row.hex && (
                       <span
                         className="h-4 w-4 rounded-full border border-border shrink-0"
@@ -290,22 +397,27 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                       className={cn(
                         "text-xs font-semibold truncate",
                         rowTotal > 0 ? "text-accent" : "text-foreground",
+                        hasVariants && activeColor === row.key && "underline underline-offset-2",
                       )}
                       title={row.name}
                     >
                       {row.name}
                     </span>
-                  </div>
+                  </button>
                   {sizes.map((size) => {
                     const qty = qtys[cellKey(row.key, size)] ?? 0;
                     const active = qty > 0;
+                    const available = isCellAvailable(row.key, size);
                     return (
                       <div
                         key={size}
                         className={cn(
                           "flex items-center justify-center rounded border bg-background px-0.5 py-1",
                           active ? "border-accent" : "border-border",
+                          !available && "opacity-40 bg-muted/30",
                         )}
+                        title={!available ? "Out of stock" : undefined}
+                        aria-label={!available ? `${row.name} ${size} out of stock` : undefined}
                       >
                         <input
                           type="number"
@@ -313,34 +425,42 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                           min={0}
                           value={qty || ""}
                           placeholder="0"
-                          onChange={(e) =>
+                          disabled={!available}
+                          onFocus={(e) => {
+                            e.currentTarget.select();
+                            if (hasVariants) setActiveColor(row.key);
+                          }}
+                          onChange={(e) => {
+                            if (!available) return;
                             setQtys((p) => ({
                               ...p,
                               [cellKey(row.key, size)]: Math.max(
                                 0,
                                 parseInt(e.target.value || "0", 10) || 0,
                               ),
-                            }))
-                          }
-                          onFocus={(e) => e.currentTarget.select()}
+                            }));
+                          }}
                           className={cn(
                             "h-7 w-full text-center text-base sm:text-sm rounded bg-transparent border-0 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                             active && "text-accent font-semibold",
+                            !available && "cursor-not-allowed",
                           )}
                         />
                         <div className="flex flex-col">
                           <button
                             type="button"
+                            disabled={!available}
                             onClick={() => bumpQty(row.key, size, +1)}
-                            className="h-3 w-3 flex items-center justify-center text-muted-foreground hover:text-accent"
+                            className="h-3 w-3 flex items-center justify-center text-muted-foreground hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label={`Increase ${row.name} ${size}`}
                           >
                             <ChevronUp className="h-3 w-3" />
                           </button>
                           <button
                             type="button"
+                            disabled={!available}
                             onClick={() => bumpQty(row.key, size, -1)}
-                            className="h-3 w-3 flex items-center justify-center text-muted-foreground hover:text-accent"
+                            className="h-3 w-3 flex items-center justify-center text-muted-foreground hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
                             aria-label={`Decrease ${row.name} ${size}`}
                           >
                             <ChevronDown className="h-3 w-3" />
@@ -349,6 +469,13 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
                       </div>
                     );
                   })}
+                  {hasVariants && !rowHasAnyAvailable && (
+                    <div
+                      className="col-span-full text-[11px] text-muted-foreground italic pl-[96px] -mt-1"
+                    >
+                      No sizes currently in stock for {row.name}.
+                    </div>
+                  )}
                 </div>
               );
             })}

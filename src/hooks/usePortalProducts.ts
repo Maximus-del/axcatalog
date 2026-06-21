@@ -6,6 +6,8 @@ export interface PortalImage {
   url: string;
   is_primary: boolean;
   sort_order: number;
+  /** Shopify image id from metadata.shopify_image_id (when present). */
+  shopifyImageId: string | null;
 }
 
 export interface PortalVariant {
@@ -98,7 +100,7 @@ export function usePortalProducts(athleteId: string | null): State {
         .select(
           `product:products!inner(
              id, title, slug, status, product_type, shopify_handle, blank_id, price, wholesale_price, metadata, created_at,
-             images:product_images(id, storage_bucket, storage_path, is_primary, sort_order)
+             images:product_images(id, storage_bucket, storage_path, is_primary, sort_order, metadata)
            )`,
         )
         .eq("athlete_id", athleteId)
@@ -132,6 +134,7 @@ export function usePortalProducts(athleteId: string | null): State {
           storage_path: string;
           is_primary: boolean;
           sort_order: number;
+          metadata?: Record<string, any> | null;
         }>;
       }>;
 
@@ -250,6 +253,8 @@ export function usePortalProducts(athleteId: string | null): State {
                   url,
                   is_primary: !!i.is_primary,
                   sort_order: i.sort_order ?? 0,
+                  shopifyImageId:
+                    (i.metadata && (i.metadata as any).shopify_image_id) ?? null,
                 }
               : null;
           })
