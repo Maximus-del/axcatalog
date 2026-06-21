@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.shopify-sync-product-images]
 verify_jwt = true
+
+[functions.shopify-sync-product-variants]
+verify_jwt = true
