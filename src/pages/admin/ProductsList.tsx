@@ -52,6 +52,7 @@ import { haptic } from "@/lib/haptics";
 import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
 import { runMooneySweep } from "@/lib/mooney-sweep";
 import { fetchShopifyPrimaryImage, refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
+import { refreshShopifyVariants, summarizeVariantRefresh } from "@/lib/shopify-refresh-variants";
 
 interface ProductRow {
   id: string;
@@ -352,6 +353,27 @@ export default function ProductsList() {
       toast.error(`Refresh failed: ${e?.message ?? e}`, { id: t });
     } finally {
       setRefreshBusy(false);
+    }
+  }
+
+  const [variantsBusy, setVariantsBusy] = useState(false);
+  async function handleRefreshAllVariants() {
+    if (variantsBusy) return;
+    setVariantsBusy(true);
+    const t = toast.loading("Refreshing Shopify variants…");
+    try {
+      const res = await refreshShopifyVariants();
+      if (res.errors.length) {
+        toast.warning(`Partial sync — ${summarizeVariantRefresh(res)}`, { id: t });
+        console.warn("Variant sync errors:", res.errors);
+      } else {
+        toast.success(summarizeVariantRefresh(res), { id: t });
+      }
+    } catch (e: any) {
+      toast.error("Variant refresh failed. Please try again.", { id: t });
+      console.error("Variant refresh failed:", e);
+    } finally {
+      setVariantsBusy(false);
     }
   }
 
@@ -693,6 +715,18 @@ export default function ProductsList() {
             >
               {refreshBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
               <span className="hidden md:inline">Refresh Images</span>
+            </Button>
+          )}
+          {isAdmin && (
+            <Button
+              variant="outline"
+              onClick={handleRefreshAllVariants}
+              disabled={variantsBusy}
+              className="gap-2 h-11 md:h-10 pressable"
+              title="Pull colors, sizes, prices and inventory from Shopify for every product in this org"
+            >
+              {variantsBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="hidden md:inline">Refresh Variants</span>
             </Button>
           )}
         </div>

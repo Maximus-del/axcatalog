@@ -8,6 +8,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Download, ImageIcon, Layers, Loader2, Pencil, RefreshCw, Video as VideoIcon } from "lucide-react";
 import { toast } from "sonner";
 import { fetchShopifyPrimaryImage, refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
+import { refreshShopifyVariants, summarizeVariantRefresh } from "@/lib/shopify-refresh-variants";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ export default function ProductDetail() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [fetchBusy, setFetchBusy] = useState(false);
+  const [variantsBusy, setVariantsBusy] = useState(false);
 
   const [counts, setCounts] = useState({ mockups: 0, designs: 0, videos: 0 });
   const [tab, setTab] = useState<"mockups" | "designs" | "videos">("mockups");
@@ -84,6 +86,25 @@ export default function ProductDetail() {
       toast.error(`Refresh failed: ${e?.message ?? e}`, { id: t });
     } finally {
       setRefreshBusy(false);
+    }
+  }
+
+  async function handleRefreshVariants() {
+    if (!product || variantsBusy) return;
+    setVariantsBusy(true);
+    const t = toast.loading("Refreshing variants from Shopify…");
+    try {
+      const res = await refreshShopifyVariants({ product_id: product.id });
+      if (res.errors.length) {
+        toast.warning(`Partial sync — ${summarizeVariantRefresh(res)}`, { id: t });
+      } else {
+        toast.success(summarizeVariantRefresh(res), { id: t });
+      }
+    } catch (e: any) {
+      toast.error("Variant refresh failed. Please try again.", { id: t });
+      console.error("Variant refresh failed:", e);
+    } finally {
+      setVariantsBusy(false);
     }
   }
 
@@ -190,6 +211,24 @@ export default function ProductDetail() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Full sync of all images for this product.</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={handleRefreshVariants}
+                    disabled={variantsBusy}
+                    className="gap-2"
+                  >
+                    {variantsBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Refresh variants
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Pull colors, sizes, prices and inventory from Shopify.</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           )}
