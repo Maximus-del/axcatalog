@@ -768,6 +768,23 @@ export function BulkOrderSheet({
                         </span>
                       )}
                     </button>
+                    {hasVariants ? (
+                      <VariantColorGrid
+                        product={p}
+                        productByColor={productByColor}
+                        productTotal={productTotal}
+                        discountPct={discountPct}
+                        volumeTiers={volumeTiers}
+                        totalUnits={totalUnits}
+                        nextTier={nextTier}
+                        autoOn={autoOn}
+                        autoTotal={autoTotal}
+                        setAutoOn={setAutoOn}
+                        applyAutoTotal={applyAutoTotal}
+                        SizeStepper={SizeStepper}
+                      />
+                    ) : (
+                    <>
                     <div className="pl-20 mb-2 flex flex-wrap items-start gap-3">
                         {(() => {
                           const autoKey = `${p.id}::${activeColor}`;
