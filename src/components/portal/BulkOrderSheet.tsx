@@ -597,23 +597,73 @@ export function BulkOrderSheet({
           ) : (
             <ul className="divide-y divide-border/60">
               {visibleProducts.map((p) => {
-                const sizes = [...STANDARD_SIZES];
+                const hasVariants = (p.variants?.length ?? 0) > 0;
+                // When variants exist, build size list from real variants;
+                // otherwise keep the standard columns for manual products.
+                const sizes: string[] = hasVariants
+                  ? (() => {
+                      const seen = new Set<string>();
+                      const out: string[] = [];
+                      // Prefer standard order for known sizes, then extras in variant order.
+                      const variantSizes = new Set<string>();
+                      for (const v of p.variants) {
+                        const s = v.size ?? "";
+                        if (s) variantSizes.add(s);
+                      }
+                      for (const s of STANDARD_SIZES) {
+                        if (variantSizes.has(s) && !seen.has(s)) {
+                          seen.add(s);
+                          out.push(s);
+                        }
+                      }
+                      for (const v of p.variants) {
+                        const s = v.size ?? "";
+                        if (!s || seen.has(s)) continue;
+                        seen.add(s);
+                        out.push(s);
+                      }
+                      return out.length ? out : [...STANDARD_SIZES];
+                    })()
+                  : [...STANDARD_SIZES];
+                // Variant lookup by `${color}|${size}` (color "" when null).
+                const variantByCell = new Map<
+                  string,
+                  (typeof p.variants)[number]
+                >();
+                if (hasVariants) {
+                  for (const v of p.variants) {
+                    variantByCell.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
+                  }
+                }
+                const isAvailable = (color: string, size: string): boolean => {
+                  if (!hasVariants) return true;
+                  const v = variantByCell.get(`${color}|${size}`);
+                  return !!v && v.available === true;
+                };
                 const productByColor = draft[p.id] ?? {};
                 const productTotal = sumProduct(productByColor);
                 const rawColors = p.colors ?? [];
-                const hasBlack = rawColors.some(
-                  (c) => c.name.trim().toLowerCase() === "black",
-                );
-                const colorList = hasBlack
+                // When real variants exist, never inject a synthetic "Black";
+                // use exactly the colorways Shopify reports.
+                const colorList = hasVariants
                   ? rawColors
-                  : [{ name: "Black", hex: "#000000" }, ...rawColors];
+                  : (() => {
+                      const hasBlack = rawColors.some(
+                        (c) => c.name.trim().toLowerCase() === "black",
+                      );
+                      return hasBlack
+                        ? rawColors
+                        : [{ name: "Black", hex: "#000000" }, ...rawColors];
+                    })();
                 const activeColor =
                   selectedColor[p.id] ??
-                  (colorList.find(
-                    (c) => c.name.trim().toLowerCase() === "black",
-                  )?.name ??
-                    colorList[0]?.name ??
-                    "Black");
+                  (hasVariants
+                    ? colorList[0]?.name ?? ""
+                    : colorList.find(
+                        (c) => c.name.trim().toLowerCase() === "black",
+                      )?.name ??
+                      colorList[0]?.name ??
+                      "Black");
                 const activeColorQty = sumSizes(productByColor[activeColor]);
                 const justAddedKey = `${p.id}::${activeColor}`;
                 return (
@@ -691,6 +741,11 @@ export function BulkOrderSheet({
                                           p.id,
                                           activeColor,
                                           parseInt(e.target.value || "0", 10) || 0,
+                                          hasVariants
+                                            ? sizes.filter((s) =>
+                                                isAvailable(activeColor, s),
+                                              )
+                                            : sizes,
                                         )
                                       }
                                       onFocus={(e) => e.currentTarget.select()}
@@ -703,7 +758,16 @@ export function BulkOrderSheet({
                                     step={1}
                                     value={total}
                                     onValueChange={(v) =>
-                                      applyAutoTotal(p.id, activeColor, v)
+                                      applyAutoTotal(
+                                        p.id,
+                                        activeColor,
+                                        v,
+                                        hasVariants
+                                          ? sizes.filter((s) =>
+                                              isAvailable(activeColor, s),
+                                            )
+                                          : sizes,
+                                      )
                                     }
                                     organizationId={organizationId}
                                   />
@@ -768,6 +832,7 @@ export function BulkOrderSheet({
                               size={s}
                               label={s}
                               color={activeColor}
+                              disabled={!isAvailable(activeColor, s)}
                             />
                           ))}
                         </div>
