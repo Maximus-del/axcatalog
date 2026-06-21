@@ -769,20 +769,201 @@ export function BulkOrderSheet({
                       )}
                     </button>
                     {hasVariants ? (
-                      <VariantColorGrid
-                        product={p}
-                        productByColor={productByColor}
-                        productTotal={productTotal}
-                        discountPct={discountPct}
-                        volumeTiers={volumeTiers}
-                        totalUnits={totalUnits}
-                        nextTier={nextTier}
-                        autoOn={autoOn}
-                        autoTotal={autoTotal}
-                        setAutoOn={setAutoOn}
-                        applyAutoTotal={applyAutoTotal}
-                        SizeStepper={SizeStepper}
-                      />
+                      (() => {
+                        // Group real variants by color and render each group as its
+                        // own row of size steppers. Unavailable variants stay visible
+                        // but disabled (see SizeStepper's `disabled` prop).
+                        type V = (typeof p.variants)[number];
+                        const groups = new Map<
+                          string,
+                          { variants: V[]; minPos: number }
+                        >();
+                        for (const v of p.variants) {
+                          const key = v.color ?? "";
+                          const g = groups.get(key) ?? {
+                            variants: [],
+                            minPos: Number.POSITIVE_INFINITY,
+                          };
+                          g.variants.push(v);
+                          g.minPos = Math.min(
+                            g.minPos,
+                            v.position ?? Number.POSITIVE_INFINITY,
+                          );
+                          groups.set(key, g);
+                        }
+                        const groupArr = Array.from(groups.entries())
+                          .map(([name, g]) => ({ name, ...g }))
+                          .sort((a, b) => {
+                            if (
+                              isFinite(a.minPos) &&
+                              isFinite(b.minPos) &&
+                              a.minPos !== b.minPos
+                            ) {
+                              return a.minPos - b.minPos;
+                            }
+                            return a.name.localeCompare(b.name);
+                          });
+                        const sortGroupSizes = (vs: V[]) => {
+                          const bySize = new Map<string, V>();
+                          for (const v of vs) bySize.set(v.size ?? "", v);
+                          const allSizes = Array.from(bySize.keys());
+                          const std = SIZE_ORDER.filter((s) =>
+                            bySize.has(s),
+                          ) as string[];
+                          const extras = allSizes
+                            .filter(
+                              (s) =>
+                                s !== "" &&
+                                !SIZE_ORDER.includes(s as any),
+                            )
+                            .sort();
+                          const ordered = [...std, ...extras];
+                          if (bySize.has("")) ordered.push("");
+                          return ordered.map((s) => ({
+                            size: s,
+                            variant: bySize.get(s)!,
+                          }));
+                        };
+                        return (
+                          <div className="pl-20 flex flex-col gap-3 md:flex-row md:items-stretch md:gap-6">
+                            <div className="flex-1 min-w-0 flex flex-col gap-2">
+                              {groupArr.map((group) => {
+                                const colorKey = group.name;
+                                const sized = sortGroupSizes(group.variants);
+                                const availSizes = sized
+                                  .filter((x) => x.variant.available)
+                                  .map((x) => x.size);
+                                const colorQty = sumSizes(
+                                  productByColor[colorKey],
+                                );
+                                const hex =
+                                  (p.colors ?? []).find(
+                                    (c) =>
+                                      c.name.trim().toLowerCase() ===
+                                      colorKey.trim().toLowerCase(),
+                                  )?.hex ?? null;
+                                const thumbId =
+                                  group.variants.find(
+                                    (v) => v.shopifyImageId,
+                                  )?.shopifyImageId ?? null;
+                                const thumbUrl = thumbId
+                                  ? p.images.find(
+                                      (i) => i.shopifyImageId === thumbId,
+                                    )?.url ?? null
+                                  : null;
+                                const autoKey = `${p.id}::${colorKey}`;
+                                const on = autoOn[autoKey] ?? false;
+                                const total = autoTotal[autoKey] ?? 0;
+                                return (
+                                  <div
+                                    key={colorKey || "__nocolor__"}
+                                    className="rounded border border-border/60 bg-background/30 p-2.5"
+                                  >
+                                    <div className="flex items-center gap-2 mb-2">
+                                      {thumbUrl ? (
+                                        <img
+                                          src={thumbUrl}
+                                          alt=""
+                                          className="h-9 w-9 rounded object-cover bg-[hsl(var(--dark))] shrink-0"
+                                        />
+                                      ) : hex ? (
+                                        <span
+                                          className="h-9 w-9 rounded border border-border shrink-0"
+                                          style={{ backgroundColor: hex }}
+                                        />
+                                      ) : (
+                                        <span className="h-9 w-9 rounded border border-dashed border-border/60 shrink-0" />
+                                      )}
+                                      <div className="flex-1 min-w-0">
+                                        <div
+                                          className="text-xs font-semibold uppercase tracking-wider text-foreground truncate"
+                                          title={colorKey || "One Color"}
+                                        >
+                                          {colorKey || "One Color"}
+                                        </div>
+                                        <div className="text-[10px] text-muted-foreground">
+                                          {availSizes.length}/{sized.length} in stock
+                                        </div>
+                                      </div>
+                                      {colorQty > 0 && (
+                                        <span className="text-[11px] uppercase tracking-wider text-accent font-semibold shrink-0">
+                                          {colorQty} pcs
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-5 gap-x-2 gap-y-1.5">
+                                      {sized.map(({ size, variant }) => (
+                                        <SizeStepper
+                                          key={`${colorKey}|${size}`}
+                                          productId={p.id}
+                                          size={size}
+                                          label={size || "OS"}
+                                          color={colorKey}
+                                          disabled={!variant.available}
+                                        />
+                                      ))}
+                                    </div>
+                                    {availSizes.length > 1 && (
+                                      <div className="mt-2 flex items-center gap-2">
+                                        <Label
+                                          htmlFor={`auto-${autoKey}`}
+                                          className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground"
+                                        >
+                                          Auto
+                                        </Label>
+                                        <Switch
+                                          id={`auto-${autoKey}`}
+                                          checked={on}
+                                          onCheckedChange={(v) =>
+                                            setAutoOn((prev) => ({
+                                              ...prev,
+                                              [autoKey]: v,
+                                            }))
+                                          }
+                                        />
+                                        {on && (
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={500}
+                                            value={total || ""}
+                                            placeholder="0"
+                                            onChange={(e) =>
+                                              applyAutoTotal(
+                                                p.id,
+                                                colorKey,
+                                                parseInt(
+                                                  e.target.value || "0",
+                                                  10,
+                                                ) || 0,
+                                                availSizes,
+                                              )
+                                            }
+                                            onFocus={(e) =>
+                                              e.currentTarget.select()
+                                            }
+                                            className="h-6 w-16 text-center text-xs rounded bg-background border border-border focus:outline-none focus:border-accent"
+                                          />
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="md:w-[280px] flex">
+                              <ProductAnalytics
+                                product={p}
+                                qty={productTotal}
+                                orderDiscountPct={discountPct}
+                                tiers={volumeTiers}
+                                totalOrderUnits={totalUnits}
+                                nextTier={nextTier}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })()
                     ) : (
                     <>
                     <div className="pl-20 mb-2 flex flex-wrap items-start gap-3">
