@@ -212,6 +212,24 @@ export default function ProductDetail() {
                 </TooltipTrigger>
                 <TooltipContent>Full sync of all images for this product.</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={handleRefreshVariants}
+                    disabled={variantsBusy}
+                    className="gap-2"
+                  >
+                    {variantsBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Refresh variants
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Pull colors, sizes, prices and inventory from Shopify.</TooltipContent>
+              </Tooltip>
             </TooltipProvider>
           )}
           <Button variant="outline" onClick={() => setDrawerOpen(true)} className="gap-2">
