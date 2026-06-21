@@ -391,6 +391,30 @@ export function BulkOrderSheet({
       toast.error("You must be signed in to submit an order");
       return;
     }
+    // Block submission when any quantity targets an unavailable variant.
+    {
+      const productById = new Map(products.map((p) => [p.id, p]));
+      for (const [productId, byColor] of Object.entries(draft)) {
+        const p = productById.get(productId);
+        if (!p || !p.variants || p.variants.length === 0) continue;
+        const lookup = new Map<string, (typeof p.variants)[number]>();
+        for (const v of p.variants) {
+          lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
+        }
+        for (const [color, sizes] of Object.entries(byColor)) {
+          for (const [size, qty] of Object.entries(sizes)) {
+            if (!qty || qty <= 0) continue;
+            const v = lookup.get(`${color ?? ""}|${size}`);
+            if (!v || v.available !== true) {
+              toast.error(
+                `Remove out-of-stock items (${p.title} · ${color || "—"} · ${size}) before submitting`,
+              );
+              return;
+            }
+          }
+        }
+      }
+    }
     setSubmitting(true);
     try {
       const orderNumber = generateOrderNumber();
@@ -410,7 +434,8 @@ export function BulkOrderSheet({
 
       if (orderErr || !orderRow) throw orderErr ?? new Error("Insert failed");
 
-      // 2) Build items from draft
+      // 2) Build items from draft; attach variant identifiers in notes
+      //    so downstream sync can resolve the exact Shopify variant.
       const items: Array<{
         order_request_id: string;
         product_id: string;
@@ -418,15 +443,33 @@ export function BulkOrderSheet({
         size: string;
         quantity: number;
         color?: string | null;
+        notes?: string | null;
+        unit_retail_price?: number | null;
       }> = [];
 
       const productById = new Map(products.map((p) => [p.id, p]));
       for (const [productId, byColor] of Object.entries(draft)) {
         const p = productById.get(productId);
         if (!p) continue;
+        const hasVariants = (p.variants?.length ?? 0) > 0;
+        const lookup = new Map<string, (typeof p.variants)[number]>();
+        if (hasVariants) {
+          for (const v of p.variants) {
+            lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
+          }
+        }
         for (const [color, sizes] of Object.entries(byColor)) {
           for (const [size, qty] of Object.entries(sizes)) {
             if (qty > 0) {
+              const variant = hasVariants
+                ? lookup.get(`${color ?? ""}|${size}`)
+                : undefined;
+              const notes = variant
+                ? JSON.stringify({
+                    shopify_variant_id: variant.shopifyVariantId,
+                    sku: variant.sku ?? null,
+                  })
+                : null;
               items.push({
                 order_request_id: orderRow.id,
                 product_id: productId,
@@ -434,6 +477,8 @@ export function BulkOrderSheet({
                 size,
                 quantity: qty,
                 color: color || null,
+                notes,
+                unit_retail_price: variant?.price ?? p.price ?? null,
               });
             }
           }
