@@ -51,7 +51,12 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
   const curve = useSizeDistributionCurve(athlete?.organization_id ?? null);
 
-  const hasVariants = product.variants && product.variants.length > 0;
+  // Treat Shopify products whose only variant is "Default Title" (no color/size
+  // dimensions) as variant-less so the standard size grid still works.
+  const hasVariants =
+    !!product.variants &&
+    product.variants.length > 0 &&
+    product.variants.some((v) => (v.color ?? "") !== "" || (v.size ?? "") !== "");
 
   // Color rows: when real variants exist, derive from them so we never mix
   // generic blank colors with real Shopify colorways.
