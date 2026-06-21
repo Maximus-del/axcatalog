@@ -983,6 +983,8 @@ export function BulkOrderSheet({
                         />
                       </div>
                     </div>
+                    </>
+                    )}
                   </li>
                 );
               })}
