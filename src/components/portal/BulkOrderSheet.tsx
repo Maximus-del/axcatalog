@@ -889,7 +889,7 @@ export function BulkOrderSheet({
                           product={p}
                           qty={productTotal}
                           orderDiscountPct={discountPct}
-                          tiers={config.tiers}
+                          tiers={volumeTiers}
                           totalOrderUnits={totalUnits}
                           nextTier={nextTier}
                         />
