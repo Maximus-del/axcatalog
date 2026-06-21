@@ -347,7 +347,10 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
 
           <div className="space-y-3">
             {/* Header row with size labels */}
-            <div className="grid grid-cols-[88px_repeat(6,minmax(0,1fr))] gap-1.5 px-1">
+            <div
+              className="grid gap-1.5 px-1"
+              style={{ gridTemplateColumns: `88px repeat(${sizes.length}, minmax(0,1fr))` }}
+            >
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                 Color
               </span>
