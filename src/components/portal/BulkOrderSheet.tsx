@@ -29,6 +29,14 @@ import { MilestoneSlider } from "./MilestoneSlider";
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
 
+/** Fallback volume discount tiers if the org has none configured. */
+const FALLBACK_VOLUME_TIERS: VolumeTier[] = [
+  { min_qty: 50, discount_pct: 10 },
+  { min_qty: 100, discount_pct: 15 },
+  { min_qty: 250, discount_pct: 20 },
+  { min_qty: 500, discount_pct: 25 },
+];
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -300,20 +308,21 @@ export function BulkOrderSheet({
     [draft],
   );
 
-  // Volume discount tiers — applied to the order total based on total units.
-  const VOLUME_TIERS = [
-    { min_qty: 50, discount_pct: 10 },
-    { min_qty: 100, discount_pct: 15 },
-    { min_qty: 250, discount_pct: 20 },
-    { min_qty: 500, discount_pct: 25 },
-  ];
-  const discountPct = pickDiscount(VOLUME_TIERS, totalUnits);
+  // Prefer real org volume tiers when configured; fall back to defaults silently.
+  const volumeTiers = useMemo<VolumeTier[]>(
+    () => (config.tiers.length ? config.tiers : FALLBACK_VOLUME_TIERS),
+    [config.tiers],
+  );
+  const discountPct = pickDiscount(volumeTiers, totalUnits);
   const markupMult = 1 + config.base_markup_pct / 100;
   const discountMult = 1 - discountPct / 100;
 
   const nextTier = useMemo(
-    () => VOLUME_TIERS.find((t) => totalUnits < t.min_qty) ?? null,
-    [totalUnits],
+    () =>
+      [...volumeTiers]
+        .sort((a, b) => a.min_qty - b.min_qty)
+        .find((t) => totalUnits < t.min_qty) ?? null,
+    [totalUnits, volumeTiers],
   );
 
   // Order subtotal (post-discount) across all products in the draft.
