@@ -29,6 +29,14 @@ import { MilestoneSlider } from "./MilestoneSlider";
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
 
+/** Fallback volume discount tiers if the org has none configured. */
+const FALLBACK_VOLUME_TIERS: VolumeTier[] = [
+  { min_qty: 50, discount_pct: 10 },
+  { min_qty: 100, discount_pct: 15 },
+  { min_qty: 250, discount_pct: 20 },
+  { min_qty: 500, discount_pct: 25 },
+];
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -300,20 +308,21 @@ export function BulkOrderSheet({
     [draft],
   );
 
-  // Volume discount tiers — applied to the order total based on total units.
-  const VOLUME_TIERS = [
-    { min_qty: 50, discount_pct: 10 },
-    { min_qty: 100, discount_pct: 15 },
-    { min_qty: 250, discount_pct: 20 },
-    { min_qty: 500, discount_pct: 25 },
-  ];
-  const discountPct = pickDiscount(VOLUME_TIERS, totalUnits);
+  // Prefer real org volume tiers when configured; fall back to defaults silently.
+  const volumeTiers = useMemo<VolumeTier[]>(
+    () => (config.tiers.length ? config.tiers : FALLBACK_VOLUME_TIERS),
+    [config.tiers],
+  );
+  const discountPct = pickDiscount(volumeTiers, totalUnits);
   const markupMult = 1 + config.base_markup_pct / 100;
   const discountMult = 1 - discountPct / 100;
 
   const nextTier = useMemo(
-    () => VOLUME_TIERS.find((t) => totalUnits < t.min_qty) ?? null,
-    [totalUnits],
+    () =>
+      [...volumeTiers]
+        .sort((a, b) => a.min_qty - b.min_qty)
+        .find((t) => totalUnits < t.min_qty) ?? null,
+    [totalUnits, volumeTiers],
   );
 
   // Order subtotal (post-discount) across all products in the draft.
@@ -351,12 +360,20 @@ export function BulkOrderSheet({
     productId: string,
     color: string,
     total: number,
+    availableSizes?: readonly string[],
   ) => {
     const clamped = Math.max(0, Math.min(500, Math.floor(total)));
     const key = `${productId}::${color}`;
     setAutoTotal((prev) => ({ ...prev, [key]: clamped }));
-    const dist = distributeByCurve(clamped, [...STANDARD_SIZES], curve);
+    const targets = availableSizes && availableSizes.length
+      ? [...availableSizes]
+      : [...STANDARD_SIZES];
+    const dist = distributeByCurve(clamped, targets, curve);
+    // Zero out any standard sizes not in target list, then assign distribution.
     for (const s of STANDARD_SIZES) {
+      if (!targets.includes(s)) setQty(productId, s, 0, color);
+    }
+    for (const s of targets) {
       setQty(productId, s, dist[s] ?? 0, color);
     }
   };
@@ -373,6 +390,30 @@ export function BulkOrderSheet({
     if (!user) {
       toast.error("You must be signed in to submit an order");
       return;
+    }
+    // Block submission when any quantity targets an unavailable variant.
+    {
+      const productById = new Map(products.map((p) => [p.id, p]));
+      for (const [productId, byColor] of Object.entries(draft)) {
+        const p = productById.get(productId);
+        if (!p || !p.variants || p.variants.length === 0) continue;
+        const lookup = new Map<string, (typeof p.variants)[number]>();
+        for (const v of p.variants) {
+          lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
+        }
+        for (const [color, sizes] of Object.entries(byColor)) {
+          for (const [size, qty] of Object.entries(sizes)) {
+            if (!qty || qty <= 0) continue;
+            const v = lookup.get(`${color ?? ""}|${size}`);
+            if (!v || v.available !== true) {
+              toast.error(
+                `Remove out-of-stock items (${p.title} · ${color || "—"} · ${size}) before submitting`,
+              );
+              return;
+            }
+          }
+        }
+      }
     }
     setSubmitting(true);
     try {
@@ -393,7 +434,8 @@ export function BulkOrderSheet({
 
       if (orderErr || !orderRow) throw orderErr ?? new Error("Insert failed");
 
-      // 2) Build items from draft
+      // 2) Build items from draft; attach variant identifiers in notes
+      //    so downstream sync can resolve the exact Shopify variant.
       const items: Array<{
         order_request_id: string;
         product_id: string;
@@ -401,15 +443,33 @@ export function BulkOrderSheet({
         size: string;
         quantity: number;
         color?: string | null;
+        notes?: string | null;
+        unit_retail_price?: number | null;
       }> = [];
 
       const productById = new Map(products.map((p) => [p.id, p]));
       for (const [productId, byColor] of Object.entries(draft)) {
         const p = productById.get(productId);
         if (!p) continue;
+        const hasVariants = (p.variants?.length ?? 0) > 0;
+        const lookup = new Map<string, (typeof p.variants)[number]>();
+        if (hasVariants) {
+          for (const v of p.variants) {
+            lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
+          }
+        }
         for (const [color, sizes] of Object.entries(byColor)) {
           for (const [size, qty] of Object.entries(sizes)) {
             if (qty > 0) {
+              const variant = hasVariants
+                ? lookup.get(`${color ?? ""}|${size}`)
+                : undefined;
+              const notes = variant
+                ? JSON.stringify({
+                    shopify_variant_id: variant.shopifyVariantId,
+                    sku: variant.sku ?? null,
+                  })
+                : null;
               items.push({
                 order_request_id: orderRow.id,
                 product_id: productId,
@@ -417,6 +477,8 @@ export function BulkOrderSheet({
                 size,
                 quantity: qty,
                 color: color || null,
+                notes,
+                unit_retail_price: variant?.price ?? p.price ?? null,
               });
             }
           }
@@ -471,11 +533,13 @@ export function BulkOrderSheet({
     size,
     label,
     color,
+    disabled = false,
   }: {
     productId: string;
     size: string;
     label: string;
     color: string;
+    disabled?: boolean;
   }) => {
     const qty = draft[productId]?.[color]?.[size] ?? 0;
     const active = qty > 0;
@@ -484,21 +548,31 @@ export function BulkOrderSheet({
         <span
           className={cn(
             "text-[10px] font-semibold uppercase tracking-wider h-3.5 leading-none",
-            active ? "text-accent" : "text-transparent",
+            disabled
+              ? "text-muted-foreground/50"
+              : active
+                ? "text-accent"
+                : "text-transparent",
           )}
         >
-          {label}
+          {disabled ? "Out" : label}
         </span>
         <div
           className={cn(
             "flex items-center gap-1 rounded border bg-background pl-0.5 pr-0.5 py-0.5",
-            active ? "border-accent" : "border-border",
+            disabled
+              ? "border-dashed border-border/50 opacity-50"
+              : active
+                ? "border-accent"
+                : "border-border",
           )}
+          title={disabled ? "Out of stock" : undefined}
         >
           <button
             type="button"
             onClick={() => setQty(productId, size, Math.max(0, qty - 1), color)}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+            disabled={disabled}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
             aria-label={`Decrease ${label}`}
           >
             <Minus className="h-3 w-3" />
@@ -508,6 +582,7 @@ export function BulkOrderSheet({
               type="number"
               min={0}
               value={qty}
+              disabled={disabled}
               onChange={(e) =>
                 setQty(
                   productId,
@@ -527,7 +602,8 @@ export function BulkOrderSheet({
           <button
             type="button"
             onClick={() => setQty(productId, size, qty + 1, color)}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+            disabled={disabled}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
             aria-label={`Increase ${label}`}
           >
             <Plus className="h-3 w-3" />
@@ -566,23 +642,73 @@ export function BulkOrderSheet({
           ) : (
             <ul className="divide-y divide-border/60">
               {visibleProducts.map((p) => {
-                const sizes = [...STANDARD_SIZES];
+                const hasVariants = (p.variants?.length ?? 0) > 0;
+                // When variants exist, build size list from real variants;
+                // otherwise keep the standard columns for manual products.
+                const sizes: string[] = hasVariants
+                  ? (() => {
+                      const seen = new Set<string>();
+                      const out: string[] = [];
+                      // Prefer standard order for known sizes, then extras in variant order.
+                      const variantSizes = new Set<string>();
+                      for (const v of p.variants) {
+                        const s = v.size ?? "";
+                        if (s) variantSizes.add(s);
+                      }
+                      for (const s of STANDARD_SIZES) {
+                        if (variantSizes.has(s) && !seen.has(s)) {
+                          seen.add(s);
+                          out.push(s);
+                        }
+                      }
+                      for (const v of p.variants) {
+                        const s = v.size ?? "";
+                        if (!s || seen.has(s)) continue;
+                        seen.add(s);
+                        out.push(s);
+                      }
+                      return out.length ? out : [...STANDARD_SIZES];
+                    })()
+                  : [...STANDARD_SIZES];
+                // Variant lookup by `${color}|${size}` (color "" when null).
+                const variantByCell = new Map<
+                  string,
+                  (typeof p.variants)[number]
+                >();
+                if (hasVariants) {
+                  for (const v of p.variants) {
+                    variantByCell.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
+                  }
+                }
+                const isAvailable = (color: string, size: string): boolean => {
+                  if (!hasVariants) return true;
+                  const v = variantByCell.get(`${color}|${size}`);
+                  return !!v && v.available === true;
+                };
                 const productByColor = draft[p.id] ?? {};
                 const productTotal = sumProduct(productByColor);
                 const rawColors = p.colors ?? [];
-                const hasBlack = rawColors.some(
-                  (c) => c.name.trim().toLowerCase() === "black",
-                );
-                const colorList = hasBlack
+                // When real variants exist, never inject a synthetic "Black";
+                // use exactly the colorways Shopify reports.
+                const colorList = hasVariants
                   ? rawColors
-                  : [{ name: "Black", hex: "#000000" }, ...rawColors];
+                  : (() => {
+                      const hasBlack = rawColors.some(
+                        (c) => c.name.trim().toLowerCase() === "black",
+                      );
+                      return hasBlack
+                        ? rawColors
+                        : [{ name: "Black", hex: "#000000" }, ...rawColors];
+                    })();
                 const activeColor =
                   selectedColor[p.id] ??
-                  (colorList.find(
-                    (c) => c.name.trim().toLowerCase() === "black",
-                  )?.name ??
-                    colorList[0]?.name ??
-                    "Black");
+                  (hasVariants
+                    ? colorList[0]?.name ?? ""
+                    : colorList.find(
+                        (c) => c.name.trim().toLowerCase() === "black",
+                      )?.name ??
+                      colorList[0]?.name ??
+                      "Black");
                 const activeColorQty = sumSizes(productByColor[activeColor]);
                 const justAddedKey = `${p.id}::${activeColor}`;
                 return (
@@ -660,6 +786,11 @@ export function BulkOrderSheet({
                                           p.id,
                                           activeColor,
                                           parseInt(e.target.value || "0", 10) || 0,
+                                          hasVariants
+                                            ? sizes.filter((s) =>
+                                                isAvailable(activeColor, s),
+                                              )
+                                            : sizes,
                                         )
                                       }
                                       onFocus={(e) => e.currentTarget.select()}
@@ -672,7 +803,16 @@ export function BulkOrderSheet({
                                     step={1}
                                     value={total}
                                     onValueChange={(v) =>
-                                      applyAutoTotal(p.id, activeColor, v)
+                                      applyAutoTotal(
+                                        p.id,
+                                        activeColor,
+                                        v,
+                                        hasVariants
+                                          ? sizes.filter((s) =>
+                                              isAvailable(activeColor, s),
+                                            )
+                                          : sizes,
+                                      )
                                     }
                                     organizationId={organizationId}
                                   />
@@ -737,6 +877,7 @@ export function BulkOrderSheet({
                               size={s}
                               label={s}
                               color={activeColor}
+                              disabled={!isAvailable(activeColor, s)}
                             />
                           ))}
                         </div>
@@ -793,7 +934,7 @@ export function BulkOrderSheet({
                           product={p}
                           qty={productTotal}
                           orderDiscountPct={discountPct}
-                          tiers={config.tiers}
+                          tiers={volumeTiers}
                           totalOrderUnits={totalUnits}
                           nextTier={nextTier}
                         />
