@@ -8,6 +8,25 @@ export interface PortalImage {
   sort_order: number;
 }
 
+export interface PortalVariant {
+  id: string;
+  productId: string;
+  shopifyVariantId: string;
+  sku: string | null;
+  title: string | null;
+  color: string | null;
+  size: string | null;
+  price: number | null;
+  compareAtPrice: number | null;
+  available: boolean;
+  inventoryQuantity: number | null;
+  inventoryPolicy: string | null;
+  position: number | null;
+  shopifyImageId: string | null;
+  metadata: Record<string, any>;
+  syncedAt: string | null;
+}
+
 export interface PortalProduct {
   id: string;
   title: string;
@@ -26,9 +45,11 @@ export interface PortalProduct {
    * null when the linked blank has no tier price set yet.
    */
   athlete_unit_price: number | null;
-  /** Available sizes from the linked blank, in sort_order. */
+  /** Real Shopify variants when available (non-orphaned). Empty array for manual/non-Shopify products. */
+  variants: PortalVariant[];
+  /** Available sizes: derived from variants when present, else from linked blank. */
   sizes: string[];
-  /** Available colors from the linked blank, in sort_order. */
+  /** Available colors: derived from variants when present, else from linked blank/metadata. */
   colors: Array<{ name: string; hex: string | null }>;
   created_at: string;
 }
