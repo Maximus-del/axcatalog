@@ -360,12 +360,20 @@ export function BulkOrderSheet({
     productId: string,
     color: string,
     total: number,
+    availableSizes?: readonly string[],
   ) => {
     const clamped = Math.max(0, Math.min(500, Math.floor(total)));
     const key = `${productId}::${color}`;
     setAutoTotal((prev) => ({ ...prev, [key]: clamped }));
-    const dist = distributeByCurve(clamped, [...STANDARD_SIZES], curve);
+    const targets = availableSizes && availableSizes.length
+      ? [...availableSizes]
+      : [...STANDARD_SIZES];
+    const dist = distributeByCurve(clamped, targets, curve);
+    // Zero out any standard sizes not in target list, then assign distribution.
     for (const s of STANDARD_SIZES) {
+      if (!targets.includes(s)) setQty(productId, s, 0, color);
+    }
+    for (const s of targets) {
       setQty(productId, s, dist[s] ?? 0, color);
     }
   };
