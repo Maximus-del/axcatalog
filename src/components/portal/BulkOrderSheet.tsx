@@ -472,12 +472,18 @@ export function BulkOrderSheet({
             lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
           }
         }
+        // Single "Default Title" variant: no real color/size dimensions, but
+        // we still want the Shopify variant id attached to every line item.
+        const defaultVariant =
+          !hasVariants && (p.variants?.length ?? 0) === 1
+            ? p.variants[0]
+            : null;
         for (const [color, sizes] of Object.entries(byColor)) {
           for (const [size, qty] of Object.entries(sizes)) {
             if (qty > 0) {
               const variant = hasVariants
                 ? lookup.get(`${color ?? ""}|${size}`)
-                : undefined;
+                : defaultVariant ?? undefined;
               const notes = variant
                 ? JSON.stringify({
                     shopify_variant_id: variant.shopifyVariantId,
