@@ -396,7 +396,15 @@ export function BulkOrderSheet({
       const productById = new Map(products.map((p) => [p.id, p]));
       for (const [productId, byColor] of Object.entries(draft)) {
         const p = productById.get(productId);
-        if (!p || !p.variants || p.variants.length === 0) continue;
+        if (
+          !p ||
+          !p.variants ||
+          p.variants.length === 0 ||
+          !p.variants.some(
+            (v) => (v.color ?? "") !== "" || (v.size ?? "") !== "",
+          )
+        )
+          continue;
         const lookup = new Map<string, (typeof p.variants)[number]>();
         for (const v of p.variants) {
           lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
@@ -451,7 +459,11 @@ export function BulkOrderSheet({
       for (const [productId, byColor] of Object.entries(draft)) {
         const p = productById.get(productId);
         if (!p) continue;
-        const hasVariants = (p.variants?.length ?? 0) > 0;
+        const hasVariants =
+          (p.variants?.length ?? 0) > 0 &&
+          p.variants.some(
+            (v) => (v.color ?? "") !== "" || (v.size ?? "") !== "",
+          );
         const lookup = new Map<string, (typeof p.variants)[number]>();
         if (hasVariants) {
           for (const v of p.variants) {
