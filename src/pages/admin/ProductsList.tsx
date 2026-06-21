@@ -356,6 +356,27 @@ export default function ProductsList() {
     }
   }
 
+  const [variantsBusy, setVariantsBusy] = useState(false);
+  async function handleRefreshAllVariants() {
+    if (variantsBusy) return;
+    setVariantsBusy(true);
+    const t = toast.loading("Refreshing Shopify variants…");
+    try {
+      const res = await refreshShopifyVariants();
+      if (res.errors.length) {
+        toast.warning(`Partial sync — ${summarizeVariantRefresh(res)}`, { id: t });
+        console.warn("Variant sync errors:", res.errors);
+      } else {
+        toast.success(summarizeVariantRefresh(res), { id: t });
+      }
+    } catch (e: any) {
+      toast.error("Variant refresh failed. Please try again.", { id: t });
+      console.error("Variant refresh failed:", e);
+    } finally {
+      setVariantsBusy(false);
+    }
+  }
+
   const [fetchImageBusyId, setFetchImageBusyId] = useState<string | null>(null);
   async function handleFetchImage(productId: string) {
     if (fetchImageBusyId) return;
