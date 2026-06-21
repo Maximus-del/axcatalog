@@ -2132,6 +2132,113 @@ export type Database = {
           },
         ]
       }
+      product_variants: {
+        Row: {
+          available: boolean | null
+          barcode: string | null
+          color: string | null
+          compare_at_price: number | null
+          created_at: string
+          currency: string
+          id: string
+          inventory_policy: string | null
+          inventory_quantity: number | null
+          metadata: Json
+          option1_name: string | null
+          option1_value: string | null
+          option2_name: string | null
+          option2_value: string | null
+          option3_name: string | null
+          option3_value: string | null
+          position: number | null
+          price: number | null
+          product_id: string
+          requires_shipping: boolean
+          shopify_image_id: string | null
+          shopify_inventory_item_id: string | null
+          shopify_variant_id: string
+          size: string | null
+          sku: string | null
+          synced_at: string | null
+          taxable: boolean
+          title: string | null
+          updated_at: string
+          weight_grams: number | null
+        }
+        Insert: {
+          available?: boolean | null
+          barcode?: string | null
+          color?: string | null
+          compare_at_price?: number | null
+          created_at?: string
+          currency?: string
+          id?: string
+          inventory_policy?: string | null
+          inventory_quantity?: number | null
+          metadata?: Json
+          option1_name?: string | null
+          option1_value?: string | null
+          option2_name?: string | null
+          option2_value?: string | null
+          option3_name?: string | null
+          option3_value?: string | null
+          position?: number | null
+          price?: number | null
+          product_id: string
+          requires_shipping?: boolean
+          shopify_image_id?: string | null
+          shopify_inventory_item_id?: string | null
+          shopify_variant_id: string
+          size?: string | null
+          sku?: string | null
+          synced_at?: string | null
+          taxable?: boolean
+          title?: string | null
+          updated_at?: string
+          weight_grams?: number | null
+        }
+        Update: {
+          available?: boolean | null
+          barcode?: string | null
+          color?: string | null
+          compare_at_price?: number | null
+          created_at?: string
+          currency?: string
+          id?: string
+          inventory_policy?: string | null
+          inventory_quantity?: number | null
+          metadata?: Json
+          option1_name?: string | null
+          option1_value?: string | null
+          option2_name?: string | null
+          option2_value?: string | null
+          option3_name?: string | null
+          option3_value?: string | null
+          position?: number | null
+          price?: number | null
+          product_id?: string
+          requires_shipping?: boolean
+          shopify_image_id?: string | null
+          shopify_inventory_item_id?: string | null
+          shopify_variant_id?: string
+          size?: string | null
+          sku?: string | null
+          synced_at?: string | null
+          taxable?: boolean
+          title?: string | null
+          updated_at?: string
+          weight_grams?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_videos: {
         Row: {
           created_at: string
