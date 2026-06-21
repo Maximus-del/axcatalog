@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { BulkOrderStatus } from "@/lib/order-status";
+import { parseOrderItemNotes } from "@/lib/order-item-notes";
 
 export interface OrderItem {
   id: string;
@@ -10,6 +11,12 @@ export interface OrderItem {
   color: string | null;
   quantity: number;
   notes: string | null;
+  /** Parsed user-facing note text (legacy strings or `note` field from JSON). */
+  notes_text: string | null;
+  /** Shopify variant GID/id selected at order time, if available. */
+  shopify_variant_id: string | null;
+  /** Variant SKU snapshot at order time, if available. */
+  variant_sku: string | null;
   product_image_url: string | null;
 }
 
@@ -105,6 +112,7 @@ export function useAdminOrderDetail(id: string | undefined) {
           .from(primary.storage_bucket)
           .getPublicUrl(primary.storage_path).data.publicUrl;
       }
+      const parsedNotes = parseOrderItemNotes(row.notes);
       return {
         id: row.id,
         product_id: row.product_id,
@@ -113,6 +121,9 @@ export function useAdminOrderDetail(id: string | undefined) {
         color: row.color,
         quantity: row.quantity,
         notes: row.notes,
+        notes_text: parsedNotes.text,
+        shopify_variant_id: parsedNotes.shopifyVariantId,
+        variant_sku: parsedNotes.sku,
         product_image_url: url,
       };
     });
