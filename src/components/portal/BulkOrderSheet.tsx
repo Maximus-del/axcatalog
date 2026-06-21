@@ -488,11 +488,13 @@ export function BulkOrderSheet({
     size,
     label,
     color,
+    disabled = false,
   }: {
     productId: string;
     size: string;
     label: string;
     color: string;
+    disabled?: boolean;
   }) => {
     const qty = draft[productId]?.[color]?.[size] ?? 0;
     const active = qty > 0;
@@ -501,21 +503,31 @@ export function BulkOrderSheet({
         <span
           className={cn(
             "text-[10px] font-semibold uppercase tracking-wider h-3.5 leading-none",
-            active ? "text-accent" : "text-transparent",
+            disabled
+              ? "text-muted-foreground/50"
+              : active
+                ? "text-accent"
+                : "text-transparent",
           )}
         >
-          {label}
+          {disabled ? "Out" : label}
         </span>
         <div
           className={cn(
             "flex items-center gap-1 rounded border bg-background pl-0.5 pr-0.5 py-0.5",
-            active ? "border-accent" : "border-border",
+            disabled
+              ? "border-dashed border-border/50 opacity-50"
+              : active
+                ? "border-accent"
+                : "border-border",
           )}
+          title={disabled ? "Out of stock" : undefined}
         >
           <button
             type="button"
             onClick={() => setQty(productId, size, Math.max(0, qty - 1), color)}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+            disabled={disabled}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
             aria-label={`Decrease ${label}`}
           >
             <Minus className="h-3 w-3" />
@@ -525,6 +537,7 @@ export function BulkOrderSheet({
               type="number"
               min={0}
               value={qty}
+              disabled={disabled}
               onChange={(e) =>
                 setQty(
                   productId,
@@ -544,7 +557,8 @@ export function BulkOrderSheet({
           <button
             type="button"
             onClick={() => setQty(productId, size, qty + 1, color)}
-            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10"
+            disabled={disabled}
+            className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
             aria-label={`Increase ${label}`}
           >
             <Plus className="h-3 w-3" />
