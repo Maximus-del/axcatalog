@@ -52,6 +52,7 @@ import { haptic } from "@/lib/haptics";
 import { useMarqueeSelection } from "@/hooks/useMarqueeSelection";
 import { runMooneySweep } from "@/lib/mooney-sweep";
 import { fetchShopifyPrimaryImage, refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
+import { refreshShopifyVariants, summarizeVariantRefresh } from "@/lib/shopify-refresh-variants";
 
 interface ProductRow {
   id: string;
