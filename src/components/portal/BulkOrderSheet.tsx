@@ -642,7 +642,13 @@ export function BulkOrderSheet({
           ) : (
             <ul className="divide-y divide-border/60">
               {visibleProducts.map((p) => {
-                const hasVariants = (p.variants?.length ?? 0) > 0;
+                // Skip single-variant "Default Title" products so the standard
+                // size grid remains usable (no real color/size dimensions).
+                const hasVariants =
+                  (p.variants?.length ?? 0) > 0 &&
+                  p.variants.some(
+                    (v) => (v.color ?? "") !== "" || (v.size ?? "") !== "",
+                  );
                 // When variants exist, build size list from real variants;
                 // otherwise keep the standard columns for manual products.
                 const sizes: string[] = hasVariants
