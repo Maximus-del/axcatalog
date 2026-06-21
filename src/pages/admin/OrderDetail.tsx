@@ -431,7 +431,29 @@ export default function OrderDetail() {
                       <td className="px-4 py-3 text-muted-foreground">{it.color ?? "—"}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{it.quantity}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
-                        {it.notes ?? "—"}
+                        {it.shopify_variant_id || it.variant_sku || it.notes_text ? (
+                          <div className="space-y-1">
+                            {it.variant_sku && (
+                              <div className="font-mono uppercase text-[10px] tracking-wide text-foreground/80">
+                                {it.variant_sku}
+                              </div>
+                            )}
+                            {it.shopify_variant_id && (
+                              <div
+                                className="font-mono text-[10px] opacity-60 truncate max-w-[180px]"
+                                title={it.shopify_variant_id}
+                              >
+                                {it.shopify_variant_id.replace(
+                                  /^gid:\/\/shopify\/ProductVariant\//,
+                                  "var ",
+                                )}
+                              </div>
+                            )}
+                            {it.notes_text && <div>{it.notes_text}</div>}
+                          </div>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   ))}
