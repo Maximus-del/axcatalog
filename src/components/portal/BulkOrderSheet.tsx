@@ -27,6 +27,8 @@ import {
 import { MilestoneSlider } from "./MilestoneSlider";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
+/** Full apparel size ladder used to order real Shopify variant sizes. */
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
 
 /** Fallback volume discount tiers if the org has none configured. */
