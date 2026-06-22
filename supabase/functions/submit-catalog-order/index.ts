@@ -176,6 +176,8 @@ Deno.serve(async (req) => {
       channel: "wholesale_catalog",
       customer_name,
       customer_email,
+      athlete_id: null,
+      team_id: null,
       requested_by: null,
       order_number,
       total_units: totalUnits,
