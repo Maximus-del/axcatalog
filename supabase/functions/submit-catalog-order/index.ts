@@ -1,6 +1,14 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
 import { z } from "npm:zod@3.23.8";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
 const BodySchema = z.object({
   customer_name: z.string().trim().min(1).max(200),
@@ -31,56 +39,67 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  let payload: unknown;
   try {
-    payload = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        status: 405,
+        headers: jsonHeaders,
+      });
+    }
+
+    let payload: unknown;
+    try {
+      payload = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+        status: 400,
+        headers: jsonHeaders,
+      });
+    }
+
+    const parsed = BodySchema.safeParse(payload);
+    if (!parsed.success) {
+      return new Response(
+        JSON.stringify({ error: parsed.error.flatten().fieldErrors }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+
+    const { customer_name, customer_email, lines } = parsed.data;
+
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!serviceKey || !supabaseUrl) {
+      console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+      return new Response(
+        JSON.stringify({ error: "Server misconfigured" }),
+        { status: 500, headers: jsonHeaders },
+      );
+    }
+
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
     });
-  }
 
-  const parsed = BodySchema.safeParse(payload);
-  if (!parsed.success) {
-    return new Response(
-      JSON.stringify({ error: parsed.error.flatten().fieldErrors }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  }
+    const blankIds = Array.from(new Set(lines.map((l) => l.blank_id)));
+    const { data: blanks, error: blanksErr } = await admin
+      .from("blanks")
+      .select(
+        "id, name, organization_id, sellable_as_blank, internal_only, price_standard",
+      )
+      .in("id", blankIds);
 
-  const { customer_name, customer_email, lines } = parsed.data;
+    if (blanksErr) {
+      console.error("blanks fetch error", blanksErr);
+      return new Response(JSON.stringify({ error: blanksErr.message }), {
+        status: 500,
+        headers: jsonHeaders,
+      });
+    }
 
-  const admin = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+    const byId = new Map((blanks ?? []).map((b: any) => [b.id, b]));
 
-  const blankIds = Array.from(new Set(lines.map((l) => l.blank_id)));
-  const { data: blanks, error: blanksErr } = await admin
-    .from("blanks")
-    .select(
-      "id, name, organization_id, sellable_as_blank, internal_only, price_standard",
-    )
-    .in("id", blankIds);
-
-  if (blanksErr) {
-    return new Response(JSON.stringify({ error: blanksErr.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const byId = new Map((blanks ?? []).map((b: any) => [b.id, b]));
-
-  let orgId: string | null = null;
+    let orgId: string | null = null;
   const itemRows: Array<{
     product_id: string;
     product_name_snapshot: string;
@@ -91,35 +110,35 @@ Deno.serve(async (req) => {
     unit_retail_price: number;
     line_subtotal: number;
   }> = [];
-  let totalUnits = 0;
-  let wholesaleSubtotal = 0;
-  let retailEquivalent = 0;
+    let totalUnits = 0;
+    let wholesaleSubtotal = 0;
+    let retailEquivalent = 0;
 
-  for (const line of lines) {
+    for (const line of lines) {
     const b: any = byId.get(line.blank_id);
     if (!b) {
       return new Response(
         JSON.stringify({ error: `Unknown product: ${line.blank_id}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 400, headers: jsonHeaders },
       );
     }
     if (!b.sellable_as_blank || b.internal_only) {
       return new Response(
         JSON.stringify({ error: `Product not available: ${b.name}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 400, headers: jsonHeaders },
       );
     }
     const price = Number(b.price_standard);
     if (!Number.isFinite(price) || price <= 0) {
       return new Response(
         JSON.stringify({ error: `No price configured for: ${b.name}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 400, headers: jsonHeaders },
       );
     }
     if (orgId && orgId !== b.organization_id) {
       return new Response(
         JSON.stringify({ error: "Cart contains products from multiple organizations" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        { status: 400, headers: jsonHeaders },
       );
     }
     orgId = b.organization_id;
@@ -139,18 +158,18 @@ Deno.serve(async (req) => {
       unit_retail_price: price,
       line_subtotal: subtotal,
     });
-  }
+    }
 
-  if (!orgId) {
-    return new Response(JSON.stringify({ error: "No valid lines" }), {
-      status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+    if (!orgId) {
+      return new Response(JSON.stringify({ error: "No valid lines" }), {
+        status: 400,
+        headers: jsonHeaders,
+      });
+    }
 
-  const order_number = genOrderNumber();
+    const order_number = genOrderNumber();
 
-  const { data: orderRow, error: orderErr } = await admin
+    const { data: orderRow, error: orderErr } = await admin
     .from("bulk_order_requests")
     .insert({
       organization_id: orgId,
@@ -158,7 +177,6 @@ Deno.serve(async (req) => {
       customer_name,
       customer_email,
       requested_by: null,
-      status: "submitted",
       order_number,
       total_units: totalUnits,
       wholesale_subtotal: Number(wholesaleSubtotal.toFixed(2)),
@@ -168,28 +186,36 @@ Deno.serve(async (req) => {
     .select("id, order_number")
     .single();
 
-  if (orderErr || !orderRow) {
+    if (orderErr || !orderRow) {
+      console.error("order insert error", orderErr);
+      return new Response(
+        JSON.stringify({ error: orderErr?.message ?? "Failed to create order" }),
+        { status: 500, headers: jsonHeaders },
+      );
+    }
+
+    const { error: itemsErr } = await admin.from("bulk_order_items").insert(
+      itemRows.map((r) => ({ ...r, order_request_id: orderRow.id })),
+    );
+
+    if (itemsErr) {
+      console.error("items insert error", itemsErr);
+      await admin.from("bulk_order_requests").delete().eq("id", orderRow.id);
+      return new Response(JSON.stringify({ error: itemsErr.message }), {
+        status: 500,
+        headers: jsonHeaders,
+      });
+    }
+
     return new Response(
-      JSON.stringify({ error: orderErr?.message ?? "Failed to create order" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      JSON.stringify({ id: orderRow.id, order_number: orderRow.order_number }),
+      { status: 200, headers: jsonHeaders },
+    );
+  } catch (err: any) {
+    console.error("submit-catalog-order error:", err);
+    return new Response(
+      JSON.stringify({ error: err?.message ?? String(err) }),
+      { status: 500, headers: jsonHeaders },
     );
   }
-
-  const { error: itemsErr } = await admin.from("bulk_order_items").insert(
-    itemRows.map((r) => ({ ...r, order_request_id: orderRow.id })),
-  );
-
-  if (itemsErr) {
-    // Best-effort rollback of the parent order
-    await admin.from("bulk_order_requests").delete().eq("id", orderRow.id);
-    return new Response(JSON.stringify({ error: itemsErr.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  return new Response(
-    JSON.stringify({ id: orderRow.id, order_number: orderRow.order_number }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-  );
 });
