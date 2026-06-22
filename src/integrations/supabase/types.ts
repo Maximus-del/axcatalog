@@ -720,16 +720,19 @@ export type Database = {
           admin_notes: string | null
           amount_due: number | null
           athlete_id: string | null
+          channel: string
           completed_at: string | null
           created_at: string
           credit_applied: number
+          customer_email: string | null
+          customer_name: string | null
           id: string
           notes: string | null
           order_number: string | null
           organization_id: string
           payment_method: string
           priority: string
-          requested_by: string
+          requested_by: string | null
           retail_equivalent: number
           shipped_at: string | null
           shipping_carrier: string | null
@@ -746,16 +749,19 @@ export type Database = {
           admin_notes?: string | null
           amount_due?: number | null
           athlete_id?: string | null
+          channel?: string
           completed_at?: string | null
           created_at?: string
           credit_applied?: number
+          customer_email?: string | null
+          customer_name?: string | null
           id?: string
           notes?: string | null
           order_number?: string | null
           organization_id: string
           payment_method?: string
           priority?: string
-          requested_by: string
+          requested_by?: string | null
           retail_equivalent?: number
           shipped_at?: string | null
           shipping_carrier?: string | null
@@ -772,16 +778,19 @@ export type Database = {
           admin_notes?: string | null
           amount_due?: number | null
           athlete_id?: string | null
+          channel?: string
           completed_at?: string | null
           created_at?: string
           credit_applied?: number
+          customer_email?: string | null
+          customer_name?: string | null
           id?: string
           notes?: string | null
           order_number?: string | null
           organization_id?: string
           payment_method?: string
           priority?: string
-          requested_by?: string
+          requested_by?: string | null
           retail_equivalent?: number
           shipped_at?: string | null
           shipping_carrier?: string | null
