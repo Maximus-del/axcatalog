@@ -47,3 +47,45 @@ export function usePublicCatalogItem(id: string | undefined) {
     },
   });
 }
+
+export interface CatalogColor {
+  color_name: string;
+  sort_order: number;
+}
+
+export interface CatalogSize {
+  size: string;
+  sort_order: number;
+}
+
+export function usePublicCatalogColors(blankId: string | undefined) {
+  return useQuery({
+    queryKey: ["public-catalog-colors", blankId],
+    enabled: !!blankId,
+    queryFn: async (): Promise<CatalogColor[]> => {
+      const { data, error } = await supabase
+        .from("public_catalog_colors" as any)
+        .select("color_name, sort_order")
+        .eq("blank_id", blankId!)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as CatalogColor[];
+    },
+  });
+}
+
+export function usePublicCatalogSizes(blankId: string | undefined) {
+  return useQuery({
+    queryKey: ["public-catalog-sizes", blankId],
+    enabled: !!blankId,
+    queryFn: async (): Promise<CatalogSize[]> => {
+      const { data, error } = await supabase
+        .from("public_catalog_sizes" as any)
+        .select("size, sort_order")
+        .eq("blank_id", blankId!)
+        .order("sort_order", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as CatalogSize[];
+    },
+  });
+}
