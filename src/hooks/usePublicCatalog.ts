@@ -69,7 +69,7 @@ export function usePublicCatalogColors(blankId: string | undefined) {
         .eq("blank_id", blankId!)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as CatalogColor[];
+      return ((data ?? []) as unknown) as CatalogColor[];
     },
   });
 }
@@ -85,7 +85,7 @@ export function usePublicCatalogSizes(blankId: string | undefined) {
         .eq("blank_id", blankId!)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      return (data ?? []) as CatalogSize[];
+      return ((data ?? []) as unknown) as CatalogSize[];
     },
   });
 }
