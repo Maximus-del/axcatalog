@@ -1,0 +1,195 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { z } from "npm:zod@3.23.8";
+
+const BodySchema = z.object({
+  customer_name: z.string().trim().min(1).max(200),
+  customer_email: z.string().trim().email().max(255),
+  lines: z
+    .array(
+      z.object({
+        blank_id: z.string().uuid(),
+        color: z.string().trim().min(1).max(100),
+        size: z.string().trim().min(1).max(50),
+        quantity: z.number().int().positive().max(100000),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+
+function genOrderNumber() {
+  const d = new Date();
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const rand = Math.random().toString(36).replace(/[^a-z0-9]/g, "").slice(0, 5).toUpperCase();
+  return `WC-${yy}${mm}${dd}-${rand}`;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  let payload: unknown;
+  try {
+    payload = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const parsed = BodySchema.safeParse(payload);
+  if (!parsed.success) {
+    return new Response(
+      JSON.stringify({ error: parsed.error.flatten().fieldErrors }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const { customer_name, customer_email, lines } = parsed.data;
+
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  const blankIds = Array.from(new Set(lines.map((l) => l.blank_id)));
+  const { data: blanks, error: blanksErr } = await admin
+    .from("blanks")
+    .select(
+      "id, name, organization_id, sellable_as_blank, internal_only, price_standard",
+    )
+    .in("id", blankIds);
+
+  if (blanksErr) {
+    return new Response(JSON.stringify({ error: blanksErr.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const byId = new Map((blanks ?? []).map((b: any) => [b.id, b]));
+
+  let orgId: string | null = null;
+  const itemRows: Array<{
+    product_id: string;
+    product_name_snapshot: string;
+    color: string;
+    size: string;
+    quantity: number;
+    unit_wholesale_price: number;
+    unit_retail_price: number;
+    line_subtotal: number;
+  }> = [];
+  let totalUnits = 0;
+  let wholesaleSubtotal = 0;
+  let retailEquivalent = 0;
+
+  for (const line of lines) {
+    const b: any = byId.get(line.blank_id);
+    if (!b) {
+      return new Response(
+        JSON.stringify({ error: `Unknown product: ${line.blank_id}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (!b.sellable_as_blank || b.internal_only) {
+      return new Response(
+        JSON.stringify({ error: `Product not available: ${b.name}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    const price = Number(b.price_standard);
+    if (!Number.isFinite(price) || price <= 0) {
+      return new Response(
+        JSON.stringify({ error: `No price configured for: ${b.name}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (orgId && orgId !== b.organization_id) {
+      return new Response(
+        JSON.stringify({ error: "Cart contains products from multiple organizations" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    orgId = b.organization_id;
+
+    const subtotal = Number((price * line.quantity).toFixed(2));
+    totalUnits += line.quantity;
+    wholesaleSubtotal += subtotal;
+    retailEquivalent += subtotal;
+
+    itemRows.push({
+      product_id: b.id,
+      product_name_snapshot: b.name,
+      color: line.color,
+      size: line.size,
+      quantity: line.quantity,
+      unit_wholesale_price: price,
+      unit_retail_price: price,
+      line_subtotal: subtotal,
+    });
+  }
+
+  if (!orgId) {
+    return new Response(JSON.stringify({ error: "No valid lines" }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const order_number = genOrderNumber();
+
+  const { data: orderRow, error: orderErr } = await admin
+    .from("bulk_order_requests")
+    .insert({
+      organization_id: orgId,
+      channel: "wholesale_catalog",
+      customer_name,
+      customer_email,
+      requested_by: null,
+      status: "submitted",
+      order_number,
+      total_units: totalUnits,
+      wholesale_subtotal: Number(wholesaleSubtotal.toFixed(2)),
+      retail_equivalent: Number(retailEquivalent.toFixed(2)),
+      total_savings: Number((retailEquivalent - wholesaleSubtotal).toFixed(2)),
+    })
+    .select("id, order_number")
+    .single();
+
+  if (orderErr || !orderRow) {
+    return new Response(
+      JSON.stringify({ error: orderErr?.message ?? "Failed to create order" }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
+  const { error: itemsErr } = await admin.from("bulk_order_items").insert(
+    itemRows.map((r) => ({ ...r, order_request_id: orderRow.id })),
+  );
+
+  if (itemsErr) {
+    // Best-effort rollback of the parent order
+    await admin.from("bulk_order_requests").delete().eq("id", orderRow.id);
+    return new Response(JSON.stringify({ error: itemsErr.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  return new Response(
+    JSON.stringify({ id: orderRow.id, order_number: orderRow.order_number }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+  );
+});

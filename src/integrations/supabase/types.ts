@@ -3860,6 +3860,52 @@ export type Database = {
         }
         Relationships: []
       }
+      public_catalog_colors: {
+        Row: {
+          blank_id: string | null
+          color_name: string | null
+          sort_order: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_colors_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_colors_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_catalog_sizes: {
+        Row: {
+          blank_id: string | null
+          size: string | null
+          sort_order: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_sizes_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_sizes_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_revenue_summary: {
         Row: {
           first_order_at: string | null

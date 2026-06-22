@@ -1,13 +1,53 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Shirt } from "lucide-react";
+import { ArrowLeft, Shirt, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { usePublicCatalogItem } from "@/hooks/usePublicCatalog";
+import { Input } from "@/components/ui/input";
+import { toast } from "@/hooks/use-toast";
+import {
+  usePublicCatalogItem,
+  usePublicCatalogColors,
+  usePublicCatalogSizes,
+} from "@/hooks/usePublicCatalog";
 import { formatGarmentType } from "@/lib/blank-status";
+import { useCart } from "./CartContext";
 
 export default function CatalogProductDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: item, isLoading, error } = usePublicCatalogItem(id);
+  const { data: colors = [] } = usePublicCatalogColors(id);
+  const { data: sizes = [] } = usePublicCatalogSizes(id);
+  const { addLine } = useCart();
+
+  const [color, setColor] = useState<string | null>(null);
+  const [size, setSize] = useState<string | null>(null);
+  const [qty, setQty] = useState<number>(1);
+
+  useEffect(() => {
+    if (!color && colors.length) setColor(colors[0].color_name);
+  }, [colors, color]);
+  useEffect(() => {
+    if (!size && sizes.length) setSize(sizes[0].size);
+  }, [sizes, size]);
+
+  const canAdd = !!item && !!color && !!size && qty > 0;
+
+  const handleAdd = () => {
+    if (!item || !color || !size) return;
+    addLine({
+      blank_id: item.id,
+      sku: item.sku,
+      name: item.name,
+      color,
+      size,
+      quantity: qty,
+    });
+    toast({
+      title: "Added to cart",
+      description: `${qty} × ${item.name} (${color} / ${size})`,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -73,13 +113,88 @@ export default function CatalogProductDetail() {
               ))}
             </div>
 
-            <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-              Colors, sizes, and ordering will be added in the next step.
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Color
+                </div>
+                {colors.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No colors listed.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {colors.map((c) => {
+                      const active = c.color_name === color;
+                      return (
+                        <button
+                          key={c.color_name}
+                          type="button"
+                          onClick={() => setColor(c.color_name)}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition ${
+                            active
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border hover:border-foreground/50"
+                          }`}
+                        >
+                          {active && <Check className="h-3 w-3" />}
+                          {c.color_name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Size
+                </div>
+                {sizes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No sizes listed.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {sizes.map((s) => {
+                      const active = s.size === size;
+                      return (
+                        <button
+                          key={s.size}
+                          type="button"
+                          onClick={() => setSize(s.size)}
+                          className={`min-w-[3rem] rounded-md border px-3 py-1.5 text-xs font-medium tabular-nums transition ${
+                            active
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-border hover:border-foreground/50"
+                          }`}
+                        >
+                          {s.size}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Quantity
+                </div>
+                <Input
+                  type="number"
+                  min={1}
+                  value={qty}
+                  onChange={(e) =>
+                    setQty(Math.max(1, parseInt(e.target.value || "1", 10) || 1))
+                  }
+                  className="w-28"
+                />
+              </div>
             </div>
 
-            <Button disabled className="w-full">
-              Add to order (coming soon)
+            <Button onClick={handleAdd} disabled={!canAdd} className="w-full">
+              Add to cart
             </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Final pricing is confirmed at checkout.
+            </p>
           </div>
         </div>
       )}

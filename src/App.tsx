@@ -54,6 +54,7 @@ import AffiliatePayouts from "./pages/affiliate/AffiliatePayouts";
 import CatalogLayout from "./pages/catalog/CatalogLayout";
 import CatalogList from "./pages/catalog/CatalogList";
 import CatalogProductDetail from "./pages/catalog/CatalogProductDetail";
+import CatalogCheckout from "./pages/catalog/CatalogCheckout";
 
 const queryClient = new QueryClient();
 
@@ -127,6 +128,7 @@ const App = () => (
             {/* Public wholesale catalog (no auth) */}
             <Route path="/catalog" element={<CatalogLayout />}>
               <Route index element={<CatalogList />} />
+              <Route path="checkout" element={<CatalogCheckout />} />
               <Route path=":id" element={<CatalogProductDetail />} />
             </Route>
 

@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.shopify-sync-product-variants]
 verify_jwt = true
+
+[functions.submit-catalog-order]
+verify_jwt = false
