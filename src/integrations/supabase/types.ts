@@ -486,6 +486,13 @@ export type Database = {
             referencedRelation: "blanks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "blank_colors_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
         ]
       }
       blank_sizes: {
@@ -516,6 +523,13 @@ export type Database = {
             columns: ["blank_id"]
             isOneToOne: false
             referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_sizes_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
             referencedColumns: ["id"]
           },
         ]
@@ -2415,6 +2429,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "products_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "products_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -3794,6 +3815,39 @@ export type Database = {
           shopify_shop_domain?: string | null
           slug?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      public_catalog: {
+        Row: {
+          garment_type: string | null
+          id: string | null
+          image_url: string | null
+          name: string | null
+          price_athlete: number | null
+          price_corporate: number | null
+          price_standard: number | null
+          sku: string | null
+        }
+        Insert: {
+          garment_type?: never
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          sku?: string | null
+        }
+        Update: {
+          garment_type?: never
+          id?: string | null
+          image_url?: string | null
+          name?: string | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          sku?: string | null
         }
         Relationships: []
       }

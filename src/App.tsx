@@ -51,6 +51,10 @@ import AffiliateProducts from "./pages/affiliate/AffiliateProducts";
 import AffiliateSales from "./pages/affiliate/AffiliateSales";
 import AffiliatePayouts from "./pages/affiliate/AffiliatePayouts";
 
+import CatalogLayout from "./pages/catalog/CatalogLayout";
+import CatalogList from "./pages/catalog/CatalogList";
+import CatalogProductDetail from "./pages/catalog/CatalogProductDetail";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -119,6 +123,13 @@ const App = () => (
 
             {/* Affiliate */}
             <Route path="/affiliate/signup" element={<AffiliateSignup />} />
+
+            {/* Public wholesale catalog (no auth) */}
+            <Route path="/catalog" element={<CatalogLayout />}>
+              <Route index element={<CatalogList />} />
+              <Route path=":id" element={<CatalogProductDetail />} />
+            </Route>
+
             <Route
               path="/affiliate"
               element={
