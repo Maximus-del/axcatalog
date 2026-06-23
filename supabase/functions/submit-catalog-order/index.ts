@@ -11,9 +11,10 @@ const corsHeaders = {
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
 const BodySchema = z.object({
+  token: z.string().trim().min(1).max(200).nullable().optional(),
   customer_name: z.string().trim().min(1).max(200),
   customer_email: z.string().trim().email().max(255),
-  lines: z
+  items: z
     .array(
       z.object({
         blank_id: z.string().uuid(),
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { customer_name, customer_email, lines } = parsed.data;
+    const { token, customer_name, customer_email, items } = parsed.data;
 
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -81,11 +82,39 @@ Deno.serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    const blankIds = Array.from(new Set(lines.map((l) => l.blank_id)));
+    // Re-resolve the token server-side — never trust the client.
+    let tier: "athlete" | "corporate" | "standard" = "standard";
+    let resolvedName: string | null = null;
+    let resolvedEmail: string | null = null;
+    if (token) {
+      const { data: tk } = await admin.rpc("resolve_catalog_token" as any, {
+        p_token: token,
+      } as any);
+      const resolved = Array.isArray(tk) && tk.length > 0 ? (tk[0] as any) : null;
+      if (resolved) {
+        if (
+          resolved.tier === "athlete" ||
+          resolved.tier === "corporate" ||
+          resolved.tier === "standard"
+        ) {
+          tier = resolved.tier;
+        }
+        resolvedName = resolved.customer_name ?? null;
+        resolvedEmail = resolved.customer_email ?? null;
+      }
+    }
+    const priceField =
+      tier === "athlete"
+        ? "price_athlete"
+        : tier === "corporate"
+          ? "price_corporate"
+          : "price_standard";
+
+    const blankIds = Array.from(new Set(items.map((l) => l.blank_id)));
     const { data: blanks, error: blanksErr } = await admin
       .from("blanks")
       .select(
-        "id, name, organization_id, sellable_as_blank, internal_only, price_standard",
+        "id, name, organization_id, sellable_as_blank, internal_only, price_athlete, price_corporate, price_standard",
       )
       .in("id", blankIds);
 
@@ -114,7 +143,7 @@ Deno.serve(async (req) => {
     let wholesaleSubtotal = 0;
     let retailEquivalent = 0;
 
-    for (const line of lines) {
+    for (const line of items) {
     const b: any = byId.get(line.blank_id);
     if (!b) {
       return new Response(
@@ -128,10 +157,17 @@ Deno.serve(async (req) => {
         { status: 400, headers: jsonHeaders },
       );
     }
-    const price = Number(b.price_standard);
-    if (!Number.isFinite(price) || price <= 0) {
+    const wholesalePrice = Number(b[priceField]);
+    const retailPrice = Number(b.price_standard);
+    if (!Number.isFinite(wholesalePrice) || wholesalePrice <= 0) {
       return new Response(
         JSON.stringify({ error: `No price configured for: ${b.name}` }),
+        { status: 400, headers: jsonHeaders },
+      );
+    }
+    if (!Number.isFinite(retailPrice) || retailPrice <= 0) {
+      return new Response(
+        JSON.stringify({ error: `No list price configured for: ${b.name}` }),
         { status: 400, headers: jsonHeaders },
       );
     }
@@ -143,10 +179,11 @@ Deno.serve(async (req) => {
     }
     orgId = b.organization_id;
 
-    const subtotal = Number((price * line.quantity).toFixed(2));
+    const subtotal = Number((wholesalePrice * line.quantity).toFixed(2));
+    const retailSubtotal = Number((retailPrice * line.quantity).toFixed(2));
     totalUnits += line.quantity;
     wholesaleSubtotal += subtotal;
-    retailEquivalent += subtotal;
+    retailEquivalent += retailSubtotal;
 
     itemRows.push({
       blank_id: b.id,
@@ -154,8 +191,8 @@ Deno.serve(async (req) => {
       color: line.color,
       size: line.size,
       quantity: line.quantity,
-      unit_wholesale_price: price,
-      unit_retail_price: price,
+      unit_wholesale_price: wholesalePrice,
+      unit_retail_price: retailPrice,
       line_subtotal: subtotal,
     });
     }
@@ -174,8 +211,8 @@ Deno.serve(async (req) => {
     .insert({
       organization_id: orgId,
       channel: "wholesale_catalog",
-      customer_name,
-      customer_email,
+      customer_name: resolvedName ?? customer_name,
+      customer_email: resolvedEmail ?? customer_email,
       athlete_id: null,
       team_id: null,
       requested_by: null,
@@ -184,6 +221,7 @@ Deno.serve(async (req) => {
       wholesale_subtotal: Number(wholesaleSubtotal.toFixed(2)),
       retail_equivalent: Number(retailEquivalent.toFixed(2)),
       total_savings: Number((retailEquivalent - wholesaleSubtotal).toFixed(2)),
+      admin_notes: token ? `catalog_token=${token} tier=${tier}` : null,
     })
     .select("id, order_number")
     .single();

@@ -7,9 +7,11 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useCart } from "./CartContext";
+import { useCatalogAccess } from "./CatalogAccessContext";
 
 export default function CatalogCheckout() {
   const { lines, updateQty, removeLine, clear, totalUnits } = useCart();
+  const { token } = useCatalogAccess();
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
@@ -24,9 +26,10 @@ export default function CatalogCheckout() {
     try {
       const { data, error } = await supabase.functions.invoke("submit-catalog-order", {
         body: {
+          token: token ?? null,
           customer_name: name.trim(),
           customer_email: email.trim(),
-          lines: lines.map((l) => ({
+          items: lines.map((l) => ({
             blank_id: l.blank_id,
             color: l.color,
             size: l.size,
