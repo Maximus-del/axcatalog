@@ -656,6 +656,7 @@ export type Database = {
       }
       bulk_order_items: {
         Row: {
+          blank_id: string | null
           color: string | null
           created_at: string
           id: string
@@ -670,6 +671,7 @@ export type Database = {
           unit_wholesale_price: number | null
         }
         Insert: {
+          blank_id?: string | null
           color?: string | null
           created_at?: string
           id?: string
@@ -684,6 +686,7 @@ export type Database = {
           unit_wholesale_price?: number | null
         }
         Update: {
+          blank_id?: string | null
           color?: string | null
           created_at?: string
           id?: string
@@ -698,6 +701,20 @@ export type Database = {
           unit_wholesale_price?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bulk_order_items_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_order_items_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bulk_order_items_order_request_id_fkey"
             columns: ["order_request_id"]
