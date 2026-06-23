@@ -247,6 +247,73 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Best-effort internal notification email — never fail the order on email errors.
+    const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+    if (RESEND_API_KEY) {
+      try {
+        const orderNumber = orderRow.order_number;
+        const notifyCustomerName = resolvedName ?? customer_name;
+        const notifyCustomerEmail = resolvedEmail ?? customer_email;
+        const units = totalUnits;
+        const wholesale = wholesaleSubtotal;
+        const savings = retailEquivalent - wholesaleSubtotal;
+        const esc = (s: string) =>
+          String(s)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+        const rows = itemRows
+          .map(
+            (i) => `
+              <tr>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee;">${i.quantity}×</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee;">${esc(i.product_name_snapshot)}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee;">${esc([i.color, i.size].filter(Boolean).join(" / "))}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee;">$${Number(i.unit_wholesale_price).toFixed(2)}</td>
+                <td style="padding:6px 10px;border-bottom:1px solid #eee;">$${Number(i.line_subtotal).toFixed(2)}</td>
+              </tr>
+            `,
+          )
+          .join("");
+        const html = `
+          <h2>New wholesale order ${esc(orderNumber)}</h2>
+          <p>${esc(notifyCustomerName)} &lt;${esc(notifyCustomerEmail)}&gt;</p>
+          <table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:14px;">
+            <thead>
+              <tr>
+                <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #333;">Qty</th>
+                <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #333;">Item</th>
+                <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #333;">Color / Size</th>
+                <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #333;">Unit</th>
+                <th style="padding:6px 10px;text-align:left;border-bottom:2px solid #333;">Line</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p>
+            <strong>Units:</strong> ${units}<br/>
+            <strong>Wholesale total:</strong> $${wholesale.toFixed(2)}<br/>
+            <strong>Customer savings:</strong> $${savings.toFixed(2)}
+          </p>
+        `;
+        await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "AthleteXclusive <onboarding@resend.dev>",
+            to: ["team@athletexclusive.com"],
+            subject: `New wholesale order ${orderNumber} — $${wholesale.toFixed(2)}, ${units} units`,
+            html,
+          }),
+        });
+      } catch (e) {
+        console.error("order email failed (order still saved):", e);
+      }
+    }
+
     return new Response(
       JSON.stringify({ id: orderRow.id, order_number: orderRow.order_number }),
       { status: 200, headers: jsonHeaders },
