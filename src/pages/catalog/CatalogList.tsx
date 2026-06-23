@@ -12,16 +12,11 @@ import {
 } from "@/components/ui/select";
 import { usePublicCatalog, type CatalogItem } from "@/hooks/usePublicCatalog";
 import { formatGarmentType } from "@/lib/blank-status";
-
-function priceFrom(item: CatalogItem): number | null {
-  const candidates = [item.price_athlete, item.price_corporate, item.price_standard].filter(
-    (p): p is number => typeof p === "number" && p > 0,
-  );
-  return candidates.length ? Math.min(...candidates) : null;
-}
+import { priceForTier, useCatalogAccess } from "./CatalogAccessContext";
 
 export default function CatalogList() {
   const { data, isLoading, error } = usePublicCatalog();
+  const { tier } = useCatalogAccess();
   const [search, setSearch] = useState("");
   const [garmentType, setGarmentType] = useState<string>("all");
   const [sort, setSort] = useState<"name" | "price-asc" | "price-desc">("name");
@@ -46,13 +41,13 @@ export default function CatalogList() {
       out = [...out].sort((a, b) => a.name.localeCompare(b.name));
     } else {
       out = [...out].sort((a, b) => {
-        const pa = priceFrom(a) ?? Infinity;
-        const pb = priceFrom(b) ?? Infinity;
+        const pa = priceForTier(a, tier) ?? Infinity;
+        const pb = priceForTier(b, tier) ?? Infinity;
         return sort === "price-asc" ? pa - pb : pb - pa;
       });
     }
     return out;
-  }, [items, search, garmentType, sort]);
+  }, [items, search, garmentType, sort, tier]);
 
   return (
     <div className="space-y-6">
@@ -108,7 +103,16 @@ export default function CatalogList() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {filtered.map((item) => {
-          const from = priceFrom(item);
+          const customerPrice = priceForTier(item, tier);
+          const listPrice =
+            typeof item.price_standard === "number" && item.price_standard > 0
+              ? item.price_standard
+              : null;
+          const showSavings =
+            tier !== "standard" &&
+            customerPrice != null &&
+            listPrice != null &&
+            listPrice > customerPrice;
           return (
             <Link
               key={item.id}
@@ -145,8 +149,19 @@ export default function CatalogList() {
                     </Badge>
                   )}
                 </div>
-                <p className="text-sm font-medium tabular-nums mt-auto">
-                  {from != null ? `from $${from.toFixed(2)}` : "Contact for pricing"}
+                <p className="text-sm font-medium tabular-nums mt-auto flex items-baseline gap-2">
+                  {customerPrice != null ? (
+                    <>
+                      <span>${customerPrice.toFixed(2)}</span>
+                      {showSavings && (
+                        <span className="text-xs text-muted-foreground line-through font-normal">
+                          ${listPrice!.toFixed(2)}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span>Contact for pricing</span>
+                  )}
                 </p>
               </div>
             </Link>
