@@ -33,6 +33,7 @@ import AffiliatesList from "./pages/admin/AffiliatesList";
 import QuestionnairesList from "./pages/admin/QuestionnairesList";
 import QuestionnaireEditor from "./pages/admin/QuestionnaireEditor";
 import QuestionnairePublic from "./pages/QuestionnairePublic";
+import CustomerPricingLinks from "./pages/admin/CustomerPricingLinks";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -100,6 +101,7 @@ const App = () => (
               <Route path="affiliates" element={<AffiliatesList />} />
               <Route path="questionnaires" element={<QuestionnairesList />} />
               <Route path="questionnaires/:id" element={<QuestionnaireEditor />} />
+              <Route path="pricing-links" element={<CustomerPricingLinks />} />
               <Route path="imports/orders" element={<ImportsList />} />
               <Route path="imports/orders/:id" element={<ImportBatchDetail />} />
             </Route>
