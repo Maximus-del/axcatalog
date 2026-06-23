@@ -138,7 +138,7 @@ export default function CustomerPricingLinks() {
       return;
     }
     setCreating(true);
-    const token = (crypto.randomUUID() + crypto.randomUUID()).replaceAll("-", "");
+    const token = (crypto.randomUUID() + crypto.randomUUID()).split("-").join("");
     const { data, error } = await supabase
       .from("catalog_access_tokens")
       .insert({
