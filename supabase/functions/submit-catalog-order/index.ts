@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
 
     let orgId: string | null = null;
   const itemRows: Array<{
-    product_id: string;
+    blank_id: string;
     product_name_snapshot: string;
     color: string;
     size: string;
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
     retailEquivalent += subtotal;
 
     itemRows.push({
-      product_id: b.id,
+      blank_id: b.id,
       product_name_snapshot: b.name,
       color: line.color,
       size: line.size,
