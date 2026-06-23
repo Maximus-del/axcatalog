@@ -878,6 +878,63 @@ export type Database = {
           },
         ]
       }
+      catalog_access_tokens: {
+        Row: {
+          active: boolean
+          created_at: string
+          customer_email: string | null
+          customer_name: string | null
+          expires_at: string | null
+          id: string
+          last_used_at: string | null
+          notes: string | null
+          organization_id: string
+          tier: string
+          token: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          notes?: string | null
+          organization_id: string
+          tier: string
+          token: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          customer_email?: string | null
+          customer_name?: string | null
+          expires_at?: string | null
+          id?: string
+          last_used_at?: string | null
+          notes?: string | null
+          organization_id?: string
+          tier?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "catalog_access_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "catalog_access_tokens_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collection_designs: {
         Row: {
           collection_id: string
@@ -3993,6 +4050,16 @@ export type Database = {
       }
       generate_affiliate_code: { Args: { _name: string }; Returns: string }
       is_org_accessible: { Args: { _org_id: string }; Returns: boolean }
+      mint_catalog_token: {
+        Args: {
+          p_email: string
+          p_expires?: string
+          p_name: string
+          p_org: string
+          p_tier: string
+        }
+        Returns: string
+      }
       record_affiliate_payout: {
         Args: {
           _affiliate_id: string
@@ -4017,6 +4084,15 @@ export type Database = {
       refund_order_credit_partial: {
         Args: { _amount: number; _notes?: string; _order_id: string }
         Returns: number
+      }
+      resolve_catalog_token: {
+        Args: { p_token: string }
+        Returns: {
+          customer_email: string
+          customer_name: string
+          organization_id: string
+          tier: string
+        }[]
       }
       set_affiliate_status: {
         Args: {

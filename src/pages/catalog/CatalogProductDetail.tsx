@@ -12,6 +12,7 @@ import {
 } from "@/hooks/usePublicCatalog";
 import { formatGarmentType } from "@/lib/blank-status";
 import { useCart } from "./CartContext";
+import { priceForTier, useCatalogAccess } from "./CatalogAccessContext";
 
 export default function CatalogProductDetail() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +20,7 @@ export default function CatalogProductDetail() {
   const { data: colors = [] } = usePublicCatalogColors(id);
   const { data: sizes = [] } = usePublicCatalogSizes(id);
   const { addLine } = useCart();
+  const { tier } = useCatalogAccess();
 
   const [color, setColor] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
@@ -93,25 +95,39 @@ export default function CatalogProductDetail() {
               </p>
             </div>
 
-            <div className="rounded-lg border border-border divide-y divide-border">
-              {[
-                { label: "Tier 1", value: item.price_athlete },
-                { label: "Tier 2", value: item.price_corporate },
-                { label: "Tier 3", value: item.price_standard },
-              ].map((row) => (
-                <div
-                  key={row.label}
-                  className="flex items-center justify-between px-4 py-3 text-sm"
-                >
-                  <span className="font-medium">{row.label}</span>
-                  <span className="tabular-nums">
-                    {typeof row.value === "number" && row.value > 0
-                      ? `$${row.value.toFixed(2)}`
-                      : "—"}
-                  </span>
+            {(() => {
+              const customerPrice = priceForTier(item, tier);
+              const listPrice =
+                typeof item.price_standard === "number" && item.price_standard > 0
+                  ? item.price_standard
+                  : null;
+              const showSavings =
+                tier !== "standard" &&
+                customerPrice != null &&
+                listPrice != null &&
+                listPrice > customerPrice;
+              return (
+                <div className="rounded-lg border border-border px-4 py-3">
+                  <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1">
+                    Your price
+                  </div>
+                  {customerPrice != null ? (
+                    <div className="flex items-baseline gap-3">
+                      <span className="text-2xl font-bold tabular-nums">
+                        ${customerPrice.toFixed(2)}
+                      </span>
+                      {showSavings && (
+                        <span className="text-sm text-muted-foreground line-through tabular-nums">
+                          ${listPrice!.toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Contact for pricing</div>
+                  )}
                 </div>
-              ))}
-            </div>
+              );
+            })()}
 
             <div className="space-y-4">
               <div>
