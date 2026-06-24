@@ -3944,6 +3944,9 @@ export type Database = {
         Row: {
           blank_id: string | null
           color_name: string | null
+          hex_code: string | null
+          image_url: string | null
+          image_url_back: string | null
           sort_order: number | null
         }
         Relationships: [

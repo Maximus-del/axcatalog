@@ -51,6 +51,8 @@ export function usePublicCatalogItem(id: string | undefined) {
 export interface CatalogColor {
   color_name: string;
   sort_order: number;
+  image_url: string | null;
+  image_url_back: string | null;
 }
 
 export interface CatalogSize {
@@ -65,7 +67,7 @@ export function usePublicCatalogColors(blankId: string | undefined) {
     queryFn: async (): Promise<CatalogColor[]> => {
       const { data, error } = await supabase
         .from("public_catalog_colors" as any)
-        .select("color_name, sort_order")
+        .select("color_name, sort_order, image_url, image_url_back")
         .eq("blank_id", blankId!)
         .order("sort_order", { ascending: true });
       if (error) throw error;
