@@ -82,7 +82,7 @@ export default function CatalogProductDetail() {
             const hasBack = !!backSrc;
             const mainSrc = view === "back" && hasBack ? backSrc : frontSrc;
             return (
-              <div className="relative aspect-square rounded-lg flex items-center justify-center overflow-hidden">
+              <div className="relative aspect-square rounded-lg bg-white flex items-center justify-center overflow-hidden">
                 {mainSrc ? (
                   <img
                     src={mainSrc}

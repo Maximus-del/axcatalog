@@ -119,7 +119,7 @@ export default function CatalogList() {
               to={`/catalog/${item.id}`}
               className="rounded-lg border border-border bg-card overflow-hidden hover:border-accent transition-colors flex flex-col"
             >
-              <div className="aspect-square bg-muted/40 flex items-center justify-center overflow-hidden">
+              <div className="aspect-square bg-white flex items-center justify-center overflow-hidden rounded-t-lg">
                 {item.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
