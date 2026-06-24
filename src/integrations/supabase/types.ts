@@ -460,6 +460,8 @@ export type Database = {
           color_name: string
           hex_code: string | null
           id: string
+          image_url: string | null
+          image_url_back: string | null
           sort_order: number
         }
         Insert: {
@@ -468,6 +470,8 @@ export type Database = {
           color_name: string
           hex_code?: string | null
           id?: string
+          image_url?: string | null
+          image_url_back?: string | null
           sort_order?: number
         }
         Update: {
@@ -476,6 +480,8 @@ export type Database = {
           color_name?: string
           hex_code?: string | null
           id?: string
+          image_url?: string | null
+          image_url_back?: string | null
           sort_order?: number
         }
         Relationships: [
