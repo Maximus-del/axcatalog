@@ -25,10 +25,15 @@ export default function CatalogProductDetail() {
   const [color, setColor] = useState<string | null>(null);
   const [size, setSize] = useState<string | null>(null);
   const [qty, setQty] = useState<number>(1);
+  const [view, setView] = useState<"front" | "back">("front");
 
   useEffect(() => {
     if (!color && colors.length) setColor(colors[0].color_name);
   }, [colors, color]);
+  // Default to front when color changes
+  useEffect(() => {
+    setView("front");
+  }, [color]);
   useEffect(() => {
     if (!size && sizes.length) setSize(sizes[0].size);
   }, [sizes, size]);
@@ -70,17 +75,52 @@ export default function CatalogProductDetail() {
 
       {item && (
         <div className="grid md:grid-cols-2 gap-8">
-          <div className="aspect-square bg-muted/40 rounded-lg flex items-center justify-center overflow-hidden border border-border">
-            {item.image_url ? (
-              <img
-                src={item.image_url}
-                alt={item.name}
-                className="h-full w-full object-contain p-6"
-              />
-            ) : (
-              <Shirt className="h-24 w-24 text-muted-foreground/40" strokeWidth={1.5} />
-            )}
-          </div>
+          {(() => {
+            const selectedColor = colors.find((c) => c.color_name === color) ?? null;
+            const frontSrc = selectedColor?.image_url ?? item.image_url ?? null;
+            const backSrc = selectedColor?.image_url_back ?? null;
+            const hasBack = !!backSrc;
+            const mainSrc = view === "back" && hasBack ? backSrc : frontSrc;
+            return (
+              <div className="relative aspect-square rounded-lg flex items-center justify-center overflow-hidden">
+                {mainSrc ? (
+                  <img
+                    src={mainSrc}
+                    alt={`${item.name}${selectedColor ? ` — ${selectedColor.color_name}` : ""} (${view})`}
+                    className="h-full w-full object-contain p-6"
+                  />
+                ) : (
+                  <Shirt className="h-24 w-24 text-muted-foreground/40" strokeWidth={1.5} />
+                )}
+                {hasBack && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 inline-flex rounded-full border border-border bg-background/80 backdrop-blur p-0.5 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setView("front")}
+                      className={`px-3 py-1 rounded-full transition ${
+                        view === "front"
+                          ? "bg-foreground text-background"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Front
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("back")}
+                      className={`px-3 py-1 rounded-full transition ${
+                        view === "back"
+                          ? "bg-foreground text-background"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Back
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="space-y-5">
             <div>
