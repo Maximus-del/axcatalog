@@ -18,6 +18,19 @@ export interface OrderItem {
   /** Variant SKU snapshot at order time, if available. */
   variant_sku: string | null;
   product_image_url: string | null;
+  customization: OrderItemCustomization | null;
+}
+
+export interface OrderItemCustomization {
+  design_url: string;          // storage path inside design-files bucket
+  surface: "front" | "back";
+  surface_label?: string;
+  placement_label: string;
+  x_pct: number;
+  y_pct: number;
+  w_pct: number;
+  h_pct: number;
+  rotation_deg: number;
 }
 
 export interface OrderDetail {
@@ -81,7 +94,7 @@ export function useAdminOrderDetail(id: string | undefined) {
     const { data: items, error: itemsErr } = await supabase
       .from("bulk_order_items")
       .select(
-        `id, product_id, product_name_snapshot, size, color, quantity, notes,
+        `id, product_id, product_name_snapshot, size, color, quantity, notes, customization,
          product:products(
            product_images(storage_bucket, storage_path, is_primary, sort_order)
          )`,
@@ -113,6 +126,11 @@ export function useAdminOrderDetail(id: string | undefined) {
           .getPublicUrl(primary.storage_path).data.publicUrl;
       }
       const parsedNotes = parseOrderItemNotes(row.notes);
+      const c = (row as { customization?: unknown }).customization;
+      const customization =
+        c && typeof c === "object" && (c as Record<string, unknown>).design_url
+          ? (c as OrderItemCustomization)
+          : null;
       return {
         id: row.id,
         product_id: row.product_id,
@@ -125,6 +143,7 @@ export function useAdminOrderDetail(id: string | undefined) {
         shopify_variant_id: parsedNotes.shopifyVariantId,
         variant_sku: parsedNotes.sku,
         product_image_url: url,
+        customization,
       };
     });
 
