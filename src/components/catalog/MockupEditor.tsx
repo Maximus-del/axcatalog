@@ -3,14 +3,13 @@ import { Upload, RotateCcw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import {
-  PrintZone,
   SurfaceDef,
   SurfaceKey,
-  clampToZone,
   surfacesFor,
   zonesFor,
 } from "@/lib/print-zones";
 import type { CartCustomization } from "@/pages/catalog/CartContext";
+import { renderPrintReadyPng } from "@/lib/render-print-ready";
 
 interface ColorImage {
   color_name: string;
@@ -28,10 +27,17 @@ interface Props {
       file: File;
       placement: Omit<CartCustomization, "asset_path" | "asset_filename" | "asset_mime" | "preview_url">;
       previewUrl: string;
+      /** Renders the print-ready PNG, clipped to the zone box, at zone pixel dimensions. */
+      getPrintReadyFile: (filename?: string) => Promise<File>;
     } | null,
   ) => void;
 }
 
+/**
+ * Placement is expressed as percentages of the print-zone BOX (0..1).
+ * Values may be negative or greater than 1; the visual stage and the
+ * exported print-ready PNG clip to the box.
+ */
 interface Placement {
   x: number;
   y: number;
@@ -66,12 +72,10 @@ export default function MockupEditor({
   const [zoneId, setZoneId] = useState<string>(zones[0]?.id ?? "");
   const zone = zones.find((z) => z.id === zoneId) ?? zones[0];
 
-  // Reset zone when surface changes.
   useEffect(() => {
     setZoneId(zones[0]?.id ?? "");
   }, [zones]);
 
-  // File + preview
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -84,19 +88,18 @@ export default function MockupEditor({
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
-  // Placement (percentages of base image). Default: fill the active zone.
+  // Default: fill the box exactly.
   const [placement, setPlacement] = useState<Placement | null>(null);
   useEffect(() => {
     if (!zone) {
       setPlacement(null);
       return;
     }
-    setPlacement({ x: zone.x, y: zone.y, w: zone.w, h: zone.h, rotation: 0 });
+    setPlacement({ x: 0, y: 0, w: 1, h: 1, rotation: 0 });
   }, [zone?.id]);
 
-  // Bubble up to parent.
   useEffect(() => {
-    if (!file || !previewUrl || !placement || !zone) {
+    if (!file || !previewUrl || !placement || !zone || !baseSrc) {
       onChange(null);
       return;
     }
@@ -114,8 +117,22 @@ export default function MockupEditor({
         h_pct: round(placement.h),
         rotation_deg: Math.round(placement.rotation),
       },
+      getPrintReadyFile: (filename = "design.png") =>
+        renderPrintReadyPng({
+          baseImageSrc: baseSrc,
+          designFile: file,
+          zone,
+          placement: {
+            x_pct: placement.x,
+            y_pct: placement.y,
+            w_pct: placement.w,
+            h_pct: placement.h,
+            rotation_deg: placement.rotation,
+          },
+          filename,
+        }),
     });
-  }, [file, previewUrl, placement, zone, surface.key, surface.label, onChange]);
+  }, [file, previewUrl, placement, zone, baseSrc, surface.key, surface.label, onChange]);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragMode | null>(null);
@@ -133,46 +150,40 @@ export default function MockupEditor({
     setFile(f);
   }, []);
 
-  const onPointerDown = (mode: DragMode) => (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    (e.target as Element).setPointerCapture?.(e.pointerId);
-    dragRef.current = mode;
-  };
-
   const onPointerMove = (e: React.PointerEvent) => {
     const drag = dragRef.current;
     if (!drag || !placement || !zone || !stageRef.current) return;
     const rect = stageRef.current.getBoundingClientRect();
+    const boxPxW = Math.max(1, zone.w * rect.width);
+    const boxPxH = Math.max(1, zone.h * rect.height);
     if (drag.kind === "move") {
-      const dx = (e.clientX - drag.startX) / rect.width;
-      const dy = (e.clientY - drag.startY) / rect.height;
-      const next = clampToZone(
-        { x: drag.orig.x + dx, y: drag.orig.y + dy, w: drag.orig.w, h: drag.orig.h },
-        zone,
-      );
-      setPlacement({ ...next, rotation: drag.orig.rotation });
+      const dx = (e.clientX - drag.startX) / boxPxW;
+      const dy = (e.clientY - drag.startY) / boxPxH;
+      setPlacement({
+        x: drag.orig.x + dx,
+        y: drag.orig.y + dy,
+        w: drag.orig.w,
+        h: drag.orig.h,
+        rotation: drag.orig.rotation,
+      });
     } else if (drag.kind === "scale") {
       const aspect = drag.orig.w / drag.orig.h;
-      const dx = (e.clientX - drag.startX) / rect.width;
-      const dy = (e.clientY - drag.startY) / rect.height;
-      // Use the larger axis delta, preserve aspect.
-      let signW = drag.corner === "ne" || drag.corner === "se" ? 1 : -1;
-      let signH = drag.corner === "sw" || drag.corner === "se" ? 1 : -1;
+      const dx = (e.clientX - drag.startX) / boxPxW;
+      const dy = (e.clientY - drag.startY) / boxPxH;
+      const signW = drag.corner === "ne" || drag.corner === "se" ? 1 : -1;
+      const signH = drag.corner === "sw" || drag.corner === "se" ? 1 : -1;
       const deltaPct = Math.max(signW * dx, signH * dy);
-      let newW = Math.max(0.04, drag.orig.w + deltaPct);
-      let newH = newW / aspect;
+      const newW = Math.max(0.02, drag.orig.w + deltaPct);
+      const newH = newW / aspect;
       let newX = drag.orig.x;
       let newY = drag.orig.y;
       if (signW < 0) newX = drag.orig.x + (drag.orig.w - newW);
       if (signH < 0) newY = drag.orig.y + (drag.orig.h - newH);
-      const next = clampToZone({ x: newX, y: newY, w: newW, h: newH }, zone);
-      setPlacement({ ...next, rotation: drag.orig.rotation });
+      setPlacement({ x: newX, y: newY, w: newW, h: newH, rotation: drag.orig.rotation });
     } else if (drag.kind === "rotate") {
       const angle =
         Math.atan2(e.clientY - drag.centerY, e.clientX - drag.centerX) * (180 / Math.PI);
-      const startA = drag.startAngle;
-      const delta = angle - startA;
+      const delta = angle - drag.startAngle;
       setPlacement({ ...drag.orig, rotation: (drag.orig.rotation + delta + 360) % 360 });
     }
   };
@@ -188,6 +199,16 @@ export default function MockupEditor({
       </div>
     );
   }
+
+  // Convert box-% placement → stage-% rect for the unclipped interaction overlay.
+  const stageRect = zone && placement
+    ? {
+        x: zone.x + placement.x * zone.w,
+        y: zone.y + placement.y * zone.h,
+        w: placement.w * zone.w,
+        h: placement.h * zone.h,
+      }
+    : null;
 
   return (
     <div className="space-y-3">
@@ -206,7 +227,6 @@ export default function MockupEditor({
         )}
       </div>
 
-      {/* Surface picker */}
       {surfaces.length > 1 && (
         <div className="inline-flex rounded-md border border-border p-0.5 text-xs">
           {surfaces.map((s) => (
@@ -226,7 +246,6 @@ export default function MockupEditor({
         </div>
       )}
 
-      {/* Stage */}
       <div
         ref={stageRef}
         className="relative aspect-square w-full rounded-lg bg-white overflow-hidden select-none touch-none"
@@ -241,10 +260,38 @@ export default function MockupEditor({
           draggable={false}
         />
 
-        {/* Zone guide */}
+        {/* Clip layer: zone box with overflow:hidden so anything outside is cut. */}
+        {zone && previewUrl && placement && (
+          <div
+            className="absolute overflow-hidden pointer-events-none"
+            style={{
+              left: `${zone.x * 100}%`,
+              top: `${zone.y * 100}%`,
+              width: `${zone.w * 100}%`,
+              height: `${zone.h * 100}%`,
+            }}
+          >
+            <img
+              src={previewUrl}
+              alt="Your design"
+              draggable={false}
+              className="absolute object-contain"
+              style={{
+                left: `${placement.x * 100}%`,
+                top: `${placement.y * 100}%`,
+                width: `${placement.w * 100}%`,
+                height: `${placement.h * 100}%`,
+                transform: `rotate(${placement.rotation}deg)`,
+                transformOrigin: "center",
+              }}
+            />
+          </div>
+        )}
+
+        {/* Zone outline guide */}
         {zone && (
           <div
-            className="absolute border border-dashed border-foreground/40 pointer-events-none"
+            className="absolute border border-dashed border-foreground/50 pointer-events-none"
             style={{
               left: `${zone.x * 100}%`,
               top: `${zone.y * 100}%`,
@@ -254,24 +301,22 @@ export default function MockupEditor({
           />
         )}
 
-        {/* Design overlay */}
-        {previewUrl && placement && zone && (
+        {/* Interaction overlay: unclipped bounding rect with handles. */}
+        {previewUrl && placement && zone && stageRect && (
           <div
             className="absolute"
             style={{
-              left: `${placement.x * 100}%`,
-              top: `${placement.y * 100}%`,
-              width: `${placement.w * 100}%`,
-              height: `${placement.h * 100}%`,
+              left: `${stageRect.x * 100}%`,
+              top: `${stageRect.y * 100}%`,
+              width: `${stageRect.w * 100}%`,
+              height: `${stageRect.h * 100}%`,
               transform: `rotate(${placement.rotation}deg)`,
               transformOrigin: "center",
             }}
           >
-            <img
-              src={previewUrl}
-              alt="Your design"
-              className="absolute inset-0 h-full w-full object-contain cursor-move"
-              draggable={false}
+            <div
+              className="absolute inset-0 cursor-move"
+              style={{ touchAction: "none" }}
               onPointerDown={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -284,9 +329,7 @@ export default function MockupEditor({
                 };
               }}
             />
-            {/* Selection box */}
             <div className="absolute inset-0 ring-1 ring-primary/70 pointer-events-none" />
-            {/* Corner handles */}
             {(["nw", "ne", "sw", "se"] as const).map((corner) => (
               <div
                 key={corner}
@@ -313,7 +356,6 @@ export default function MockupEditor({
                 }}
               />
             ))}
-            {/* Rotation handle */}
             <div
               className="absolute left-1/2 -translate-x-1/2 -top-7 h-4 w-4 rounded-full bg-background border border-primary flex items-center justify-center"
               style={{ cursor: "grab", touchAction: "none" }}
@@ -322,8 +364,10 @@ export default function MockupEditor({
                 e.stopPropagation();
                 (e.target as Element).setPointerCapture?.(e.pointerId);
                 const stage = stageRef.current!.getBoundingClientRect();
-                const cx = stage.left + (placement.x + placement.w / 2) * stage.width;
-                const cy = stage.top + (placement.y + placement.h / 2) * stage.height;
+                const sx = zone.x + (placement.x + placement.w / 2) * zone.w;
+                const sy = zone.y + (placement.y + placement.h / 2) * zone.h;
+                const cx = stage.left + sx * stage.width;
+                const cy = stage.top + sy * stage.height;
                 const startA =
                   Math.atan2(e.clientY - cy, e.clientX - cx) * (180 / Math.PI);
                 dragRef.current = {
@@ -340,7 +384,6 @@ export default function MockupEditor({
           </div>
         )}
 
-        {/* Empty state */}
         {!previewUrl && (
           <div className="absolute inset-0 flex items-end justify-center pb-6 pointer-events-none">
             <div className="text-xs text-muted-foreground bg-background/80 rounded-full px-3 py-1">
@@ -350,7 +393,6 @@ export default function MockupEditor({
         )}
       </div>
 
-      {/* Quick-zone buttons */}
       {zones.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {zones.map((z) => (
@@ -370,7 +412,6 @@ export default function MockupEditor({
         </div>
       )}
 
-      {/* Upload control */}
       <label className="inline-flex items-center gap-2 cursor-pointer rounded-md border border-border px-3 py-2 text-sm hover:bg-accent transition w-full justify-center">
         <Upload className="h-4 w-4" />
         {file ? "Replace design (PNG)" : "Upload your design (PNG)"}
@@ -383,7 +424,7 @@ export default function MockupEditor({
       </label>
 
       <p className="text-[11px] text-muted-foreground text-center">
-        Drag inside the dashed area to position. Corner handles resize; top handle rotates.
+        Drag, scale, and rotate freely — anything outside the dashed box is clipped and won't print.
       </p>
     </div>
   );

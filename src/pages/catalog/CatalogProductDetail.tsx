@@ -36,6 +36,7 @@ export default function CatalogProductDetail() {
           CartCustomization,
           "asset_path" | "asset_filename" | "asset_mime" | "preview_url"
         >;
+        getPrintReadyFile: (filename?: string) => Promise<File>;
       }
     | null
   >(null);
@@ -61,21 +62,23 @@ export default function CatalogProductDetail() {
     if (mockup) {
       setUploading(true);
       try {
-        const safeName = mockup.file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
-        const path = `catalog-uploads/${crypto.randomUUID()}/${safeName || "design.png"}`;
+        // Render the print-ready PNG (clipped to the zone box, at zone pixel size).
+        const baseName = mockup.file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60) || "design";
+        const printFile = await mockup.getPrintReadyFile(`${baseName}.png`);
+        const path = `catalog-uploads/${crypto.randomUUID()}/${printFile.name}`;
         const { error: upErr } = await supabase.storage
           .from("design-files")
-          .upload(path, mockup.file, {
+          .upload(path, printFile, {
             cacheControl: "3600",
             upsert: false,
-            contentType: mockup.file.type || "image/png",
+            contentType: "image/png",
           });
         if (upErr) throw upErr;
         customization = {
           ...mockup.placement,
           asset_path: path,
-          asset_filename: mockup.file.name,
-          asset_mime: mockup.file.type || "image/png",
+          asset_filename: printFile.name,
+          asset_mime: "image/png",
           preview_url: mockup.previewUrl,
         };
       } catch (e: any) {
