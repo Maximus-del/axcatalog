@@ -665,6 +665,7 @@ export type Database = {
           blank_id: string | null
           color: string | null
           created_at: string
+          customization: Json | null
           id: string
           line_subtotal: number | null
           notes: string | null
@@ -680,6 +681,7 @@ export type Database = {
           blank_id?: string | null
           color?: string | null
           created_at?: string
+          customization?: Json | null
           id?: string
           line_subtotal?: number | null
           notes?: string | null
@@ -695,6 +697,7 @@ export type Database = {
           blank_id?: string | null
           color?: string | null
           created_at?: string
+          customization?: Json | null
           id?: string
           line_subtotal?: number | null
           notes?: string | null
