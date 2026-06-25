@@ -1882,6 +1882,51 @@ export type Database = {
         }
         Relationships: []
       }
+      print_zones: {
+        Row: {
+          created_at: string
+          garment_category: string
+          h: number
+          id: string
+          label: string
+          sort_order: number
+          surface: string
+          updated_at: string
+          w: number
+          x: number
+          y: number
+          zone_id: string
+        }
+        Insert: {
+          created_at?: string
+          garment_category: string
+          h: number
+          id?: string
+          label: string
+          sort_order?: number
+          surface: string
+          updated_at?: string
+          w: number
+          x: number
+          y: number
+          zone_id: string
+        }
+        Update: {
+          created_at?: string
+          garment_category?: string
+          h?: number
+          id?: string
+          label?: string
+          sort_order?: number
+          surface?: string
+          updated_at?: string
+          w?: number
+          x?: number
+          y?: number
+          zone_id?: string
+        }
+        Relationships: []
+      }
       product_athletes: {
         Row: {
           athlete_id: string
