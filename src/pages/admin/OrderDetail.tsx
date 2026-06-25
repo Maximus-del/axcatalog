@@ -44,6 +44,7 @@ import {
 } from "@/lib/order-status";
 import { StatusBadge, PriorityBadge } from "@/components/admin/orders/StatusBadge";
 import { avatarColorFor, initialsFor } from "@/lib/avatar-color";
+import { OrderItemCustomizationCell } from "@/components/admin/orders/OrderItemCustomization";
 
 type Transition = Exclude<BulkOrderStatus, "submitted">;
 
@@ -393,13 +394,14 @@ export default function OrderDetail() {
                     <th className="text-left px-4 py-3 ax-label">Size</th>
                     <th className="text-left px-4 py-3 ax-label">Color</th>
                     <th className="text-right px-4 py-3 ax-label">Qty</th>
+                    <th className="text-left px-4 py-3 ax-label">Customization</th>
                     <th className="text-left px-4 py-3 ax-label">Notes</th>
                   </tr>
                 </thead>
                 <tbody>
                   {order.items.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted-foreground">
                         No items.
                       </td>
                     </tr>
@@ -430,6 +432,13 @@ export default function OrderDetail() {
                       <td className="px-4 py-3 font-mono text-xs uppercase">{it.size}</td>
                       <td className="px-4 py-3 text-muted-foreground">{it.color ?? "—"}</td>
                       <td className="px-4 py-3 text-right tabular-nums">{it.quantity}</td>
+                      <td className="px-4 py-3">
+                        {it.customization ? (
+                          <OrderItemCustomizationCell customization={it.customization} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {it.shopify_variant_id || it.variant_sku || it.notes_text ? (
                           <div className="space-y-1">
