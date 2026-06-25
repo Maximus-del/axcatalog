@@ -34,6 +34,7 @@ import QuestionnairesList from "./pages/admin/QuestionnairesList";
 import QuestionnaireEditor from "./pages/admin/QuestionnaireEditor";
 import QuestionnairePublic from "./pages/QuestionnairePublic";
 import CustomerPricingLinks from "./pages/admin/CustomerPricingLinks";
+import PrintZonesEditor from "./pages/admin/PrintZonesEditor";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -102,6 +103,7 @@ const App = () => (
               <Route path="questionnaires" element={<QuestionnairesList />} />
               <Route path="questionnaires/:id" element={<QuestionnaireEditor />} />
               <Route path="pricing-links" element={<CustomerPricingLinks />} />
+              <Route path="print-zones" element={<PrintZonesEditor />} />
               <Route path="imports/orders" element={<ImportsList />} />
               <Route path="imports/orders/:id" element={<ImportBatchDetail />} />
             </Route>
