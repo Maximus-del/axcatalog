@@ -1,7 +1,9 @@
-// Print-zone configuration. Coordinates are PERCENTAGES of the base image
-// (0..1). These are the editable defaults; admins will tune them later.
+// Print-zone types + surface mapping. Zone data itself now lives in the
+// `print_zones` table (publicly readable) and is fetched via
+// `usePrintZones`. Only the surface→image-field mapping stays here.
 
 export type SurfaceKey = "front" | "back";
+export type GarmentCategory = "apparel" | "cap";
 
 export interface PrintZone {
   id: string;
@@ -19,27 +21,14 @@ export interface SurfaceDef {
   imageField: "image_url" | "image_url_back";
 }
 
-const APPAREL_ZONES: Record<SurfaceKey, PrintZone[]> = {
-  front: [
-    { id: "left_chest", label: "Left chest", x: 0.4, y: 0.3, w: 0.16, h: 0.12 },
-    { id: "center_chest", label: "Center chest", x: 0.34, y: 0.3, w: 0.32, h: 0.22 },
-  ],
-  back: [
-    { id: "high_back", label: "High back", x: 0.32, y: 0.22, w: 0.36, h: 0.1 },
-    { id: "center_back", label: "Center back", x: 0.3, y: 0.3, w: 0.4, h: 0.3 },
-    { id: "low_back", label: "Low back", x: 0.32, y: 0.55, w: 0.36, h: 0.18 },
-    { id: "full_16x20", label: "16×20 back", x: 0.28, y: 0.26, w: 0.44, h: 0.55 },
-  ],
-};
-
-const CAP_ZONES: Record<"front", PrintZone[]> = {
-  front: [
-    { id: "cap_front", label: "Front panel", x: 0.34, y: 0.4, w: 0.32, h: 0.16 },
-  ],
-};
-
 export function isCap(garmentType: string | null | undefined): boolean {
   return (garmentType ?? "").toLowerCase() === "hat";
+}
+
+export function garmentCategoryFor(
+  garmentType: string | null | undefined,
+): GarmentCategory {
+  return isCap(garmentType) ? "cap" : "apparel";
 }
 
 /**
@@ -56,14 +45,6 @@ export function surfacesFor(garmentType: string | null | undefined): SurfaceDef[
     { key: "front", label: "Front", imageField: "image_url" },
     { key: "back", label: "Back", imageField: "image_url_back" },
   ];
-}
-
-export function zonesFor(
-  garmentType: string | null | undefined,
-  surface: SurfaceKey,
-): PrintZone[] {
-  if (isCap(garmentType)) return CAP_ZONES.front;
-  return APPAREL_ZONES[surface] ?? [];
 }
 
 /** Clamp a placement rect (all in 0..1 percentages) inside a zone. */

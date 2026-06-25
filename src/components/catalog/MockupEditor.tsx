@@ -5,11 +5,12 @@ import { toast } from "@/hooks/use-toast";
 import {
   SurfaceDef,
   SurfaceKey,
+  garmentCategoryFor,
   surfacesFor,
-  zonesFor,
 } from "@/lib/print-zones";
 import type { CartCustomization } from "@/pages/catalog/CartContext";
 import { renderPrintReadyPng } from "@/lib/render-print-ready";
+import { usePrintZones } from "@/hooks/usePrintZones";
 
 interface ColorImage {
   color_name: string;
@@ -68,7 +69,12 @@ export default function MockupEditor({
     fallbackImage ??
     null;
 
-  const zones = useMemo(() => zonesFor(garmentType, surface.key), [garmentType, surface.key]);
+  const category = useMemo(() => garmentCategoryFor(garmentType), [garmentType]);
+  const { data: zonesBySurface } = usePrintZones(category);
+  const zones = useMemo(
+    () => zonesBySurface?.[surface.key] ?? [],
+    [zonesBySurface, surface.key],
+  );
   const [zoneId, setZoneId] = useState<string>(zones[0]?.id ?? "");
   const zone = zones.find((z) => z.id === zoneId) ?? zones[0];
 
