@@ -272,13 +272,10 @@ export default function MockupEditor({
               alt="Your design"
               className="absolute inset-0 h-full w-full object-contain cursor-move"
               draggable={false}
-              onPointerDown={onPointerDown({
-                kind: "move",
-                startX: 0, startY: 0,
-                orig: placement,
-              })}
-              // re-bind real start coords at down time:
-              onPointerDownCapture={(e) => {
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                (e.target as Element).setPointerCapture?.(e.pointerId);
                 dragRef.current = {
                   kind: "move",
                   startX: e.clientX,
