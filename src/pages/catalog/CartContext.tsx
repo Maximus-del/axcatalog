@@ -13,6 +13,8 @@ export interface CartCustomization {
   surface_label: string;
   zone_id: string;
   placement_label: string;
+  // All values are percentages of the print-zone BOX (0..1).
+  // May be negative or >1 — the rendered/print-ready asset is clipped to the box.
   x_pct: number;
   y_pct: number;
   w_pct: number;
