@@ -8,6 +8,23 @@ import {
 } from "react";
 
 // Client-side cart. Prices are NEVER stored here — server recomputes at checkout.
+export interface CartCustomization {
+  surface: "front" | "back";
+  surface_label: string;
+  zone_id: string;
+  placement_label: string;
+  x_pct: number;
+  y_pct: number;
+  w_pct: number;
+  h_pct: number;
+  rotation_deg: number;
+  asset_path: string;        // storage path inside the design-files bucket
+  asset_filename: string;
+  asset_mime: string;
+  /** Local object-URL for preview only — not persisted across reloads. */
+  preview_url?: string;
+}
+
 export interface CartLine {
   blank_id: string;
   sku: string | null;
@@ -15,6 +32,7 @@ export interface CartLine {
   color: string;
   size: string;
   quantity: number;
+  customization?: CartCustomization;
 }
 
 interface CartContextValue {
@@ -54,11 +72,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const addLine = useCallback((line: CartLine) => {
     setLines((prev) => {
+      // Never dedup customized lines — each placement is unique.
+      if (line.customization) {
+        return [...prev, line];
+      }
       const idx = prev.findIndex(
         (l) =>
           l.blank_id === line.blank_id &&
           l.color === line.color &&
-          l.size === line.size,
+          l.size === line.size &&
+          !l.customization,
       );
       if (idx >= 0) {
         const next = [...prev];

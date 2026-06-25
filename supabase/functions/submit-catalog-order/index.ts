@@ -10,6 +10,21 @@ const corsHeaders = {
 
 const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
 
+const CustomizationSchema = z.object({
+  surface: z.enum(["front", "back"]),
+  surface_label: z.string().trim().min(1).max(50),
+  zone_id: z.string().trim().min(1).max(60),
+  placement_label: z.string().trim().min(1).max(60),
+  x_pct: z.number().min(0).max(1),
+  y_pct: z.number().min(0).max(1),
+  w_pct: z.number().min(0).max(1),
+  h_pct: z.number().min(0).max(1),
+  rotation_deg: z.number().min(-360).max(360),
+  asset_path: z.string().trim().min(1).max(500),
+  asset_filename: z.string().trim().min(1).max(255),
+  asset_mime: z.string().trim().min(1).max(100),
+});
+
 const BodySchema = z.object({
   token: z.string().trim().min(1).max(200).nullable().optional(),
   customer_name: z.string().trim().min(1).max(200),
@@ -21,6 +36,7 @@ const BodySchema = z.object({
         color: z.string().trim().min(1).max(100),
         size: z.string().trim().min(1).max(50),
         quantity: z.number().int().positive().max(100000),
+        customization: CustomizationSchema.optional(),
       }),
     )
     .min(1)
@@ -138,6 +154,7 @@ Deno.serve(async (req) => {
     unit_wholesale_price: number;
     unit_retail_price: number;
     line_subtotal: number;
+    customization: unknown | null;
   }> = [];
     let totalUnits = 0;
     let wholesaleSubtotal = 0;
@@ -194,6 +211,9 @@ Deno.serve(async (req) => {
       unit_wholesale_price: wholesalePrice,
       unit_retail_price: retailPrice,
       line_subtotal: subtotal,
+      customization: line.customization
+        ? { ...line.customization, captured_at: new Date().toISOString() }
+        : null,
     });
     }
 

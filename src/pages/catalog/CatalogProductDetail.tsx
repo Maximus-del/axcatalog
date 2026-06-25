@@ -5,14 +5,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   usePublicCatalogItem,
   usePublicCatalogColors,
   usePublicCatalogSizes,
 } from "@/hooks/usePublicCatalog";
 import { formatGarmentType } from "@/lib/blank-status";
-import { useCart } from "./CartContext";
+import { useCart, type CartCustomization } from "./CartContext";
 import { priceForTier, useCatalogAccess } from "./CatalogAccessContext";
+import MockupEditor from "@/components/catalog/MockupEditor";
 
 export default function CatalogProductDetail() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +28,18 @@ export default function CatalogProductDetail() {
   const [size, setSize] = useState<string | null>(null);
   const [qty, setQty] = useState<number>(1);
   const [view, setView] = useState<"front" | "back">("front");
+  const [mockup, setMockup] = useState<
+    | {
+        file: File;
+        previewUrl: string;
+        placement: Omit<
+          CartCustomization,
+          "asset_path" | "asset_filename" | "asset_mime" | "preview_url"
+        >;
+      }
+    | null
+  >(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!color && colors.length) setColor(colors[0].color_name);
@@ -40,8 +54,43 @@ export default function CatalogProductDetail() {
 
   const canAdd = !!item && !!color && !!size && qty > 0;
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!item || !color || !size) return;
+
+    let customization: CartCustomization | undefined;
+    if (mockup) {
+      setUploading(true);
+      try {
+        const safeName = mockup.file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
+        const path = `catalog-uploads/${crypto.randomUUID()}/${safeName || "design.png"}`;
+        const { error: upErr } = await supabase.storage
+          .from("design-files")
+          .upload(path, mockup.file, {
+            cacheControl: "3600",
+            upsert: false,
+            contentType: mockup.file.type || "image/png",
+          });
+        if (upErr) throw upErr;
+        customization = {
+          ...mockup.placement,
+          asset_path: path,
+          asset_filename: mockup.file.name,
+          asset_mime: mockup.file.type || "image/png",
+          preview_url: mockup.previewUrl,
+        };
+      } catch (e: any) {
+        toast({
+          title: "Upload failed",
+          description: e?.message ?? "Could not upload your design.",
+          variant: "destructive",
+        });
+        setUploading(false);
+        return;
+      } finally {
+        setUploading(false);
+      }
+    }
+
     addLine({
       blank_id: item.id,
       sku: item.sku,
@@ -49,11 +98,15 @@ export default function CatalogProductDetail() {
       color,
       size,
       quantity: qty,
+      customization,
     });
     toast({
       title: "Added to cart",
-      description: `${qty} × ${item.name} (${color} / ${size})`,
+      description: customization
+        ? `${qty} × ${item.name} (${color} / ${size}) — with your design`
+        : `${qty} × ${item.name} (${color} / ${size})`,
     });
+    setMockup(null);
   };
 
   return (
@@ -246,11 +299,20 @@ export default function CatalogProductDetail() {
             </div>
 
             <Button onClick={handleAdd} disabled={!canAdd} className="w-full">
-              Add to cart
+              {uploading ? "Uploading…" : "Add to cart"}
             </Button>
             <p className="text-xs text-muted-foreground text-center">
               Final pricing is confirmed at checkout.
             </p>
+
+            <div className="pt-4 border-t border-border">
+              <MockupEditor
+                garmentType={item.garment_type}
+                fallbackImage={item.image_url}
+                selectedColor={colors.find((c) => c.color_name === color) ?? null}
+                onChange={setMockup}
+              />
+            </div>
           </div>
         </div>
       )}

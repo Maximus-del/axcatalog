@@ -34,6 +34,22 @@ export default function CatalogCheckout() {
             color: l.color,
             size: l.size,
             quantity: l.quantity,
+            customization: l.customization
+              ? {
+                  surface: l.customization.surface,
+                  surface_label: l.customization.surface_label,
+                  zone_id: l.customization.zone_id,
+                  placement_label: l.customization.placement_label,
+                  x_pct: l.customization.x_pct,
+                  y_pct: l.customization.y_pct,
+                  w_pct: l.customization.w_pct,
+                  h_pct: l.customization.h_pct,
+                  rotation_deg: l.customization.rotation_deg,
+                  asset_path: l.customization.asset_path,
+                  asset_filename: l.customization.asset_filename,
+                  asset_mime: l.customization.asset_mime,
+                }
+              : undefined,
           })),
         },
       });
@@ -90,12 +106,24 @@ export default function CatalogCheckout() {
                 key={`${l.blank_id}-${l.color}-${l.size}-${i}`}
                 className="flex items-center gap-3 p-3 text-sm"
               >
+                {l.customization?.preview_url && (
+                  <img
+                    src={l.customization.preview_url}
+                    alt="Your design"
+                    className="h-10 w-10 object-contain rounded bg-white border border-border"
+                  />
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium truncate">{l.name}</p>
                   <p className="text-xs text-muted-foreground">
                     {l.color} · {l.size}
                     {l.sku ? ` · SKU ${l.sku}` : ""}
                   </p>
+                  {l.customization && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Custom: {l.customization.surface_label} · {l.customization.placement_label}
+                    </p>
+                  )}
                 </div>
                 <Input
                   type="number"
