@@ -476,6 +476,7 @@ export default function OrderDetail() {
                       <td className="px-4 py-3 text-right text-accent font-bold tabular-nums">
                         {totalUnits}
                       </td>
+                      <td className="px-4 py-3" />
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {totalItems} line{totalItems === 1 ? "" : "s"}
                       </td>
