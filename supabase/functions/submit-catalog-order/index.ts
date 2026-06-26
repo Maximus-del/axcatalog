@@ -20,9 +20,9 @@ const CustomizationSchema = z.object({
   w_pct: z.number().min(0).max(1),
   h_pct: z.number().min(0).max(1),
   rotation_deg: z.number().min(-360).max(360),
-  asset_path: z.string().trim().min(1).max(500),
-  asset_filename: z.string().trim().min(1).max(255),
-  asset_mime: z.string().trim().min(1).max(100),
+  design_url: z.string().trim().min(1).max(500),
+  asset_filename: z.string().trim().min(1).max(255).optional(),
+  asset_mime: z.string().trim().min(1).max(100).optional(),
 });
 
 const BodySchema = z.object({
@@ -226,26 +226,10 @@ Deno.serve(async (req) => {
 
     const order_number = genOrderNumber();
 
-    // Uploads happen on Add to cart via signed URLs, so the client already
-    // passes a finalized asset_path. Persist customization straight onto the
-    // row, mapping asset_path -> design_url. Items without a design stay null.
-    const finalizedRows = itemRows.map((row) => {
-      const c = row.customization as any;
-      if (!c) return row;
-      return {
-        ...row,
-        customization: {
-          design_url: c.asset_path ?? null,
-          surface: c.surface,
-          placement_label: c.placement_label,
-          x_pct: c.x_pct,
-          y_pct: c.y_pct,
-          w_pct: c.w_pct,
-          h_pct: c.h_pct,
-          rotation_deg: c.rotation_deg,
-        },
-      };
-    });
+    // Uploads already happened on Add to cart via signed URLs. The client
+    // passes a plain JSON customization object (design_url + placement). We
+    // persist it straight onto the row; items without a design stay null.
+    const finalizedRows = itemRows;
 
     const { data: orderRow, error: orderErr } = await admin
     .from("bulk_order_requests")
