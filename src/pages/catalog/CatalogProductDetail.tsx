@@ -142,6 +142,9 @@ export default function CatalogProductDetail() {
             const backSrc = selectedColor?.image_url_back ?? null;
             const hasBack = !!backSrc;
             const mainSrc = view === "back" && hasBack ? backSrc : frontSrc;
+            const isCap = /hat|cap/i.test(item.garment_type ?? "");
+            const frontLabel = isCap ? "Side" : "Front";
+            const backLabel = isCap ? "Front" : "Back";
             return (
               <div className="relative aspect-square rounded-lg bg-white flex items-center justify-center overflow-hidden">
                 {mainSrc ? (
@@ -164,7 +167,7 @@ export default function CatalogProductDetail() {
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      Front
+                      {frontLabel}
                     </button>
                     <button
                       type="button"
@@ -175,7 +178,7 @@ export default function CatalogProductDetail() {
                           : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
-                      Back
+                      {backLabel}
                     </button>
                   </div>
                 )}
