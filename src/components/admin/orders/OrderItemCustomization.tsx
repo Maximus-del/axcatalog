@@ -1,5 +1,6 @@
-import { Download } from "lucide-react";
-import { useSignedUrl } from "@/lib/storage";
+import { useEffect, useState } from "react";
+import { Download, AlertCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import type { OrderItemCustomization as Customization } from "@/hooks/useAdminOrderDetail";
 
 interface Props {
@@ -30,8 +31,39 @@ function normalizeDesignPath(input: string): string {
 
 export function OrderItemCustomizationCell({ customization }: Props) {
   const path = normalizeDesignPath(customization.design_url);
-  const { url } = useSignedUrl("design-files", path, 3600);
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const filename = path.split("/").pop() ?? "design.png";
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!path) {
+      setError("Missing design path");
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    void supabase.storage
+      .from("design-files")
+      .createSignedUrl(path, 3600)
+      .then(({ data, error: err }) => {
+        if (cancelled) return;
+        if (err || !data?.signedUrl) {
+          console.error("createSignedUrl failed", err, path);
+          setError(err?.message ?? "Could not load design");
+          setUrl(null);
+        } else {
+          setUrl(data.signedUrl);
+        }
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
   const surfaceLabel =
     customization.surface_label ??
     (customization.surface === "back" ? "Back" : "Front");
@@ -51,6 +83,8 @@ export function OrderItemCustomizationCell({ customization }: Props) {
             alt="Customer design"
             className="max-h-full max-w-full object-contain"
           />
+        ) : error ? (
+          <AlertCircle className="h-4 w-4 text-destructive" />
         ) : (
           <span className="text-[10px] text-muted-foreground">…</span>
         )}
@@ -71,9 +105,13 @@ export function OrderItemCustomizationCell({ customization }: Props) {
             <Download className="h-3 w-3" />
             Download design
           </a>
-        ) : (
+        ) : error ? (
+          <span className="text-[11px] text-destructive" title={error}>
+            Design unavailable
+          </span>
+        ) : loading ? (
           <span className="text-[11px] text-muted-foreground">Loading link…</span>
-        )}
+        ) : null}
       </div>
     </div>
   );
