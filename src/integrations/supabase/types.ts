@@ -1889,6 +1889,7 @@ export type Database = {
           h: number
           id: string
           label: string
+          organization_id: string
           sort_order: number
           surface: string
           updated_at: string
@@ -1903,6 +1904,7 @@ export type Database = {
           h: number
           id?: string
           label: string
+          organization_id: string
           sort_order?: number
           surface: string
           updated_at?: string
@@ -1917,6 +1919,7 @@ export type Database = {
           h?: number
           id?: string
           label?: string
+          organization_id?: string
           sort_order?: number
           surface?: string
           updated_at?: string
@@ -1925,7 +1928,22 @@ export type Database = {
           y?: number
           zone_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "print_zones_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "print_zones_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_athletes: {
         Row: {
