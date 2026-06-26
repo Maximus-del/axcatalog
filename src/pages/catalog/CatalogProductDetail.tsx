@@ -65,15 +65,20 @@ export default function CatalogProductDetail() {
         // Render the print-ready PNG (clipped to the zone box, at zone pixel size).
         const baseName = mockup.file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60) || "design";
         const printFile = await mockup.getPrintReadyFile(`${baseName}.png`);
-        const path = `catalog-uploads/${crypto.randomUUID()}/${printFile.name}`;
+        const { data: signed, error: signErr } = await supabase.functions.invoke<
+          { path: string; token: string }
+        >("mockup-upload-url", { body: { filename: printFile.name } });
+        if (signErr || !signed?.path || !signed?.token) {
+          throw signErr ?? new Error("Could not get upload URL");
+        }
         const { error: upErr } = await supabase.storage
           .from("design-files")
-          .upload(path, printFile, {
-            cacheControl: "3600",
-            upsert: false,
+          .uploadToSignedUrl(signed.path, signed.token, printFile, {
             contentType: "image/png",
+            upsert: false,
           });
         if (upErr) throw upErr;
+        const path = signed.path;
         customization = {
           ...mockup.placement,
           asset_path: path,
