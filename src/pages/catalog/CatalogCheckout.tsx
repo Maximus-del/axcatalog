@@ -45,7 +45,7 @@ export default function CatalogCheckout() {
                   w_pct: l.customization.w_pct,
                   h_pct: l.customization.h_pct,
                   rotation_deg: l.customization.rotation_deg,
-                  asset_path: l.customization.asset_path,
+                  design_url: l.customization.asset_path,
                   asset_filename: l.customization.asset_filename,
                   asset_mime: l.customization.asset_mime,
                 }
