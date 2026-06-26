@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.submit-catalog-order]
 verify_jwt = false
+
+[functions.mockup-upload-url]
+verify_jwt = false
