@@ -361,9 +361,13 @@ Deno.serve(async (req) => {
     );
   } catch (err: any) {
     console.error("submit-catalog-order error:", err);
-    return new Response(
-      JSON.stringify({ error: err?.message ?? String(err) }),
-      { status: 500, headers: jsonHeaders },
-    );
+    const message =
+      typeof err === "string"
+        ? err
+        : err?.message ?? err?.error ?? JSON.stringify(err) ?? "Unknown error";
+    return new Response(JSON.stringify({ error: message }), {
+      status: 400,
+      headers: jsonHeaders,
+    });
   }
 });
