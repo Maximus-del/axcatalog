@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.mockup-upload-url]
 verify_jwt = false
+
+[functions.design-signed-url]
+verify_jwt = true

@@ -45,13 +45,14 @@ export function OrderItemCustomizationCell({ customization }: Props) {
     }
     setLoading(true);
     setError(null);
-    void supabase.storage
-      .from("design-files")
-      .createSignedUrl(path, 3600)
+    void supabase.functions
+      .invoke<{ signedUrl: string }>("design-signed-url", {
+        body: { path },
+      })
       .then(({ data, error: err }) => {
         if (cancelled) return;
         if (err || !data?.signedUrl) {
-          console.error("createSignedUrl failed", err, path);
+          console.error("design-signed-url failed", err, path);
           setError(err?.message ?? "Could not load design");
           setUrl(null);
         } else {
