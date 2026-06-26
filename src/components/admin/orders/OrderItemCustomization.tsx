@@ -6,9 +6,32 @@ interface Props {
   customization: Customization;
 }
 
+/**
+ * Normalize design_url to a plain object path inside the design-files bucket.
+ * Handles cases where it was stored as a full Supabase URL, a public/sign URL,
+ * or with a leading bucket prefix or slash.
+ */
+function normalizeDesignPath(input: string): string {
+  let path = input.trim();
+  // Strip full URL down to the path after the bucket name.
+  const marker = "/design-files/";
+  const idx = path.indexOf(marker);
+  if (idx !== -1) {
+    path = path.slice(idx + marker.length);
+  }
+  // Strip query string (signed URL tokens).
+  const q = path.indexOf("?");
+  if (q !== -1) path = path.slice(0, q);
+  // Strip leading slash or bucket prefix.
+  path = path.replace(/^\/+/, "");
+  if (path.startsWith("design-files/")) path = path.slice("design-files/".length);
+  return path;
+}
+
 export function OrderItemCustomizationCell({ customization }: Props) {
-  const { url } = useSignedUrl("design-files", customization.design_url, 3600);
-  const filename = customization.design_url.split("/").pop() ?? "design.png";
+  const path = normalizeDesignPath(customization.design_url);
+  const { url } = useSignedUrl("design-files", path, 3600);
+  const filename = path.split("/").pop() ?? "design.png";
   const surfaceLabel =
     customization.surface_label ??
     (customization.surface === "back" ? "Back" : "Front");
