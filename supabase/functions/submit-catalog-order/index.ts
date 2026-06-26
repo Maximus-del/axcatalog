@@ -226,53 +226,26 @@ Deno.serve(async (req) => {
 
     const order_number = genOrderNumber();
 
-    // For each item with customization, copy the uploaded design file from its
-    // temp location in `design-files` to a stable per-order path, and rewrite
-    // the customization JSON we persist to only the spec'd fields.
-    const finalizedRows = await Promise.all(
-      itemRows.map(async (row, idx) => {
-        const c = row.customization as any;
-        if (!c) return row;
-        const srcPath: string | undefined = c.asset_path;
-        const destPath = `catalog-mockups/${order_number}/${idx}.png`;
-        let designUrl = srcPath ?? null;
-        if (srcPath) {
-          try {
-            const { data: blob, error: dlErr } = await admin.storage
-              .from("design-files")
-              .download(srcPath);
-            if (dlErr) throw dlErr;
-            const { error: upErr } = await admin.storage
-              .from("design-files")
-              .upload(destPath, blob, {
-                contentType: c.asset_mime || "image/png",
-                upsert: true,
-              });
-            if (upErr) throw upErr;
-            designUrl = destPath;
-            // best-effort cleanup of the temp upload
-            if (srcPath !== destPath) {
-              await admin.storage.from("design-files").remove([srcPath]);
-            }
-          } catch (e) {
-            console.error("design file copy failed for item", idx, e);
-          }
-        }
-        return {
-          ...row,
-          customization: {
-            design_url: designUrl,
-            surface: c.surface,
-            placement_label: c.placement_label,
-            x_pct: c.x_pct,
-            y_pct: c.y_pct,
-            w_pct: c.w_pct,
-            h_pct: c.h_pct,
-            rotation_deg: c.rotation_deg,
-          },
-        };
-      }),
-    );
+    // Uploads happen on Add to cart via signed URLs, so the client already
+    // passes a finalized asset_path. Persist customization straight onto the
+    // row, mapping asset_path -> design_url. Items without a design stay null.
+    const finalizedRows = itemRows.map((row) => {
+      const c = row.customization as any;
+      if (!c) return row;
+      return {
+        ...row,
+        customization: {
+          design_url: c.asset_path ?? null,
+          surface: c.surface,
+          placement_label: c.placement_label,
+          x_pct: c.x_pct,
+          y_pct: c.y_pct,
+          w_pct: c.w_pct,
+          h_pct: c.h_pct,
+          rotation_deg: c.rotation_deg,
+        },
+      };
+    });
 
     const { data: orderRow, error: orderErr } = await admin
     .from("bulk_order_requests")
