@@ -15,10 +15,13 @@ const CustomizationSchema = z.object({
   surface_label: z.string().trim().min(1).max(50),
   zone_id: z.string().trim().min(1).max(60),
   placement_label: z.string().trim().min(1).max(60),
-  x_pct: z.number().min(0).max(1),
-  y_pct: z.number().min(0).max(1),
-  w_pct: z.number().min(0).max(1),
-  h_pct: z.number().min(0).max(1),
+  // Placement is relative to the print-zone box but the zone is a visual
+  // clip mask — designs may extend past the box on any side. Allow a sane
+  // out-of-range guard rather than clamping to 0..1.
+  x_pct: z.number().min(-3).max(3),
+  y_pct: z.number().min(-3).max(3),
+  w_pct: z.number().min(-3).max(3),
+  h_pct: z.number().min(-3).max(3),
   rotation_deg: z.number().min(-360).max(360),
   design_url: z.string().trim().min(1).max(500),
   asset_filename: z.string().trim().min(1).max(255).optional(),
