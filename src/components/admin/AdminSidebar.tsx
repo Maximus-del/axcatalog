@@ -84,7 +84,7 @@ const GROUPS: NavGroup[] = [
     label: "System",
     items: [
       { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
-      { label: "Team", to: "/admin/team", icon: UserCog },
+      { label: "Team", to: "/admin/users", icon: UserCog },
       { label: "Settings", to: "/admin/settings", icon: Settings },
     ],
   },
