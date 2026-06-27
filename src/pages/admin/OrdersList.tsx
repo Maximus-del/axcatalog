@@ -12,6 +12,8 @@ import {
   ArrowUpDown,
   Users,
   Trophy,
+  LayoutGrid,
+  Table as TableIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,10 +49,12 @@ import {
   type BulkOrderStatus,
 } from "@/lib/order-status";
 import { StatusBadge, PriorityBadge } from "@/components/admin/orders/StatusBadge";
+import { OrdersBoard } from "@/components/admin/orders/OrdersBoard";
 
 type FilterTab = "open" | "all" | BulkOrderStatus;
 type DateRange = "7d" | "30d" | "all";
 type SortKey = "created_at" | "status" | "total_units";
+type ViewMode = "table" | "board";
 
 const PAGE_SIZE = 25;
 
@@ -81,6 +85,17 @@ export default function OrdersList() {
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
+  const [view, setView] = useState<ViewMode>(
+    (params.get("view") as ViewMode) === "board" ? "board" : "table",
+  );
+
+  useEffect(() => {
+    const next = new URLSearchParams(params);
+    if (view === "table") next.delete("view");
+    else next.set("view", view);
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   // Sync tab to URL
   useEffect(() => {
