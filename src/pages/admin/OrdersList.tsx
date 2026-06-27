@@ -229,7 +229,7 @@ export default function OrdersList() {
           <div className="ax-section-header mb-2">Fulfillment</div>
           <h1 className="text-3xl font-bold">Bulk Orders</h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
           {(["submitted", "in_production", "completed"] as BulkOrderStatus[]).map((s) => (
             <span key={s} className="flex items-center gap-1.5">
               <span
@@ -244,6 +244,32 @@ export default function OrdersList() {
               <span className="text-muted-foreground">{STATUS_LABEL[s]}</span>
             </span>
           ))}
+          <div className="inline-flex rounded-md border border-border overflow-hidden ml-2">
+            <button
+              type="button"
+              onClick={() => setView("table")}
+              className={cn(
+                "px-2.5 py-1.5 text-xs inline-flex items-center gap-1.5 transition-colors",
+                view === "table"
+                  ? "bg-accent/15 text-accent"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <TableIcon className="h-3.5 w-3.5" /> Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("board")}
+              className={cn(
+                "px-2.5 py-1.5 text-xs inline-flex items-center gap-1.5 border-l border-border transition-colors",
+                view === "board"
+                  ? "bg-accent/15 text-accent"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Board
+            </button>
+          </div>
         </div>
       </header>
 
