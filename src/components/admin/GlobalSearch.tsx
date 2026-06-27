@@ -221,7 +221,7 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
                   <span className="truncate">{h.label}</span>
                   {h.sub && (
                     <span className="ml-auto text-[11px] text-muted-foreground capitalize">
-                      {h.sub.replaceAll("_", " ")}
+                      {h.sub.replace(/_/g, " ")}
                     </span>
                   )}
                 </CommandItem>
