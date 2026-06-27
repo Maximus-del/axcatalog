@@ -1,0 +1,1 @@
+ALTER TABLE public.bulk_order_requests ADD COLUMN IF NOT EXISTS fulfillment_stage text;

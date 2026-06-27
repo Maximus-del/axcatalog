@@ -752,6 +752,7 @@ export type Database = {
           credit_applied: number
           customer_email: string | null
           customer_name: string | null
+          fulfillment_stage: string | null
           id: string
           notes: string | null
           order_number: string | null
@@ -781,6 +782,7 @@ export type Database = {
           credit_applied?: number
           customer_email?: string | null
           customer_name?: string | null
+          fulfillment_stage?: string | null
           id?: string
           notes?: string | null
           order_number?: string | null
@@ -810,6 +812,7 @@ export type Database = {
           credit_applied?: number
           customer_email?: string | null
           customer_name?: string | null
+          fulfillment_stage?: string | null
           id?: string
           notes?: string | null
           order_number?: string | null
