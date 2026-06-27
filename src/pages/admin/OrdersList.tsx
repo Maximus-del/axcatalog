@@ -12,6 +12,8 @@ import {
   ArrowUpDown,
   Users,
   Trophy,
+  LayoutGrid,
+  Table as TableIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -47,10 +49,12 @@ import {
   type BulkOrderStatus,
 } from "@/lib/order-status";
 import { StatusBadge, PriorityBadge } from "@/components/admin/orders/StatusBadge";
+import { OrdersBoard } from "@/components/admin/orders/OrdersBoard";
 
 type FilterTab = "open" | "all" | BulkOrderStatus;
 type DateRange = "7d" | "30d" | "all";
 type SortKey = "created_at" | "status" | "total_units";
+type ViewMode = "table" | "board";
 
 const PAGE_SIZE = 25;
 
@@ -81,6 +85,17 @@ export default function OrdersList() {
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
+  const [view, setView] = useState<ViewMode>(
+    (params.get("view") as ViewMode) === "board" ? "board" : "table",
+  );
+
+  useEffect(() => {
+    const next = new URLSearchParams(params);
+    if (view === "table") next.delete("view");
+    else next.set("view", view);
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   // Sync tab to URL
   useEffect(() => {
@@ -214,7 +229,7 @@ export default function OrdersList() {
           <div className="ax-section-header mb-2">Fulfillment</div>
           <h1 className="text-3xl font-bold">Bulk Orders</h1>
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
           {(["submitted", "in_production", "completed"] as BulkOrderStatus[]).map((s) => (
             <span key={s} className="flex items-center gap-1.5">
               <span
@@ -229,6 +244,32 @@ export default function OrdersList() {
               <span className="text-muted-foreground">{STATUS_LABEL[s]}</span>
             </span>
           ))}
+          <div className="inline-flex rounded-md border border-border overflow-hidden ml-2">
+            <button
+              type="button"
+              onClick={() => setView("table")}
+              className={cn(
+                "px-2.5 py-1.5 text-xs inline-flex items-center gap-1.5 transition-colors",
+                view === "table"
+                  ? "bg-accent/15 text-accent"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <TableIcon className="h-3.5 w-3.5" /> Table
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("board")}
+              className={cn(
+                "px-2.5 py-1.5 text-xs inline-flex items-center gap-1.5 border-l border-border transition-colors",
+                view === "board"
+                  ? "bg-accent/15 text-accent"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> Board
+            </button>
+          </div>
         </div>
       </header>
 
@@ -296,7 +337,18 @@ export default function OrdersList() {
         </Select>
       </div>
 
-      {/* Table */}
+      {/* View */}
+      {view === "board" ? (
+        loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-64 rounded-2xl" />
+            ))}
+          </div>
+        ) : (
+          <OrdersBoard baseOrders={filtered} onRefetch={() => void refetch()} />
+        )
+      ) : (
       <div className="ax-card p-0 overflow-hidden">
         {loading ? (
           <div className="p-4 space-y-2">
@@ -471,6 +523,7 @@ export default function OrdersList() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
