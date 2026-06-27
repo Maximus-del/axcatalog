@@ -1,99 +1,148 @@
 import {
-  LayoutDashboard,
+  Home,
+  Inbox,
+  CheckSquare,
   Package,
-  Palette,
-  Shirt,
-  Users,
-  Trophy,
   FolderKanban,
-  Download,
   ClipboardList,
   DollarSign,
-  Upload,
-  Wallet,
-  Handshake,
-  ClipboardEdit,
-  Link2,
+  Users,
+  Trophy,
+  Building2,
+  Palette,
+  Image as ImageIcon,
+  Sparkles,
+  Truck,
+  Printer,
+  Shirt,
+  BarChart3,
+  Settings,
   Frame,
+  type LucideIcon,
 } from "lucide-react";
-import { useLocation } from "react-router-dom";
-import { NavLink } from "@/components/NavLink";
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  useSidebar,
-} from "@/components/ui/sidebar";
+import { NavLink, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { Wordmark } from "@/components/brand/Wordmark";
 
-const items = [
-  { title: "Dashboard", url: "/admin", icon: LayoutDashboard, end: true },
-  { title: "Products", url: "/admin/products", icon: Package },
-  { title: "Designs", url: "/admin/designs", icon: Palette },
-  { title: "Blanks", url: "/admin/blanks", icon: Shirt },
-  { title: "Athletes", url: "/admin/athletes", icon: Users },
-  { title: "Teams", url: "/admin/teams", icon: Trophy },
-  { title: "Collections", url: "/admin/collections", icon: FolderKanban },
-  { title: "Ingestion", url: "/admin/ingestion", icon: Download },
-  { title: "Orders", url: "/admin/orders", icon: ClipboardList },
-  { title: "Imports", url: "/admin/imports/orders", icon: Upload },
-  { title: "Pricing", url: "/admin/pricing", icon: DollarSign },
-  { title: "Credits", url: "/admin/credits", icon: Wallet },
-  { title: "Affiliates", url: "/admin/affiliates", icon: Handshake },
-  { title: "Questionnaires", url: "/admin/questionnaires", icon: ClipboardEdit },
-  { title: "Pricing Links", url: "/admin/pricing-links", icon: Link2 },
-  { title: "Print Zones", url: "/admin/print-zones", icon: Frame },
+interface NavItem {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+  end?: boolean;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const GROUPS: NavGroup[] = [
+  {
+    label: "Workspace",
+    items: [
+      { label: "Home", to: "/admin", icon: Home, end: true },
+      { label: "Inbox", to: "/admin/inbox", icon: Inbox },
+      { label: "Tasks", to: "/admin/tasks", icon: CheckSquare },
+    ],
+  },
+  {
+    label: "Commerce",
+    items: [
+      { label: "Products", to: "/admin/products", icon: Package },
+      { label: "Collections", to: "/admin/collections", icon: FolderKanban },
+      { label: "Orders", to: "/admin/orders", icon: ClipboardList },
+      { label: "Pricing", to: "/admin/pricing", icon: DollarSign },
+    ],
+  },
+  {
+    label: "Clients",
+    items: [
+      { label: "Athletes", to: "/admin/athletes", icon: Users },
+      { label: "Teams", to: "/admin/teams", icon: Trophy },
+      { label: "Organizations", to: "/admin/organizations", icon: Building2 },
+    ],
+  },
+  {
+    label: "Creative",
+    items: [
+      { label: "Designs", to: "/admin/designs", icon: Palette },
+      { label: "Mockups", to: "/admin/mockups", icon: ImageIcon },
+      { label: "Brand Assets", to: "/admin/brand-assets", icon: Sparkles },
+      { label: "Print Zones", to: "/admin/print-zones", icon: Frame },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { label: "Fulfillment", to: "/admin/fulfillment", icon: Truck },
+      { label: "Print Queue", to: "/admin/print-queue", icon: Printer },
+      { label: "Blanks", to: "/admin/blanks", icon: Shirt },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
+      { label: "Settings", to: "/admin/settings", icon: Settings },
+    ],
+  },
 ];
 
-export function AdminSidebar() {
-  const { state } = useSidebar();
-  const collapsed = state === "collapsed";
-  const location = useLocation();
+interface Props {
+  onNavigate?: () => void;
+}
 
+export function AdminSidebar({ onNavigate }: Props) {
+  const { pathname } = useLocation();
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarContent className="bg-sidebar">
-        <div className="h-14 flex items-center px-4 border-b border-sidebar-border">
-          {collapsed ? (
-            <span className="font-bold text-lg tracking-wider text-accent">X</span>
-          ) : (
-            <Wordmark size="sm" />
-          )}
+    <aside className="h-full w-64 shrink-0 bg-[hsl(var(--ax-sidebar))] border-r border-[hsl(var(--ax-border))] flex flex-col">
+      <div className="h-16 flex items-center px-5 border-b border-[hsl(var(--ax-border))]">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 rounded-[10px] bg-[hsl(var(--ax-accent))] text-white flex items-center justify-center font-bold">
+            X
+          </div>
+          <div className="leading-tight">
+            <div className="text-[13px] font-bold text-[hsl(var(--ax-ink))]">AthleteXclusive</div>
+            <div className="text-[10px] uppercase tracking-[0.14em] text-[hsl(var(--ax-faint))]">OS</div>
+          </div>
         </div>
+      </div>
 
-        <SidebarGroup>
-          {!collapsed && <SidebarGroupLabel className="ax-label">Workspace</SidebarGroupLabel>}
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {items.map((item) => {
-                const active = item.end
-                  ? location.pathname === item.url
-                  : location.pathname.startsWith(item.url);
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scroll-touch">
+        {GROUPS.map((g) => (
+          <div key={g.label}>
+            <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-faint))]">
+              {g.label}
+            </div>
+            <ul className="space-y-0.5">
+              {g.items.map((it) => {
+                const active = it.end
+                  ? pathname === it.to
+                  : pathname.startsWith(it.to);
+                const Icon = it.icon;
                 return (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild tooltip={item.title} isActive={active}>
-                      <NavLink
-                        to={item.url}
-                        end={item.end}
-                        className="flex items-center gap-3 text-muted-foreground hover:text-foreground"
-                        activeClassName="!text-accent !bg-[hsl(var(--accent)/0.08)]"
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <li key={it.to}>
+                    <NavLink
+                      to={it.to}
+                      end={it.end}
+                      onClick={onNavigate}
+                      className={cn(
+                        "group flex items-center gap-2.5 h-9 px-3 rounded-[10px] text-[13px] font-medium transition-colors",
+                        active
+                          ? "bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                          : "text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))] hover:bg-[hsl(var(--ax-line))]",
+                      )}
+                    >
+                      <Icon className={cn("h-[15px] w-[15px] shrink-0", active && "text-[hsl(var(--ax-accent))]")} />
+                      <span className="truncate">{it.label}</span>
+                    </NavLink>
+                  </li>
                 );
               })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-    </Sidebar>
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </aside>
   );
 }
