@@ -167,7 +167,7 @@ function usePendingApprovals() {
     (async () => {
       const { data } = await supabase
         .from("designs")
-        .select("id, title, preview_url, status")
+        .select("id, title, status")
         .order("created_at", { ascending: false })
         .limit(6);
       if (cancelled) return;
@@ -175,7 +175,7 @@ function usePendingApprovals() {
         (data ?? []).map((d: any) => ({
           id: d.id,
           title: d.title,
-          image: d.preview_url ?? null,
+          image: null,
           to: `/admin/designs/${d.id}`,
         })),
       );
