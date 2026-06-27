@@ -9,6 +9,7 @@ import { RequireAdmin, RequirePortal } from "@/auth/guards";
 import RootRedirect from "./pages/RootRedirect";
 import Login from "./pages/Login";
 import PendingAccess from "./pages/PendingAccess";
+import SetPassword from "./pages/SetPassword";
 import NotFound from "./pages/NotFound";
 
 import AdminLayout from "@/components/admin/AdminLayout";
@@ -72,6 +73,7 @@ const App = () => (
             <Route path="/" element={<RootRedirect />} />
             <Route path="/login" element={<Login />} />
             <Route path="/pending-access" element={<PendingAccess />} />
+            <Route path="/set-password" element={<SetPassword />} />
             <Route path="/q/:slug" element={<QuestionnairePublic />} />
 
             {/* Admin */}
