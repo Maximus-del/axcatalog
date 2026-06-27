@@ -384,7 +384,7 @@ export default function PrintZonesEditor() {
         </div>
 
         <div className="space-y-3">
-          <div className="rounded-lg border p-3">
+          <div className="ax-card p-3">
             <div className="text-xs font-medium text-muted-foreground mb-2">Zones ({zones.length})</div>
             <div className="space-y-1">
               {zones.map((z) => (
@@ -417,7 +417,7 @@ export default function PrintZonesEditor() {
           </div>
 
           {selected && (
-            <div className="rounded-lg border p-3 space-y-2">
+            <div className="ax-card p-3 space-y-2">
               <div className="text-xs font-medium text-muted-foreground">Selected zone</div>
               <FieldRow label="Label">
                 <Input
