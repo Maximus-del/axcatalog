@@ -18,6 +18,7 @@ import {
   BarChart3,
   Settings,
   Frame,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -51,7 +52,7 @@ const GROUPS: NavGroup[] = [
       { label: "Products", to: "/admin/products", icon: Package },
       { label: "Collections", to: "/admin/collections", icon: FolderKanban },
       { label: "Orders", to: "/admin/orders", icon: ClipboardList },
-      { label: "Pricing", to: "/admin/pricing", icon: DollarSign },
+      { label: "Pricing", to: "/admin/pricing-links", icon: DollarSign },
     ],
   },
   {
@@ -68,7 +69,6 @@ const GROUPS: NavGroup[] = [
       { label: "Designs", to: "/admin/designs", icon: Palette },
       { label: "Mockups", to: "/admin/mockups", icon: ImageIcon },
       { label: "Brand Assets", to: "/admin/brand-assets", icon: Sparkles },
-      { label: "Print Zones", to: "/admin/print-zones", icon: Frame },
     ],
   },
   {
@@ -76,6 +76,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { label: "Fulfillment", to: "/admin/fulfillment", icon: Truck },
       { label: "Print Queue", to: "/admin/print-queue", icon: Printer },
+      { label: "Print Zones", to: "/admin/print-zones", icon: Frame },
       { label: "Blanks", to: "/admin/blanks", icon: Shirt },
     ],
   },
@@ -83,6 +84,7 @@ const GROUPS: NavGroup[] = [
     label: "System",
     items: [
       { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
+      { label: "Team", to: "/admin/team", icon: UserCog },
       { label: "Settings", to: "/admin/settings", icon: Settings },
     ],
   },
