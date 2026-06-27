@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.design-signed-url]
 verify_jwt = true
+
+[functions.admin-manage-users]
+verify_jwt = true
