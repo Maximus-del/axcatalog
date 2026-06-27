@@ -35,6 +35,7 @@ import QuestionnaireEditor from "./pages/admin/QuestionnaireEditor";
 import QuestionnairePublic from "./pages/QuestionnairePublic";
 import CustomerPricingLinks from "./pages/admin/CustomerPricingLinks";
 import PrintZonesEditor from "./pages/admin/PrintZonesEditor";
+import TeamUsers from "./pages/admin/TeamUsers";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -102,7 +103,8 @@ const App = () => (
               <Route path="print-queue" element={<AdminPlaceholder title="Print Queue" />} />
               <Route path="analytics" element={<AdminPlaceholder title="Analytics" />} />
               <Route path="settings" element={<AdminPlaceholder title="Settings" />} />
-              <Route path="team" element={<AdminPlaceholder title="Team" />} />
+              <Route path="team" element={<TeamUsers />} />
+              <Route path="users" element={<TeamUsers />} />
               <Route path="ingestion" element={<IngestionQueue />} />
               <Route path="ingestion/:id" element={<IngestionQueue />} />
               <Route path="orders" element={<OrdersList />} />
