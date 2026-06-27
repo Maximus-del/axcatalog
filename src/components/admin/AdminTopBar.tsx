@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, Plus, LogOut, Menu } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/admin/orders/NotificationBell";
+import { GlobalSearch } from "@/components/admin/GlobalSearch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,14 +27,23 @@ const NEW_ACTIONS = [
 export function AdminTopBar({ onOpenMobileNav }: Props) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const searchRef = useRef<HTMLInputElement>(null);
-  const [q, setQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement?.tagName !== "INPUT" && document.activeElement?.tagName !== "TEXTAREA") {
+      const active = document.activeElement as HTMLElement | null;
+      const inField =
+        active?.tagName === "INPUT" ||
+        active?.tagName === "TEXTAREA" ||
+        active?.isContentEditable;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchRef.current?.focus();
+        setSearchOpen((v) => !v);
+        return;
+      }
+      if (e.key === "/" && !inField) {
+        e.preventDefault();
+        setSearchOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -52,17 +62,20 @@ export function AdminTopBar({ onOpenMobileNav }: Props) {
         <Menu className="h-4 w-4" />
       </button>
 
-      <div className="flex-1 max-w-xl relative">
+      <button
+        type="button"
+        onClick={() => setSearchOpen(true)}
+        className="flex-1 max-w-xl relative h-10 pl-9 pr-12 rounded-[11px] border border-[hsl(var(--ax-border))] bg-white text-left text-sm text-[hsl(var(--ax-faint))] hover:border-[hsl(var(--ax-accent))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ax-accent)/0.25)] focus:border-[hsl(var(--ax-accent))] transition-colors"
+        aria-label="Open global search"
+      >
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[hsl(var(--ax-faint))]" />
-        <input
-          ref={searchRef}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search products, athletes, orders…"
-          className="w-full h-10 pl-9 pr-12 rounded-[11px] border border-[hsl(var(--ax-border))] bg-white text-[hsl(var(--ax-ink))] text-sm placeholder:text-[hsl(var(--ax-faint))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ax-accent)/0.25)] focus:border-[hsl(var(--ax-accent))]"
-        />
-        <kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 h-5 px-1.5 items-center rounded-md border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-line))] text-[10px] text-[hsl(var(--ax-secondary))] font-medium">/</kbd>
-      </div>
+        <span className="leading-10">Search products, athletes, orders, designs…</span>
+        <kbd className="hidden sm:inline-flex absolute right-3 top-1/2 -translate-y-1/2 h-5 px-1.5 items-center rounded-md border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-line))] text-[10px] text-[hsl(var(--ax-secondary))] font-medium gap-0.5">
+          <span>⌘</span>K
+        </kbd>
+      </button>
+
+      <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
