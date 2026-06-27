@@ -1,11 +1,13 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { useState } from "react";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminBottomNav } from "./AdminBottomNav";
 import { AdminTopBar } from "./AdminTopBar";
+import { QuickActionsFab } from "./QuickActionsFab";
 
 export default function AdminLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <div className="admin-os min-h-screen flex w-full bg-[hsl(var(--ax-canvas))] text-[hsl(var(--ax-ink))]">
@@ -30,10 +32,13 @@ export default function AdminLayout() {
       <div className="flex-1 flex flex-col min-w-0">
         <AdminTopBar onOpenMobileNav={() => setMobileNavOpen(true)} />
         <main className="flex-1 scroll-touch pb-bottom-nav md:pb-0 min-w-0">
-          <Outlet />
+          <div key={location.pathname} className="animate-fade-in">
+            <Outlet />
+          </div>
         </main>
       </div>
       <AdminBottomNav />
+      <QuickActionsFab />
     </div>
   );
 }
