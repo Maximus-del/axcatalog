@@ -102,6 +102,7 @@ const App = () => (
               <Route path="print-queue" element={<AdminPlaceholder title="Print Queue" />} />
               <Route path="analytics" element={<AdminPlaceholder title="Analytics" />} />
               <Route path="settings" element={<AdminPlaceholder title="Settings" />} />
+              <Route path="team" element={<AdminPlaceholder title="Team" />} />
               <Route path="ingestion" element={<IngestionQueue />} />
               <Route path="ingestion/:id" element={<IngestionQueue />} />
               <Route path="orders" element={<OrdersList />} />

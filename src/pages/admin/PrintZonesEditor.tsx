@@ -256,10 +256,11 @@ export default function PrintZonesEditor() {
   const surfaces: SurfaceKey[] = category === "cap" ? ["front"] : ["front", "back"];
 
   return (
-    <div className="p-6 space-y-4 max-w-6xl">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+    <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+      <header className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Print Zones</h1>
+          <div className="ax-section-header mb-2">Operations</div>
+          <h1 className="text-3xl font-bold">Print Zones</h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-xl">
             These boxes are shared by garment type — saving applies to every product of this type.
           </p>
@@ -273,9 +274,9 @@ export default function PrintZonesEditor() {
             {saving ? "Saving…" : dirtyCount ? `Save ${dirtyCount}` : "Saved"}
           </Button>
         </div>
-      </div>
+      </header>
 
-      <div className="flex flex-wrap gap-4">
+      <div className="ax-card p-4 flex flex-wrap gap-4">
         <SegBtns
           label="Category"
           value={category}
@@ -296,7 +297,7 @@ export default function PrintZonesEditor() {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         <div
           ref={stageRef}
-          className="relative aspect-square w-full rounded-lg border bg-white overflow-hidden select-none touch-none"
+          className="ax-card relative aspect-square w-full overflow-hidden select-none touch-none bg-white"
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
@@ -383,7 +384,7 @@ export default function PrintZonesEditor() {
         </div>
 
         <div className="space-y-3">
-          <div className="rounded-lg border p-3">
+          <div className="ax-card p-3">
             <div className="text-xs font-medium text-muted-foreground mb-2">Zones ({zones.length})</div>
             <div className="space-y-1">
               {zones.map((z) => (
@@ -416,7 +417,7 @@ export default function PrintZonesEditor() {
           </div>
 
           {selected && (
-            <div className="rounded-lg border p-3 space-y-2">
+            <div className="ax-card p-3 space-y-2">
               <div className="text-xs font-medium text-muted-foreground">Selected zone</div>
               <FieldRow label="Label">
                 <Input

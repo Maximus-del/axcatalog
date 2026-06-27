@@ -202,20 +202,21 @@ export default function CustomerPricingLinks() {
   );
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-6">
+      <header className="flex items-end justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Customer Pricing Links</h1>
-          <p className="text-sm text-muted-foreground">
+          <div className="ax-section-header mb-2">Commerce</div>
+          <h1 className="text-3xl font-bold">Pricing Links</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Share tiered pricing with a customer via a single link.
           </p>
         </div>
-        <Button onClick={() => setCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" /> New link
+        <Button onClick={() => setCreateOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" /> New link
         </Button>
-      </div>
+      </header>
 
-      <div className="border border-border rounded-md">
+      <div className="ax-card p-0 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
