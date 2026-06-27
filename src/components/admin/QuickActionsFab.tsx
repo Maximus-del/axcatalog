@@ -27,7 +27,7 @@ export function QuickActionsFab() {
   };
 
   return (
-    <div className="fixed right-4 z-40 bottom-[calc(var(--bottom-nav-h,0px)+16px)] md:bottom-6 print:hidden">
+    <div className="fixed right-4 z-40 bottom-20 md:bottom-6 print:hidden">
       {open && (
         <div
           className="fixed inset-0 -z-10 bg-black/10 animate-fade-in"
