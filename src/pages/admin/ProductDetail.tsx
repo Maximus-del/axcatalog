@@ -136,8 +136,7 @@ export default function ProductDetail() {
     const { data: vrs } = await supabase
       .from("product_variants")
       .select("id, color, size, price, sku, inventory_quantity, available")
-      .eq("product_id", id)
-      .order("position", { ascending: true });
+      .eq("product_id", id);
     setVariants((vrs ?? []) as VariantRow[]);
 
     // blank for cost + garment type
