@@ -337,7 +337,18 @@ export default function OrdersList() {
         </Select>
       </div>
 
-      {/* Table */}
+      {/* View */}
+      {view === "board" ? (
+        loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-64 rounded-2xl" />
+            ))}
+          </div>
+        ) : (
+          <OrdersBoard baseOrders={filtered} onRefetch={() => void refetch()} />
+        )
+      ) : (
       <div className="ax-card p-0 overflow-hidden">
         {loading ? (
           <div className="p-4 space-y-2">
@@ -512,6 +523,7 @@ export default function OrdersList() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
