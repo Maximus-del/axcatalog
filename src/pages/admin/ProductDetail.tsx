@@ -5,7 +5,19 @@
 // in ProductDetailDrawer for now — a "Quick edit" button opens it here.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, ImageIcon, Layers, Loader2, Pencil, RefreshCw, Video as VideoIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  ImageIcon,
+  Layers,
+  Loader2,
+  Pencil,
+  RefreshCw,
+  Video as VideoIcon,
+  Frame as FrameIcon,
+  DollarSign,
+  Boxes,
+} from "lucide-react";
 import { toast } from "sonner";
 import { fetchShopifyPrimaryImage, refreshShopifyImages, summarizeRefresh } from "@/lib/shopify-refresh-images";
 import { refreshShopifyVariants, summarizeVariantRefresh } from "@/lib/shopify-refresh-variants";
@@ -30,6 +42,43 @@ interface ProductLite {
   price: number | null;
   shopify_product_id: string | null;
   shopify_handle: string | null;
+  blank_id: string | null;
+  description: string | null;
+}
+
+interface ProductImageRow {
+  storage_bucket: string;
+  storage_path: string;
+  is_primary: boolean;
+  sort_order: number;
+}
+
+interface VariantRow {
+  id: string;
+  color: string | null;
+  size: string | null;
+  price: number | null;
+  sku: string | null;
+  inventory_quantity: number | null;
+  available: boolean | null;
+}
+
+interface BlankRow {
+  garment_type: string | null;
+  blank_cost: number | null;
+  decoration_cost: number | null;
+  additional_cost: number | null;
+}
+
+interface PrintZoneRow {
+  id: string;
+  label: string;
+  surface: string;
+}
+
+function publicUrl(bucket: string, path: string): string {
+  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export default function ProductDetail() {
@@ -46,13 +95,19 @@ export default function ProductDetail() {
   const [counts, setCounts] = useState({ mockups: 0, designs: 0, videos: 0 });
   const [tab, setTab] = useState<"mockups" | "designs" | "videos">("mockups");
 
+  const [images, setImages] = useState<ProductImageRow[]>([]);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
+  const [variants, setVariants] = useState<VariantRow[]>([]);
+  const [blank, setBlank] = useState<BlankRow | null>(null);
+  const [zones, setZones] = useState<PrintZoneRow[]>([]);
+
   async function load() {
     if (!id) return;
     setLoading(true);
     const { data, error } = await supabase
       .from("products")
       .select(
-        "id, organization_id, title, slug, status, price, shopify_product_id, shopify_handle",
+        "id, organization_id, title, slug, status, price, shopify_product_id, shopify_handle, blank_id, description",
       )
       .eq("id", id)
       .maybeSingle();
@@ -66,6 +121,48 @@ export default function ProductDetail() {
         .maybeSingle();
       setShopDomain(org?.shopify_shop_domain ?? null);
     }
+
+    // images
+    const { data: imgs } = await supabase
+      .from("product_images")
+      .select("storage_bucket, storage_path, is_primary, sort_order")
+      .eq("product_id", id)
+      .order("is_primary", { ascending: false })
+      .order("sort_order", { ascending: true });
+    setImages((imgs ?? []) as ProductImageRow[]);
+    setActiveImageIdx(0);
+
+    // variants
+    const { data: vrs } = await supabase
+      .from("product_variants")
+      .select("id, color, size, price, sku, inventory_quantity, available")
+      .eq("product_id", id)
+      .order("position", { ascending: true });
+    setVariants((vrs ?? []) as VariantRow[]);
+
+    // blank for cost + garment type
+    if (data?.blank_id) {
+      const { data: b } = await supabase
+        .from("blanks")
+        .select("garment_type, blank_cost, decoration_cost, additional_cost")
+        .eq("id", data.blank_id)
+        .maybeSingle();
+      setBlank((b as BlankRow | null) ?? null);
+
+      const gt = (b?.garment_type ?? "").toString().toLowerCase();
+      const cat = /hat|cap/.test(gt) ? "cap" : "apparel";
+      const { data: z } = await supabase
+        .from("print_zones" as never)
+        .select("id, label, surface")
+        .eq("garment_category", cat)
+        .order("surface", { ascending: true })
+        .order("sort_order", { ascending: true });
+      setZones((z ?? []) as PrintZoneRow[]);
+    } else {
+      setBlank(null);
+      setZones([]);
+    }
+
     setLoading(false);
   }
 
@@ -145,8 +242,14 @@ export default function ProductDetail() {
     return (
       <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-6">
         <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-96 w-full" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Skeleton className="aspect-square w-full rounded-2xl" />
+          <div className="space-y-3">
+            <Skeleton className="h-10 w-2/3" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+            <Skeleton className="h-32 w-full rounded-2xl" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -165,6 +268,31 @@ export default function ProductDetail() {
       </div>
     );
   }
+
+  const cost =
+    blank
+      ? Number(blank.blank_cost ?? 0) +
+        Number(blank.decoration_cost ?? 0) +
+        Number(blank.additional_cost ?? 0)
+      : null;
+  const price = product.price != null ? Number(product.price) : null;
+  const margin = cost != null && price != null ? price - cost : null;
+  const marginPct =
+    margin != null && price && price > 0 ? (margin / price) * 100 : null;
+
+  const variantColors = Array.from(
+    new Set(variants.map((v) => v.color).filter(Boolean) as string[]),
+  );
+  const variantSizes = Array.from(
+    new Set(variants.map((v) => v.size).filter(Boolean) as string[]),
+  );
+  const totalInventory = variants.reduce(
+    (s, v) => s + (v.inventory_quantity ?? 0),
+    0,
+  );
+  const availableVariants = variants.filter((v) => v.available !== false).length;
+
+  const activeImage = images[activeImageIdx] ?? images[0] ?? null;
 
   return (
     <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-6">
@@ -238,33 +366,227 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Hero */}
-      <header className="space-y-2">
-        <div className="ax-section-header">Product</div>
-        <h1 className="text-2xl md:text-3xl font-bold">{product.title}</h1>
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          <span
-            className={cn(
-              "inline-flex px-2 py-0.5 rounded-full border capitalize",
-              statusBadgeClass(product.status),
+      {/* Apple-style hero: image + spec rail */}
+      <section className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px] gap-6">
+        {/* Image gallery */}
+        <div className="space-y-3">
+          <div className="ax-card aspect-square bg-white overflow-hidden flex items-center justify-center">
+            {activeImage ? (
+              <img
+                src={publicUrl(activeImage.storage_bucket, activeImage.storage_path)}
+                alt={product.title}
+                className="w-full h-full object-contain p-8"
+              />
+            ) : (
+              <div className="text-sm text-muted-foreground">No image</div>
             )}
-          >
-            {formatStatus(product.status)}
-          </span>
-          {product.price != null && (
-            <span className="text-muted-foreground tabular-nums">
-              ${Number(product.price).toFixed(2)}
-            </span>
+          </div>
+          {images.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {images.map((img, i) => (
+                <button
+                  key={`${img.storage_path}-${i}`}
+                  type="button"
+                  onClick={() => setActiveImageIdx(i)}
+                  className={cn(
+                    "h-16 w-16 shrink-0 rounded-lg border bg-white overflow-hidden transition",
+                    i === activeImageIdx
+                      ? "border-accent ring-2 ring-accent/40"
+                      : "border-border hover:border-foreground/30",
+                  )}
+                >
+                  <img
+                    src={publicUrl(img.storage_bucket, img.storage_path)}
+                    alt=""
+                    className="w-full h-full object-contain p-1"
+                  />
+                </button>
+              ))}
+            </div>
           )}
-          <span className="text-muted-foreground">·</span>
-          <code className="text-[11px] text-muted-foreground">{product.slug}</code>
         </div>
-      </header>
+
+        {/* Spec rail */}
+        <aside className="space-y-4 lg:sticky lg:top-4 lg:self-start">
+          <div>
+            <div className="ax-section-header mb-2">Product</div>
+            <h1 className="text-3xl font-bold leading-tight">{product.title}</h1>
+            <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+              <span
+                className={cn(
+                  "inline-flex px-2 py-0.5 rounded-full border capitalize",
+                  statusBadgeClass(product.status),
+                )}
+              >
+                {formatStatus(product.status)}
+              </span>
+              <code className="text-[11px] text-muted-foreground">{product.slug}</code>
+            </div>
+            {product.description && (
+              <p className="mt-3 text-sm text-muted-foreground line-clamp-4">
+                {product.description}
+              </p>
+            )}
+          </div>
+
+          {/* Price strip */}
+          <div className="ax-card p-4">
+            <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Retail
+            </div>
+            <div className="text-2xl font-bold tabular-nums">
+              {price != null ? `$${price.toFixed(2)}` : "—"}
+            </div>
+          </div>
+
+          {/* Variants */}
+          <div className="ax-card p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Boxes className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Variants</h2>
+              <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+                {variants.length} total · {availableVariants} live
+              </span>
+            </div>
+            {variantColors.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Colors
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {variantColors.map((c) => (
+                    <span
+                      key={c}
+                      className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-muted text-foreground border border-border"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {variantSizes.length > 0 && (
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1.5">
+                  Sizes
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {variantSizes.map((s) => (
+                    <span
+                      key={s}
+                      className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-md bg-background border border-border tabular-nums"
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {variants.length === 0 && (
+              <div className="text-xs text-muted-foreground italic">
+                No variants synced.
+              </div>
+            )}
+          </div>
+
+          {/* Cost / Margin */}
+          <div className="ax-card p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Cost &amp; Margin</h2>
+            </div>
+            <SpecRow label="True cost">
+              {cost != null ? `$${cost.toFixed(2)}` : "—"}
+            </SpecRow>
+            <SpecRow label="Margin / unit">
+              {margin != null ? (
+                <span
+                  className={cn(
+                    margin >= 0 ? "text-emerald-600" : "text-destructive",
+                  )}
+                >
+                  ${margin.toFixed(2)}
+                </span>
+              ) : (
+                "—"
+              )}
+            </SpecRow>
+            <SpecRow label="Margin %">
+              {marginPct != null ? `${marginPct.toFixed(1)}%` : "—"}
+            </SpecRow>
+          </div>
+
+          {/* Inventory */}
+          <div className="ax-card p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <Boxes className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Inventory</h2>
+            </div>
+            <SpecRow label="On hand">
+              <span className="tabular-nums">{totalInventory}</span>
+            </SpecRow>
+            <SpecRow label="SKUs">
+              <span className="tabular-nums">{variants.length}</span>
+            </SpecRow>
+          </div>
+
+          {/* Print locations */}
+          <div className="ax-card p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <FrameIcon className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Print locations</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-7 text-xs"
+                onClick={() => navigate("/admin/print-zones")}
+              >
+                Edit
+              </Button>
+            </div>
+            {zones.length === 0 ? (
+              <div className="text-xs text-muted-foreground italic">
+                {product.blank_id
+                  ? "No zones for this garment type."
+                  : "Link a blank to enable print zones."}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {zones.map((z) => (
+                  <span
+                    key={z.id}
+                    className="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30 capitalize"
+                  >
+                    {z.surface} · {z.label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Files */}
+          <div className="ax-card p-4 space-y-1">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Files</h2>
+            </div>
+            <SpecRow label="Mockups">
+              <span className="tabular-nums">{counts.mockups}</span>
+            </SpecRow>
+            <SpecRow label="Designs">
+              <span className="tabular-nums">{counts.designs}</span>
+            </SpecRow>
+            <SpecRow label="Videos">
+              <span className="tabular-nums">{counts.videos}</span>
+            </SpecRow>
+          </div>
+        </aside>
+      </section>
 
       {/* Media */}
       <section className="space-y-3">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-lg font-semibold">Media</h2>
+          <h2 className="text-lg font-semibold">Files &amp; Media</h2>
           <span className="text-xs text-muted-foreground tabular-nums">
             Mockups ({counts.mockups}) · Designs ({counts.designs}) · Videos ({counts.videos})
           </span>
@@ -323,6 +645,21 @@ export default function ProductDetail() {
         onOpenChange={setDrawerOpen}
         onChanged={load}
       />
+    </div>
+  );
+}
+
+function SpecRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium tabular-nums">{children}</span>
     </div>
   );
 }
