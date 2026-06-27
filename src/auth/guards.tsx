@@ -3,26 +3,33 @@ import { ReactNode } from "react";
 import { useAuth } from "./AuthProvider";
 import { LoadingScreen } from "@/components/brand/LoadingScreen";
 
+function mustChangePassword(user: any): boolean {
+  return user?.user_metadata?.must_change_password === true;
+}
+
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, user, loading } = useAuth();
   const location = useLocation();
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" state={{ from: location }} replace />;
+  if (mustChangePassword(user)) return <Navigate to="/set-password" replace />;
   return <>{children}</>;
 }
 
 export function RequireAdmin({ children }: { children: ReactNode }) {
-  const { session, role, loading } = useAuth();
+  const { session, user, role, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
+  if (mustChangePassword(user)) return <Navigate to="/set-password" replace />;
   if (role !== "admin") return <Navigate to="/portal" replace />;
   return <>{children}</>;
 }
 
 export function RequirePortal({ children }: { children: ReactNode }) {
-  const { session, role, linkedAthleteIds, loading } = useAuth();
+  const { session, user, role, linkedAthleteIds, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
+  if (mustChangePassword(user)) return <Navigate to="/set-password" replace />;
   // Admins can view the portal (used for impersonation).
   if (role === "admin") return <>{children}</>;
   if (linkedAthleteIds.length === 0) return <Navigate to="/pending-access" replace />;
@@ -30,8 +37,9 @@ export function RequirePortal({ children }: { children: ReactNode }) {
 }
 
 export function RequireAffiliate({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth();
+  const { session, user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!session) return <Navigate to="/login" replace />;
+  if (mustChangePassword(user)) return <Navigate to="/set-password" replace />;
   return <>{children}</>;
 }
