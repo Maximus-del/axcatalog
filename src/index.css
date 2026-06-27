@@ -189,6 +189,117 @@
   }
 }
 
+/* ============================================================
+   AthleteXclusive OS — admin light theme scope
+   Applied via <div class="admin-os"> wrapper in AdminLayout.
+   Overrides semantic tokens so existing admin pages re-skin
+   automatically. Portal & catalog keep the global dark theme.
+   ============================================================ */
+.admin-os {
+  /* Surfaces */
+  --ax-canvas: 240 8% 96%;          /* #F4F4F6 */
+  --ax-sidebar: 240 9% 98%;         /* #FBFBFC */
+  --ax-card: 0 0% 100%;             /* #FFF */
+  --ax-border: 240 6% 93%;          /* #ECECEF */
+  --ax-line: 240 7% 95%;            /* #F1F1F3 */
+  --ax-ink: 222 13% 10%;            /* #16181D */
+  --ax-secondary: 220 6% 45%;       /* #6A707A */
+  --ax-faint: 220 7% 64%;           /* #9CA1AA */
+  --ax-accent: 146 50% 36%;         /* #2E8B57 */
+  --ax-on-accent: 0 0% 100%;
+
+  /* Status */
+  --ax-amber: 33 75% 52%;           /* #E0922A */
+  --ax-blue: 222 91% 64%;           /* #4F86F7 */
+  --ax-violet: 258 90% 67%;         /* #8B5CF6 */
+  --ax-red: 352 84% 65%;            /* #EF5A6F */
+
+  /* Map to shadcn semantic tokens used across admin */
+  --background: var(--ax-canvas);
+  --foreground: var(--ax-ink);
+  --card: var(--ax-card);
+  --card-foreground: var(--ax-ink);
+  --popover: var(--ax-card);
+  --popover-foreground: var(--ax-ink);
+  --dark: var(--ax-sidebar);
+  --primary: var(--ax-accent);
+  --primary-foreground: var(--ax-on-accent);
+  --accent: var(--ax-accent);
+  --accent-foreground: var(--ax-on-accent);
+  --secondary: 240 9% 97%;
+  --secondary-foreground: var(--ax-ink);
+  --muted: var(--ax-line);
+  --muted-foreground: var(--ax-secondary);
+  --dim: var(--ax-faint);
+  --border: var(--ax-border);
+  --input: var(--ax-border);
+  --ring: var(--ax-accent);
+  --warning: var(--ax-amber);
+
+  --sidebar-background: var(--ax-sidebar);
+  --sidebar-foreground: var(--ax-ink);
+  --sidebar-border: var(--ax-border);
+  --sidebar-accent: 146 50% 36%;
+  --sidebar-accent-foreground: 0 0% 100%;
+
+  color-scheme: light;
+  color: hsl(var(--ax-ink));
+  background: hsl(var(--ax-canvas));
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'kern';
+  -webkit-font-smoothing: antialiased;
+
+  --shadow-soft-1: 0 1px 2px rgba(20,22,28,.04);
+  --shadow-soft-2: 0 6px 20px rgba(20,22,28,.05);
+}
+
+.admin-os .ax-card {
+  background: hsl(var(--ax-card));
+  border: 1px solid hsl(var(--ax-border));
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft-1), var(--shadow-soft-2);
+}
+.admin-os .ax-card-hover:hover {
+  border-color: hsl(var(--ax-accent) / 0.6);
+  transform: translateY(-1px);
+}
+
+.admin-os .ax-label {
+  color: hsl(var(--ax-secondary));
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.admin-os .ax-section-header {
+  color: hsl(var(--ax-accent));
+}
+.admin-os .ax-stat { color: hsl(var(--ax-ink)); }
+
+.admin-os .ax-badge-success {
+  background: rgba(46, 139, 87, 0.12);
+  color: hsl(var(--ax-accent));
+}
+.admin-os .ax-badge-pending {
+  background: rgba(224, 146, 42, 0.14);
+  color: hsl(var(--ax-amber));
+}
+
+/* OS-specific utility classes */
+.admin-os .ax-os-shadow { box-shadow: var(--shadow-soft-1), var(--shadow-soft-2); }
+.admin-os .ax-os-card {
+  background: hsl(var(--ax-card));
+  border: 1px solid hsl(var(--ax-border));
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft-1), var(--shadow-soft-2);
+}
+.admin-os .ax-os-control {
+  border-radius: 11px;
+}
+.admin-os .ax-os-soft {
+  background: rgba(46, 139, 87, 0.12);
+  color: hsl(var(--ax-accent));
+}
+.admin-os .ax-os-divider { border-color: hsl(var(--ax-line)); }
+
 /* Smooth scrolling site-wide (respect reduced motion via the spec) */
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {

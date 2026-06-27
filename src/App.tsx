@@ -93,6 +93,15 @@ const App = () => (
               <Route path="athletes/:id" element={<AthleteDetail />} />
               <Route path="teams" element={<AdminPlaceholder title="Teams" />} />
               <Route path="collections" element={<AdminPlaceholder title="Collections" />} />
+              <Route path="inbox" element={<AdminPlaceholder title="Inbox" />} />
+              <Route path="tasks" element={<AdminPlaceholder title="Tasks" />} />
+              <Route path="organizations" element={<AdminPlaceholder title="Organizations" />} />
+              <Route path="mockups" element={<AdminPlaceholder title="Mockups" />} />
+              <Route path="brand-assets" element={<AdminPlaceholder title="Brand Assets" />} />
+              <Route path="fulfillment" element={<AdminPlaceholder title="Fulfillment" />} />
+              <Route path="print-queue" element={<AdminPlaceholder title="Print Queue" />} />
+              <Route path="analytics" element={<AdminPlaceholder title="Analytics" />} />
+              <Route path="settings" element={<AdminPlaceholder title="Settings" />} />
               <Route path="ingestion" element={<IngestionQueue />} />
               <Route path="ingestion/:id" element={<IngestionQueue />} />
               <Route path="orders" element={<OrdersList />} />
