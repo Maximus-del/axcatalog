@@ -37,6 +37,7 @@ import QuestionnairePublic from "./pages/QuestionnairePublic";
 import CustomerPricingLinks from "./pages/admin/CustomerPricingLinks";
 import PrintZonesEditor from "./pages/admin/PrintZonesEditor";
 import TeamUsers from "./pages/admin/TeamUsers";
+import TasksList from "./pages/admin/TasksList";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -97,7 +98,7 @@ const App = () => (
               <Route path="teams" element={<AdminPlaceholder title="Teams" />} />
               <Route path="collections" element={<AdminPlaceholder title="Collections" />} />
               <Route path="inbox" element={<AdminPlaceholder title="Inbox" />} />
-              <Route path="tasks" element={<AdminPlaceholder title="Tasks" />} />
+              <Route path="tasks" element={<TasksList />} />
               <Route path="organizations" element={<AdminPlaceholder title="Organizations" />} />
               <Route path="mockups" element={<AdminPlaceholder title="Mockups" />} />
               <Route path="brand-assets" element={<AdminPlaceholder title="Brand Assets" />} />
