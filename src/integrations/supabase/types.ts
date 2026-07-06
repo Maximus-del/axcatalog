@@ -231,6 +231,61 @@ export type Database = {
         }
         Relationships: []
       }
+      asset_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+          parent_folder_id: string | null
+          scope: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+          parent_folder_id?: string | null
+          scope?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+          parent_folder_id?: string | null
+          scope?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_folders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_folders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_folders_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "asset_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       athlete_credit_transactions: {
         Row: {
           amount: number
@@ -458,6 +513,9 @@ export type Database = {
           available: boolean
           blank_id: string
           color_name: string
+          current_stock: number | null
+          easy_scan_barcode: string | null
+          easy_scan_url: string | null
           hex_code: string | null
           id: string
           image_url: string | null
@@ -468,6 +526,9 @@ export type Database = {
           available?: boolean
           blank_id: string
           color_name: string
+          current_stock?: number | null
+          easy_scan_barcode?: string | null
+          easy_scan_url?: string | null
           hex_code?: string | null
           id?: string
           image_url?: string | null
@@ -478,6 +539,9 @@ export type Database = {
           available?: boolean
           blank_id?: string
           color_name?: string
+          current_stock?: number | null
+          easy_scan_barcode?: string | null
+          easy_scan_url?: string | null
           hex_code?: string | null
           id?: string
           image_url?: string | null
@@ -485,6 +549,13 @@ export type Database = {
           sort_order?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "blank_colors_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
           {
             foreignKeyName: "blank_colors_blank_id_fkey"
             columns: ["blank_id"]
@@ -505,6 +576,9 @@ export type Database = {
         Row: {
           available: boolean
           blank_id: string
+          current_stock: number | null
+          easy_scan_barcode: string | null
+          easy_scan_url: string | null
           id: string
           size: string
           sort_order: number
@@ -512,6 +586,9 @@ export type Database = {
         Insert: {
           available?: boolean
           blank_id: string
+          current_stock?: number | null
+          easy_scan_barcode?: string | null
+          easy_scan_url?: string | null
           id?: string
           size: string
           sort_order?: number
@@ -519,11 +596,21 @@ export type Database = {
         Update: {
           available?: boolean
           blank_id?: string
+          current_stock?: number | null
+          easy_scan_barcode?: string | null
+          easy_scan_url?: string | null
           id?: string
           size?: string
           sort_order?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "blank_sizes_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
           {
             foreignKeyName: "blank_sizes_blank_id_fkey"
             columns: ["blank_id"]
@@ -660,6 +747,101 @@ export type Database = {
           },
         ]
       }
+      brand_assets: {
+        Row: {
+          asset_type: Database["public"]["Enums"]["brand_asset_type"]
+          color_scheme: Json | null
+          created_at: string
+          description: string | null
+          file_name: string | null
+          file_size: number | null
+          file_type: string | null
+          folder_id: string | null
+          id: string
+          is_primary: boolean
+          organization_id: string
+          storage_bucket: string
+          storage_path: string | null
+          tags: string[]
+          thumbnail_path: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+          version_number: number
+        }
+        Insert: {
+          asset_type?: Database["public"]["Enums"]["brand_asset_type"]
+          color_scheme?: Json | null
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          folder_id?: string | null
+          id?: string
+          is_primary?: boolean
+          organization_id: string
+          storage_bucket?: string
+          storage_path?: string | null
+          tags?: string[]
+          thumbnail_path?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+          version_number?: number
+        }
+        Update: {
+          asset_type?: Database["public"]["Enums"]["brand_asset_type"]
+          color_scheme?: Json | null
+          created_at?: string
+          description?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          folder_id?: string | null
+          id?: string
+          is_primary?: boolean
+          organization_id?: string
+          storage_bucket?: string
+          storage_path?: string | null
+          tags?: string[]
+          thumbnail_path?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_assets_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "asset_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_assets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_assets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_assets_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bulk_order_items: {
         Row: {
           blank_id: string | null
@@ -710,6 +892,13 @@ export type Database = {
           unit_wholesale_price?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bulk_order_items_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
           {
             foreignKeyName: "bulk_order_items_blank_id_fkey"
             columns: ["blank_id"]
@@ -1120,6 +1309,38 @@ export type Database = {
           },
         ]
       }
+      design_associations: {
+        Row: {
+          created_at: string
+          design_id: string
+          entity_id: string
+          entity_type: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          design_id: string
+          entity_id: string
+          entity_type: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          design_id?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_associations_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       design_athletes: {
         Row: {
           athlete_id: string
@@ -1466,6 +1687,97 @@ export type Database = {
           },
         ]
       }
+      fulfillment_materials: {
+        Row: {
+          artwork_path: string | null
+          category: Database["public"]["Enums"]["material_category"]
+          created_at: string
+          description: string | null
+          id: string
+          image_path: string | null
+          last_ordered_at: string | null
+          last_received_at: string | null
+          name: string
+          notes: string | null
+          order_history: Json
+          organization_id: string
+          supplier: string | null
+          supplier_sku: string | null
+          supplier_url: string | null
+          tags: string[]
+          unit_cost: number | null
+          unit_cost_currency: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          artwork_path?: string | null
+          category?: Database["public"]["Enums"]["material_category"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_path?: string | null
+          last_ordered_at?: string | null
+          last_received_at?: string | null
+          name: string
+          notes?: string | null
+          order_history?: Json
+          organization_id: string
+          supplier?: string | null
+          supplier_sku?: string | null
+          supplier_url?: string | null
+          tags?: string[]
+          unit_cost?: number | null
+          unit_cost_currency?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          artwork_path?: string | null
+          category?: Database["public"]["Enums"]["material_category"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_path?: string | null
+          last_ordered_at?: string | null
+          last_received_at?: string | null
+          name?: string
+          notes?: string | null
+          order_history?: Json
+          organization_id?: string
+          supplier?: string | null
+          supplier_sku?: string | null
+          supplier_url?: string | null
+          tags?: string[]
+          unit_cost?: number | null
+          unit_cost_currency?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fulfillment_materials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fulfillment_materials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fulfillment_materials_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_batches: {
         Row: {
           completed_at: string | null
@@ -1602,6 +1914,189 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mockups: {
+        Row: {
+          athlete_id: string | null
+          blank_id: string | null
+          created_at: string
+          description: string | null
+          design_id: string | null
+          drop_name: string | null
+          file_name: string | null
+          file_size: number | null
+          file_type: string | null
+          folder_id: string | null
+          id: string
+          organization_id: string
+          photographer: string | null
+          product_id: string | null
+          published_to_shopify: boolean
+          shot_type: Database["public"]["Enums"]["mockup_shot_type"]
+          status: Database["public"]["Enums"]["mockup_status"]
+          storage_bucket: string
+          storage_path: string | null
+          tags: string[]
+          team_id: string | null
+          thumbnail_path: string | null
+          title: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          athlete_id?: string | null
+          blank_id?: string | null
+          created_at?: string
+          description?: string | null
+          design_id?: string | null
+          drop_name?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          folder_id?: string | null
+          id?: string
+          organization_id: string
+          photographer?: string | null
+          product_id?: string | null
+          published_to_shopify?: boolean
+          shot_type?: Database["public"]["Enums"]["mockup_shot_type"]
+          status?: Database["public"]["Enums"]["mockup_status"]
+          storage_bucket?: string
+          storage_path?: string | null
+          tags?: string[]
+          team_id?: string | null
+          thumbnail_path?: string | null
+          title: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          athlete_id?: string | null
+          blank_id?: string | null
+          created_at?: string
+          description?: string | null
+          design_id?: string | null
+          drop_name?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          folder_id?: string | null
+          id?: string
+          organization_id?: string
+          photographer?: string | null
+          product_id?: string | null
+          published_to_shopify?: boolean
+          shot_type?: Database["public"]["Enums"]["mockup_shot_type"]
+          status?: Database["public"]["Enums"]["mockup_status"]
+          storage_bucket?: string
+          storage_path?: string | null
+          tags?: string[]
+          team_id?: string | null
+          thumbnail_path?: string | null
+          title?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mockups_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "mockups_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "mockups_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
+          {
+            foreignKeyName: "mockups_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "asset_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "team_revenue_summary"
+            referencedColumns: ["team_id"]
+          },
+          {
+            foreignKeyName: "mockups_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -2579,6 +3074,13 @@ export type Database = {
           wholesale_price_source?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "products_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
           {
             foreignKeyName: "products_blank_id_fkey"
             columns: ["blank_id"]
@@ -3575,6 +4077,125 @@ export type Database = {
           },
         ]
       }
+      task_activity: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          task_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          task_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_activity_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_activity_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          organization_id: string
+          priority: number
+          status: Database["public"]["Enums"]["task_status"]
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          organization_id: string
+          priority?: number
+          status?: Database["public"]["Enums"]["task_status"]
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          organization_id?: string
+          priority?: number
+          status?: Database["public"]["Enums"]["task_status"]
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_memberships: {
         Row: {
           athlete_id: string
@@ -3940,6 +4561,37 @@ export type Database = {
           },
         ]
       }
+      blank_variant_barcodes: {
+        Row: {
+          blank_id: string | null
+          blank_name: string | null
+          color_hex: string | null
+          color_id: string | null
+          color_name: string | null
+          current_stock: number | null
+          easy_scan_barcode: string | null
+          easy_scan_url: string | null
+          organization_id: string | null
+          size_id: string | null
+          size_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blanks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blanks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations_safe: {
         Row: {
           created_at: string | null
@@ -4023,6 +4675,13 @@ export type Database = {
             foreignKeyName: "blank_colors_blank_id_fkey"
             columns: ["blank_id"]
             isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
+          {
+            foreignKeyName: "blank_colors_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
             referencedRelation: "blanks"
             referencedColumns: ["id"]
           },
@@ -4042,6 +4701,13 @@ export type Database = {
           sort_order: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "blank_sizes_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
           {
             foreignKeyName: "blank_sizes_blank_id_fkey"
             columns: ["blank_id"]
@@ -4194,6 +4860,14 @@ export type Database = {
         | "out_of_stock"
         | "discontinued"
         | "preorder"
+      brand_asset_type:
+        | "logo"
+        | "wordmark"
+        | "style_guide"
+        | "palette"
+        | "print_material"
+        | "typography"
+        | "other"
       bulk_order_status:
         | "submitted"
         | "acknowledged"
@@ -4259,6 +4933,23 @@ export type Database = {
         | "WNBA"
         | "NCAA"
         | "OTHER"
+      material_category:
+        | "packaging"
+        | "sticker"
+        | "magnet"
+        | "card"
+        | "mailer"
+        | "filler"
+        | "other"
+      mockup_shot_type:
+        | "flat_lay"
+        | "model_front"
+        | "model_back"
+        | "detail_close_up"
+        | "lookbook"
+        | "action"
+        | "other"
+      mockup_status: "draft" | "approved" | "published"
       product_status:
         | "draft"
         | "internal"
@@ -4340,6 +5031,7 @@ export type Database = {
         | "shopify"
         | "internal"
         | "other"
+      task_status: "todo" | "in_progress" | "blocked" | "done"
       team_status: "active" | "inactive" | "archived"
     }
     CompositeTypes: {
@@ -4481,6 +5173,15 @@ export const Constants = {
         "discontinued",
         "preorder",
       ],
+      brand_asset_type: [
+        "logo",
+        "wordmark",
+        "style_guide",
+        "palette",
+        "print_material",
+        "typography",
+        "other",
+      ],
       bulk_order_status: [
         "submitted",
         "acknowledged",
@@ -4544,6 +5245,25 @@ export const Constants = {
         "cancelled",
       ],
       league_type: ["NFL", "NBA", "MLB", "NHL", "MLS", "WNBA", "NCAA", "OTHER"],
+      material_category: [
+        "packaging",
+        "sticker",
+        "magnet",
+        "card",
+        "mailer",
+        "filler",
+        "other",
+      ],
+      mockup_shot_type: [
+        "flat_lay",
+        "model_front",
+        "model_back",
+        "detail_close_up",
+        "lookbook",
+        "action",
+        "other",
+      ],
+      mockup_status: ["draft", "approved", "published"],
       product_status: [
         "draft",
         "internal",
@@ -4636,6 +5356,7 @@ export const Constants = {
         "internal",
         "other",
       ],
+      task_status: ["todo", "in_progress", "blocked", "done"],
       team_status: ["active", "inactive", "archived"],
     },
   },
