@@ -14,7 +14,6 @@ import NotFound from "./pages/NotFound";
 
 import AdminLayout from "@/components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminPlaceholder from "./pages/admin/AdminPlaceholder";
 import AthletesList from "./pages/admin/AthletesList";
 import AthleteDetail from "./pages/admin/AthleteDetail";
 import ProductsList from "./pages/admin/ProductsList";
@@ -38,6 +37,19 @@ import CustomerPricingLinks from "./pages/admin/CustomerPricingLinks";
 import PrintZonesEditor from "./pages/admin/PrintZonesEditor";
 import TeamUsers from "./pages/admin/TeamUsers";
 import TasksList from "./pages/admin/TasksList";
+import OrganizationsList from "./pages/admin/OrganizationsList";
+import OrganizationDetail from "./pages/admin/OrganizationDetail";
+import TeamsList from "./pages/admin/TeamsList";
+import TeamDetail from "./pages/admin/TeamDetail";
+import CollectionsList from "./pages/admin/CollectionsList";
+import CollectionDetail from "./pages/admin/CollectionDetail";
+import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminSettings from "./pages/admin/AdminSettings";
+import AdminMockups from "./pages/admin/AdminMockups";
+import AdminBrandAssets from "./pages/admin/AdminBrandAssets";
+import AdminFulfillment from "./pages/admin/AdminFulfillment";
+import AdminPrintQueue from "./pages/admin/AdminPrintQueue";
+import AdminInbox from "./pages/admin/AdminInbox";
 
 import PortalLayout from "@/components/portal/PortalLayout";
 import PortalHome from "./pages/portal/PortalHome";
@@ -47,6 +59,7 @@ import PortalAnalytics from "./pages/portal/PortalAnalytics";
 import PortalContent from "./pages/portal/PortalContent";
 import PortalDrops from "./pages/portal/PortalDrops";
 import PortalEra from "./pages/portal/PortalEra";
+import PortalMessages from "./pages/portal/PortalMessages";
 
 import { RequireAffiliate } from "@/auth/guards";
 import AffiliateLayout from "@/components/affiliate/AffiliateLayout";
@@ -95,17 +108,20 @@ const App = () => (
               <Route path="blanks/:id" element={<BlankDetail />} />
               <Route path="athletes" element={<AthletesList />} />
               <Route path="athletes/:id" element={<AthleteDetail />} />
-              <Route path="teams" element={<AdminPlaceholder title="Teams" />} />
-              <Route path="collections" element={<AdminPlaceholder title="Collections" />} />
-              <Route path="inbox" element={<AdminPlaceholder title="Inbox" />} />
+              <Route path="teams" element={<TeamsList />} />
+              <Route path="teams/:id" element={<TeamDetail />} />
+              <Route path="collections" element={<CollectionsList />} />
+              <Route path="collections/:id" element={<CollectionDetail />} />
+              <Route path="inbox" element={<AdminInbox />} />
               <Route path="tasks" element={<TasksList />} />
-              <Route path="organizations" element={<AdminPlaceholder title="Organizations" />} />
-              <Route path="mockups" element={<AdminPlaceholder title="Mockups" />} />
-              <Route path="brand-assets" element={<AdminPlaceholder title="Brand Assets" />} />
-              <Route path="fulfillment" element={<AdminPlaceholder title="Fulfillment" />} />
-              <Route path="print-queue" element={<AdminPlaceholder title="Print Queue" />} />
-              <Route path="analytics" element={<AdminPlaceholder title="Analytics" />} />
-              <Route path="settings" element={<AdminPlaceholder title="Settings" />} />
+              <Route path="organizations" element={<OrganizationsList />} />
+              <Route path="organizations/:id" element={<OrganizationDetail />} />
+              <Route path="mockups" element={<AdminMockups />} />
+              <Route path="brand-assets" element={<AdminBrandAssets />} />
+              <Route path="fulfillment" element={<AdminFulfillment />} />
+              <Route path="print-queue" element={<AdminPrintQueue />} />
+              <Route path="analytics" element={<AdminAnalytics />} />
+              <Route path="settings" element={<AdminSettings />} />
               <Route path="team" element={<TeamUsers />} />
               <Route path="users" element={<TeamUsers />} />
               <Route path="ingestion" element={<IngestionQueue />} />
@@ -138,6 +154,7 @@ const App = () => (
               <Route path="content" element={<PortalContent />} />
               <Route path="drops" element={<PortalDrops />} />
               <Route path="era" element={<PortalEra />} />
+              <Route path="messages" element={<PortalMessages />} />
               <Route path="products/:id" element={<PortalProductDetail />} />
             </Route>
 

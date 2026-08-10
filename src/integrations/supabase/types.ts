@@ -2356,6 +2356,87 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          organization_id: string
+          sender_role: string
+          sender_user_id: string | null
+          thread_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          sender_role: string
+          sender_user_id?: string | null
+          thread_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          sender_role?: string
+          sender_user_id?: string | null
+          thread_id?: string
+        }
+        Relationships: []
+      }
+      portal_threads: {
+        Row: {
+          admin_unread: boolean
+          athlete_id: string
+          category: string
+          created_at: string
+          created_by: string | null
+          created_by_role: string
+          id: string
+          last_message_at: string
+          last_message_role: string | null
+          organization_id: string
+          portal_unread: boolean
+          status: string
+          subject: string
+          updated_at: string
+        }
+        Insert: {
+          admin_unread?: boolean
+          athlete_id: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_role?: string
+          id?: string
+          last_message_at?: string
+          last_message_role?: string | null
+          organization_id: string
+          portal_unread?: boolean
+          status?: string
+          subject: string
+          updated_at?: string
+        }
+        Update: {
+          admin_unread?: boolean
+          athlete_id?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          created_by_role?: string
+          id?: string
+          last_message_at?: string
+          last_message_role?: string | null
+          organization_id?: string
+          portal_unread?: boolean
+          status?: string
+          subject?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pricing_tiers: {
         Row: {
           created_at: string
@@ -4755,6 +4836,7 @@ export type Database = {
     }
     Functions: {
       accrue_monthly_credits: { Args: never; Returns: number }
+      mark_thread_read: { Args: { _thread_id: string }; Returns: undefined }
       admin_adjust_credit: {
         Args: { _amount: number; _athlete_id: string; _notes: string }
         Returns: number

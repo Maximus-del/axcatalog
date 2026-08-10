@@ -358,7 +358,7 @@ const SECTIONS: SectionDef[] = [
     label: "Analytics",
     icon: BarChart3,
     route: "/admin/analytics",
-    enabled: false,
+    enabled: true,
     statLabel: "top org",
     load: loadTopOrg,
   },
@@ -367,7 +367,7 @@ const SECTIONS: SectionDef[] = [
     label: "Settings",
     icon: Settings,
     route: "/admin/settings",
-    enabled: false,
+    enabled: true,
     noStat: true,
   },
 ];

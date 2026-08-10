@@ -11,6 +11,7 @@ import {
   Sparkles,
   Inbox,
   Printer,
+  MessageSquareText,
 } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import { format, formatDistanceToNow, startOfMonth, endOfMonth, subMonths, startOfDay, endOfDay } from "date-fns";
@@ -18,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { categoryLabel, threadTimeAgo } from "@/lib/portal-messaging";
 
 const fmtMoney = (n: number) =>
   `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -253,6 +255,62 @@ function useStatTiles() {
   return t;
 }
 
+interface InboxThread {
+  id: string;
+  subject: string;
+  category: string;
+  client: string;
+  last_message_at: string;
+  admin_unread: boolean;
+}
+function useInboxSummary() {
+  const [state, setState] = useState<{ recent: InboxThread[]; unreadCount: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [recentRes, unreadRes] = await Promise.all([
+        supabase
+          .from("portal_threads")
+          .select("id, subject, category, last_message_at, admin_unread, athlete_id")
+          .order("last_message_at", { ascending: false })
+          .limit(5),
+        supabase
+          .from("portal_threads")
+          .select("id", { count: "exact", head: true })
+          .eq("admin_unread", true),
+      ]);
+      const rows = recentRes.data ?? [];
+      const ids = [...new Set(rows.map((r) => r.athlete_id))];
+      const nameMap = new Map<string, string>();
+      if (ids.length) {
+        const { data: aths } = await supabase
+          .from("athletes")
+          .select("id, full_name, first_name, last_name")
+          .in("id", ids);
+        (aths ?? []).forEach((a) =>
+          nameMap.set(a.id, a.full_name ?? `${a.first_name} ${a.last_name}`),
+        );
+      }
+      if (cancelled) return;
+      setState({
+        recent: rows.map((r) => ({
+          id: r.id,
+          subject: r.subject,
+          category: r.category,
+          client: nameMap.get(r.athlete_id) ?? "Client",
+          last_message_at: r.last_message_at,
+          admin_unread: r.admin_unread,
+        })),
+        unreadCount: unreadRes.count ?? 0,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return state;
+}
+
 const TAG_STYLE: Record<Priority["tag"], string> = {
   urgent: "bg-[hsl(var(--ax-red)/0.12)] text-[hsl(var(--ax-red))]",
   review: "bg-[hsl(var(--ax-blue)/0.12)] text-[hsl(var(--ax-blue))]",
@@ -272,10 +330,12 @@ export default function AdminDashboard() {
   const approvals = usePendingApprovals();
   const shipping = useShippingToday();
   const tiles = useStatTiles();
+  const inbox = useInboxSummary();
 
   const month = format(new Date(), "MMMM");
   const today = format(new Date(), "EEEE, MMM d");
-  const attentionCount = (priorities?.length ?? 0) + (approvals?.length ?? 0);
+  const attentionCount =
+    (priorities?.length ?? 0) + (approvals?.length ?? 0) + (inbox?.unreadCount ?? 0);
 
   const trendPct = revenue && revenue.prev > 0
     ? ((revenue.total - revenue.prev) / revenue.prev) * 100
@@ -490,6 +550,65 @@ export default function AdminDashboard() {
           )}
         </section>
       </div>
+
+      {/* Client messages */}
+      <section className="ax-os-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-bold text-[hsl(var(--ax-ink))] flex items-center gap-2">
+            <MessageSquareText className="h-4 w-4 text-[hsl(var(--ax-accent))]" />
+            Client messages
+            {inbox && inbox.unreadCount > 0 && (
+              <span className="text-[10px] font-semibold rounded-full bg-[hsl(var(--ax-accent))] text-white px-2 py-0.5">
+                {inbox.unreadCount} new
+              </span>
+            )}
+          </h2>
+          <Link to="/admin/inbox" className="text-xs text-[hsl(var(--ax-accent))] font-medium hover:underline">
+            Open inbox
+          </Link>
+        </div>
+        {!inbox ? (
+          <div className="space-y-2">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : inbox.recent.length === 0 ? (
+          <div className="text-sm text-[hsl(var(--ax-secondary))] py-6 text-center">
+            No client messages yet. Portal conversations will appear here.
+          </div>
+        ) : (
+          <ul className="divide-y divide-[hsl(var(--ax-line))]">
+            {inbox.recent.map((t) => (
+              <li key={t.id}>
+                <Link to="/admin/inbox" className="flex items-center gap-3 py-2.5 hover:opacity-80">
+                  {t.admin_unread ? (
+                    <span className="h-2 w-2 rounded-full bg-[hsl(var(--ax-accent))] shrink-0" />
+                  ) : (
+                    <span className="h-2 w-2 rounded-full bg-[hsl(var(--ax-line))] shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className={cn(
+                        "text-sm truncate text-[hsl(var(--ax-ink))]",
+                        t.admin_unread ? "font-bold" : "font-medium",
+                      )}
+                    >
+                      {t.subject}
+                    </div>
+                    <div className="text-xs text-[hsl(var(--ax-secondary))] truncate">
+                      {t.client} · {categoryLabel(t.category)}
+                    </div>
+                  </div>
+                  <span className="text-[11px] text-[hsl(var(--ax-faint))] shrink-0">
+                    {threadTimeAgo(t.last_message_at)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Compact stat tiles */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
