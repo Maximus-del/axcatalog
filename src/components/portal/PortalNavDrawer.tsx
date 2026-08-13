@@ -8,6 +8,8 @@ import {
   Sparkles,
   Image,
   MessageSquare,
+  Wand2,
+  User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,9 +21,11 @@ interface Props {
 const LINKS = [
   { to: "/portal", label: "Home", icon: Home, end: true },
   { to: "/portal/products", label: "Product Lineup", icon: Shirt },
-  { to: "/portal/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/portal/studio", label: "Design Studio", icon: Wand2 },
   { to: "/portal/content", label: "Social Content", icon: Image },
   { to: "/portal/messages", label: "Messages", icon: MessageSquare },
+  { to: "/portal/profile", label: "Profile & Brand", icon: User },
+  { to: "/portal/analytics", label: "Analytics", icon: BarChart3 },
   { to: "/portal/drops", label: "Upcoming Drops", icon: Sparkles },
   { to: "/portal/era", label: "AR / Era", icon: Layers },
 ];

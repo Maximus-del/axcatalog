@@ -10,7 +10,8 @@ import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { ImpersonationGuardModal } from "./ImpersonationGuardModal";
 import { PortalNavDrawer } from "./PortalNavDrawer";
-import { MobileHeader } from "./home/MobileHeader";
+import { AthleteHeader } from "./home/AthleteHeader";
+import { NotificationsSheet } from "./NotificationsSheet";
 import { BulkOrderSheet } from "./BulkOrderSheet";
 import { OrderDraftBar } from "./OrderDraftBar";
 import { OrderDraftProvider } from "./OrderDraftContext";
@@ -50,6 +51,7 @@ export default function PortalLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const [guardOpen, setGuardOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   // Pull-to-refresh: trigger a window reload of the data hooks via a key.
   // We delegate the actual refetch to child pages by emitting a custom event.
@@ -115,12 +117,8 @@ export default function PortalLayout() {
 
           <PortalNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
 
-          <MobileHeader
-            firstName={athlete.first_name}
-            lastName={athlete.last_name}
-            lifetimeRevenue={null}
-            onMenuClick={() => setNavOpen(true)}
-          />
+          <AthleteHeader onMenuClick={() => setNavOpen(true)} onBellClick={() => setNotifOpen(true)} />
+          <NotificationsSheet open={notifOpen} onOpenChange={setNotifOpen} />
 
           <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-3 hidden md:flex items-center justify-end gap-3">
             <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>

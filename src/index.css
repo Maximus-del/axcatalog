@@ -300,6 +300,19 @@
 }
 .admin-os .ax-os-divider { border-color: hsl(var(--ax-line)); }
 
+/* Portal form input */
+.portal-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  color: hsl(var(--foreground));
+}
+.portal-input::placeholder { color: hsl(var(--muted-foreground)); }
+.portal-input:focus { outline: none; border-color: hsl(var(--accent)); }
+
 /* Smooth scrolling site-wide (respect reduced motion via the spec) */
 html { scroll-behavior: smooth; }
 @media (prefers-reduced-motion: reduce) {

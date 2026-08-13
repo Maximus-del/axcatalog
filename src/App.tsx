@@ -60,6 +60,11 @@ import PortalContent from "./pages/portal/PortalContent";
 import PortalDrops from "./pages/portal/PortalDrops";
 import PortalEra from "./pages/portal/PortalEra";
 import PortalMessages from "./pages/portal/PortalMessages";
+import PortalStudio from "./pages/portal/PortalStudio";
+import PortalProfile from "./pages/portal/PortalProfile";
+import GameDayBuilder from "./pages/portal/build/GameDayBuilder";
+import CampBuilder from "./pages/portal/build/CampBuilder";
+import CustomBuilder from "./pages/portal/build/CustomBuilder";
 
 import { RequireAffiliate } from "@/auth/guards";
 import AffiliateLayout from "@/components/affiliate/AffiliateLayout";
@@ -155,6 +160,11 @@ const App = () => (
               <Route path="drops" element={<PortalDrops />} />
               <Route path="era" element={<PortalEra />} />
               <Route path="messages" element={<PortalMessages />} />
+              <Route path="studio" element={<PortalStudio />} />
+              <Route path="profile" element={<PortalProfile />} />
+              <Route path="build/game-day" element={<GameDayBuilder />} />
+              <Route path="build/camp" element={<CampBuilder />} />
+              <Route path="build/custom" element={<CustomBuilder />} />
               <Route path="products/:id" element={<PortalProductDetail />} />
             </Route>
 
