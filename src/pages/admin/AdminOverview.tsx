@@ -2,9 +2,10 @@
 // Counts come straight from shared objects (one source of truth).
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Star, ShoppingBag, Newspaper, CalendarDays, TrendingUp, AlertCircle, ArrowRight } from "lucide-react";
+import { Users, Star, ShoppingBag, Newspaper, CalendarDays, TrendingUp, AlertCircle, ArrowRight, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useDiscoverAthletes } from "@/hooks/useDiscoverAthletes";
+import { useDomainEvents } from "@/hooks/useContent";
 import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
 import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
 
@@ -20,7 +21,7 @@ function useEcosystemStats() {
   return useQuery({
     queryKey: ["operator-overview-stats"],
     queryFn: async () => {
-      const [athletes, followers, access, products, content, events, drafts, eventsDraft, designsPending] = await Promise.all([
+      const [athletes, followers, access, products, content, events, drafts, eventsDraft, pendingApproval, changesRequested, eventsNoReg] = await Promise.all([
         num(head("public_athletes")),
         num(head("athlete_follows")),
         num(head("athlete_follows").in("state", ["subscriber", "vip"])),
@@ -29,9 +30,11 @@ function useEcosystemStats() {
         num(head("events")),
         num(head("content_assets").eq("status", "draft")),
         num(head("events").eq("status", "draft")),
-        num(head("designs").in("status", ["concept", "in_progress"])),
+        num(head("products").eq("approval_state", "pending")),
+        num(head("products").eq("approval_state", "rejected")),
+        num(head("events").is("registration_url", null)),
       ]);
-      return { athletes, followers, access, products, content, events, drafts, eventsDraft, designsPending };
+      return { athletes, followers, access, products, content, events, drafts, eventsDraft, pendingApproval, changesRequested, eventsNoReg };
     },
   });
 }
@@ -45,14 +48,24 @@ const KPI = [
   { key: "events", label: "Events", icon: CalendarDays },
 ] as const;
 
+function timeAgo(iso: string): string {
+  const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
+  if (h < 1) return "just now";
+  if (h < 24) return `${Math.round(h)}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
 export default function AdminOverview() {
   const { data: stats } = useEcosystemStats();
   const { data: athletes = [] } = useDiscoverAthletes();
+  const { data: activity = [] } = useDomainEvents(12);
 
   const actions = [
+    { label: "products waiting for athlete approval", value: stats?.pendingApproval ?? 0, to: "/admin/athletes" },
+    { label: "products with changes requested", value: stats?.changesRequested ?? 0, to: "/admin/athletes" },
+    { label: "events missing a registration link", value: stats?.eventsNoReg ?? 0, to: "/admin/events" },
     { label: "content posts in draft", value: stats?.drafts ?? 0, to: "/admin/content" },
     { label: "events not yet published", value: stats?.eventsDraft ?? 0, to: "/admin/events" },
-    { label: "designs awaiting approval", value: stats?.designsPending ?? 0, to: "/admin/designs" },
   ].filter((a) => a.value > 0);
 
   return (
@@ -88,6 +101,23 @@ export default function AdminOverview() {
                 <span className="flex-1 text-sm font-medium capitalize">{a.value} {a.label}</span>
                 <ArrowRight className="h-4 w-4 text-[hsl(var(--ax-faint))]" />
               </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {activity.length > 0 && (
+        <section>
+          <h2 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--ax-secondary))] mb-3 flex items-center gap-2">
+            <Activity className="h-4 w-4 text-[hsl(var(--ax-accent))]" /> Activity
+          </h2>
+          <div className="ax-card divide-y divide-[hsl(var(--ax-line))]">
+            {activity.map((e) => (
+              <div key={e.id} className="flex items-center gap-3 px-4 h-11">
+                <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-accent))] shrink-0" />
+                <span className="flex-1 text-[13px] truncate">{e.title}</span>
+                <span className="text-[11px] text-[hsl(var(--ax-faint))] shrink-0">{timeAgo(e.occurred_at)}</span>
+              </div>
             ))}
           </div>
         </section>

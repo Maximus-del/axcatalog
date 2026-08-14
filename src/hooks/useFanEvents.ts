@@ -7,11 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useFollows } from "@/hooks/useFan";
 import { useDiscoverAthletes, useFeedProducts } from "@/hooks/useDiscoverAthletes";
+import { useDomainEvents } from "@/hooks/useContent";
 import type { PublicAthlete, PublicAthleteProduct } from "@/lib/ecosystem/types";
 import {
   buildFeed, feedToNotifications, newAthleteIds, pickFeatured,
   type EnrichedFeedItem, type NotifItem,
 } from "@/lib/ecosystem/feed-engine";
+
+const NOTIF_CATS = new Set(["drops", "camps", "content", "events"]);
+function toCat(c: string | null): NotifItem["cat"] {
+  return (c && NOTIF_CATS.has(c) ? c : "content") as NotifItem["cat"];
+}
 
 export function useFanEvents() {
   const { followedIds, isLoading } = useFollows();
@@ -33,10 +39,38 @@ export function useFanEvents() {
     return m;
   }, [products]);
 
+  const { data: rawEvents = [] } = useDomainEvents();
+
   const feed = useMemo<EnrichedFeedItem[]>(() => buildFeed(followed, productsByAthlete), [followed, productsByAthlete]);
-  const notifications = useMemo<NotifItem[]>(() => feedToNotifications(feed), [feed]);
-  const newIds = useMemo(() => newAthleteIds(feed), [feed]);
   const featured = useMemo(() => pickFeatured(feed), [feed]);
+
+  // Real domain-events for followed athletes (audience already RLS-filtered),
+  // mapped into notification items and merged with demo content.
+  const realNotifs = useMemo<NotifItem[]>(
+    () =>
+      rawEvents
+        .filter((e) => e.audience !== "operator" && e.athlete_id && followedIds.has(e.athlete_id))
+        .map((e) => ({
+          id: e.id,
+          athleteId: e.athlete_id as string,
+          cat: toCat(e.category),
+          title: e.title,
+          sub: e.body ?? "",
+          to: e.link ?? "/feed",
+          offsetHours: Math.max(0, (Date.now() - new Date(e.occurred_at).getTime()) / 3_600_000),
+        })),
+    [rawEvents, followedIds],
+  );
+
+  const notifications = useMemo<NotifItem[]>(
+    () => [...realNotifs, ...feedToNotifications(feed)].sort((a, b) => a.offsetHours - b.offsetHours),
+    [realNotifs, feed],
+  );
+  const newIds = useMemo(() => {
+    const s = newAthleteIds(feed);
+    for (const n of realNotifs) if (n.offsetHours <= 72) s.add(n.athleteId);
+    return s;
+  }, [feed, realNotifs]);
 
   return {
     athletes: athletes as PublicAthlete[],

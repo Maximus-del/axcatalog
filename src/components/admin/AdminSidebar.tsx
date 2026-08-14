@@ -21,6 +21,7 @@ import {
   Newspaper,
   Star,
   CalendarDays,
+  LayoutTemplate,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -94,6 +95,7 @@ const GROUPS: NavGroup[] = [
   {
     label: "System",
     items: [
+      { label: "Templates", to: "/admin/templates", icon: LayoutTemplate },
       { label: "Team", to: "/admin/users", icon: UserCog },
       { label: "Settings", to: "/admin/settings", icon: Settings },
     ],

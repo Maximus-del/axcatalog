@@ -5,6 +5,7 @@ import { LogOut, TrendingUp, ShoppingBag, Package, Wallet } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 import { AccessSummaryCard } from "@/components/portal/AccessSummaryCard";
+import { PortalApprovals } from "@/components/portal/PortalApprovals";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import { getTierProgress, fmtUsd } from "@/lib/portal-config";
 import { CodeVault } from "@/components/portal/CodeVault";
@@ -57,6 +58,8 @@ export default function PortalProfile() {
         <div className="text-[10px] uppercase tracking-[0.2em] text-accent font-bold">Your Brand</div>
         <h1 className="text-2xl font-bold mt-1">{fullName}</h1>
       </header>
+
+      <PortalApprovals athleteId={athlete.id} />
 
       {/* Brand stats */}
       <section className="grid grid-cols-2 gap-3">

@@ -83,3 +83,21 @@
 ---
 
 *Guiding principle applied throughout: build the reusable system, plug athletes/fans into it, and keep the mock layer swappable. Nothing here hard-codes an individual athlete.*
+
+---
+
+# Phase — Operations: Event Engine, Templates, Drop Lifecycle
+
+**QA findings.** Live click-through isn't possible in the build sandbox (Supabase egress blocked), so QA was code + data level: verified the shared-object loop returns through the public views (content/events/plans), confirmed RLS gates gated content, and confirmed the athlete-approval path works for platform-admin/impersonation (a real separate athlete account would need org membership or an approval RPC — noted below). Edge cases handled in components: not-signed-in (locked teasers + Join CTAs), missing images (gradient/initials + `onError`), empty content/events/plans (empty states), and timestamp-derived states so no operator has to flip a switch at launch time.
+
+**Notification architecture (now real).** `domain_events` is an append-only event log written by **database triggers** on `content_assets` (publish), `events` (announce/registration_open), `athlete_follows` (follow/subscribe), and `products` (approval + drop scheduling). RLS decides the audience: operators/org members read their whole org stream (activity log); fans read only events for athletes they follow, gated by `audience` vs their follow state, and only once `occurred_at <= now`. The fan notification center + bell read these real events (merged with demo content), filtered by per-athlete preferences, with unread via a stored last-seen. `occurred_at` supports scheduled visibility. **Push/email/SMS delivery + timed fan-out are the documented next step (needs pg_cron/edge worker); the in-app read model is real.**
+
+**Template system.** `athlete_templates` holds configuration (modules, default plans, content categories, notification defaults) — not athlete data. `apply_athlete_template(athlete, template)` provisions default membership plans (only if none exist) and writes modules/config to the athlete, then the athlete stays editable. Seeded NFL / College / High School templates. Applied from the athlete profile ("Apply Template"); browsable at Admin → System → Templates.
+
+**Drop lifecycle.** Products carry `approval_state` (none→pending→approved/rejected) + `access_date`/`public_date`/`drop_date`. Operator schedules dates and "Send for Approval" on the athlete's **Drops** tab; the athlete sees "Action Required" in their portal and Approves / Requests Changes (with a note the operator sees). Fan UI derives the state from timestamps everywhere via one `earlyAccess()` helper: upcoming → "Access members shop early / Get Access"; access window → "Your early access is open"; public → normal. A `drop.scheduled` event notifies followers; approval outcomes notify operators.
+
+**Shared objects, enforced.** One `products`, `content_assets`, `events`, `membership_plans`, `athlete_follows` — every surface is a permissioned view. No `fan_*`/`athlete_*`/`admin_*` copies.
+
+**Still mocked / future.** Real billing (Stripe), push/email/SMS + timed notification fan-out, a full product *create* wizard (columns + scheduling exist; creation still uses the existing admin product flow), product/drop templates (athlete templates exist; merch templates are PREPARE-FOR), a separate-athlete-account approval RPC, and multi-athlete campaign tools.
+
+**Next 5.** (1) A tiny scheduled worker (pg_cron/edge) to fire `drop.early_access_open`/`public` + membership renewal events at their timestamps — turns the derived UI into true notifications. (2) A product *create* wizard on the Drops tab (blank→design→images→price→schedule) so the whole drop is born in one place. (3) A "Coming Soon" fan surface + operator "Launch Calendar" over the scheduled dates. (4) Real per-subscription media gating (definer RPC) so gated *media* — not just metadata — is server-enforced. (5) Only after the above: Stripe, to convert the mock subscribe into revenue — the state model, plans, and access gating are already in place, so billing is now a genuinely small addition.

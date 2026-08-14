@@ -3,8 +3,10 @@
 // ("Shop the Look") ties merch back to the athlete.
 import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, ExternalLink, ImageOff } from "lucide-react";
+import { ArrowLeft, ExternalLink, ImageOff, Lock, Timer } from "lucide-react";
 import { useProductById, useAthleteProducts, useDiscoverAthletes } from "@/hooks/useDiscoverAthletes";
+import { useAthleteAccess } from "@/hooks/useFan";
+import { earlyAccess } from "@/lib/ecosystem/access";
 import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
 import { productImageUrl, shopLink, fmtPrice } from "@/lib/ecosystem/image";
 import { SaveButton } from "@/components/fan/ui/SaveButton";
@@ -17,6 +19,8 @@ export default function ProductDetail() {
   const { data: product, isLoading } = useProductById(id);
   const { data: athletes = [] } = useDiscoverAthletes();
   const { data: more = [] } = useAthleteProducts(product?.athlete_id);
+  const access = useAthleteAccess(product?.athlete_id);
+  const early = product ? earlyAccess(product.access_date, product.public_date, access.isMember) : { phase: "none" as const, label: "" };
 
   const athlete = useMemo<PublicAthlete | undefined>(
     () => (athletes as PublicAthlete[]).find((a) => a.id === product?.athlete_id),
@@ -69,6 +73,15 @@ export default function ProductDetail() {
                 )}
                 <h1 className="text-2xl font-black tracking-tight">{product.title}</h1>
                 {price && <div className="text-lg font-bold mt-1">{price}</div>}
+                {early.phase !== "none" && early.phase !== "public_open" && (
+                  <div className="mt-3 rounded-xl border border-accent/30 bg-accent/[0.06] p-3 flex items-center gap-2">
+                    {early.phase === "access_open" ? <Timer className="h-4 w-4 text-accent shrink-0" /> : <Lock className="h-4 w-4 text-accent shrink-0" />}
+                    <span className="text-[13px] font-semibold text-accent flex-1">{early.label}</span>
+                    {early.phase === "upcoming" && !access.isMember && athlete && (
+                      <Link to={`/a/${athlete.slug}?tab=access`} className="h-8 px-3 rounded-lg bg-accent text-accent-foreground text-[12px] font-bold shrink-0">Get Access</Link>
+                    )}
+                  </div>
+                )}
                 {product.description && <p className="text-sm text-muted-foreground mt-3 whitespace-pre-line line-clamp-6">{product.description}</p>}
 
                 <div className="flex gap-2 mt-5">

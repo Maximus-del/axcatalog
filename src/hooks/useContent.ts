@@ -30,3 +30,15 @@ export function useAthletePlans(athleteId: string | undefined) {
 export function useAthleteSubscribers(athleteId: string | undefined) {
   return useQuery({ queryKey: ["athlete-subs", athleteId], enabled: !!athleteId, queryFn: () => c.listAthleteSubscribers(athleteId!) });
 }
+export function useDomainEvents(limit = 80) {
+  return useQuery({ queryKey: ["domain-events", limit], queryFn: () => c.fetchDomainEvents(limit) });
+}
+export function useTemplates() {
+  return useQuery({ queryKey: ["templates"], queryFn: () => c.listTemplates() });
+}
+export function useAthleteOperatorProducts(athleteId: string | undefined) {
+  return useQuery({ queryKey: ["op-products", athleteId], enabled: !!athleteId, queryFn: () => c.fetchAthleteOperatorProducts(athleteId!) });
+}
+export function usePendingProducts(athleteId: string | undefined) {
+  return useQuery({ queryKey: ["pending-products", athleteId], enabled: !!athleteId, queryFn: () => c.fetchPendingProducts(athleteId!) });
+}

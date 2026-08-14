@@ -189,6 +189,66 @@ export async function listAthleteSubscribers(athleteId: string): Promise<Subscri
   return (data ?? []) as unknown as SubscriberRow[];
 }
 
+// ---- Domain events (the event engine) ----
+export interface DomainEvent {
+  id: string; type: string; athlete_id: string | null; subject_type: string | null; subject_id: string | null;
+  audience: string; category: string | null; title: string; body: string | null; link: string | null;
+  occurred_at: string; created_at: string;
+}
+export async function fetchDomainEvents(limit = 80): Promise<DomainEvent[]> {
+  const { data, error } = await supabase
+    .from("domain_events" as never)
+    .select("id, type, athlete_id, subject_type, subject_id, audience, category, title, body, link, occurred_at, created_at")
+    .order("occurred_at", { ascending: false }).limit(limit);
+  if (error) throw error;
+  return (data ?? []) as unknown as DomainEvent[];
+}
+
+// ---- Product lifecycle (operator + athlete) ----
+export interface OperatorProduct {
+  id: string; title: string; status: string; approval_state: string;
+  access_date: string | null; public_date: string | null; drop_date: string | null;
+  approval_note: string | null;
+  product_images?: { storage_bucket: string; storage_path: string; is_primary: boolean; sort_order: number }[];
+}
+export async function fetchAthleteOperatorProducts(athleteId: string): Promise<OperatorProduct[]> {
+  const { data, error } = await supabase
+    .from("products" as never)
+    .select("id, title, status, approval_state, access_date, public_date, drop_date, approval_note, product_athletes!inner(athlete_id), product_images(storage_bucket, storage_path, is_primary, sort_order)")
+    .eq("product_athletes.athlete_id", athleteId)
+    .order("updated_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as OperatorProduct[];
+}
+export async function scheduleProduct(id: string, dates: { access_date?: string | null; public_date?: string | null; drop_date?: string | null }): Promise<void> {
+  const { error } = await supabase.from("products" as never).update(dates as never).eq("id", id);
+  if (error) throw error;
+}
+export async function sendProductForApproval(id: string): Promise<void> {
+  const { error } = await supabase.from("products" as never).update({ approval_state: "pending" } as never).eq("id", id);
+  if (error) throw error;
+}
+export async function setProductApproval(id: string, approved: boolean, note: string | null): Promise<void> {
+  const { error } = await supabase.from("products" as never)
+    .update({ approval_state: approved ? "approved" : "rejected", approval_note: note } as never).eq("id", id);
+  if (error) throw error;
+}
+export async function fetchPendingProducts(athleteId: string): Promise<OperatorProduct[]> {
+  return (await fetchAthleteOperatorProducts(athleteId)).filter((p) => p.approval_state === "pending");
+}
+
+// ---- Templates ----
+export interface Template { id: string; name: string; kind: string; description: string | null; config: Record<string, unknown>; is_active: boolean }
+export async function listTemplates(): Promise<Template[]> {
+  const { data, error } = await supabase.from("athlete_templates" as never).select("*").eq("is_active", true).order("name");
+  if (error) throw error;
+  return (data ?? []) as unknown as Template[];
+}
+export async function applyTemplate(athleteId: string, templateId: string): Promise<void> {
+  const { error } = await supabase.rpc("apply_athlete_template" as never, { _athlete_id: athleteId, _template_id: templateId } as never);
+  if (error) throw error;
+}
+
 // ---- Fan mock subscribe (no billing). Sets follow state; records subscription. ----
 export async function subscribeMock(fanUserId: string, athleteId: string, tier: "access" | "vip", planId: string | null): Promise<void> {
   const state = tier === "vip" ? "vip" : "subscriber";
