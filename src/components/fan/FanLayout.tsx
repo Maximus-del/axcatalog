@@ -2,6 +2,8 @@
 import { Outlet, Link, useLocation, NavLink } from "react-router-dom";
 import { Home, Compass, Sparkles, ShoppingBag, User, Bell } from "lucide-react";
 import { FanBottomNav } from "./FanBottomNav";
+import { useFanEvents, useNotifSeen } from "@/hooks/useFanEvents";
+import { countUnread } from "@/lib/ecosystem/feed-engine";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -14,6 +16,9 @@ const LINKS = [
 
 export default function FanLayout() {
   const { pathname } = useLocation();
+  const { notifications } = useFanEvents();
+  const { thresholdHours } = useNotifSeen();
+  const unread = countUnread(notifications, thresholdHours);
   return (
     <div className="min-h-screen bg-background text-foreground scroll-smooth">
       <header className="sticky top-0 z-40 bg-[hsl(var(--dark))]/95 backdrop-blur-md border-b border-border">
@@ -47,12 +52,17 @@ export default function FanLayout() {
               aria-label="Notifications"
               className={({ isActive }) =>
                 cn(
-                  "h-9 w-9 rounded-lg flex items-center justify-center transition-colors",
+                  "relative h-9 w-9 rounded-lg flex items-center justify-center transition-colors",
                   isActive ? "text-accent bg-accent/10" : "text-muted-foreground hover:text-foreground",
                 )
               }
             >
               <Bell className="h-5 w-5" />
+              {unread > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-foreground text-[10px] font-black flex items-center justify-center">
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              )}
             </NavLink>
           </div>
         </div>

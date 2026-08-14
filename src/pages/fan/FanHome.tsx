@@ -1,15 +1,20 @@
-// Personalized Home feed — Stories row + filter chips + mixed feed cards.
-// Demo narrative content is layered over REAL product drops for followed
-// athletes who have published merch.
+// Personalized Home — hierarchical, not an infinite wall. Featured moment,
+// Stories, a focused "New From Your Athletes" feed with filters, then
+// discovery modules (Camps, Stories, Continue Exploring).
 import { useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
-import { useFollows } from "@/hooks/useFan";
-import { useDiscoverAthletes, useFeedProducts } from "@/hooks/useDiscoverAthletes";
-import type { PublicAthlete, PublicAthleteProduct } from "@/lib/ecosystem/types";
-import { demoFeed } from "@/lib/ecosystem/demo-content";
-import type { FeedItem, FeedType } from "@/lib/ecosystem/content-types";
+import { useFanEvents } from "@/hooks/useFanEvents";
+import type { PublicAthlete } from "@/lib/ecosystem/types";
+import { demoCamps, demoArticles } from "@/lib/ecosystem/demo-content";
+import { recommendAthletes } from "@/lib/ecosystem/recommend";
+import type { FeedType } from "@/lib/ecosystem/content-types";
 import { StoryRow } from "@/components/fan/ui/StoryRow";
 import { FeedCard } from "@/components/fan/ui/FeedCard";
+import { FeaturedCard } from "@/components/fan/ui/FeaturedCard";
+import { CampCard } from "@/components/fan/ui/CampCard";
+import { ArticleCard } from "@/components/fan/ui/ArticleCard";
+import { AthleteCardCompact } from "@/components/fan/ui/AthleteCard";
+import { HorizontalSection } from "@/components/fan/ui/HorizontalSection";
 import { EmptyState } from "@/components/fan/ui/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -29,45 +34,29 @@ const FILTER_TYPES: Record<Filter, Set<FeedType> | null> = {
 };
 
 export default function FanHome() {
-  const { followedIds, isLoading: followsLoading } = useFollows();
-  const followedArr = useMemo(() => [...followedIds], [followedIds]);
-  const { data: athletes = [] } = useDiscoverAthletes();
-  const { data: products = [] } = useFeedProducts(followedArr);
+  const { followed, followedIds, feed, newIds, featured, athletes, loading } = useFanEvents();
   const [filter, setFilter] = useState<Filter>("for_you");
 
-  const followedAthletes = useMemo(
-    () => (athletes as PublicAthlete[]).filter((a) => followedIds.has(a.id)),
-    [athletes, followedIds],
-  );
-  const athleteById = useMemo(() => {
-    const m = new Map<string, PublicAthlete>();
-    for (const a of followedAthletes) m.set(a.id, a);
-    return m;
-  }, [followedAthletes]);
-  const productByAthlete = useMemo(() => {
-    const m = new Map<string, PublicAthleteProduct>();
-    for (const p of products as PublicAthleteProduct[]) if (!m.has(p.athlete_id)) m.set(p.athlete_id, p);
-    return m;
-  }, [products]);
+  const athleteById = useMemo(() => new Map(followed.map((a) => [a.id, a] as const)), [followed]);
+  const camps = useMemo(() => demoCamps(followed.map((a) => ({ id: a.id, slug: a.slug, first: a.first_name }))).slice(0, 8), [followed]);
+  const articles = useMemo(() => demoArticles(followed.map((a) => ({ id: a.id, slug: a.slug, first: a.first_name }))).slice(0, 8), [followed]);
+  const recs = useMemo(() => recommendAthletes(athletes, followedIds, 12), [athletes, followedIds]);
 
-  const feed = useMemo<FeedItem[]>(
-    () => demoFeed(followedAthletes.map((a) => ({ id: a.id, slug: a.slug, first: a.first_name }))),
-    [followedAthletes],
-  );
-  const newIds = useMemo(() => new Set(feed.map((f) => f.athleteId)), [feed]);
+  const featuredAthlete = featured ? athleteById.get(featured.athleteId) : undefined;
+  const nameById = useMemo(() => new Map((athletes as PublicAthlete[]).map((a) => [a.id, a.full_name || `${a.first_name} ${a.last_name}`] as const)), [athletes]);
 
   const visible = useMemo(() => {
     const types = FILTER_TYPES[filter];
-    return types ? feed.filter((f) => types.has(f.type)) : feed;
-  }, [feed, filter]);
+    const list = types ? feed.filter((f) => types.has(f.type)) : feed;
+    return list.filter((f) => f.id !== featured?.id).slice(0, 12);
+  }, [feed, filter, featured]);
 
-  if (followsLoading) {
+  if (loading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-16 rounded-2xl" />
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-64 rounded-2xl" />
-        ))}
+        <Skeleton className="h-64 rounded-3xl" />
+        {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-64 rounded-2xl" />)}
       </div>
     );
   }
@@ -85,48 +74,61 @@ export default function FanHome() {
   }
 
   return (
-    <div className="space-y-5">
-      {/* Stories */}
+    <div className="space-y-7">
       <section>
         <h2 className="ax-section-header mb-3">Your Access</h2>
-        <StoryRow athletes={followedAthletes} newIds={newIds} />
+        <StoryRow athletes={followed} newIds={newIds} />
       </section>
 
-      {/* Filters */}
-      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 scroll-touch sticky top-14 z-30 bg-background/80 backdrop-blur py-1">
-        {FILTERS.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={cn(
-              "shrink-0 h-8 px-3.5 rounded-full text-[13px] font-semibold border transition-colors",
-              filter === f.key ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground",
-            )}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
+      {featured && featuredAthlete && <FeaturedCard item={featured} athlete={featuredAthlete} />}
 
-      {/* Feed */}
-      <div className="space-y-4 max-w-xl">
-        {visible.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-10 text-center">Nothing here yet — check another filter.</p>
-        ) : (
-          visible.map((item) => {
-            const athlete = athleteById.get(item.athleteId);
-            if (!athlete) return null;
-            return (
-              <FeedCard
-                key={item.id}
-                item={item}
-                athlete={athlete}
-                product={item.type === "drop" ? productByAthlete.get(item.athleteId) : undefined}
-              />
-            );
-          })
-        )}
-      </div>
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="ax-section-header">New From Your Athletes</h2>
+        </div>
+        <div className="flex gap-2 overflow-x-auto -mx-4 px-4 scroll-touch mb-4">
+          {FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={cn(
+                "shrink-0 h-8 px-3.5 rounded-full text-[13px] font-semibold border transition-colors",
+                filter === f.key ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground",
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-4 max-w-xl">
+          {visible.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Nothing here yet — try another filter.</p>
+          ) : (
+            visible.map((item) => {
+              const athlete = athleteById.get(item.athleteId);
+              return athlete ? <FeedCard key={item.id} item={item} athlete={athlete} /> : null;
+            })
+          )}
+        </div>
+      </section>
+
+      {camps.length > 0 && (
+        <HorizontalSection title="Upcoming Camps" action={{ label: "See all", to: "/feed/camps" }}>
+          {camps.map((c) => <CampCard key={c.id} camp={c} athleteName={nameById.get(c.athleteId)} />)}
+        </HorizontalSection>
+      )}
+
+      {articles.length > 0 && (
+        <HorizontalSection title="From the Farm">
+          {articles.map((a) => <ArticleCard key={a.id} article={a} />)}
+        </HorizontalSection>
+      )}
+
+      {recs.length > 0 && (
+        <HorizontalSection title="Continue Exploring" action={{ label: "Discover", to: "/feed/discover" }}>
+          {recs.map((r) => <AthleteCardCompact key={r.athlete.id} athlete={r.athlete} />)}
+        </HorizontalSection>
+      )}
     </div>
   );
 }

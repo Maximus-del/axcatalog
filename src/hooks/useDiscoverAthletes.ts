@@ -1,108 +1,53 @@
-// Fan-facing athlete discovery + single-athlete public profile + their merch.
-// Reads ONLY from the public_athletes / public_athlete_products views, which
-// expose a safe column allow-list (never query athletes/products directly here).
+// Thin query hooks over the fan data service layer (src/lib/ecosystem/services).
+// No Supabase calls live here — swap the backend in services.ts, not here.
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import type { PublicAthlete, PublicAthleteProduct } from "@/lib/ecosystem/types";
-
-const ATHLETE_COLS =
-  "id, slug, full_name, first_name, last_name, position, jersey_number, league, organization_id, org_name, org_slug, org_type, team_name, team_slug, image_url";
-const PRODUCT_COLS =
-  "id, title, slug, description, price, compare_at_price, shopify_handle, athlete_id, athlete_role, organization_id, created_at, updated_at, image_bucket, image_path";
+import * as svc from "@/lib/ecosystem/services";
 
 export function useDiscoverAthletes() {
-  return useQuery({
+  return useQuery<PublicAthlete[]>({
     queryKey: ["public-athletes"],
-    queryFn: async (): Promise<PublicAthlete[]> => {
-      const { data, error } = await supabase
-        .from("public_athletes" as never)
-        .select(ATHLETE_COLS)
-        .order("full_name", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as unknown as PublicAthlete[];
-    },
+    queryFn: () => svc.fetchAthletes(),
   });
 }
 
 export function useAthletePublic(slug: string | undefined) {
-  return useQuery({
+  return useQuery<PublicAthlete | null>({
     queryKey: ["public-athlete", slug],
     enabled: !!slug,
-    queryFn: async (): Promise<PublicAthlete | null> => {
-      const { data, error } = await supabase
-        .from("public_athletes" as never)
-        .select(ATHLETE_COLS)
-        .eq("slug", slug!)
-        .maybeSingle();
-      if (error) throw error;
-      return (data as unknown as PublicAthlete | null) ?? null;
-    },
+    queryFn: () => svc.fetchAthleteBySlug(slug!),
   });
 }
 
 export function useAthleteProducts(athleteId: string | undefined) {
-  return useQuery({
+  return useQuery<PublicAthleteProduct[]>({
     queryKey: ["public-athlete-products", athleteId],
     enabled: !!athleteId,
-    queryFn: async (): Promise<PublicAthleteProduct[]> => {
-      const { data, error } = await supabase
-        .from("public_athlete_products" as never)
-        .select(PRODUCT_COLS)
-        .eq("athlete_id", athleteId!)
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as unknown as PublicAthleteProduct[];
-    },
+    queryFn: () => svc.fetchAthleteProducts(athleteId!),
   });
 }
 
 export function useProductById(id: string | undefined) {
-  return useQuery({
+  return useQuery<PublicAthleteProduct | null>({
     queryKey: ["public-product", id],
     enabled: !!id,
-    queryFn: async (): Promise<PublicAthleteProduct | null> => {
-      const { data, error } = await supabase
-        .from("public_athlete_products" as never)
-        .select(PRODUCT_COLS)
-        .eq("id", id!)
-        .maybeSingle();
-      if (error) throw error;
-      return (data as unknown as PublicAthleteProduct | null) ?? null;
-    },
+    queryFn: () => svc.fetchProductById(id!),
   });
 }
 
-/** All published athlete products (network-wide) — drives Shop + Discover drops. */
 export function useAllAthleteProducts(limit = 48) {
-  return useQuery({
+  return useQuery<PublicAthleteProduct[]>({
     queryKey: ["all-athlete-products", limit],
-    queryFn: async (): Promise<PublicAthleteProduct[]> => {
-      const { data, error } = await supabase
-        .from("public_athlete_products" as never)
-        .select(PRODUCT_COLS)
-        .order("updated_at", { ascending: false })
-        .limit(limit);
-      if (error) throw error;
-      return (data ?? []) as unknown as PublicAthleteProduct[];
-    },
+    queryFn: () => svc.fetchAllProducts(limit),
   });
 }
 
 /** Products across a set of followed athletes — the personalized feed source. */
 export function useFeedProducts(athleteIds: string[]) {
   const key = [...athleteIds].sort().join(",");
-  return useQuery({
+  return useQuery<PublicAthleteProduct[]>({
     queryKey: ["fan-feed-products", key],
     enabled: athleteIds.length > 0,
-    queryFn: async (): Promise<PublicAthleteProduct[]> => {
-      const { data, error } = await supabase
-        .from("public_athlete_products" as never)
-        .select(PRODUCT_COLS)
-        .in("athlete_id", athleteIds)
-        .order("updated_at", { ascending: false })
-        .limit(60);
-      if (error) throw error;
-      return (data ?? []) as unknown as PublicAthleteProduct[];
-    },
+    queryFn: () => svc.fetchProductsByAthletes(athleteIds),
   });
 }
