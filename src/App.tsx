@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/auth/AuthProvider";
-import { RequireAdmin, RequirePortal } from "@/auth/guards";
+import { RequireAdmin, RequirePortal, RequireFan } from "@/auth/guards";
 
 import RootRedirect from "./pages/RootRedirect";
 import Login from "./pages/Login";
@@ -79,6 +79,14 @@ import CatalogList from "./pages/catalog/CatalogList";
 import CatalogProductDetail from "./pages/catalog/CatalogProductDetail";
 import CatalogCheckout from "./pages/catalog/CatalogCheckout";
 
+import FanLayout from "@/components/fan/FanLayout";
+import FanJoin from "./pages/fan/FanJoin";
+import FanHome from "./pages/fan/FanHome";
+import FanDiscover from "./pages/fan/FanDiscover";
+import FanFollowing from "./pages/fan/FanFollowing";
+import FanProfile from "./pages/fan/FanProfile";
+import AthletePublicProfile from "./pages/fan/AthletePublicProfile";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -94,6 +102,25 @@ const App = () => (
             <Route path="/pending-access" element={<PendingAccess />} />
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/q/:slug" element={<QuestionnairePublic />} />
+
+            {/* Goat Farm Access (fan) — public entry + shareable athlete pages */}
+            <Route path="/join" element={<FanJoin />} />
+            <Route path="/a/:slug" element={<AthletePublicProfile />} />
+
+            {/* Fan feed (Goat Farm Access) */}
+            <Route
+              path="/feed"
+              element={
+                <RequireFan>
+                  <FanLayout />
+                </RequireFan>
+              }
+            >
+              <Route index element={<FanHome />} />
+              <Route path="discover" element={<FanDiscover />} />
+              <Route path="following" element={<FanFollowing />} />
+              <Route path="profile" element={<FanProfile />} />
+            </Route>
 
             {/* Admin */}
             <Route
