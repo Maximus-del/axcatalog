@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { PublicAthlete, PublicAthleteProduct } from "@/lib/ecosystem/types";
 
 const ATHLETE_COLS =
-  "id, slug, full_name, first_name, last_name, position, jersey_number, league, organization_id, org_name, org_slug, org_type, team_name, team_slug";
+  "id, slug, full_name, first_name, last_name, position, jersey_number, league, organization_id, org_name, org_slug, org_type, team_name, team_slug, image_url";
 const PRODUCT_COLS =
   "id, title, slug, description, price, compare_at_price, shopify_handle, athlete_id, athlete_role, organization_id, created_at, updated_at, image_bucket, image_path";
 

@@ -23,6 +23,7 @@ export interface PublicAthlete {
   org_type: string;
   team_name: string | null;
   team_slug: string | null;
+  image_url: string | null;
 }
 
 /** Row from the public_athlete_products view. */

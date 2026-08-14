@@ -1,17 +1,13 @@
-// Visual athlete hero for the profile page. Gradient stands in for photography.
-import { athleteName, athleteInitials, type PublicAthlete } from "@/lib/ecosystem/types";
-import { gradientFor } from "@/lib/ecosystem/visual";
+// Visual athlete hero for the profile page. Uses the athlete photo when present.
+import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
+import { AthletePhoto } from "./AthletePhoto";
 
 export function AthleteHero({ athlete }: { athlete: PublicAthlete }) {
   const subtitle = [athlete.position, athlete.team_name, athlete.league].filter(Boolean).join(" · ") || "Athlete";
   return (
     <div className="relative rounded-3xl overflow-hidden border border-border">
-      <div className="h-44 sm:h-56" style={{ background: gradientFor(athlete.slug) }}>
-        <div className="h-full w-full flex items-center justify-center">
-          <span className="text-6xl font-black text-white/80">{athleteInitials(athlete)}</span>
-        </div>
-      </div>
-      <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/80 to-transparent" />
+      <AthletePhoto athlete={athlete} className="h-52 sm:h-64 w-full" textClass="text-6xl" />
+      <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-black/85 to-transparent" />
       <div className="absolute inset-x-0 bottom-0 p-4">
         <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">{athleteName(athlete)}</h1>
         <p className="text-[13px] text-white/80">{subtitle}</p>

@@ -5,10 +5,10 @@ import { useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, ExternalLink, ImageOff } from "lucide-react";
 import { useProductById, useAthleteProducts, useDiscoverAthletes } from "@/hooks/useDiscoverAthletes";
-import { athleteName, athleteInitials, type PublicAthlete } from "@/lib/ecosystem/types";
+import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
 import { productImageUrl, shopLink, fmtPrice } from "@/lib/ecosystem/image";
-import { gradientFor } from "@/lib/ecosystem/visual";
 import { SaveButton } from "@/components/fan/ui/SaveButton";
+import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
 import { ProductCard } from "@/components/fan/ProductCard";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -63,9 +63,7 @@ export default function ProductDetail() {
               <div>
                 {athlete && (
                   <Link to={`/a/${athlete.slug}`} className="inline-flex items-center gap-2 mb-3">
-                    <span className="h-8 w-8 rounded-full flex items-center justify-center" style={{ background: gradientFor(athlete.slug) }}>
-                      <span className="text-[10px] font-black text-white/90">{athleteInitials(athlete)}</span>
-                    </span>
+                    <AthletePhoto athlete={athlete} className="h-8 w-8 rounded-full" textClass="text-[10px]" />
                     <span className="text-sm font-bold text-accent">{athleteName(athlete)}</span>
                   </Link>
                 )}

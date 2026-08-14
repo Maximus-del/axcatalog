@@ -8,8 +8,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useDiscoverAthletes } from "@/hooks/useDiscoverAthletes";
 import { useFollows } from "@/hooks/useFan";
-import { athleteName, athleteInitials, type PublicAthlete } from "@/lib/ecosystem/types";
-import { gradientFor } from "@/lib/ecosystem/visual";
+import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
+import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
 import { FollowButton } from "@/components/fan/FollowButton";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -70,9 +70,7 @@ export default function FanOnboarding() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5">
                 {featured.map((a) => (
                   <div key={a.id} className="rounded-2xl overflow-hidden border border-border bg-card">
-                    <div className="h-24 flex items-center justify-center" style={{ background: gradientFor(a.slug) }}>
-                      <span className="text-2xl font-black text-white/85">{athleteInitials(a)}</span>
-                    </div>
+                    <AthletePhoto athlete={a} className="h-24 w-full" textClass="text-2xl" />
                     <div className="p-2.5">
                       <div className="font-semibold text-sm truncate">{athleteName(a)}</div>
                       <div className="text-[11px] text-muted-foreground truncate">

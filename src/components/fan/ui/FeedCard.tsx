@@ -7,10 +7,11 @@ import { FEED_TYPE_LABEL } from "@/lib/ecosystem/content-types";
 import { agoLabel } from "@/lib/ecosystem/demo-content";
 import { gradientFor, TYPE_ACCENT } from "@/lib/ecosystem/visual";
 import { productImageUrl, shopLink, fmtPrice } from "@/lib/ecosystem/image";
-import { athleteName, athleteInitials, type PublicAthlete } from "@/lib/ecosystem/types";
+import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
 import type { PublicAthleteProduct } from "@/lib/ecosystem/types";
 import { AccessBadge } from "./AccessBadge";
 import { SaveButton } from "./SaveButton";
+import { AthletePhoto } from "./AthletePhoto";
 
 function ctaTarget(item: FeedItem, product?: PublicAthleteProduct): { href?: string; to?: string } {
   if (item.type === "drop" && product) {
@@ -41,8 +42,8 @@ export function FeedCard({
     <article className="rounded-2xl border border-border bg-card overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2.5 p-3">
-        <Link to={`/a/${athlete.slug}`} className="h-9 w-9 rounded-full shrink-0 flex items-center justify-center" style={{ background: gradientFor(athlete.slug) }}>
-          <span className="text-[11px] font-black text-white/90">{athleteInitials(athlete)}</span>
+        <Link to={`/a/${athlete.slug}`}>
+          <AthletePhoto athlete={athlete} className="h-9 w-9 rounded-full" textClass="text-[11px]" />
         </Link>
         <div className="min-w-0 flex-1">
           <Link to={`/a/${athlete.slug}`} className="font-semibold text-sm truncate block leading-tight">
