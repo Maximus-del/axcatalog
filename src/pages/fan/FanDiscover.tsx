@@ -1,70 +1,132 @@
-// Athlete discovery — browse and follow athletes across the network.
+// Discover — visual, sectioned athlete + merch + camp discovery.
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { Search } from "lucide-react";
-import { useDiscoverAthletes } from "@/hooks/useDiscoverAthletes";
-import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
-import { AthleteAvatar } from "@/components/fan/AthleteAvatar";
+import { useDiscoverAthletes, useAllAthleteProducts } from "@/hooks/useDiscoverAthletes";
+import { athleteName, type PublicAthlete, type PublicAthleteProduct } from "@/lib/ecosystem/types";
+import { demoCamps } from "@/lib/ecosystem/demo-content";
+import { AthleteCardFeatured, AthleteCardCompact, AthleteRow } from "@/components/fan/ui/AthleteCard";
+import { HorizontalSection } from "@/components/fan/ui/HorizontalSection";
+import { CampCard } from "@/components/fan/ui/CampCard";
+import { ProductCard } from "@/components/fan/ProductCard";
 import { FollowButton } from "@/components/fan/FollowButton";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function FanDiscover() {
   const { data: athletes = [], isLoading } = useDiscoverAthletes();
+  const { data: products = [] } = useAllAthleteProducts(24);
   const [q, setQ] = useState("");
 
-  const filtered = useMemo(() => {
+  const list = athletes as PublicAthlete[];
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of list) m.set(a.id, athleteName(a));
+    return m;
+  }, [list]);
+
+  const searchResults = useMemo(() => {
     const term = q.trim().toLowerCase();
-    const list = athletes as PublicAthlete[];
-    if (!term) return list;
+    if (!term) return null;
     return list.filter((a) =>
-      [athleteName(a), a.position, a.team_name, a.league, a.org_name]
-        .filter(Boolean)
-        .some((v) => (v as string).toLowerCase().includes(term)),
+      [athleteName(a), a.position, a.team_name, a.league].filter(Boolean).some((v) => (v as string).toLowerCase().includes(term)),
     );
-  }, [athletes, q]);
+  }, [list, q]);
+
+  const featured = list.slice(0, 6);
+  const trending = list.slice(6, 16);
+  const nfl = list.filter((a) => a.league === "NFL");
+  const college = list.filter((a) => a.league === "NCAA");
+  const rising = list.slice(-8);
+  const camps = useMemo(
+    () => demoCamps(list.map((a) => ({ id: a.id, slug: a.slug, first: a.first_name }))).slice(0, 8),
+    [list],
+  );
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-black tracking-tight">Discover athletes</h1>
-        <p className="text-sm text-muted-foreground mt-1">Follow athletes to personalize your feed.</p>
-      </div>
-
-      <div className="relative">
+    <div className="space-y-7">
+      <div className="relative sticky top-14 z-30 bg-background/90 backdrop-blur py-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
           className="portal-input w-full pl-9"
-          placeholder="Search by name, position, team…"
+          placeholder="Search athletes, teams, sports..."
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
       </div>
 
       {isLoading ? (
-        <div className="space-y-2.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-20 rounded-2xl" />
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-2xl" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground py-10 text-center">No athletes match “{q}”.</p>
+      ) : searchResults ? (
+        searchResults.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-10 text-center">No athletes match “{q}”.</p>
+        ) : (
+          <ul className="space-y-2.5">
+            {searchResults.map((a) => (
+              <AthleteRow key={a.id} athlete={a}>
+                <FollowButton athleteId={a.id} />
+              </AthleteRow>
+            ))}
+          </ul>
+        )
       ) : (
-        <ul className="space-y-2.5">
-          {filtered.map((a) => (
-            <li key={a.id} className="rounded-2xl border border-border bg-card p-3 flex items-center gap-3">
-              <Link to={`/a/${a.slug}`} className="shrink-0">
-                <AthleteAvatar athlete={a} />
-              </Link>
-              <Link to={`/a/${a.slug}`} className="min-w-0 flex-1">
-                <div className="font-semibold truncate">{athleteName(a)}</div>
-                <div className="text-[12px] text-muted-foreground truncate">
-                  {[a.position, a.team_name, a.league].filter(Boolean).join(" · ") || "Athlete"}
+        <>
+          <HorizontalSection title="Featured">
+            {featured.map((a) => (
+              <AthleteCardFeatured key={a.id} athlete={a} />
+            ))}
+          </HorizontalSection>
+
+          {trending.length > 0 && (
+            <HorizontalSection title="Trending Athletes">
+              {trending.map((a) => (
+                <AthleteCardCompact key={a.id} athlete={a} />
+              ))}
+            </HorizontalSection>
+          )}
+
+          {products.length > 0 && (
+            <HorizontalSection title="Upcoming Drops">
+              {(products as PublicAthleteProduct[]).slice(0, 12).map((p) => (
+                <div key={p.id} className="w-[160px] shrink-0 snap-start">
+                  <ProductCard product={p} athleteName={nameById.get(p.athlete_id)} />
                 </div>
-              </Link>
-              <FollowButton athleteId={a.id} />
-            </li>
-          ))}
-        </ul>
+              ))}
+            </HorizontalSection>
+          )}
+
+          {nfl.length > 0 && (
+            <HorizontalSection title="NFL">
+              {nfl.slice(0, 14).map((a) => (
+                <AthleteCardCompact key={a.id} athlete={a} />
+              ))}
+            </HorizontalSection>
+          )}
+
+          {college.length > 0 && (
+            <HorizontalSection title="College">
+              {college.map((a) => (
+                <AthleteCardCompact key={a.id} athlete={a} />
+              ))}
+            </HorizontalSection>
+          )}
+
+          <HorizontalSection title="Upcoming Camps" action={{ label: "See all", to: "/feed/camps" }}>
+            {camps.map((c) => (
+              <CampCard key={c.id} camp={c} athleteName={nameById.get(c.athleteId)} />
+            ))}
+          </HorizontalSection>
+
+          {rising.length > 0 && (
+            <HorizontalSection title="Rising">
+              {rising.map((a) => (
+                <AthleteCardCompact key={a.id} athlete={a} />
+              ))}
+            </HorizontalSection>
+          )}
+        </>
       )}
     </div>
   );

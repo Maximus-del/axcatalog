@@ -56,6 +56,38 @@ export function useAthleteProducts(athleteId: string | undefined) {
   });
 }
 
+export function useProductById(id: string | undefined) {
+  return useQuery({
+    queryKey: ["public-product", id],
+    enabled: !!id,
+    queryFn: async (): Promise<PublicAthleteProduct | null> => {
+      const { data, error } = await supabase
+        .from("public_athlete_products" as never)
+        .select(PRODUCT_COLS)
+        .eq("id", id!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as unknown as PublicAthleteProduct | null) ?? null;
+    },
+  });
+}
+
+/** All published athlete products (network-wide) — drives Shop + Discover drops. */
+export function useAllAthleteProducts(limit = 48) {
+  return useQuery({
+    queryKey: ["all-athlete-products", limit],
+    queryFn: async (): Promise<PublicAthleteProduct[]> => {
+      const { data, error } = await supabase
+        .from("public_athlete_products" as never)
+        .select(PRODUCT_COLS)
+        .order("updated_at", { ascending: false })
+        .limit(limit);
+      if (error) throw error;
+      return (data ?? []) as unknown as PublicAthleteProduct[];
+    },
+  });
+}
+
 /** Products across a set of followed athletes — the personalized feed source. */
 export function useFeedProducts(athleteIds: string[]) {
   const key = [...athleteIds].sort().join(",");

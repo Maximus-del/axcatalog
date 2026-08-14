@@ -85,7 +85,14 @@ import FanHome from "./pages/fan/FanHome";
 import FanDiscover from "./pages/fan/FanDiscover";
 import FanFollowing from "./pages/fan/FanFollowing";
 import FanProfile from "./pages/fan/FanProfile";
+import FanAccess from "./pages/fan/FanAccess";
+import FanShop from "./pages/fan/FanShop";
+import FanSaved from "./pages/fan/FanSaved";
+import FanCamps from "./pages/fan/FanCamps";
+import FanNotifications from "./pages/fan/FanNotifications";
+import FanOnboarding from "./pages/fan/FanOnboarding";
 import AthletePublicProfile from "./pages/fan/AthletePublicProfile";
+import ProductDetail from "./pages/fan/ProductDetail";
 
 const queryClient = new QueryClient();
 
@@ -106,6 +113,15 @@ const App = () => (
             {/* Goat Farm Access (fan) — public entry + shareable athlete pages */}
             <Route path="/join" element={<FanJoin />} />
             <Route path="/a/:slug" element={<AthletePublicProfile />} />
+            <Route path="/p/:id" element={<ProductDetail />} />
+            <Route
+              path="/welcome"
+              element={
+                <RequireFan>
+                  <FanOnboarding />
+                </RequireFan>
+              }
+            />
 
             {/* Fan feed (Goat Farm Access) */}
             <Route
@@ -118,6 +134,11 @@ const App = () => (
             >
               <Route index element={<FanHome />} />
               <Route path="discover" element={<FanDiscover />} />
+              <Route path="access" element={<FanAccess />} />
+              <Route path="shop" element={<FanShop />} />
+              <Route path="camps" element={<FanCamps />} />
+              <Route path="saved" element={<FanSaved />} />
+              <Route path="notifications" element={<FanNotifications />} />
               <Route path="following" element={<FanFollowing />} />
               <Route path="profile" element={<FanProfile />} />
             </Route>

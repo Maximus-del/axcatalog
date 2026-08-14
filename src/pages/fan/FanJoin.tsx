@@ -39,7 +39,7 @@ export default function FanJoin() {
       await createFanProfile(user.id, displayName.trim());
       reload();
       toast.success("Goat Farm Access is live");
-      navigate("/feed", { replace: true });
+      navigate("/welcome", { replace: true });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create your access");
     } finally {
@@ -62,7 +62,7 @@ export default function FanJoin() {
         await createFanProfile(data.user.id, displayName.trim());
         reload();
         toast.success("Welcome to Goat Farm Access");
-        navigate("/feed", { replace: true });
+        navigate("/welcome", { replace: true });
       } else {
         setSentConfirm(true);
       }

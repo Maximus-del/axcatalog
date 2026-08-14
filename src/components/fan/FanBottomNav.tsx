@@ -1,6 +1,6 @@
-// Mobile-first primary nav for Goat Farm Access: Feed · Discover · Following · You.
+// Mobile-first premium bottom nav: Home · Discover · Access · Shop · You.
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Compass, Star, User, type LucideIcon } from "lucide-react";
+import { Home, Compass, Sparkles, ShoppingBag, User, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Slot {
@@ -11,9 +11,10 @@ interface Slot {
 }
 
 const SLOTS: Slot[] = [
-  { label: "Feed", icon: Home, to: "/feed", end: true },
+  { label: "Home", icon: Home, to: "/feed", end: true },
   { label: "Discover", icon: Compass, to: "/feed/discover" },
-  { label: "Following", icon: Star, to: "/feed/following" },
+  { label: "Access", icon: Sparkles, to: "/feed/access" },
+  { label: "Shop", icon: ShoppingBag, to: "/feed/shop" },
   { label: "You", icon: User, to: "/feed/profile" },
 ];
 
@@ -35,12 +36,12 @@ export function FanBottomNav() {
                 aria-label={s.label}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative w-full h-16 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors",
+                  "relative w-full h-16 flex flex-col items-center justify-center gap-1 text-[10px] font-semibold transition-colors",
                   active ? "text-accent" : "text-muted-foreground",
                 )}
               >
                 {active && <span className="absolute top-0 h-0.5 w-8 rounded-full bg-accent" aria-hidden />}
-                <Icon className={cn("h-[22px] w-[22px]", active && "drop-shadow-[0_0_6px_hsl(var(--accent)/0.5)]")} />
+                <Icon className={cn("h-[21px] w-[21px]", active && "drop-shadow-[0_0_6px_hsl(var(--accent)/0.5)]")} />
                 <span className="leading-none">{s.label}</span>
               </NavLink>
             </li>

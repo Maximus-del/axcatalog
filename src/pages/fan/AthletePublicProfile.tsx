@@ -1,23 +1,52 @@
-// Public, shareable athlete profile at /a/:slug. Works signed-out (with a
-// prompt to join) or signed-in (with follow + access). Reads public views only.
-import { Link } from "react-router-dom";
-import { useParams } from "react-router-dom";
-import { ArrowLeft, Star } from "lucide-react";
+// Public, shareable athlete profile at /a/:slug — hero + tabbed experience
+// (Home / Access / Shop / Camps / About). Works signed-out (prompt to join)
+// or signed-in (follow + access). Reads public views + demo content only.
+import { useMemo } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Star, Instagram, Twitter, Globe } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { useAthletePublic, useAthleteProducts } from "@/hooks/useDiscoverAthletes";
-import { athleteName } from "@/lib/ecosystem/types";
-import { AthleteAvatar } from "@/components/fan/AthleteAvatar";
+import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
+import { demoFeedForAthlete, demoCampForAthlete } from "@/lib/ecosystem/demo-content";
+import { ACCESS_TYPES } from "@/lib/ecosystem/content-types";
+import { AthleteHero, AthleteStatBar } from "@/components/fan/ui/AthleteHero";
 import { FollowButton } from "@/components/fan/FollowButton";
+import { AccessButton } from "@/components/fan/ui/AccessButton";
+import { FeedCard } from "@/components/fan/ui/FeedCard";
+import { CampCard } from "@/components/fan/ui/CampCard";
 import { ProductCard } from "@/components/fan/ProductCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+const TABS = ["home", "access", "shop", "camps", "about"] as const;
+type Tab = (typeof TABS)[number];
+
+function mockFollowers(slug: string): string {
+  let h = 0;
+  for (const c of slug) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `${(h % 380) + 20}K`;
+}
 
 export default function AthletePublicProfile() {
   const { slug } = useParams<{ slug: string }>();
   const { session, hasFanProfile } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const tab = (TABS.includes(params.get("tab") as Tab) ? params.get("tab") : "home") as Tab;
   const { data: athlete, isLoading } = useAthletePublic(slug);
   const { data: products = [], isLoading: productsLoading } = useAthleteProducts(athlete?.id);
 
   const canFollow = !!session && hasFanProfile;
+  const feed = useMemo(
+    () => (athlete ? demoFeedForAthlete({ id: athlete.id, slug: athlete.slug, first: athlete.first_name }) : []),
+    [athlete],
+  );
+  const accessContent = feed.filter((f) => ACCESS_TYPES.has(f.type));
+  const camp = athlete ? demoCampForAthlete({ id: athlete.id, slug: athlete.slug, first: athlete.first_name }) : null;
+
+  function setTab(t: Tab) {
+    params.set("tab", t);
+    setParams(params, { replace: true });
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-16">
@@ -30,15 +59,9 @@ export default function AthletePublicProfile() {
         </div>
       </header>
 
-      <main className="max-w-[1100px] mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-[1100px] mx-auto px-4 sm:px-6 py-5">
         {isLoading ? (
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-16 w-16 rounded-full" />
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-          </div>
+          <Skeleton className="h-56 rounded-3xl" />
         ) : !athlete ? (
           <div className="py-20 text-center text-muted-foreground">
             <p>This athlete isn’t available.</p>
@@ -46,58 +69,119 @@ export default function AthletePublicProfile() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-4">
-              <AthleteAvatar athlete={athlete} size="lg" />
-              <div className="min-w-0 flex-1">
-                <h1 className="text-2xl font-black tracking-tight truncate">{athleteName(athlete)}</h1>
-                <p className="text-sm text-muted-foreground truncate">
-                  {[athlete.position, athlete.team_name, athlete.league].filter(Boolean).join(" · ") || "Athlete"}
-                </p>
-              </div>
+            <AthleteHero athlete={athlete} />
+
+            {/* Actions */}
+            <div className="flex gap-2 mt-3">
               {canFollow ? (
-                <FollowButton athleteId={athlete.id} />
+                <>
+                  <FollowButton athleteId={athlete.id} className="flex-1" />
+                  <AccessButton athleteId={athlete.id} className="flex-1" />
+                </>
               ) : (
-                <Link to="/join" className="h-9 px-4 rounded-full bg-accent text-accent-foreground font-bold text-[13px] inline-flex items-center gap-1.5">
-                  <Star className="h-4 w-4" /> Follow
+                <Link to="/join" className="flex-1 h-9 rounded-full bg-accent text-accent-foreground font-bold text-[13px] inline-flex items-center justify-center gap-1.5">
+                  <Star className="h-4 w-4" /> Join to follow
                 </Link>
               )}
             </div>
 
-            {/* Access teaser */}
-            <div className="mt-6 rounded-2xl border border-accent/30 bg-accent/[0.06] p-4 flex items-start gap-3">
-              <span className="h-9 w-9 rounded-lg bg-accent/15 flex items-center justify-center shrink-0">
-                <Star className="h-4 w-4 text-accent" />
-              </span>
-              <div>
-                <div className="font-bold text-sm">{athleteName(athlete).split(" ")[0]} Access</div>
-                <p className="text-[12px] text-muted-foreground mt-0.5">
-                  Follow for free drops &amp; updates. Exclusive Access &amp; VIP tiers are coming soon.
-                </p>
-              </div>
+            <AthleteStatBar followers={mockFollowers(athlete.slug)} drops={products.length} posts={accessContent.length} />
+
+            {/* Tabs */}
+            <div className="flex gap-1 mt-5 border-b border-border overflow-x-auto scroll-touch">
+              {TABS.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={cn(
+                    "shrink-0 h-10 px-3.5 text-sm font-bold capitalize border-b-2 -mb-px transition-colors",
+                    tab === t ? "border-accent text-accent" : "border-transparent text-muted-foreground",
+                  )}
+                >
+                  {t}
+                </button>
+              ))}
             </div>
 
-            {/* Merch */}
-            <section className="mt-7">
-              <h2 className="ax-section-header mb-3">Merch</h2>
-              {productsLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square rounded-2xl" />
-                  ))}
-                </div>
-              ) : products.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-8 text-center">No merch published yet.</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {products.map((p) => (
-                    <ProductCard key={p.id} product={p} />
-                  ))}
-                </div>
-              )}
-            </section>
+            <div className="mt-5">
+              {tab === "home" && <ProfileFeed athlete={athlete} items={feed} />}
+              {tab === "access" && <ProfileAccess athlete={athlete} canFollow={canFollow} items={accessContent} />}
+              {tab === "shop" && <ProfileShop products={products} loading={productsLoading} />}
+              {tab === "camps" && camp && <div className="max-w-sm"><CampCard camp={camp} /></div>}
+              {tab === "about" && <ProfileAbout athlete={athlete} />}
+            </div>
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function ProfileFeed({ athlete, items }: { athlete: PublicAthlete; items: ReturnType<typeof demoFeedForAthlete> }) {
+  if (items.length === 0) return <p className="text-sm text-muted-foreground py-8 text-center">No updates yet.</p>;
+  return (
+    <div className="space-y-4 max-w-xl">
+      {items.map((item) => <FeedCard key={item.id} item={item} athlete={athlete} />)}
+    </div>
+  );
+}
+
+function ProfileAccess({ athlete, canFollow, items }: { athlete: PublicAthlete; canFollow: boolean; items: ReturnType<typeof demoFeedForAthlete> }) {
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-accent/30 bg-accent/[0.06] p-4">
+        <div className="font-bold">{athlete.first_name} Access</div>
+        <p className="text-[13px] text-muted-foreground mt-1">
+          Exclusive content, early drops, and member perks. Access is a free preview for now.
+        </p>
+        {canFollow && <AccessButton athleteId={athlete.id} className="mt-3" />}
+      </div>
+      <div className="space-y-4 max-w-xl">
+        {items.map((item) => <FeedCard key={item.id} item={item} athlete={athlete} />)}
+      </div>
+    </div>
+  );
+}
+
+function ProfileShop({ products, loading }: { products: ReturnType<typeof useAthleteProducts>["data"]; loading: boolean }) {
+  if (loading) {
+    return <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="aspect-square rounded-2xl" />)}</div>;
+  }
+  if (!products || products.length === 0) return <p className="text-sm text-muted-foreground py-8 text-center">No merch published yet.</p>;
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {products.map((p) => <ProductCard key={p.id} product={p} />)}
+    </div>
+  );
+}
+
+function ProfileAbout({ athlete }: { athlete: PublicAthlete }) {
+  const meta = [
+    ["Position", athlete.position],
+    ["Team", athlete.team_name],
+    ["League", athlete.league],
+  ].filter(([, v]) => v);
+  return (
+    <div className="space-y-5 max-w-lg">
+      <p className="text-sm text-muted-foreground">
+        {athleteName(athlete)} on Goat Farm Access — merch, exclusive content, camps, and events in one place.
+      </p>
+      <div className="rounded-2xl border border-border bg-card divide-y divide-border">
+        {meta.map(([k, v]) => (
+          <div key={k as string} className="flex items-center justify-between px-4 h-12">
+            <span className="text-[13px] text-muted-foreground">{k}</span>
+            <span className="text-sm font-semibold">{v}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        {[Instagram, Twitter, Globe].map((Icon, i) => (
+          <span key={i} className="h-10 w-10 rounded-xl border border-border flex items-center justify-center text-muted-foreground">
+            <Icon className="h-4 w-4" />
+          </span>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">Bio &amp; social links are placeholder content for this demo athlete.</p>
     </div>
   );
 }

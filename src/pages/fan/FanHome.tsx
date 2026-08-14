@@ -1,36 +1,72 @@
-// Personalized fan feed — new merch from athletes you follow.
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
-import { Compass, Sparkles } from "lucide-react";
+// Personalized Home feed — Stories row + filter chips + mixed feed cards.
+// Demo narrative content is layered over REAL product drops for followed
+// athletes who have published merch.
+import { useMemo, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { useFollows } from "@/hooks/useFan";
 import { useDiscoverAthletes, useFeedProducts } from "@/hooks/useDiscoverAthletes";
-import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
-import { AthleteAvatar } from "@/components/fan/AthleteAvatar";
-import { ProductCard } from "@/components/fan/ProductCard";
+import type { PublicAthlete, PublicAthleteProduct } from "@/lib/ecosystem/types";
+import { demoFeed } from "@/lib/ecosystem/demo-content";
+import type { FeedItem, FeedType } from "@/lib/ecosystem/content-types";
+import { StoryRow } from "@/components/fan/ui/StoryRow";
+import { FeedCard } from "@/components/fan/ui/FeedCard";
+import { EmptyState } from "@/components/fan/ui/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+
+type Filter = "for_you" | "drops" | "content" | "camps";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "for_you", label: "For You" },
+  { key: "drops", label: "Drops" },
+  { key: "content", label: "Content" },
+  { key: "camps", label: "Camps" },
+];
+const FILTER_TYPES: Record<Filter, Set<FeedType> | null> = {
+  for_you: null,
+  drops: new Set<FeedType>(["drop"]),
+  content: new Set<FeedType>(["exclusive", "photoshoot", "update", "article"]),
+  camps: new Set<FeedType>(["camp", "event"]),
+};
 
 export default function FanHome() {
   const { followedIds, isLoading: followsLoading } = useFollows();
   const followedArr = useMemo(() => [...followedIds], [followedIds]);
   const { data: athletes = [] } = useDiscoverAthletes();
-  const { data: products = [], isLoading: productsLoading } = useFeedProducts(followedArr);
-
-  const nameById = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const a of athletes as PublicAthlete[]) m.set(a.id, athleteName(a));
-    return m;
-  }, [athletes]);
+  const { data: products = [] } = useFeedProducts(followedArr);
+  const [filter, setFilter] = useState<Filter>("for_you");
 
   const followedAthletes = useMemo(
     () => (athletes as PublicAthlete[]).filter((a) => followedIds.has(a.id)),
     [athletes, followedIds],
   );
+  const athleteById = useMemo(() => {
+    const m = new Map<string, PublicAthlete>();
+    for (const a of followedAthletes) m.set(a.id, a);
+    return m;
+  }, [followedAthletes]);
+  const productByAthlete = useMemo(() => {
+    const m = new Map<string, PublicAthleteProduct>();
+    for (const p of products as PublicAthleteProduct[]) if (!m.has(p.athlete_id)) m.set(p.athlete_id, p);
+    return m;
+  }, [products]);
+
+  const feed = useMemo<FeedItem[]>(
+    () => demoFeed(followedAthletes.map((a) => ({ id: a.id, slug: a.slug, first: a.first_name }))),
+    [followedAthletes],
+  );
+  const newIds = useMemo(() => new Set(feed.map((f) => f.athleteId)), [feed]);
+
+  const visible = useMemo(() => {
+    const types = FILTER_TYPES[filter];
+    return types ? feed.filter((f) => types.has(f.type)) : feed;
+  }, [feed, filter]);
 
   if (followsLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square rounded-2xl" />
+      <div className="space-y-4">
+        <Skeleton className="h-16 rounded-2xl" />
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-64 rounded-2xl" />
         ))}
       </div>
     );
@@ -38,67 +74,59 @@ export default function FanHome() {
 
   if (followedIds.size === 0) {
     return (
-      <div className="pt-6">
-        <div className="rounded-3xl border border-dashed border-border bg-card/40 p-10 text-center">
-          <div className="mx-auto h-14 w-14 rounded-2xl bg-accent/15 flex items-center justify-center mb-4">
-            <Sparkles className="h-7 w-7 text-accent" />
-          </div>
-          <h2 className="text-lg font-black">Build your feed</h2>
-          <p className="text-sm text-muted-foreground mt-2 max-w-xs mx-auto">
-            Follow athletes to see their newest merch, drops, and exclusive content here.
-          </p>
-          <Link
-            to="/feed/discover"
-            className="mt-5 inline-flex items-center gap-2 h-11 px-5 rounded-full bg-accent text-accent-foreground font-bold text-sm"
-          >
-            <Compass className="h-4 w-4" /> Discover athletes
-          </Link>
-        </div>
-      </div>
+      <EmptyState
+        icon={Sparkles}
+        title="Your Access starts here"
+        body="Follow athletes to get drops, camps, content, and updates in one place."
+        ctaLabel="Discover Athletes"
+        ctaTo="/feed/discover"
+      />
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Following row */}
+    <div className="space-y-5">
+      {/* Stories */}
       <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="ax-section-header">Following</h2>
-          <Link to="/feed/following" className="text-[12px] font-semibold text-accent">Manage</Link>
-        </div>
-        <div className="flex gap-4 overflow-x-auto -mx-4 px-4 pb-1">
-          {followedAthletes.map((a) => (
-            <Link key={a.id} to={`/a/${a.slug}`} className="flex flex-col items-center gap-1.5 shrink-0 w-16">
-              <AthleteAvatar athlete={a} />
-              <span className="text-[11px] text-muted-foreground text-center leading-tight truncate w-full">
-                {athleteName(a).split(" ")[0]}
-              </span>
-            </Link>
-          ))}
-        </div>
+        <h2 className="ax-section-header mb-3">Your Access</h2>
+        <StoryRow athletes={followedAthletes} newIds={newIds} />
       </section>
 
+      {/* Filters */}
+      <div className="flex gap-2 overflow-x-auto -mx-4 px-4 scroll-touch sticky top-14 z-30 bg-background/80 backdrop-blur py-1">
+        {FILTERS.map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={cn(
+              "shrink-0 h-8 px-3.5 rounded-full text-[13px] font-semibold border transition-colors",
+              filter === f.key ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground",
+            )}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       {/* Feed */}
-      <section>
-        <h2 className="ax-section-header mb-3">New from athletes you follow</h2>
-        {productsLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="aspect-square rounded-2xl" />
-            ))}
-          </div>
-        ) : products.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            No merch from your athletes yet — check back soon.
-          </p>
+      <div className="space-y-4 max-w-xl">
+        {visible.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-10 text-center">Nothing here yet — check another filter.</p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {products.map((p) => (
-              <ProductCard key={p.id} product={p} athleteName={nameById.get(p.athlete_id)} />
-            ))}
-          </div>
+          visible.map((item) => {
+            const athlete = athleteById.get(item.athleteId);
+            if (!athlete) return null;
+            return (
+              <FeedCard
+                key={item.id}
+                item={item}
+                athlete={athlete}
+                product={item.type === "drop" ? productByAthlete.get(item.athleteId) : undefined}
+              />
+            );
+          })
         )}
-      </section>
+      </div>
     </div>
   );
 }
