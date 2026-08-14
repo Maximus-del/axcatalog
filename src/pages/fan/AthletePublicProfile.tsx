@@ -3,18 +3,24 @@
 // engine so content links to merch ("Shop the Look").
 import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Star, Instagram, Twitter, Globe } from "lucide-react";
+import { ArrowLeft, Star, Instagram, Twitter, Globe, MapPin, Calendar, ExternalLink } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { useAthletePublic, useAthleteProducts } from "@/hooks/useDiscoverAthletes";
+import { useAthleteContent, useAthleteEvents } from "@/hooks/useContent";
+import { useAthleteAccess } from "@/hooks/useFan";
 import { athleteName, type PublicAthlete, type PublicAthleteProduct } from "@/lib/ecosystem/types";
 import { demoCampForAthlete } from "@/lib/ecosystem/demo-content";
 import { buildFeed, type EnrichedFeedItem } from "@/lib/ecosystem/feed-engine";
 import { ACCESS_TYPES } from "@/lib/ecosystem/content-types";
+import { earlyAccess } from "@/lib/ecosystem/access";
+import type { PublicEvent } from "@/lib/ecosystem/content";
 import { AthleteHero, AthleteStatBar } from "@/components/fan/ui/AthleteHero";
 import { FollowButton } from "@/components/fan/FollowButton";
 import { AccessButton } from "@/components/fan/ui/AccessButton";
 import { FeedCard } from "@/components/fan/ui/FeedCard";
 import { CampCard } from "@/components/fan/ui/CampCard";
+import { ContentCard } from "@/components/fan/ui/ContentCard";
+import { AccessPlans } from "@/components/fan/ui/AccessPlans";
 import { ProductCard } from "@/components/fan/ProductCard";
 import { HorizontalSection } from "@/components/fan/ui/HorizontalSection";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +42,9 @@ export default function AthletePublicProfile() {
   const tab = (TABS.includes(params.get("tab") as Tab) ? params.get("tab") : "home") as Tab;
   const { data: athlete, isLoading } = useAthletePublic(slug);
   const { data: products = [], isLoading: productsLoading } = useAthleteProducts(athlete?.id);
+  const { data: realContent = [] } = useAthleteContent(athlete?.id);
+  const { data: realEvents = [] } = useAthleteEvents(athlete?.id);
+  const access = useAthleteAccess(athlete?.id);
 
   const canFollow = !!session && hasFanProfile;
   const feed = useMemo<EnrichedFeedItem[]>(
@@ -43,6 +52,7 @@ export default function AthletePublicProfile() {
     [athlete, products],
   );
   const accessContent = feed.filter((f) => ACCESS_TYPES.has(f.type));
+  const accessRealContent = realContent.filter((c) => c.visibility === "access" || c.visibility === "vip");
   const camp = athlete ? demoCampForAthlete({ id: athlete.id, slug: athlete.slug, first: athlete.first_name }) : null;
 
   function setTab(t: Tab) {
@@ -106,12 +116,42 @@ export default function AthletePublicProfile() {
                       ))}
                     </HorizontalSection>
                   )}
+                  {realContent.length > 0 && (
+                    <section>
+                      <h2 className="ax-section-header mb-3">Latest</h2>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {realContent.slice(0, 6).map((c) => <ContentCard key={c.id} content={c} access={access} />)}
+                      </div>
+                    </section>
+                  )}
                   <ProfileFeed athlete={athlete} items={feed} />
                 </div>
               )}
-              {tab === "access" && <ProfileAccess athlete={athlete} canFollow={canFollow} items={accessContent} />}
+              {tab === "access" && (
+                <div className="space-y-6">
+                  <AccessPlans athleteId={athlete.id} canFollow={canFollow} />
+                  {accessRealContent.length > 0 && (
+                    <section>
+                      <h2 className="ax-section-header mb-3">Access Content</h2>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {accessRealContent.map((c) => <ContentCard key={c.id} content={c} access={access} />)}
+                      </div>
+                    </section>
+                  )}
+                  {accessContent.length > 0 && accessRealContent.length === 0 && (
+                    <div className="space-y-4 max-w-xl">
+                      {accessContent.map((item) => <FeedCard key={item.id} item={item} athlete={athlete} />)}
+                    </div>
+                  )}
+                </div>
+              )}
               {tab === "shop" && <ProfileShop products={products} loading={productsLoading} />}
-              {tab === "camps" && camp && <div className="max-w-sm"><CampCard camp={camp} block /></div>}
+              {tab === "camps" && (
+                <div className="space-y-3 max-w-lg">
+                  {realEvents.map((e) => <EventRow key={e.id} event={e} isMember={access.isMember} />)}
+                  {camp && realEvents.length === 0 && <CampCard camp={camp} block />}
+                </div>
+              )}
               {tab === "about" && <ProfileAbout athlete={athlete} />}
             </div>
           </>
@@ -130,17 +170,25 @@ function ProfileFeed({ athlete, items }: { athlete: PublicAthlete; items: Enrich
   );
 }
 
-function ProfileAccess({ athlete, canFollow, items }: { athlete: PublicAthlete; canFollow: boolean; items: EnrichedFeedItem[] }) {
+function EventRow({ event, isMember }: { event: PublicEvent; isMember: boolean }) {
+  const early = earlyAccess(event.access_date, event.public_date, isMember);
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-accent/30 bg-accent/[0.06] p-4">
-        <div className="font-bold">{athlete.first_name} Access</div>
-        <p className="text-[13px] text-muted-foreground mt-1">Exclusive content, early drops, and member perks. Access is a free preview for now.</p>
-        {canFollow && <AccessButton athleteId={athlete.id} className="mt-3" />}
+    <div className="rounded-2xl border border-border bg-card p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-black uppercase tracking-wider text-accent">{event.type.replace("_", " ")}</span>
+        <span className="text-[11px] text-muted-foreground capitalize">{event.status.replace("_", " ")}</span>
       </div>
-      <div className="space-y-4 max-w-xl">
-        {items.map((item) => <FeedCard key={item.id} item={item} athlete={athlete} />)}
+      <div className="font-bold mt-1">{event.name}</div>
+      <div className="mt-1.5 space-y-0.5 text-[12px] text-muted-foreground">
+        {event.city && <div className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> {event.city}</div>}
+        {event.event_date && <div className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {new Date(event.event_date).toLocaleDateString()}</div>}
       </div>
+      {early.label && <div className="mt-2 text-[12px] font-bold text-accent">{early.label}</div>}
+      {event.registration_url && (
+        <a href={event.registration_url} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-accent text-accent-foreground font-bold text-[13px]">
+          Register <ExternalLink className="h-4 w-4" />
+        </a>
+      )}
     </div>
   );
 }

@@ -42,6 +42,9 @@ export interface PublicAthleteProduct {
   updated_at: string;
   image_bucket: string | null;
   image_path: string | null;
+  access_date?: string | null;
+  public_date?: string | null;
+  drop_date?: string | null;
 }
 
 export interface FanProfile {

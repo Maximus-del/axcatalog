@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { LogOut, TrendingUp, ShoppingBag, Package, Wallet } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { usePortalData } from "@/components/portal/PortalDataContext";
+import { AccessSummaryCard } from "@/components/portal/AccessSummaryCard";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import { getTierProgress, fmtUsd } from "@/lib/portal-config";
 import { CodeVault } from "@/components/portal/CodeVault";
@@ -72,6 +73,8 @@ export default function PortalProfile() {
           );
         })}
       </section>
+
+      <AccessSummaryCard athleteId={athlete.id} />
 
       {/* Tier progress */}
       <section className="rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/12 via-card to-card p-5">

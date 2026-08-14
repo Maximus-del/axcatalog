@@ -17,8 +17,10 @@ import {
   Shirt,
   BarChart3,
   Settings,
-  Frame,
   UserCog,
+  Newspaper,
+  Star,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -39,11 +41,20 @@ interface NavGroup {
 
 const GROUPS: NavGroup[] = [
   {
-    label: "Workspace",
+    label: "Ecosystem",
     items: [
-      { label: "Home", to: "/admin", icon: Home, end: true },
-      { label: "Inbox", to: "/admin/inbox", icon: Inbox },
-      { label: "Tasks", to: "/admin/tasks", icon: CheckSquare },
+      { label: "Overview", to: "/admin", icon: Home, end: true },
+      { label: "Athletes", to: "/admin/athletes", icon: Users },
+      { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      { label: "Content", to: "/admin/content", icon: Newspaper },
+      { label: "Designs", to: "/admin/designs", icon: Palette },
+      { label: "Mockups", to: "/admin/mockups", icon: ImageIcon },
+      { label: "Brand Assets", to: "/admin/brand-assets", icon: Sparkles },
     ],
   },
   {
@@ -52,38 +63,37 @@ const GROUPS: NavGroup[] = [
       { label: "Products", to: "/admin/products", icon: Package },
       { label: "Collections", to: "/admin/collections", icon: FolderKanban },
       { label: "Orders", to: "/admin/orders", icon: ClipboardList },
+      { label: "Blanks", to: "/admin/blanks", icon: Shirt },
       { label: "Pricing", to: "/admin/pricing-links", icon: DollarSign },
+    ],
+  },
+  {
+    label: "Access",
+    items: [{ label: "Memberships", to: "/admin/access", icon: Star }],
+  },
+  {
+    label: "Events",
+    items: [{ label: "Camps & Events", to: "/admin/events", icon: CalendarDays }],
+  },
+  {
+    label: "Operations",
+    items: [
+      { label: "Inbox", to: "/admin/inbox", icon: Inbox },
+      { label: "Tasks", to: "/admin/tasks", icon: CheckSquare },
+      { label: "Fulfillment", to: "/admin/fulfillment", icon: Truck },
+      { label: "Print Queue", to: "/admin/print-queue", icon: Printer },
     ],
   },
   {
     label: "Clients",
     items: [
-      { label: "Athletes", to: "/admin/athletes", icon: Users },
       { label: "Teams", to: "/admin/teams", icon: Trophy },
       { label: "Organizations", to: "/admin/organizations", icon: Building2 },
     ],
   },
   {
-    label: "Creative",
-    items: [
-      { label: "Designs", to: "/admin/designs", icon: Palette },
-      { label: "Mockups", to: "/admin/mockups", icon: ImageIcon },
-      { label: "Brand Assets", to: "/admin/brand-assets", icon: Sparkles },
-    ],
-  },
-  {
-    label: "Operations",
-    items: [
-      { label: "Fulfillment", to: "/admin/fulfillment", icon: Truck },
-      { label: "Print Queue", to: "/admin/print-queue", icon: Printer },
-      { label: "Print Zones", to: "/admin/print-zones", icon: Frame },
-      { label: "Blanks", to: "/admin/blanks", icon: Shirt },
-    ],
-  },
-  {
     label: "System",
     items: [
-      { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
       { label: "Team", to: "/admin/users", icon: UserCog },
       { label: "Settings", to: "/admin/settings", icon: Settings },
     ],

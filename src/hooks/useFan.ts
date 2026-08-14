@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import type { AthleteFollowRow, FollowState } from "@/lib/ecosystem/types";
+import { accessStateFor } from "@/lib/ecosystem/access";
 
 export function useFollows() {
   const { user } = useAuth();
@@ -35,6 +36,13 @@ export function useFollows() {
   }, [rows]);
 
   return { ...query, rows, followedIds, byAthlete };
+}
+
+/** The signed-in fan's access capabilities for a specific athlete. */
+export function useAthleteAccess(athleteId: string | undefined) {
+  const { byAthlete, isLoading } = useFollows();
+  const state = athleteId ? byAthlete.get(athleteId)?.state : undefined;
+  return { ...accessStateFor(state), state, loading: isLoading };
 }
 
 export function useFollowActions() {

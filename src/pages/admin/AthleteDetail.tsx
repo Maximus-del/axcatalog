@@ -13,6 +13,12 @@ import {
   type AthleteFormValues,
 } from "@/components/admin/athletes/AthleteFormDialog";
 import { MembershipFormDialog } from "@/components/admin/athletes/MembershipFormDialog";
+import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
+import { AthleteContentTab } from "@/components/admin/ecosystem/AthleteContentTab";
+import { AthleteAccessTab } from "@/components/admin/ecosystem/AthleteAccessTab";
+import { AthleteEventsTab } from "@/components/admin/ecosystem/AthleteEventsTab";
+
+const MGMT_TABS = ["products", "content", "access", "events"] as const;
 
 const UNTAGGED_KEY = "__untagged__";
 const GENERAL_KEY = "__general__";
@@ -30,6 +36,7 @@ interface Athlete {
   status: "active" | "inactive" | "archived";
   current_team_id: string | null;
   notes: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 interface Membership {
@@ -96,6 +103,7 @@ export default function AthleteDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [membershipOpen, setMembershipOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("");
+  const [mgmtTab, setMgmtTab] = useState<(typeof MGMT_TABS)[number]>("products");
 
   async function load() {
     if (!id) return;
@@ -299,12 +307,17 @@ export default function AthleteDetail() {
       {/* HERO */}
       <header className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-5">
-          <div
-            className="flex items-center justify-center h-24 w-24 rounded-full text-2xl font-bold text-white shrink-0"
-            style={{ background: avatarColorFor(name) }}
-          >
-            {initialsFor(name)}
-          </div>
+          <AthletePhoto
+            athlete={{
+              slug: athlete.slug,
+              image_url: (athlete.metadata as { avatar_url?: string } | null)?.avatar_url ?? null,
+              full_name: name,
+              first_name: athlete.first_name,
+              last_name: athlete.last_name,
+            }}
+            className="h-24 w-24 rounded-full"
+            textClass="text-2xl"
+          />
           <div className="space-y-2">
             <h1 className="text-3xl font-bold">{name}</h1>
             <div className="flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
@@ -324,8 +337,13 @@ export default function AthleteDetail() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" asChild className="gap-2">
+            <Link to={`/a/${athlete.slug}`}>
+              <Eye className="h-4 w-4" /> View Fan Profile
+            </Link>
+          </Button>
+          <Button variant="outline" asChild className="gap-2">
             <Link to={`/portal?as=${athlete.id}`}>
-              <Eye className="h-4 w-4" /> View Portal
+              <Eye className="h-4 w-4" /> Athlete Dashboard
             </Link>
           </Button>
           <Button variant="outline" onClick={() => setMembershipOpen(true)} className="gap-2">
@@ -337,6 +355,32 @@ export default function AthleteDetail() {
         </div>
       </header>
 
+      {/* MANAGEMENT TABS */}
+      <div className="flex gap-1 border-b border-[hsl(var(--ax-border))] overflow-x-auto">
+        {MGMT_TABS.map((m) => (
+          <button
+            key={m}
+            onClick={() => setMgmtTab(m)}
+            className={cn(
+              "shrink-0 h-10 px-4 text-sm font-bold capitalize border-b-2 -mb-px transition-colors",
+              mgmtTab === m
+                ? "border-[hsl(var(--ax-accent))] text-[hsl(var(--ax-accent))]"
+                : "border-transparent text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]",
+            )}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {mgmtTab === "content" ? (
+        <AthleteContentTab athleteId={athlete.id} organizationId={athlete.organization_id} athleteName={name} />
+      ) : mgmtTab === "access" ? (
+        <AthleteAccessTab athleteId={athlete.id} organizationId={athlete.organization_id} />
+      ) : mgmtTab === "events" ? (
+        <AthleteEventsTab athleteId={athlete.id} organizationId={athlete.organization_id} athleteName={name} />
+      ) : (
+      <>
       {/* ERA TABS */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-auto flex-wrap justify-start gap-1">
@@ -483,6 +527,8 @@ export default function AthleteDetail() {
           <StatTile label="Years Active" value={yearsActive} />
         </div>
       </section>
+      </>
+      )}
 
       <AthleteFormDialog
         open={editOpen}

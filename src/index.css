@@ -196,17 +196,18 @@
    automatically. Portal & catalog keep the global dark theme.
    ============================================================ */
 .admin-os {
-  /* Surfaces */
-  --ax-canvas: 240 8% 96%;          /* #F4F4F6 */
-  --ax-sidebar: 240 9% 98%;         /* #FBFBFC */
-  --ax-card: 0 0% 100%;             /* #FFF */
-  --ax-border: 240 6% 93%;          /* #ECECEF */
-  --ax-line: 240 7% 95%;            /* #F1F1F3 */
-  --ax-ink: 222 13% 10%;            /* #16181D */
-  --ax-secondary: 220 6% 45%;       /* #6A707A */
-  --ax-faint: 220 7% 64%;           /* #9CA1AA */
-  --ax-accent: 146 50% 36%;         /* #2E8B57 */
-  --ax-on-accent: 0 0% 100%;
+  /* Surfaces — dark operator theme (Goat Farm language). A single token
+     swap re-skins every admin page; structure/classes unchanged. */
+  --ax-canvas: 0 0% 10%;            /* #1a1a1a page bg */
+  --ax-sidebar: 0 0% 5%;            /* #0d0d0d rail */
+  --ax-card: 0 0% 14%;              /* #242424 panels */
+  --ax-border: 0 0% 21%;            /* #383838 */
+  --ax-line: 0 0% 17%;              /* #2b2b2b */
+  --ax-ink: 0 0% 100%;              /* #fff text */
+  --ax-secondary: 220 9% 65%;       /* #9ca3af muted */
+  --ax-faint: 0 0% 45%;             /* #737373 */
+  --ax-accent: 145 63% 49%;         /* #2ecc71 signature green */
+  --ax-on-accent: 0 0% 5%;          /* near-black on green */
 
   /* Status */
   --ax-amber: 33 75% 52%;           /* #E0922A */
@@ -226,7 +227,7 @@
   --primary-foreground: var(--ax-on-accent);
   --accent: var(--ax-accent);
   --accent-foreground: var(--ax-on-accent);
-  --secondary: 240 9% 97%;
+  --secondary: 0 0% 13%;
   --secondary-foreground: var(--ax-ink);
   --muted: var(--ax-line);
   --muted-foreground: var(--ax-secondary);
@@ -239,18 +240,18 @@
   --sidebar-background: var(--ax-sidebar);
   --sidebar-foreground: var(--ax-ink);
   --sidebar-border: var(--ax-border);
-  --sidebar-accent: 146 50% 36%;
-  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-accent: 145 63% 49%;
+  --sidebar-accent-foreground: 0 0% 5%;
 
-  color-scheme: light;
+  color-scheme: dark;
   color: hsl(var(--ax-ink));
   background: hsl(var(--ax-canvas));
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-feature-settings: 'cv11', 'ss01', 'kern';
   -webkit-font-smoothing: antialiased;
 
-  --shadow-soft-1: 0 1px 2px rgba(20,22,28,.04);
-  --shadow-soft-2: 0 6px 20px rgba(20,22,28,.05);
+  --shadow-soft-1: 0 1px 2px rgba(0,0,0,.3);
+  --shadow-soft-2: 0 8px 24px rgba(0,0,0,.35);
 }
 
 .admin-os .ax-card {
@@ -299,6 +300,21 @@
   color: hsl(var(--ax-accent));
 }
 .admin-os .ax-os-divider { border-color: hsl(var(--ax-line)); }
+
+/* Operator form field */
+.admin-os .ax-field {
+  width: 100%;
+  height: 40px;
+  background: hsl(var(--ax-card));
+  border: 1px solid hsl(var(--ax-border));
+  border-radius: 10px;
+  padding: 0 12px;
+  color: hsl(var(--ax-ink));
+  font-size: 14px;
+}
+.admin-os textarea.ax-field { height: auto; min-height: 40px; padding: 10px 12px; line-height: 1.4; }
+.admin-os .ax-field::placeholder { color: hsl(var(--ax-faint)); }
+.admin-os .ax-field:focus { outline: none; border-color: hsl(var(--ax-accent)); }
 
 /* Portal form input */
 .portal-input {
