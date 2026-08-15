@@ -18,9 +18,11 @@ import { AthleteContentTab } from "@/components/admin/ecosystem/AthleteContentTa
 import { AthleteAccessTab } from "@/components/admin/ecosystem/AthleteAccessTab";
 import { AthleteEventsTab } from "@/components/admin/ecosystem/AthleteEventsTab";
 import { AthleteDropsTab } from "@/components/admin/ecosystem/AthleteDropsTab";
+import { AthleteCollectionsTab } from "@/components/admin/ecosystem/AthleteCollectionsTab";
 import { ApplyTemplateButton } from "@/components/admin/ecosystem/ApplyTemplateButton";
+import { ApplyDesignTemplateButton } from "@/components/admin/ecosystem/ApplyDesignTemplateButton";
 
-const MGMT_TABS = ["products", "drops", "content", "access", "events"] as const;
+const MGMT_TABS = ["products", "collections", "drops", "content", "access", "events"] as const;
 
 const UNTAGGED_KEY = "__untagged__";
 const GENERAL_KEY = "__general__";
@@ -349,6 +351,7 @@ export default function AthleteDetail() {
             </Link>
           </Button>
           <ApplyTemplateButton athleteId={athlete.id} />
+          <ApplyDesignTemplateButton athleteId={athlete.id} organizationId={athlete.organization_id} />
           <Button variant="outline" onClick={() => setMembershipOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Add Team Membership
           </Button>
@@ -376,8 +379,10 @@ export default function AthleteDetail() {
         ))}
       </div>
 
-      {mgmtTab === "drops" ? (
-        <AthleteDropsTab athleteId={athlete.id} />
+      {mgmtTab === "collections" ? (
+        <AthleteCollectionsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
+      ) : mgmtTab === "drops" ? (
+        <AthleteDropsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
       ) : mgmtTab === "content" ? (
         <AthleteContentTab athleteId={athlete.id} organizationId={athlete.organization_id} athleteName={name} />
       ) : mgmtTab === "access" ? (

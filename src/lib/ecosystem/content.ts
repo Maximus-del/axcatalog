@@ -87,6 +87,7 @@ export interface OperatorContentRow {
   id: string; organization_id: string; athlete_id: string | null; type: string; title: string;
   body: string | null; hero_url: string | null; visibility: string; product_id: string | null;
   event_id: string | null; status: string; publish_at: string | null; category: string | null;
+  content_purpose: string; content_format: string | null; media: unknown;
   notify: Record<string, boolean>; created_at: string;
 }
 
@@ -112,6 +113,9 @@ export interface ContentInput {
   hero_url?: string | null;
   category?: string | null;
   visibility: string;
+  content_purpose?: string;        // 'access' | 'marketing' | 'editorial' | 'internal'
+  content_format?: string | null;  // marketing format hint (ig_feed, reel, promo, …)
+  media?: unknown;                 // gallery: array of urls
   product_id?: string | null;
   event_id?: string | null;
   status: string;

@@ -1,8 +1,16 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Package, Palette } from "lucide-react";
+import { Package, Palette, Image as ImageIcon, Rocket, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { storageUrl } from "@/lib/ecosystem/image";
+import { fetchCollectionMockups, listCollectionDrops, type MockupRow, type DropRow } from "@/lib/ecosystem/commerce";
+
+const mockupUrl = (m: MockupRow): string | null => {
+  const p = m.thumbnail_path || m.storage_path;
+  if (!p) return null;
+  return p.startsWith("http") ? p : storageUrl(m.storage_bucket || "product-images", p);
+};
 
 interface Collection {
   id: string;
@@ -35,6 +43,8 @@ export default function CollectionDetail() {
   const [collection, setCollection] = useState<Collection | null>(null);
   const [products, setProducts] = useState<ProductLite[]>([]);
   const [designs, setDesigns] = useState<DesignLite[]>([]);
+  const [mockups, setMockups] = useState<MockupRow[]>([]);
+  const [drops, setDrops] = useState<DropRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -84,18 +94,26 @@ export default function CollectionDetail() {
           .order("sort_order", { ascending: true }),
       ]);
       if (!active) return;
-      setProducts(
-        (prod.data ?? []).map((r) => ({
-          sort_order: r.sort_order,
-          product: first(r.product) as ProductLite["product"],
-        })),
-      );
-      setDesigns(
-        (des.data ?? []).map((r) => ({
-          sort_order: r.sort_order,
-          design: first(r.design) as DesignLite["design"],
-        })),
-      );
+      const prodRows = (prod.data ?? []).map((r) => ({
+        sort_order: r.sort_order,
+        product: first(r.product) as ProductLite["product"],
+      }));
+      const desRows = (des.data ?? []).map((r) => ({
+        sort_order: r.sort_order,
+        design: first(r.design) as DesignLite["design"],
+      }));
+      setProducts(prodRows);
+      setDesigns(desRows);
+
+      const productIds = prodRows.map((r) => r.product?.id).filter((v): v is string => !!v);
+      const designIds = desRows.map((r) => r.design?.id).filter((v): v is string => !!v);
+      const [mk, dr] = await Promise.all([
+        fetchCollectionMockups(productIds, designIds).catch(() => [] as MockupRow[]),
+        listCollectionDrops(id).catch(() => [] as DropRow[]),
+      ]);
+      if (!active) return;
+      setMockups(mk);
+      setDrops(dr);
       setLoading(false);
     })();
     return () => {
@@ -213,6 +231,73 @@ export default function CollectionDetail() {
                 </Link>
               ) : null,
             )}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <ImageIcon className="h-4 w-4" /> Mockups ({mockups.length})
+        </h2>
+        {mockups.length === 0 ? (
+          <div className="ax-card p-6 text-sm text-muted-foreground">
+            No mockups linked to this collection's products or designs yet.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {mockups.map((m) => {
+              const url = mockupUrl(m);
+              return (
+                <div key={m.id} className="ax-card-hover overflow-hidden p-0">
+                  <div className="aspect-square bg-muted flex items-center justify-center overflow-hidden">
+                    {url ? (
+                      <img src={url} alt={m.title} className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <ImageIcon className="h-7 w-7 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="p-2.5">
+                    <div className="text-sm font-medium truncate">{m.title}</div>
+                    <div className="text-[11px] text-muted-foreground capitalize truncate">
+                      {m.shot_type?.replace(/_/g, " ")} · {m.status}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Rocket className="h-4 w-4" /> Drops ({drops.length})
+        </h2>
+        {drops.length === 0 ? (
+          <div className="ax-card p-6 text-sm text-muted-foreground">
+            No drops from this collection yet. Create one from the athlete's Drops tab.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {drops.map((d) => (
+              <div key={d.id} className="ax-card flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <div className="font-medium truncate flex items-center gap-2">
+                    <Rocket className="h-3.5 w-3.5 text-accent" /> {d.name}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {d.product_count ?? 0} products · <span className="capitalize">{d.status}</span>
+                    {d.approval_state !== "none" && <> · approval <span className="capitalize">{d.approval_state}</span></>}
+                  </div>
+                </div>
+                {(d.access_date || d.public_date) && (
+                  <div className="text-[11px] text-muted-foreground shrink-0 inline-flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    {[d.access_date, d.public_date].filter(Boolean).map((s) => (s as string).slice(0, 10)).join(" → ")}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </section>
