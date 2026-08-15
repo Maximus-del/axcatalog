@@ -10,6 +10,7 @@ import {
   Trophy,
   Building2,
   Palette,
+  Shapes,
   Image as ImageIcon,
   Sparkles,
   Truck,
@@ -54,6 +55,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { label: "Content", to: "/admin/content", icon: Newspaper },
       { label: "Designs", to: "/admin/designs", icon: Palette },
+      { label: "Design Templates", to: "/admin/design-templates", icon: Shapes },
       { label: "Mockups", to: "/admin/mockups", icon: ImageIcon },
       { label: "Brand Assets", to: "/admin/brand-assets", icon: Sparkles },
     ],

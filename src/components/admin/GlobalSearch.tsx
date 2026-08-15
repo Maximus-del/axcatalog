@@ -25,6 +25,7 @@ import {
   CalendarDays,
   Layers,
   LayoutTemplate,
+  Shapes,
   BarChart3,
 } from "lucide-react";
 
@@ -51,6 +52,7 @@ const PAGES: { label: string; to: string; keywords: string; icon: typeof Compass
   { label: "Products", to: "/admin/products", keywords: "products merch catalog", icon: Package },
   { label: "Collections", to: "/admin/collections", keywords: "collections capsules", icon: Layers },
   { label: "Designs", to: "/admin/designs", keywords: "designs graphics art", icon: Palette },
+  { label: "Design Templates", to: "/admin/design-templates", keywords: "design templates style system vintage streetwear collegiate luxury y2k heritage", icon: Shapes },
   { label: "Mockups", to: "/admin/mockups", keywords: "mockups product photos", icon: Frame },
   { label: "Content", to: "/admin/content", keywords: "content posts cms marketing access", icon: Newspaper },
   { label: "Access & Memberships", to: "/admin/access", keywords: "access memberships plans subscribers", icon: Star },

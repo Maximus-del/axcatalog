@@ -41,6 +41,8 @@ const AdminContent = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAccess = lazy(() => import("./pages/admin/AdminAccess"));
 const AdminEvents = lazy(() => import("./pages/admin/AdminEvents"));
 const AdminTemplates = lazy(() => import("./pages/admin/AdminTemplates"));
+const DesignTemplatesList = lazy(() => import("./pages/admin/DesignTemplatesList"));
+const DesignTemplateDetail = lazy(() => import("./pages/admin/DesignTemplateDetail"));
 const AthletesList = lazy(() => import("./pages/admin/AthletesList"));
 const AthleteDetail = lazy(() => import("./pages/admin/AthleteDetail"));
 const ProductsList = lazy(() => import("./pages/admin/ProductsList"));
@@ -148,6 +150,8 @@ const App = () => (
                 <Route path="access" element={<AdminAccess />} />
                 <Route path="events" element={<AdminEvents />} />
                 <Route path="templates" element={<AdminTemplates />} />
+                <Route path="design-templates" element={<DesignTemplatesList />} />
+                <Route path="design-templates/:id" element={<DesignTemplateDetail />} />
                 <Route path="products" element={<ProductsList />} />
                 <Route path="products/:id" element={<AdminProductDetail />} />
                 <Route path="designs" element={<DesignsList />} />
