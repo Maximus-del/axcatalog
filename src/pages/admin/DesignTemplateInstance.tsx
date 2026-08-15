@@ -5,25 +5,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  ArrowLeft, Copy, Check, Loader2, Sparkles, Save, FolderPlus, Star, Trash2, Wand2, AlertTriangle,
+  ArrowLeft, Copy, Check, Loader2, Sparkles, Save, FolderPlus, Star, Trash2, Wand2, AlertTriangle, ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  DEPENDENCY_LABELS,
   DIRECTION_MODES,
   PROMPT_VARIATIONS,
+  SET_PROMPT_ROLES,
   VARIABLE_LABELS,
   VARIABLE_TOKENS,
   compilePrompt,
   deletePromptPackage,
   missingVariables,
+  packagedReferences,
   pickCurrentPrompt,
+  pickSetPrompt,
   ratePromptPackage,
+  referenceImageUrl,
   resolveAthleteVariables,
   savePromptPackage,
   updateInstance,
   type DirectionMode,
+  type PromptRole,
   type PromptVariation,
+  type ReferenceMode,
   type Variables,
 } from "@/lib/ecosystem/creative";
 import {
@@ -55,6 +62,11 @@ export default function DesignTemplateInstance() {
   const [direction, setDirection] = useState("");
   const [variation, setVariation] = useState<PromptVariation>("classic");
   const [referenceSetId, setReferenceSetId] = useState<string | null>(null);
+  // Which prompt drives generation: the template's master prompt, or one
+  // reference set's Primary/Backup. Backup exists because AI output is
+  // unpredictable — switching should not mean rewriting the brief.
+  const [setRole, setSetRole] = useState<PromptRole | null>("primary");
+  const [refMode, setRefMode] = useState<ReferenceMode>("with_references");
   const [dirty, setDirty] = useState(false);
   const [savingInputs, setSavingInputs] = useState(false);
   const [built, setBuilt] = useState<{ mode: DirectionMode; text: string } | null>(null);
@@ -87,8 +99,28 @@ export default function DesignTemplateInstance() {
     });
   }, [athlete, overrides, direction]);
 
-  const currentPrompt = useMemo(() => pickCurrentPrompt(prompts, variation), [prompts, variation]);
   const referenceSet = referenceSets.find((s) => s.id === referenceSetId) ?? null;
+
+  // A set prompt is preferred when one is selected and exists; otherwise the
+  // master prompt carries the generation.
+  const currentPrompt = useMemo(() => {
+    if (referenceSetId && setRole) {
+      const setPrompt = pickSetPrompt(prompts, referenceSetId, setRole);
+      if (setPrompt) return setPrompt;
+    }
+    return pickCurrentPrompt(prompts, variation);
+  }, [prompts, referenceSetId, setRole, variation]);
+
+  const usingSetPrompt = !!currentPrompt?.reference_set_id;
+  const attachments = useMemo(
+    () => (refMode === "with_references" ? packagedReferences(referenceSet) : []),
+    [referenceSet, refMode],
+  );
+
+  // A set marked "prompt proven" defaults to not needing its images attached.
+  useEffect(() => {
+    if (referenceSet) setRefMode(referenceSet.reference_dependency === "low" ? "prompt_only" : "with_references");
+  }, [referenceSet]);
   const missing = useMemo(
     () => (currentPrompt ? missingVariables(currentPrompt.body, currentPrompt.required_variables ?? [], variables) : []),
     [currentPrompt, variables],
@@ -126,7 +158,8 @@ export default function DesignTemplateInstance() {
       athleteDirection: direction,
       directionMode: mode,
       referenceSetName: referenceSet?.name ?? null,
-      referenceCount: referenceSet?.images.length ?? 0,
+      referenceCount: attachments.length,
+      referenceMode: refMode,
       outputRequirements: currentPrompt.output_requirements,
     });
     setBuilt({ mode, text });
@@ -152,8 +185,11 @@ export default function DesignTemplateInstance() {
         athlete_id: athlete.id,
         prompt_id: currentPrompt?.id ?? null,
         reference_set_id: referenceSetId,
-        label: `${mode.label} · ${variation}`,
+        label: usingSetPrompt
+          ? `${referenceSet?.name ?? "Set"} · ${currentPrompt?.role} · ${mode.label}`
+          : `Master · ${variation} · ${mode.label}`,
         variation,
+        prompt_role: currentPrompt?.role ?? "master",
         direction_mode: built.mode,
         variables,
         athlete_direction: direction || null,
@@ -287,49 +323,127 @@ export default function DesignTemplateInstance() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="space-y-3">
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--ax-faint))] mb-1">Variation</div>
-            <div className="flex gap-1.5">
-              {PROMPT_VARIATIONS.map((v) => {
-                const has = prompts.some((p) => p.variation === v.value);
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--ax-faint))] mb-1.5">Prompt source</div>
+            <div className="flex gap-1.5 flex-wrap">
+              <button
+                onClick={() => { setReferenceSetId(null); setSetRole(null); }}
+                className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border ${
+                  !referenceSetId
+                    ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                    : "border-[hsl(var(--ax-border))] text-muted-foreground"
+                }`}
+                title="The generalized recipe for the whole style"
+              >
+                Master prompt
+              </button>
+              {referenceSets.map((s) => {
+                const on = referenceSetId === s.id;
+                const hasPrimary = !!pickSetPrompt(prompts, s.id, "primary");
                 return (
                   <button
-                    key={v.value}
-                    onClick={() => setVariation(v.value)}
-                    disabled={!has}
-                    className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border disabled:opacity-40 ${
-                      variation === v.value
+                    key={s.id}
+                    onClick={() => { setReferenceSetId(s.id); setSetRole("primary"); setDirty(true); }}
+                    className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border ${
+                      on
                         ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
                         : "border-[hsl(var(--ax-border))] text-muted-foreground"
                     }`}
+                    title={hasPrimary ? `${s.name} sub-style` : `${s.name} — no prompt yet, will fall back to master`}
                   >
-                    {v.label}
+                    {s.name} <span className="opacity-60">{s.images.length}</span>
+                    {!hasPrimary && <span className="ml-1 opacity-60">—</span>}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {referenceSets.length > 0 && (
+          {referenceSetId ? (
+            <div className="flex flex-wrap items-end gap-4">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--ax-faint))] mb-1">Prompt</div>
+                <div className="flex gap-1.5">
+                  {SET_PROMPT_ROLES.map((r) => {
+                    const has = !!pickSetPrompt(prompts, referenceSetId, r.value);
+                    return (
+                      <button
+                        key={r.value}
+                        onClick={() => setSetRole(r.value)}
+                        disabled={!has}
+                        title={r.blurb}
+                        className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border disabled:opacity-40 ${
+                          setRole === r.value
+                            ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                            : "border-[hsl(var(--ax-border))] text-muted-foreground"
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--ax-faint))] mb-1">References</div>
+                <div className="flex gap-1.5">
+                  {([
+                    { v: "with_references" as ReferenceMode, l: "Attach images" },
+                    { v: "prompt_only" as ReferenceMode, l: "Prompt only" },
+                  ]).map((o) => (
+                    <button
+                      key={o.v}
+                      onClick={() => setRefMode(o.v)}
+                      className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border ${
+                        refMode === o.v
+                          ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                          : "border-[hsl(var(--ax-border))] text-muted-foreground"
+                      }`}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {referenceSet && (
+                <div className="text-[11px] text-muted-foreground pb-1.5">
+                  {DEPENDENCY_LABELS[referenceSet.reference_dependency]}
+                </div>
+              )}
+            </div>
+          ) : (
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--ax-faint))] mb-1">Reference set</div>
-              <div className="flex gap-1.5 flex-wrap">
-                {referenceSets.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={() => { setReferenceSetId(s.id); setDirty(true); }}
-                    className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border ${
-                      referenceSetId === s.id
-                        ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
-                        : "border-[hsl(var(--ax-border))] text-muted-foreground"
-                    }`}
-                  >
-                    {s.name} <span className="opacity-60">{s.images.length}</span>
-                  </button>
-                ))}
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--ax-faint))] mb-1">Variation</div>
+              <div className="flex gap-1.5">
+                {PROMPT_VARIATIONS.map((v) => {
+                  const has = prompts.some((p) => !p.reference_set_id && p.variation === v.value);
+                  return (
+                    <button
+                      key={v.value}
+                      onClick={() => setVariation(v.value)}
+                      disabled={!has}
+                      className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border disabled:opacity-40 ${
+                        variation === v.value
+                          ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                          : "border-[hsl(var(--ax-border))] text-muted-foreground"
+                      }`}
+                    >
+                      {v.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
+          )}
+
+          {currentPrompt && (
+            <p className="text-[11px] text-[hsl(var(--ax-faint))]">
+              Using {usingSetPrompt
+                ? `${referenceSet?.name} · ${currentPrompt.role} v${currentPrompt.version}`
+                : `master prompt · ${currentPrompt.variation} v${currentPrompt.version}`}
+              {referenceSetId && !usingSetPrompt && " — this set has no prompt of its own yet, so the master is standing in."}
+            </p>
           )}
         </div>
 
@@ -375,6 +489,38 @@ export default function DesignTemplateInstance() {
             <pre className="text-[12px] leading-relaxed whitespace-pre-wrap font-sans text-[hsl(var(--ax-secondary))] max-h-72 overflow-y-auto rounded-lg bg-[hsl(var(--ax-line)/0.4)] p-3">
               {built.text}
             </pre>
+
+            {attachments.length > 0 && (
+              <div className="rounded-lg border border-[hsl(var(--ax-border))] p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-[hsl(var(--ax-accent))]">
+                    Attach these {attachments.length} reference{attachments.length === 1 ? "" : "s"}
+                  </div>
+                  <button
+                    onClick={() => attachments.forEach((img) => {
+                      const url = referenceImageUrl(img);
+                      if (url) window.open(url, "_blank", "noopener");
+                    })}
+                    className="text-[11px] font-semibold text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Open all
+                  </button>
+                </div>
+                <div className="grid grid-cols-6 gap-2">
+                  {attachments.map((img) => {
+                    const url = referenceImageUrl(img);
+                    return url ? (
+                      <a key={img.id} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square">
+                        <img src={url} alt="" className="h-full w-full object-cover rounded border border-[hsl(var(--ax-border))]" />
+                      </a>
+                    ) : null;
+                  })}
+                </div>
+                <p className="text-[11px] text-[hsl(var(--ax-faint))] mt-2">
+                  Copy the prompt, drop these images in alongside it, generate several options.
+                </p>
+              </div>
+            )}
             <div className="flex gap-2">
               <button onClick={copyBuilt} className="h-9 px-4 rounded-lg bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] font-bold text-sm inline-flex items-center gap-1.5">
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />} Copy full prompt

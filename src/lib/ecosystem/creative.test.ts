@@ -8,12 +8,20 @@ import {
   DIRECTION_MODES,
   applyTokens,
   compilePrompt,
+  draftPromptFromNotes,
   extractTokens,
   missingVariables,
+  nextPromptVersion,
+  packagedReferences,
   parseRecipe,
   pickCurrentPrompt,
+  pickSetPrompt,
+  referenceSetReadiness,
   resolveAthleteVariables,
   suggestConceptName,
+  templateReadiness,
+  type ReferenceImage,
+  type ReferenceSet,
   type TemplatePrompt,
 } from "./creative";
 
@@ -139,7 +147,7 @@ describe("compilePrompt", () => {
     expect(compilePrompt(base)).not.toContain("REFERENCES");
     const withRefs = compilePrompt({ ...base, referenceSetName: "Vintage Collegiate", referenceCount: 4 });
     expect(withRefs).toContain("REFERENCES — Vintage Collegiate (4 images)");
-    expect(withRefs).toContain("do not reproduce");
+    expect(withRefs).toContain("Do not reproduce");
   });
 
   it("singularizes a one-image reference set", () => {
@@ -157,12 +165,14 @@ describe("compilePrompt", () => {
   });
 });
 
+const p = (over: Partial<TemplatePrompt>): TemplatePrompt => ({
+  id: "x", organization_id: null, template_id: "t", reference_set_id: null, role: "master",
+  variation: "classic", version: 1, title: null, body: "b", output_requirements: null,
+  required_variables: [], is_current_best: false, master_candidate: false,
+  notes: null, created_at: "2026-01-01", ...over,
+});
+
 describe("pickCurrentPrompt", () => {
-  const p = (over: Partial<TemplatePrompt>): TemplatePrompt => ({
-    id: "x", organization_id: null, template_id: "t", variation: "classic", version: 1,
-    title: null, body: "b", output_requirements: null, required_variables: [],
-    is_current_best: false, notes: null, created_at: "2026-01-01", ...over,
-  });
 
   it("prefers the version marked current best over the newest", () => {
     const picked = pickCurrentPrompt([p({ id: "v2", version: 2 }), p({ id: "v1", version: 1, is_current_best: true })]);
@@ -180,6 +190,183 @@ describe("pickCurrentPrompt", () => {
 
   it("returns null when there are no prompts at all", () => {
     expect(pickCurrentPrompt([], "classic")).toBeNull();
+  });
+});
+
+describe("reference set prompts", () => {
+  const setA = "set-a";
+  const setB = "set-b";
+  const prompts = [
+    p({ id: "m1", version: 2 }),
+    p({ id: "a-primary", reference_set_id: setA, role: "primary", version: 1 }),
+    p({ id: "a-primary-2", reference_set_id: setA, role: "primary", version: 2, is_current_best: true }),
+    p({ id: "a-backup", reference_set_id: setA, role: "backup", version: 1 }),
+    p({ id: "b-primary", reference_set_id: setB, role: "primary", version: 1 }),
+  ];
+
+  it("picks the current-best prompt for a set and role", () => {
+    expect(pickSetPrompt(prompts, setA, "primary")?.id).toBe("a-primary-2");
+    expect(pickSetPrompt(prompts, setA, "backup")?.id).toBe("a-backup");
+  });
+
+  it("does not leak one set's prompts into another", () => {
+    expect(pickSetPrompt(prompts, setB, "backup")).toBeNull();
+  });
+
+  it("keeps master prompts out of set lookups and vice versa", () => {
+    expect(pickSetPrompt(prompts, setA, "primary")?.reference_set_id).toBe(setA);
+    expect(pickCurrentPrompt(prompts)?.id).toBe("m1");
+  });
+
+  it("versions independently per scope", () => {
+    expect(nextPromptVersion(prompts, { reference_set_id: setA, role: "primary" })).toBe(3);
+    expect(nextPromptVersion(prompts, { reference_set_id: setA, role: "backup" })).toBe(2);
+    expect(nextPromptVersion(prompts, { reference_set_id: setB, role: "backup" })).toBe(1);
+    expect(nextPromptVersion(prompts, { variation: "classic" })).toBe(3);
+  });
+});
+
+const img = (id: string, recommended = false): ReferenceImage => ({
+  id, reference_set_id: "s", url: `https://x/${id}.png`, storage_bucket: null,
+  storage_path: null, title: null, sort_order: 0, is_recommended: recommended,
+});
+
+const refSet = (over: Partial<ReferenceSet> = {}): ReferenceSet => ({
+  id: "s", organization_id: null, template_id: "t", name: "Vintage Collegiate",
+  description: null, recommended_min: 3, recommended_max: 5, is_default: false,
+  style_notes: {}, reference_dependency: "high", images: [], ...over,
+});
+
+describe("packagedReferences", () => {
+  it("sends only the marked-recommended images when any are marked", () => {
+    const s = refSet({ images: [img("a"), img("b", true), img("c", true)] });
+    expect(packagedReferences(s).map((i) => i.id)).toEqual(["b", "c"]);
+  });
+
+  it("falls back to the first few when nothing is marked", () => {
+    const s = refSet({ images: [img("a"), img("b"), img("c")], recommended_max: 2 });
+    expect(packagedReferences(s).map((i) => i.id)).toEqual(["a", "b"]);
+  });
+
+  it("handles an empty or missing set", () => {
+    expect(packagedReferences(refSet())).toEqual([]);
+    expect(packagedReferences(null)).toEqual([]);
+  });
+});
+
+describe("referenceSetReadiness", () => {
+  const s = refSet({ images: [img("a", true), img("b")] });
+
+  it("reports a set with both prompts as fully ready", () => {
+    const prompts = [
+      p({ reference_set_id: "s", role: "primary" }),
+      p({ reference_set_id: "s", role: "backup" }),
+    ];
+    const r = referenceSetReadiness(s, prompts);
+    expect(r.label).toBe("Primary + Backup ready");
+    expect(r.ready).toBe(true);
+  });
+
+  it("distinguishes primary-only from no prompt at all", () => {
+    expect(referenceSetReadiness(s, [p({ reference_set_id: "s", role: "primary" })]).label).toBe("Primary ready");
+    expect(referenceSetReadiness(s, []).label).toBe("Needs prompt");
+    expect(referenceSetReadiness(s, []).ready).toBe(false);
+  });
+
+  it("counts recommended images separately from total", () => {
+    const r = referenceSetReadiness(s, []);
+    expect(r.imageCount).toBe(2);
+    expect(r.recommendedCount).toBe(1);
+  });
+
+  it("ignores another set's prompts", () => {
+    expect(referenceSetReadiness(s, [p({ reference_set_id: "other", role: "primary" })]).ready).toBe(false);
+  });
+});
+
+describe("templateReadiness", () => {
+  it("is production ready only when every piece is in place", () => {
+    const full = templateReadiness({
+      masterPrompt: true, referenceSets: 3, setsWithPrimary: 3, setsWithBackup: 3,
+      hasRecipe: true, hasStyleDna: true,
+    });
+    expect(full.productionReady).toBe(true);
+    expect(full.done).toBe(full.total);
+  });
+
+  it("does not credit prompts when only some sets have them", () => {
+    const partial = templateReadiness({
+      masterPrompt: true, referenceSets: 3, setsWithPrimary: 2, setsWithBackup: 0,
+      hasRecipe: true, hasStyleDna: true,
+    });
+    expect(partial.productionReady).toBe(false);
+    expect(partial.items.find((i) => i.label === "Primary prompts")?.done).toBe(false);
+  });
+
+  it("does not credit prompt coverage when there are no sets at all", () => {
+    const none = templateReadiness({
+      masterPrompt: true, referenceSets: 0, setsWithPrimary: 0, setsWithBackup: 0,
+      hasRecipe: false, hasStyleDna: false,
+    });
+    expect(none.items.find((i) => i.label === "Primary prompts")?.done).toBe(false);
+  });
+});
+
+describe("draftPromptFromNotes", () => {
+  const notes = { typography: "Block varsity", texture: "Heavy distress", mood: "Old campus bookstore" };
+
+  it("turns observations into a prompt scaffold with tokens", () => {
+    const out = draftPromptFromNotes({ templateName: "Collegiate 01", setName: "Vintage Collegiate", notes });
+    expect(out).toContain("Vintage Collegiate interpretation of the Collegiate 01");
+    expect(out).toContain("TYPOGRAPHY");
+    expect(out).toContain("Block varsity");
+    expect(out).toContain("{{ATHLETE_NAME}}");
+    expect(out).toContain("ORIGINALITY");
+  });
+
+  it("omits fields with no observation rather than emitting empty headings", () => {
+    const out = draftPromptFromNotes({ templateName: "T", setName: "S", notes });
+    expect(out).not.toContain("COMPOSITION");
+    expect(out).not.toContain("COLOR\n\n");
+  });
+
+  it("gives the backup role a different strategy, not a reword", () => {
+    const primary = draftPromptFromNotes({ templateName: "T", setName: "S", notes, role: "primary" });
+    const backup = draftPromptFromNotes({ templateName: "T", setName: "S", notes, role: "backup" });
+    expect(backup).not.toBe(primary);
+    expect(backup).toContain("different strategy");
+    expect(primary).not.toContain("different strategy");
+  });
+});
+
+describe("compilePrompt reference modes", () => {
+  const base = {
+    templateName: "Collegiate 01",
+    promptBody: "Make something for {{ATHLETE_NAME}}.",
+    variables: { ATHLETE_NAME: "Darnell Mooney" },
+    referenceSetName: "Vintage Collegiate",
+    referenceCount: 4,
+  };
+
+  it("includes mood-board framing when images are attached", () => {
+    const out = compilePrompt({ ...base, referenceMode: "with_references" });
+    expect(out).toContain("visual mood board");
+    expect(out).toContain("REFERENCES — Vintage Collegiate (4 images)");
+  });
+
+  it("omits the reference block entirely in prompt-only mode", () => {
+    const out = compilePrompt({ ...base, referenceMode: "prompt_only" });
+    expect(out).not.toContain("REFERENCES");
+    expect(out).not.toContain("mood board");
+    expect(out).toContain(DEFAULT_OUTPUT_REQUIREMENTS);
+  });
+
+  it("defaults to attaching references when no mode is given", () => {
+    expect(compilePrompt(base)).toContain("REFERENCES —");
+  });
+
+  it("still forbids copying any single reference", () => {
+    expect(compilePrompt({ ...base, referenceMode: "with_references" })).toContain("Do not reproduce");
   });
 });
 

@@ -180,10 +180,18 @@ Create only the isolated apparel graphic — the artwork itself, nothing else.
 No clothing mockup. No shirt, hoodie, or garment of any kind.
 No person, model, or mannequin. No background scene, room, wall, or environment.
 No frame, border, packaging, or photography.
+The design must stand on its own as production artwork.
 Artwork only, centered, on a fully transparent background.
-High-resolution, print-ready output suitable for apparel production (PNG with alpha).`;
+High-resolution, suitable for DTG / DTF / screen-print preparation (PNG with alpha).`;
 
-const REFERENCE_GUIDANCE = `Use the supplied reference images only to understand the general typography, spacing, composition, texture, and visual hierarchy of the style. Create an original composition — do not reproduce, trace, or closely imitate any specific reference.`;
+/**
+ * References are a mood board, not source art. This wording is deliberate: it
+ * asks for the shared language across the set and explicitly rules out copying
+ * any one of them, which is what keeps output original rather than derivative.
+ */
+const REFERENCE_GUIDANCE = `Use the supplied reference images collectively as a visual mood board. Study the characteristics they share — typography, layout, hierarchy, graphic density, texture, color treatment, and spacing — and design to that shared language.
+
+Create a new original composition. Do not reproduce, trace, or closely imitate any specific reference image, logo, mascot, illustration, or exact layout. The goal is to capture the broad design language, not to recreate another designer's artwork.`;
 
 // ---- The compiler --------------------------------------------------------
 
@@ -197,7 +205,15 @@ export interface CompileInput {
   referenceSetName?: string | null;
   referenceCount?: number;
   outputRequirements?: string | null;
+  /**
+   * with_references = images will be attached alongside this prompt.
+   * prompt_only = the prompt is proven enough to stand alone, so the reference
+   * block is omitted even when a set is selected.
+   */
+  referenceMode?: ReferenceMode;
 }
+
+export type ReferenceMode = "with_references" | "prompt_only";
 
 /**
  * One clean prompt, assembled from the template's master prompt, the athlete's
@@ -226,7 +242,7 @@ export function compilePrompt(input: CompileInput): string {
   const mode = DIRECTION_MODES.find((m) => m.value === (input.directionMode ?? "closest"));
   if (mode) sections.push(`EMPHASIS — ${mode.label.toUpperCase()}\n${mode.instruction}`);
 
-  if (input.referenceCount && input.referenceCount > 0) {
+  if ((input.referenceMode ?? "with_references") === "with_references" && input.referenceCount && input.referenceCount > 0) {
     const named = clean(input.referenceSetName);
     const header = named
       ? `REFERENCES — ${named} (${input.referenceCount} image${input.referenceCount === 1 ? "" : "s"})`
@@ -249,10 +265,25 @@ export const PROMPT_VARIATIONS: { value: PromptVariation; label: string; blurb: 
   { value: "experimental", label: "Experimental", blurb: "Push the style somewhere new." },
 ];
 
+/**
+ * A prompt is either the template's MASTER prompt (reference_set_id null, keyed
+ * by variation) or a REFERENCE SET's prompt (keyed by role). Same table, because
+ * promoting a strong set prompt toward the master is then a flag, not a move.
+ */
+export type PromptRole = "master" | "primary" | "backup" | "alt";
+
+export const SET_PROMPT_ROLES: { value: PromptRole; label: string; blurb: string }[] = [
+  { value: "primary", label: "Primary", blurb: "Our best prompt for this set." },
+  { value: "backup", label: "Backup", blurb: "A different strategy for the same style — not a reword." },
+  { value: "alt", label: "Alternate", blurb: "A third approach when the first two miss." },
+];
+
 export interface TemplatePrompt {
   id: string;
   organization_id: string | null;
   template_id: string;
+  reference_set_id: string | null;
+  role: PromptRole;
   variation: PromptVariation;
   version: number;
   title: string | null;
@@ -260,25 +291,37 @@ export interface TemplatePrompt {
   output_requirements: string | null;
   required_variables: string[];
   is_current_best: boolean;
+  master_candidate: boolean;
   notes: string | null;
   created_at: string;
 }
 
+const PROMPT_COLUMNS =
+  "id, organization_id, template_id, reference_set_id, role, variation, version, title, body, " +
+  "output_requirements, required_variables, is_current_best, master_candidate, notes, created_at";
+
+/** Every prompt for a template — master and all reference-set prompts. */
 export async function listTemplatePrompts(templateId: string): Promise<TemplatePrompt[]> {
   const { data, error } = await supabase
     .from("design_template_prompts" as never)
-    .select("id, organization_id, template_id, variation, version, title, body, output_requirements, required_variables, is_current_best, notes, created_at")
+    .select(PROMPT_COLUMNS)
     .eq("template_id", templateId)
-    .order("variation")
     .order("version", { ascending: false });
   if (error) throw error;
   return (data ?? []) as unknown as TemplatePrompt[];
 }
 
-/** The prompt to use right now for a variation: current best, else newest. */
+/** The master prompt to use for a variation: current best, else newest. */
 export function pickCurrentPrompt(prompts: TemplatePrompt[], variation: PromptVariation = "classic"): TemplatePrompt | null {
-  const inVariation = prompts.filter((p) => p.variation === variation);
-  const pool = inVariation.length ? inVariation : prompts;
+  const master = prompts.filter((p) => !p.reference_set_id);
+  const inVariation = master.filter((p) => p.variation === variation);
+  const pool = inVariation.length ? inVariation : master;
+  return pool.find((p) => p.is_current_best) ?? pool[0] ?? null;
+}
+
+/** The prompt to use for one reference set + role: current best, else newest. */
+export function pickSetPrompt(prompts: TemplatePrompt[], referenceSetId: string, role: PromptRole = "primary"): TemplatePrompt | null {
+  const pool = prompts.filter((p) => p.reference_set_id === referenceSetId && p.role === role);
   return pool.find((p) => p.is_current_best) ?? pool[0] ?? null;
 }
 
@@ -286,6 +329,9 @@ export interface SavePromptInput {
   organization_id: string;
   template_id: string;
   variation: PromptVariation;
+  /** Omit for a master prompt; set for a reference-set prompt. */
+  reference_set_id?: string | null;
+  role?: PromptRole;
   title?: string | null;
   body: string;
   output_requirements?: string | null;
@@ -297,13 +343,29 @@ export interface SavePromptInput {
   makeCurrentBest?: boolean;
 }
 
-/** Saving never edits history — it writes the next version of that variation. */
+/** Next version within this scope — master variation, or set + role. */
+export function nextPromptVersion(existing: TemplatePrompt[], scope: { reference_set_id?: string | null; role?: PromptRole; variation?: PromptVariation }): number {
+  const setId = scope.reference_set_id ?? null;
+  const inScope = setId
+    ? existing.filter((p) => p.reference_set_id === setId && p.role === (scope.role ?? "primary"))
+    : existing.filter((p) => !p.reference_set_id && p.variation === (scope.variation ?? "classic"));
+  return Math.max(0, ...inScope.map((p) => p.version)) + 1;
+}
+
+/** Saving never edits history — it writes the next version within the scope. */
 export async function savePromptVersion(input: SavePromptInput): Promise<string> {
-  const nextVersion =
-    Math.max(0, ...input.existing.filter((p) => p.variation === input.variation).map((p) => p.version)) + 1;
+  const referenceSetId = input.reference_set_id ?? null;
+  const role: PromptRole = referenceSetId ? (input.role ?? "primary") : "master";
+  const nextVersion = nextPromptVersion(input.existing, {
+    reference_set_id: referenceSetId,
+    role,
+    variation: input.variation,
+  });
   const row = {
     organization_id: input.organization_id,
     template_id: input.template_id,
+    reference_set_id: referenceSetId,
+    role,
     variation: input.variation,
     version: nextVersion,
     title: input.title?.trim() || null,
@@ -317,7 +379,10 @@ export async function savePromptVersion(input: SavePromptInput): Promise<string>
   const { data, error } = await supabase.from("design_template_prompts" as never).insert(row as never).select("id").single();
   if (error) throw error;
   const id = (data as unknown as { id: string }).id;
-  if (input.makeCurrentBest !== false) await setCurrentBestPrompt(input.template_id, input.variation, id);
+  if (input.makeCurrentBest !== false) {
+    if (referenceSetId) await setCurrentBestSetPrompt(referenceSetId, role, id);
+    else await setCurrentBestPrompt(input.template_id, input.variation, id);
+  }
   return id;
 }
 
@@ -328,6 +393,7 @@ export async function setCurrentBestPrompt(templateId: string, variation: Prompt
       .from("design_template_prompts" as never)
       .update({ is_current_best: false } as never)
       .eq("template_id", templateId)
+      .is("reference_set_id", null)
       .eq("variation", variation)
       .eq("is_current_best", true)
   ).error;
@@ -335,6 +401,36 @@ export async function setCurrentBestPrompt(templateId: string, variation: Prompt
   const { error } = await supabase
     .from("design_template_prompts" as never)
     .update({ is_current_best: true } as never)
+    .eq("id", promptId);
+  if (error) throw error;
+}
+
+/** Exactly one current best per reference set + role. */
+export async function setCurrentBestSetPrompt(referenceSetId: string, role: PromptRole, promptId: string): Promise<void> {
+  const clearErr = (
+    await supabase
+      .from("design_template_prompts" as never)
+      .update({ is_current_best: false } as never)
+      .eq("reference_set_id", referenceSetId)
+      .eq("role", role)
+      .eq("is_current_best", true)
+  ).error;
+  if (clearErr) throw clearErr;
+  const { error } = await supabase
+    .from("design_template_prompts" as never)
+    .update({ is_current_best: true } as never)
+    .eq("id", promptId);
+  if (error) throw error;
+}
+
+/**
+ * Mark a set prompt as worth folding into the master. Deliberately does NOT
+ * rewrite the master — a human decides what made it work.
+ */
+export async function setMasterCandidate(promptId: string, value: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("design_template_prompts" as never)
+    .update({ master_candidate: value } as never)
     .eq("id", promptId);
   if (error) throw error;
 }
@@ -349,7 +445,33 @@ export interface ReferenceImage {
   storage_path: string | null;
   title: string | null;
   sort_order: number;
+  /** Only recommended images ride along in a prompt package. */
+  is_recommended: boolean;
 }
+
+/** How much this set still leans on its images. Low = the prompt stands alone. */
+export type ReferenceDependency = "high" | "medium" | "low";
+
+export const DEPENDENCY_LABELS: Record<ReferenceDependency, string> = {
+  high: "References needed",
+  medium: "References recommended",
+  low: "Prompt proven",
+};
+
+/** Structured observations about what the references share. Seeds prompt drafts. */
+export const STYLE_NOTE_FIELDS = [
+  { key: "typography", label: "Typography", hint: "Letterforms, weight, secondary type" },
+  { key: "composition", label: "Composition", hint: "Arrangement, alignment, balance" },
+  { key: "graphics", label: "Graphics", hint: "Marks, crests, illustration behaviour" },
+  { key: "texture", label: "Texture", hint: "Distress, grain, print feel" },
+  { key: "color", label: "Color", hint: "Palette logic and relationships" },
+  { key: "hierarchy", label: "Hierarchy", hint: "What leads, what supports" },
+  { key: "mood", label: "Mood", hint: "The feeling in one line" },
+  { key: "apparel", label: "Apparel application", hint: "Placement, scale, print method" },
+] as const;
+
+export type StyleNoteKey = (typeof STYLE_NOTE_FIELDS)[number]["key"];
+export type StyleNotes = Partial<Record<StyleNoteKey, string>>;
 
 export interface ReferenceSet {
   id: string;
@@ -360,6 +482,8 @@ export interface ReferenceSet {
   recommended_min: number;
   recommended_max: number;
   is_default: boolean;
+  style_notes: StyleNotes;
+  reference_dependency: ReferenceDependency;
   images: ReferenceImage[];
 }
 
@@ -378,7 +502,7 @@ export function referenceImageUrl(img: ReferenceImage): string | null {
 export async function listReferenceSets(templateId: string): Promise<ReferenceSet[]> {
   const { data, error } = await supabase
     .from("reference_sets" as never)
-    .select("id, organization_id, template_id, name, description, recommended_min, recommended_max, is_default")
+    .select("id, organization_id, template_id, name, description, recommended_min, recommended_max, is_default, style_notes, reference_dependency")
     .eq("template_id", templateId)
     .order("is_default", { ascending: false })
     .order("name");
@@ -387,7 +511,7 @@ export async function listReferenceSets(templateId: string): Promise<ReferenceSe
   if (sets.length === 0) return [];
   const { data: imgs } = await supabase
     .from("reference_images" as never)
-    .select("id, reference_set_id, url, storage_bucket, storage_path, title, sort_order")
+    .select("id, reference_set_id, url, storage_bucket, storage_path, title, sort_order, is_recommended")
     .in("reference_set_id", sets.map((s) => s.id))
     .order("sort_order");
   const bySet = new Map<string, ReferenceImage[]>();
@@ -466,6 +590,121 @@ export async function uploadReferenceImage(input: {
 export async function removeReferenceImage(id: string): Promise<void> {
   const { error } = await supabase.from("reference_images" as never).delete().eq("id", id);
   if (error) throw error;
+}
+
+/** Marking an image recommended is what puts it in the generation package. */
+export async function setImageRecommended(id: string, value: boolean): Promise<void> {
+  const { error } = await supabase
+    .from("reference_images" as never)
+    .update({ is_recommended: value } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function updateReferenceSet(
+  id: string,
+  patch: Partial<Pick<ReferenceSet, "name" | "description" | "style_notes" | "reference_dependency" | "is_default">>,
+): Promise<void> {
+  const { error } = await supabase
+    .from("reference_sets" as never)
+    .update({ ...patch, updated_at: new Date().toISOString() } as never)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** The images a prompt package should carry: recommended ones, else the first few. */
+export function packagedReferences(set: ReferenceSet | null | undefined): ReferenceImage[] {
+  if (!set) return [];
+  const recommended = set.images.filter((i) => i.is_recommended);
+  if (recommended.length > 0) return recommended;
+  return set.images.slice(0, set.recommended_max || 5);
+}
+
+export interface SetReadiness {
+  hasPrimary: boolean;
+  hasBackup: boolean;
+  imageCount: number;
+  recommendedCount: number;
+  /** Short status for the card: what's missing, or that it's ready. */
+  label: string;
+  ready: boolean;
+}
+
+/**
+ * Tells an operator at a glance which sub-styles can actually be used to
+ * produce work today, versus which are still just a pile of images.
+ */
+export function referenceSetReadiness(set: ReferenceSet, prompts: TemplatePrompt[]): SetReadiness {
+  const hasPrimary = !!pickSetPrompt(prompts, set.id, "primary");
+  const hasBackup = !!pickSetPrompt(prompts, set.id, "backup");
+  const imageCount = set.images.length;
+  const recommendedCount = set.images.filter((i) => i.is_recommended).length;
+  let label: string;
+  if (hasPrimary && hasBackup) label = "Primary + Backup ready";
+  else if (hasPrimary) label = "Primary ready";
+  else label = "Needs prompt";
+  return { hasPrimary, hasBackup, imageCount, recommendedCount, label, ready: hasPrimary };
+}
+
+export interface TemplateReadiness { items: { label: string; done: boolean }[]; done: number; total: number; productionReady: boolean }
+
+/** A subtle "can we move fast with this style yet?" signal — not a scorecard. */
+export function templateReadiness(input: {
+  masterPrompt: boolean;
+  referenceSets: number;
+  setsWithPrimary: number;
+  setsWithBackup: number;
+  hasRecipe: boolean;
+  hasStyleDna: boolean;
+}): TemplateReadiness {
+  const items = [
+    { label: "Master prompt", done: input.masterPrompt },
+    { label: "Reference sets", done: input.referenceSets > 0 },
+    { label: "Primary prompts", done: input.referenceSets > 0 && input.setsWithPrimary === input.referenceSets },
+    { label: "Backup prompts", done: input.referenceSets > 0 && input.setsWithBackup === input.referenceSets },
+    { label: "Collection recipe", done: input.hasRecipe },
+    { label: "Style DNA", done: input.hasStyleDna },
+  ];
+  const done = items.filter((i) => i.done).length;
+  return { items, done, total: items.length, productionReady: done === items.length };
+}
+
+/**
+ * Turn structured style observations into a prompt draft. No image analysis —
+ * the operator looks at their own references, writes what they see, and this
+ * assembles it into the shape a good prompt takes. Refined by hand from there.
+ */
+export function draftPromptFromNotes(input: {
+  templateName: string;
+  setName: string;
+  notes: StyleNotes;
+  role?: PromptRole;
+}): string {
+  const { notes } = input;
+  const lines: string[] = [
+    `Create an original apparel graphic for {{ATHLETE_NAME}} in the ${input.setName} interpretation of the ${input.templateName} visual system.`,
+    "",
+  ];
+  for (const field of STYLE_NOTE_FIELDS) {
+    const value = clean(notes[field.key]);
+    if (!value) continue;
+    lines.push(field.label.toUpperCase(), value, "");
+  }
+  if (input.role === "backup") {
+    lines.push(
+      "APPROACH",
+      "Interpret the style more loosely than a literal reading — keep the same design family, but let composition and typographic relationships breathe. This is a different strategy toward the same look, not a reworded version of it.",
+      "",
+    );
+  }
+  lines.push(
+    "ATHLETE DETAILS TO INCORPORATE",
+    "Use {{LAST_NAME}}, number {{NUMBER}}, and {{COLOR_PALETTE}} where they strengthen the composition.",
+    "",
+    "ORIGINALITY",
+    "Create an original composition. Do not reproduce or closely imitate any existing school, team, or brand mark, and do not use real trademarked logos or wordmarks.",
+  );
+  return lines.join("\n").trim();
 }
 
 // ---- Collection recipe ---------------------------------------------------
@@ -599,6 +838,8 @@ export interface SavePackageInput {
   slot_id?: string | null;
   label: string;
   variation: string;
+  /** master | primary | backup | alt — which prompt produced this generation. */
+  prompt_role?: string;
   direction_mode: DirectionMode;
   variables: Variables;
   athlete_direction: string | null;

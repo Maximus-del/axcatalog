@@ -272,7 +272,7 @@ export default function DesignTemplateDetail() {
         <div className="lg:col-span-3">
           <MasterPromptCard templateId={template.id} templateName={template.name} />
         </div>
-        <ReferenceSetsCard templateId={template.id} referencePolicy={template.reference_policy} />
+        <ReferenceSetsCard templateId={template.id} templateName={template.name} referencePolicy={template.reference_policy} />
         <CollectionRecipeCard templateId={template.id} recipe={template.collection_recipe} editable={editable} />
         <section className="ax-card p-5">
           <h2 className="font-bold">Style DNA</h2>
