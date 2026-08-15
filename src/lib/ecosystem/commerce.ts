@@ -249,18 +249,29 @@ export async function listDesignTemplates(): Promise<DesignTemplate[]> {
   if (error) throw error;
   return (data ?? []) as unknown as DesignTemplate[];
 }
-export async function applyDesignTemplate(organizationId: string, athleteId: string, templateId: string, createdBy: string | null): Promise<void> {
+/** Returns the instance id. Re-applying an existing pairing returns the instance
+ * that already exists rather than creating a duplicate working copy. */
+export async function applyDesignTemplate(organizationId: string, athleteId: string, templateId: string, createdBy: string | null): Promise<string> {
+  const existing = await supabase
+    .from("design_template_applications" as never)
+    .select("id")
+    .eq("template_id", templateId)
+    .eq("athlete_id", athleteId)
+    .maybeSingle();
+  if (existing.data) return (existing.data as unknown as { id: string }).id;
+
   const tpl = (await supabase.from("design_templates" as never).select("*").eq("id", templateId).single());
   if (tpl.error) throw tpl.error;
-  const { error } = await supabase.from("design_template_applications" as never).insert({
+  const { data, error } = await supabase.from("design_template_applications" as never).insert({
     organization_id: organizationId,
     template_id: templateId,
     athlete_id: athleteId,
     status: "applied",
     instance: tpl.data as never, // non-destructive editable copy of the template
     created_by: createdBy,
-  } as never);
+  } as never).select("id").single();
   if (error) throw error;
+  return (data as unknown as { id: string }).id;
 }
 
 // ---- Preference profile (derived from Q&A) + transparent recommendation ----
@@ -327,12 +338,16 @@ export interface DesignTemplateFull extends DesignTemplate {
   source_ref: string | null;
   is_active: boolean;
   created_at: string;
+  /** Creative recipe (see lib/ecosystem/creative.ts) — jsonb, parsed by parseRecipe(). */
+  collection_recipe: unknown;
+  reference_policy: string;
 }
 
 const TEMPLATE_COLUMNS =
   "id, organization_id, name, style, description, compatible_product_types, tags, color_tendencies, " +
   "sport_compatibility, attributes, preview_images, example_products, athlete_examples, " +
-  "graphic_characteristics, typography_characteristics, notes, source_ref, is_active, created_at";
+  "graphic_characteristics, typography_characteristics, notes, source_ref, is_active, created_at, " +
+  "collection_recipe, reference_policy";
 
 export async function listDesignTemplatesFull(includeArchived = false): Promise<DesignTemplateFull[]> {
   let q = supabase.from("design_templates" as never).select(TEMPLATE_COLUMNS);
@@ -488,6 +503,9 @@ export interface DesignTemplateInput {
   graphic_characteristics?: string | null;
   typography_characteristics?: string | null;
   attributes?: Record<string, number>;
+  /** Creative-recipe fields (see lib/ecosystem/creative.ts). */
+  collection_recipe?: Record<string, unknown>;
+  reference_policy?: string;
 }
 
 export async function createDesignTemplate(input: DesignTemplateInput): Promise<string> {

@@ -21,6 +21,7 @@ import { AthleteDropsTab } from "@/components/admin/ecosystem/AthleteDropsTab";
 import { AthleteCollectionsTab } from "@/components/admin/ecosystem/AthleteCollectionsTab";
 import { ApplyTemplateButton } from "@/components/admin/ecosystem/ApplyTemplateButton";
 import { ApplyDesignTemplateButton } from "@/components/admin/ecosystem/ApplyDesignTemplateButton";
+import { RapidStartButton } from "@/components/admin/ecosystem/RapidStartButton";
 
 const MGMT_TABS = ["products", "collections", "drops", "content", "access", "events"] as const;
 
@@ -352,6 +353,7 @@ export default function AthleteDetail() {
           </Button>
           <ApplyTemplateButton athleteId={athlete.id} />
           <ApplyDesignTemplateButton athleteId={athlete.id} organizationId={athlete.organization_id} />
+          <RapidStartButton athleteId={athlete.id} organizationId={athlete.organization_id} lastName={athlete.last_name} />
           <Button variant="outline" onClick={() => setMembershipOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Add Team Membership
           </Button>

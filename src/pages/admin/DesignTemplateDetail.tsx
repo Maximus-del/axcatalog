@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowLeft, Copy, Loader2, Pencil, Sparkles, Trash2, Archive, ArchiveRestore, Search, Check,
+  ArrowLeft, Copy, Loader2, Pencil, Sparkles, Trash2, Archive, ArchiveRestore, Search, Check, Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -23,6 +23,9 @@ import { getCurrentOrgId } from "@/hooks/useTasks";
 import { useAuth } from "@/auth/AuthProvider";
 import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
 import { NewDesignTemplateDialog } from "@/components/admin/ecosystem/NewDesignTemplateDialog";
+import { MasterPromptCard } from "@/components/admin/ecosystem/MasterPromptCard";
+import { ReferenceSetsCard } from "@/components/admin/ecosystem/ReferenceSetsCard";
+import { CollectionRecipeCard } from "@/components/admin/ecosystem/CollectionRecipeCard";
 import { TemplatePlate } from "./DesignTemplatesList";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,7 +36,7 @@ export default function DesignTemplateDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { user } = useAuth();
+  const { user, isPlatformAdmin } = useAuth();
 
   const { data: template, isLoading } = useDesignTemplate(id);
   const { data: applications = [] } = useTemplateApplications(id);
@@ -148,7 +151,9 @@ export default function DesignTemplateDetail() {
     );
   }
 
-  const editable = template.organization_id !== null;
+  // Global templates are read-only to org operators, but a platform admin owns
+  // the shared library and edits it in place — RLS allows exactly this.
+  const editable = template.organization_id !== null || isPlatformAdmin;
   const signature = templateSignature(template.attributes, 12);
 
   return (
@@ -262,6 +267,26 @@ export default function DesignTemplateDetail() {
         </div>
       )}
 
+      {/* Creative recipe — the reusable production formula */}
+      <div className="grid lg:grid-cols-3 gap-6 items-start">
+        <div className="lg:col-span-3">
+          <MasterPromptCard templateId={template.id} templateName={template.name} />
+        </div>
+        <ReferenceSetsCard templateId={template.id} referencePolicy={template.reference_policy} />
+        <CollectionRecipeCard templateId={template.id} recipe={template.collection_recipe} editable={editable} />
+        <section className="ax-card p-5">
+          <h2 className="font-bold">Style DNA</h2>
+          <p className="text-[12px] text-[hsl(var(--ax-faint))] mt-0.5 mb-3">
+            What the prompt and references are both trying to preserve.
+          </p>
+          <div className="space-y-2">
+            <Spec label="Graphics" value={template.graphic_characteristics} />
+            <Spec label="Typography" value={template.typography_characteristics} />
+            <Spec label="Colors" value={(template.color_tendencies ?? []).join(" · ")} />
+          </div>
+        </section>
+      </div>
+
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         {/* Attribute signature */}
         <section className="ax-card p-5">
@@ -358,6 +383,12 @@ export default function DesignTemplateDetail() {
                     {app.status} · applied {new Date(app.created_at).toLocaleDateString()}
                   </div>
                 </div>
+                <Link
+                  to={`/admin/design-templates/${template.id}/instances/${app.id}`}
+                  className="h-8 px-3 rounded-lg bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] text-[12px] font-bold inline-flex items-center gap-1.5 shrink-0"
+                >
+                  <Wand2 className="h-3.5 w-3.5" /> Open instance
+                </Link>
                 <button
                   onClick={() => unapply(app.id)}
                   disabled={busy === app.id}
