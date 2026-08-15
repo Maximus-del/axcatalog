@@ -37,6 +37,7 @@ import {
 import { useReferenceSets, useTemplatePrompts } from "@/hooks/useCreative";
 import { getCurrentOrgId } from "@/hooks/useTasks";
 import { useAuth } from "@/auth/AuthProvider";
+import { ExtractPromptDialog } from "@/components/admin/ecosystem/ExtractPromptDialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -357,6 +358,7 @@ function SetPrompts({
 }) {
   const [role, setRole] = useState<PromptRole>("primary");
   const [editing, setEditing] = useState(false);
+  const [extracting, setExtracting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -401,6 +403,14 @@ function SetPrompts({
               {copied ? <Check className="h-3 w-3 text-[hsl(var(--ax-accent))]" /> : <Copy className="h-3 w-3" />} Copy
             </button>
           )}
+          <button
+            onClick={() => setExtracting(true)}
+            disabled={set.images.length === 0}
+            title={set.images.length === 0 ? "Add reference images first" : "Have ChatGPT study these references and write the prompt"}
+            className="h-7 px-2.5 rounded border border-[hsl(var(--ax-border))] text-[11px] font-semibold inline-flex items-center gap-1 disabled:opacity-50"
+          >
+            <Wand2 className="h-3 w-3 text-[hsl(var(--ax-accent))]" /> From images
+          </button>
           <button
             onClick={() => setEditing(true)}
             className="h-7 px-2.5 rounded border border-[hsl(var(--ax-border))] text-[11px] font-semibold inline-flex items-center gap-1"
@@ -466,6 +476,17 @@ function SetPrompts({
           base={current}
           existing={prompts}
           onClose={() => { setEditing(false); onChange(); }}
+        />
+      )}
+
+      {extracting && (
+        <ExtractPromptDialog
+          set={set}
+          templateId={templateId}
+          templateName={templateName}
+          role={role}
+          existing={prompts}
+          onClose={() => { setExtracting(false); onChange(); }}
         />
       )}
     </div>

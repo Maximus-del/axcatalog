@@ -7,8 +7,10 @@ import {
   DEFAULT_OUTPUT_REQUIREMENTS,
   DIRECTION_MODES,
   applyTokens,
+  buildPromptExtractionRequest,
   compilePrompt,
   draftPromptFromNotes,
+  parseExtractionReply,
   extractTokens,
   missingVariables,
   nextPromptVersion,
@@ -336,6 +338,87 @@ describe("draftPromptFromNotes", () => {
     expect(backup).not.toBe(primary);
     expect(backup).toContain("different strategy");
     expect(primary).not.toContain("different strategy");
+  });
+});
+
+describe("buildPromptExtractionRequest", () => {
+  const base = { templateName: "Collegiate 01", setName: "Vintage Collegiate", imageCount: 4 };
+
+  it("asks for the shared language across the group, not one image", () => {
+    const out = buildPromptExtractionRequest(base);
+    expect(out).toContain("AS A GROUP");
+    expect(out).toContain("I do not want a description of any single image");
+    expect(out).toContain("Vintage Collegiate");
+    expect(out).toContain("4 reference images");
+  });
+
+  it("demands the placeholders back so athlete details can slot in later", () => {
+    const out = buildPromptExtractionRequest(base);
+    expect(out).toContain("{{ATHLETE_NAME}}");
+    expect(out).toContain("{{NUMBER}}");
+    expect(out).toContain("{{COLOR_PALETTE}}");
+  });
+
+  it("carries the output requirements so the returned prompt ends correctly", () => {
+    expect(buildPromptExtractionRequest(base)).toContain(DEFAULT_OUTPUT_REQUIREMENTS);
+    expect(buildPromptExtractionRequest({ ...base, outputRequirements: "MY RULES" })).toContain("MY RULES");
+  });
+
+  it("includes existing observations as a starting point when there are any", () => {
+    const withNotes = buildPromptExtractionRequest({ ...base, notes: { texture: "Heavy distress" } });
+    expect(withNotes).toContain("ALREADY OBSERVED");
+    expect(withNotes).toContain("Heavy distress");
+    expect(buildPromptExtractionRequest(base)).not.toContain("ALREADY OBSERVED");
+  });
+
+  it("tells the model to take a different angle for a backup prompt", () => {
+    expect(buildPromptExtractionRequest({ ...base, role: "backup" })).toContain("BACKUP prompt");
+    expect(buildPromptExtractionRequest({ ...base, role: "primary" })).not.toContain("BACKUP prompt");
+  });
+
+  it("handles one image without saying '1 images'", () => {
+    expect(buildPromptExtractionRequest({ ...base, imageCount: 1 })).toContain("1 reference image.");
+  });
+});
+
+describe("parseExtractionReply", () => {
+  const reply = `=== STYLE NOTES ===
+Typography: Older serif with collegiate block
+Composition: Small name above large central type
+Mood: Old campus bookstore
+
+=== PROMPT ===
+Create an original apparel graphic for {{ATHLETE_NAME}}.
+Use heavy distress throughout.`;
+
+  it("splits the two sections apart", () => {
+    const { notes, prompt } = parseExtractionReply(reply);
+    expect(notes.typography).toBe("Older serif with collegiate block");
+    expect(notes.mood).toBe("Old campus bookstore");
+    expect(prompt.startsWith("Create an original apparel graphic")).toBe(true);
+    expect(prompt).not.toContain("STYLE NOTES");
+  });
+
+  it("only keeps note lines that map to a known field", () => {
+    const { notes } = parseExtractionReply("=== STYLE NOTES ===\nVibe: cool\nTexture: gritty\n=== PROMPT ===\nx");
+    expect(notes.texture).toBe("gritty");
+    expect(Object.keys(notes)).toHaveLength(1);
+  });
+
+  it("strips code fences the model likes to add", () => {
+    const { prompt } = parseExtractionReply("=== PROMPT ===\n```\nMake a thing.\n```");
+    expect(prompt).toBe("Make a thing.");
+  });
+
+  it("treats an unmarked reply as the prompt rather than losing it", () => {
+    const { notes, prompt } = parseExtractionReply("Create an original graphic for {{ATHLETE_NAME}}.");
+    expect(prompt).toContain("{{ATHLETE_NAME}}");
+    expect(notes).toEqual({});
+  });
+
+  it("tolerates bulleted note lines", () => {
+    const { notes } = parseExtractionReply("=== STYLE NOTES ===\n- Color: cream and navy\n=== PROMPT ===\nx");
+    expect(notes.color).toBe("cream and navy");
   });
 });
 

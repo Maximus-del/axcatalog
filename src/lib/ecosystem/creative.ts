@@ -620,6 +620,39 @@ export function packagedReferences(set: ReferenceSet | null | undefined): Refere
   return set.images.slice(0, set.recommended_max || 5);
 }
 
+/**
+ * Split ChatGPT's reply back into the two things AX stores. Tolerant of the
+ * model wandering — falls back to treating the whole reply as the prompt, since
+ * a prompt with no notes is still useful and losing the paste is not.
+ */
+export function parseExtractionReply(reply: string): { notes: StyleNotes; prompt: string } {
+  const text = reply.replace(/```+[a-z]*\n?/gi, "").trim();
+  const promptMatch = text.match(/===\s*PROMPT\s*===/i);
+  const notesMatch = text.match(/===\s*STYLE\s*NOTES\s*===/i);
+
+  let notesBlock = "";
+  let promptBlock = text;
+
+  if (promptMatch?.index !== undefined) {
+    promptBlock = text.slice(promptMatch.index + promptMatch[0].length).trim();
+    const notesStart = notesMatch?.index !== undefined ? notesMatch.index + notesMatch[0].length : 0;
+    notesBlock = text.slice(notesStart, promptMatch.index).trim();
+  }
+
+  const notes: StyleNotes = {};
+  for (const line of notesBlock.split("\n")) {
+    const m = line.match(/^\s*[-*]?\s*([A-Za-z ]+?)\s*:\s*(.+)$/);
+    if (!m) continue;
+    const label = m[1].trim().toLowerCase();
+    const field = STYLE_NOTE_FIELDS.find(
+      (f) => f.key === label || f.label.toLowerCase() === label || label.startsWith(f.key),
+    );
+    if (field) notes[field.key] = m[2].trim();
+  }
+
+  return { notes, prompt: promptBlock.trim() };
+}
+
 export interface SetReadiness {
   hasPrimary: boolean;
   hasBackup: boolean;
@@ -667,6 +700,65 @@ export function templateReadiness(input: {
   ];
   const done = items.filter((i) => i.done).length;
   return { items, done, total: items.length, productionReady: done === items.length };
+}
+
+/**
+ * A meta-prompt: instructions you paste into ChatGPT ALONGSIDE this set's
+ * reference images, asking it to look at them and write the reusable prompt
+ * back to you. The model does the seeing; AX stores the result.
+ *
+ * Two things make the output usable rather than a pretty description: it must
+ * come back with the {{TOKENS}} intact so athlete details slot in later, and it
+ * must describe what the images SHARE rather than any one of them.
+ */
+export function buildPromptExtractionRequest(input: {
+  templateName: string;
+  setName: string;
+  imageCount: number;
+  notes?: StyleNotes;
+  role?: PromptRole;
+  outputRequirements?: string | null;
+}): string {
+  const tokenList = ["ATHLETE_NAME", "LAST_NAME", "NUMBER", "POSITION", "COLOR_PALETTE", "PRODUCT_TYPE"]
+    .map((t) => `{{${t}}}`)
+    .join(", ");
+
+  const existingNotes = STYLE_NOTE_FIELDS
+    .map((f) => ({ f, v: clean(input.notes?.[f.key]) }))
+    .filter((x) => x.v)
+    .map((x) => `${x.f.label}: ${x.v}`);
+
+  const backupClause = input.role === "backup"
+    ? `\nThis is a BACKUP prompt. A primary prompt for this style already exists, so approach the same visual language from a different angle — a different compositional strategy or emphasis, not a reworded version of the obvious reading.\n`
+    : "";
+
+  return `I am building a reusable prompt for generating original athlete apparel graphics. I have attached ${input.imageCount || "several"} reference image${input.imageCount === 1 ? "" : "s"}. They are examples of one specific style I want to be able to reproduce repeatedly for different athletes.
+
+This style is called "${input.setName}" — a sub-style of a broader system called "${input.templateName}".
+
+WHAT I NEED FROM YOU
+Study the attached images AS A GROUP. I do not want a description of any single image. I want the shared visual language running through all of them — the rules that make them feel like the same family.
+
+Then write me ONE reusable prompt I can use again and again, changing only the athlete details.
+${backupClause}
+THE PROMPT YOU WRITE MUST
+- Be written as instructions to an image-generation model, not as an analysis for me to read.
+- Cover, in this order and only where the references actually support it: typography, hierarchy and composition, graphic treatment and texture, illustration behaviour, color relationships, spacing and scale, and apparel intent.
+- Be specific enough that someone who has never seen these images could produce work in this style from the prompt alone. Name the letterform character, the layering, the distress level, the palette logic — not vague words like "bold" or "vintage".
+- Include these placeholders exactly as written, where each naturally belongs: ${tokenList}
+- Instruct that the result must be an ORIGINAL composition, and must not reproduce or imitate any real school, team, mascot, or brand mark, and must not use real trademarked logos or wordmarks.
+- End with this exact output block:
+
+${clean(input.outputRequirements) || DEFAULT_OUTPUT_REQUIREMENTS}
+${existingNotes.length ? `\nWHAT I HAVE ALREADY OBSERVED\nUse this as a starting point, correct me where the images say otherwise:\n${existingNotes.join("\n")}\n` : ""}
+RETURN FORMAT
+Return exactly two sections and nothing else:
+
+=== STYLE NOTES ===
+One short line for each of: Typography, Composition, Graphics, Texture, Color, Hierarchy, Mood, Apparel application.
+
+=== PROMPT ===
+The full reusable prompt, ready to paste. No commentary before or after it.`;
 }
 
 /**
