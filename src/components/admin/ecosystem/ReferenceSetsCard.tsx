@@ -5,7 +5,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
   Images, Plus, Trash2, Loader2, Link as LinkIcon, Upload, X, Star, ChevronDown, ChevronRight,
-  Copy, Check, Pencil, Wand2, ArrowUpCircle,
+  Copy, Check, Pencil, Wand2, ArrowUpCircle, ImageDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,6 +35,7 @@ import {
   type TemplatePrompt,
 } from "@/lib/ecosystem/creative";
 import { useReferenceSets, useTemplatePrompts } from "@/hooks/useCreative";
+import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { getCurrentOrgId } from "@/hooks/useTasks";
 import { useAuth } from "@/auth/AuthProvider";
 import { ExtractPromptDialog } from "@/components/admin/ecosystem/ExtractPromptDialog";
@@ -177,19 +178,37 @@ function ReferenceSetsManager({
     } finally { setBusy(null); }
   }
 
-  async function upload(setId: string, files: FileList | null) {
-    if (!files?.length) return;
+  async function upload(setId: string, files: FileList | File[] | null) {
+    const list = files ? Array.from(files) : [];
+    if (list.length === 0) return;
     setBusy(setId);
     try {
       const orgId = await getCurrentOrgId();
       if (!orgId) return;
-      for (const file of Array.from(files)) {
+      for (const file of list) {
         await uploadReferenceImage({ organization_id: orgId, reference_set_id: setId, file });
       }
-      toast.success(`${files.length} image${files.length === 1 ? "" : "s"} uploaded`);
+      toast.success(`${list.length} image${list.length === 1 ? "" : "s"} uploaded`);
       refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
+    } finally { setBusy(null); }
+  }
+
+  // Images dragged straight from another tab arrive as links, not files.
+  async function addUrls(setId: string, urls: string[]) {
+    if (urls.length === 0) return;
+    setBusy(setId);
+    try {
+      const orgId = await getCurrentOrgId();
+      if (!orgId) return;
+      for (const url of urls) {
+        await addReferenceImageUrl({ organization_id: orgId, reference_set_id: setId, url });
+      }
+      toast.success(`${urls.length} reference${urls.length === 1 ? "" : "s"} added`);
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add");
     } finally { setBusy(null); }
   }
 
@@ -272,7 +291,13 @@ function ReferenceSetsManager({
                     </div>
 
                     {view === "images" && (
-                      <>
+                      <ImagesPanel
+                        set={s}
+                        busy={busy === s.id}
+                        onUpload={(files) => upload(s.id, files)}
+                        onUrls={(urls) => addUrls(s.id, urls)}
+                        onChange={refresh}
+                      >
                         {s.images.length > 0 && (
                           <div className="grid grid-cols-6 gap-2">
                             {s.images.map((img) => {
@@ -327,7 +352,7 @@ function ReferenceSetsManager({
                             {busy === s.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Upload
                           </button>
                         </div>
-                      </>
+                      </ImagesPanel>
                     )}
 
                     {view === "prompts" && (
@@ -345,6 +370,65 @@ function ReferenceSetsManager({
           {sets.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">No sets yet.</p>}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---- Drop zone around a set's images ------------------------------------
+
+/**
+ * Drop files or drag an image straight from another tab. The whole panel is the
+ * target rather than a separate dashed box — references arrive in handfuls, and
+ * aiming at a small zone for each one is the friction worth removing.
+ */
+function ImagesPanel({
+  set, busy, onUpload, onUrls, children,
+}: {
+  set: ReferenceSet;
+  busy: boolean;
+  onUpload: (files: File[]) => void;
+  onUrls: (urls: string[]) => void;
+  onChange: () => void;
+  children: React.ReactNode;
+}) {
+  const { isOver, dropProps } = useFileDropZone({
+    onFiles: onUpload,
+    onUrls,
+    accept: ["image/"],
+    disabled: busy,
+  });
+
+  return (
+    <div
+      {...dropProps}
+      className={`relative rounded-lg transition-colors ${
+        isOver ? "ring-2 ring-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.06)]" : ""
+      }`}
+    >
+      <div className="space-y-2 p-1">{children}</div>
+
+      {set.images.length === 0 && !isOver && (
+        <div className="mx-1 mb-1 rounded-lg border border-dashed border-[hsl(var(--ax-border))] py-6 text-center">
+          <ImageDown className="h-5 w-5 mx-auto text-[hsl(var(--ax-faint))]" />
+          <p className="text-[12px] text-muted-foreground mt-1.5">
+            Drop images here — files, or drag straight from a browser tab
+          </p>
+        </div>
+      )}
+
+      {isOver && (
+        <div className="absolute inset-0 rounded-lg bg-[hsl(var(--ax-accent)/0.12)] flex items-center justify-center pointer-events-none">
+          <div className="text-[13px] font-bold text-[hsl(var(--ax-accent))] inline-flex items-center gap-2">
+            <ImageDown className="h-4 w-4" /> Drop to add to {set.name}
+          </div>
+        </div>
+      )}
+
+      {busy && (
+        <div className="absolute inset-0 rounded-lg bg-black/30 flex items-center justify-center pointer-events-none">
+          <Loader2 className="h-5 w-5 animate-spin text-white" />
+        </div>
+      )}
     </div>
   );
 }

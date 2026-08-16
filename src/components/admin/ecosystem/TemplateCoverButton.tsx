@@ -6,6 +6,7 @@ import { ImagePlus, Loader2, Link as LinkIcon, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { setTemplateCover, templatePreviewUrl, uploadTemplateCover, type DesignTemplateFull } from "@/lib/ecosystem/commerce";
+import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { Input } from "@/components/ui/input";
 
 export function TemplateCoverButton({ template }: { template: DesignTemplateFull }) {
@@ -17,13 +18,21 @@ export function TemplateCoverButton({ template }: { template: DesignTemplateFull
 
   const existing = templatePreviewUrl(template);
 
+  // Same drop behaviour as reference sets: a file, or an image dragged in.
+  const { isOver, dropProps } = useFileDropZone({
+    onFiles: (files) => upload(files as unknown as FileList),
+    onUrls: async (urls) => { setUrl(urls[0]); await saveUrlValue(urls[0]); },
+    accept: ["image/"],
+    disabled: busy,
+  });
+
   function refresh() {
     qc.invalidateQueries({ queryKey: ["design-template", template.id] });
     qc.invalidateQueries({ queryKey: ["design-template-library"] });
   }
 
-  async function upload(files: FileList | null) {
-    const file = files?.[0];
+  async function upload(files: FileList | File[] | null) {
+    const file = files ? Array.from(files)[0] : undefined;
     if (!file) return;
     setBusy(true);
     try {
@@ -38,10 +47,14 @@ export function TemplateCoverButton({ template }: { template: DesignTemplateFull
   }
 
   async function saveUrl() {
-    if (!url.trim()) return;
+    await saveUrlValue(url);
+  }
+
+  async function saveUrlValue(value: string) {
+    if (!value.trim()) return;
     setBusy(true);
     try {
-      await setTemplateCover(template.id, { url: url.trim() });
+      await setTemplateCover(template.id, { url: value.trim() });
       toast.success("Cover image set");
       setUrl("");
       refresh();
@@ -74,12 +87,18 @@ export function TemplateCoverButton({ template }: { template: DesignTemplateFull
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/50 overflow-y-auto" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-md ax-card p-5 my-8 space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            {...dropProps}
+            className={`w-full max-w-md ax-card p-5 my-8 space-y-4 transition-colors ${
+              isOver ? "ring-2 ring-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.06)]" : ""
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-start justify-between">
               <div>
                 <h3 className="font-bold text-lg">Cover image</h3>
                 <p className="text-[12px] text-[hsl(var(--ax-faint))] mt-0.5">
-                  Shown on the {template.name} card and header. Use something that reads as this style instantly.
+                  Shown on the {template.name} card and header. Drop an image anywhere in this box, or use the options below.
                 </p>
               </div>
               <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
