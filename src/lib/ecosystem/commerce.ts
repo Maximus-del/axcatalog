@@ -563,6 +563,33 @@ export async function setDesignTemplateActive(id: string, is_active: boolean): P
   if (error) throw error;
 }
 
+/**
+ * Cover image for a template — what makes "which one is Heritage again?"
+ * answerable at a glance instead of by reading the name. Stored in the existing
+ * preview_images array so the plate renderer already knows how to read it.
+ */
+export async function setTemplateCover(
+  templateId: string,
+  cover: { url: string; storage_path?: string | null } | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from("design_templates" as never)
+    .update({ preview_images: cover ? [cover] : [], updated_at: new Date().toISOString() } as never)
+    .eq("id", templateId);
+  if (error) throw error;
+}
+
+export const TEMPLATE_COVER_BUCKET = "design-references";
+
+export async function uploadTemplateCover(templateId: string, file: File): Promise<{ url: string; storage_path: string }> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+  const path = `templates/${templateId}/${crypto.randomUUID()}.${ext}`;
+  const up = await supabase.storage.from(TEMPLATE_COVER_BUCKET).upload(path, file, { upsert: false });
+  if (up.error) throw up.error;
+  const url = supabase.storage.from(TEMPLATE_COVER_BUCKET).getPublicUrl(path).data.publicUrl;
+  return { url, storage_path: path };
+}
+
 /** First usable preview image on a template, whatever shape it was stored in. */
 export function templatePreviewUrl(t: Pick<DesignTemplateFull, "preview_images">): string | null {
   const raw = t.preview_images;

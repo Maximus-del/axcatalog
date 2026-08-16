@@ -26,6 +26,7 @@ import { NewDesignTemplateDialog } from "@/components/admin/ecosystem/NewDesignT
 import { MasterPromptCard } from "@/components/admin/ecosystem/MasterPromptCard";
 import { ReferenceSetsCard } from "@/components/admin/ecosystem/ReferenceSetsCard";
 import { CollectionRecipeCard } from "@/components/admin/ecosystem/CollectionRecipeCard";
+import { TemplateCoverButton } from "@/components/admin/ecosystem/TemplateCoverButton";
 import { TemplatePlate } from "./DesignTemplatesList";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -164,7 +165,10 @@ export default function DesignTemplateDetail() {
 
       {/* Hero */}
       <div className="grid lg:grid-cols-[320px_1fr] gap-6 items-start">
-        <TemplatePlate template={template} className="h-56" />
+        <div className="space-y-2">
+          <TemplatePlate template={template} className="h-56" />
+          {editable && <TemplateCoverButton template={template} />}
+        </div>
         <div className="space-y-3">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
