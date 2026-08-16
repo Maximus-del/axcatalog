@@ -165,17 +165,24 @@ export function QuickAddProductDialog({
         team_id_at_release: teamId ?? null,
       });
 
+      // Images are best-effort here: the product carries a title, blank and price
+      // worth keeping even if an upload fails. Say so rather than failing silently.
       for (const [i, file] of files.entries()) {
-        const ext = file.name.split(".").pop()?.toLowerCase() || "png";
-        const path = `${productId}/${crypto.randomUUID()}.${ext}`;
-        const up = await supabase.storage.from("product-images").upload(path, file);
-        if (up.error) throw up.error;
-        await supabase.from("product_images").insert({
-          product_id: productId,
-          storage_bucket: "product-images",
-          storage_path: path,
-          sort_order: i,
-        } as never);
+        try {
+          const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+          const path = `${productId}/${crypto.randomUUID()}.${ext}`;
+          const up = await supabase.storage.from("product-images").upload(path, file);
+          if (up.error) throw up.error;
+          const linked = await supabase.from("product_images").insert({
+            product_id: productId,
+            storage_bucket: "product-images",
+            storage_path: path,
+            sort_order: i,
+          } as never);
+          if (linked.error) throw linked.error;
+        } catch (imgErr) {
+          toast.error(`Product created, but an image failed: ${imgErr instanceof Error ? imgErr.message : "upload rejected"}`);
+        }
       }
 
       toast.success(conceptOnly ? "Concept created" : "Product created");

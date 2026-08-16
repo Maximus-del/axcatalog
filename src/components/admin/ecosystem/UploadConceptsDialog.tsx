@@ -62,16 +62,25 @@ export function UploadConceptsDialog({
           collection_id: collectionId ?? null,
           team_id_at_release: teamId ?? null,
         });
-        const ext = d.file.name.split(".").pop()?.toLowerCase() || "png";
-        const path = `${productId}/${crypto.randomUUID()}.${ext}`;
-        const up = await supabase.storage.from("product-images").upload(path, d.file);
-        if (up.error) throw up.error;
-        await supabase.from("product_images").insert({
-          product_id: productId,
-          storage_bucket: "product-images",
-          storage_path: path,
-          sort_order: 0,
-        } as never);
+
+        // A concept without its image is a ghost row, so the product only
+        // survives if its image does. Roll back on any upload failure.
+        try {
+          const ext = d.file.name.split(".").pop()?.toLowerCase() || "png";
+          const path = `${productId}/${crypto.randomUUID()}.${ext}`;
+          const up = await supabase.storage.from("product-images").upload(path, d.file);
+          if (up.error) throw up.error;
+          const linked = await supabase.from("product_images").insert({
+            product_id: productId,
+            storage_bucket: "product-images",
+            storage_path: path,
+            sort_order: 0,
+          } as never);
+          if (linked.error) throw linked.error;
+        } catch (inner) {
+          await supabase.from("products" as never).delete().eq("id", productId);
+          throw inner;
+        }
         setProgress(i + 1);
       }
       toast.success(`${drafts.length} concept${drafts.length === 1 ? "" : "s"} created`);
