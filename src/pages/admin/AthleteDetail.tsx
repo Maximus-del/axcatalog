@@ -30,12 +30,14 @@ import {
 import { ProductStatusChip, PendingClock } from "@/components/admin/ecosystem/ProductStatusChip";
 import { toProductLike } from "@/lib/ecosystem/merch";
 import { EntityRolesDialog } from "@/components/admin/ecosystem/EntityRolesDialog";
+import { EntityMerchWorkspace } from "@/components/admin/ecosystem/EntityMerchWorkspace";
+import { UploadConceptsDialog } from "@/components/admin/ecosystem/UploadConceptsDialog";
 import {
   displayNameOf, entityTypeOf, hasModule, hasRole, isPerson, rolesOf,
   ENTITY_TYPES, AX_ROLES,
 } from "@/lib/ecosystem/entity";
 
-const MGMT_TABS = ["products", "collections", "drops", "content", "access", "events"] as const;
+const MGMT_TABS = ["merch", "collections", "drops", "content", "access", "events"] as const;
 
 const UNTAGGED_KEY = "__untagged__";
 const GENERAL_KEY = "__general__";
@@ -85,6 +87,7 @@ interface ProductLink {
     shopify_last_synced_at?: string | null;
     metadata?: Record<string, unknown> | null;
     designs?: { design_id: string }[];
+    collections?: { collection_id: string }[];
     price: number | null;
     status: string;
     images: Array<{ storage_path: string; storage_bucket: string }>;
@@ -135,12 +138,13 @@ export default function AthleteDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [membershipOpen, setMembershipOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("");
-  const [mgmtTab, setMgmtTab] = useState<(typeof MGMT_TABS)[number]>("products");
+  const [mgmtTab, setMgmtTab] = useState<(typeof MGMT_TABS)[number]>("merch");
   // Creating from the athlete page — the whole point is not leaving this context.
   const [addProduct, setAddProduct] = useState<{ concept: boolean } | null>(null);
   const [addDesign, setAddDesign] = useState(false);
   const [addCollection, setAddCollection] = useState(false);
   const [entityOpen, setEntityOpen] = useState(false);
+  const [uploadConcepts, setUploadConcepts] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -162,7 +166,8 @@ export default function AthleteDetail() {
              shopify_product_id, shopify_handle, shopify_sync_status, shopify_last_synced_at,
              metadata,
              images:product_images(storage_path, storage_bucket),
-             designs:product_designs(design_id))`,
+             designs:product_designs(design_id),
+             collections:collection_products(collection_id))`,
         )
         .eq("athlete_id", id),
       supabase
@@ -435,7 +440,26 @@ export default function AthleteDetail() {
         ))}
       </div>
 
-      {mgmtTab === "collections" ? (
+      {mgmtTab === "merch" ? (
+        <EntityMerchWorkspace
+          entity={athlete}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          products={products
+            .map((pl) => pl.product)
+            .filter(Boolean)
+            .map((p) => ({
+              ...p!,
+              collection_ids: (p!.collections ?? []).map((c) => c.collection_id),
+            }))}
+          designs={designs.map((d) => d.design).filter(Boolean) as never}
+          collections={collections}
+          onChanged={load}
+          onAddProduct={() => setAddProduct({ concept: false })}
+          onUploadConcepts={() => setUploadConcepts(true)}
+          onAddDesign={() => setAddDesign(true)}
+          onCreateCollection={() => setAddCollection(true)}
+        />
+      ) : mgmtTab === "collections" ? (
         <AthleteCollectionsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
       ) : mgmtTab === "drops" ? (
         <AthleteDropsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
@@ -469,7 +493,7 @@ export default function AthleteDetail() {
                 icon={<Package className="h-4 w-4" />}
                 count={tabProducts.length}
                 emptyText="No products yet"
-                emptyHint="Create this athlete's first product, or upload a concept while the setup gets finished."
+                emptyHint={`Create the first product for ${name}, or upload a concept while the setup gets finished.`}
                 actions={
                   <>
                     <SectionAction onClick={() => setAddProduct({ concept: false })}>+ Add Product</SectionAction>
@@ -635,6 +659,14 @@ export default function AthleteDetail() {
         <QuickAddDesignDialog
           athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
           onClose={() => setAddDesign(false)}
+          onCreated={load}
+        />
+      )}
+      {uploadConcepts && athlete && (
+        <UploadConceptsDialog
+          entity={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          onClose={() => setUploadConcepts(false)}
           onCreated={load}
         />
       )}
