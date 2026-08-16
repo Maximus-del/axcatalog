@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useBackTarget } from "@/hooks/useBackTarget";
 import { toast } from "sonner";
 import { ArrowLeft, ImagePlus, Palette, Pencil, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -72,6 +73,8 @@ interface LinkedProduct {
 export default function DesignDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // Opened from an athlete board? Go back to that board, on the tab you left.
+  const back = useBackTarget({ to: "/admin/designs", label: "Designs" });
   const designId = id!;
 
   const [design, setDesign] = useState<DesignDetailRow | null>(null);
@@ -250,7 +253,7 @@ export default function DesignDetail() {
       return;
     }
     toast.success("Design deleted");
-    navigate("/admin/designs");
+    navigate(back.to);
   }
 
   async function addAthlete() {
@@ -355,7 +358,7 @@ export default function DesignDetail() {
   if (!design) {
     return (
       <div className="p-6 lg:p-8 max-w-[1400px] mx-auto">
-        <Button variant="ghost" onClick={() => navigate("/admin/designs")} className="gap-2">
+        <Button variant="ghost" onClick={() => navigate(back.to)} className="gap-2">
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
         <div className="ax-card p-12 text-center text-muted-foreground mt-6">Design not found.</div>
@@ -378,10 +381,10 @@ export default function DesignDetail() {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => navigate("/admin/designs")}
+        onClick={() => navigate(back.to)}
         className="gap-2 -ml-2"
       >
-        <ArrowLeft className="h-4 w-4" /> Back to Designs
+        <ArrowLeft className="h-4 w-4" /> Back to {back.label}
       </Button>
 
       {/* HERO */}

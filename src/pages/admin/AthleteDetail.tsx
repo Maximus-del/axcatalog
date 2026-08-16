@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { differenceInYears, parseISO } from "date-fns";
 import { Pencil, Plus, Package, Palette, FolderOpen, Eye, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +35,8 @@ import { UploadConceptsDialog } from "@/components/admin/ecosystem/UploadConcept
 import { UploadMockupsDialog } from "@/components/admin/ecosystem/UploadMockupsDialog";
 import { AddInspirationDialog } from "@/components/admin/ecosystem/AddInspirationDialog";
 import { listInspiration, type InspirationImage } from "@/lib/ecosystem/board";
+import { useTabParam, useFreeTabParam } from "@/hooks/useTabParam";
+import { backTargetOf } from "@/hooks/useBackTarget";
 import {
   displayNameOf, entityTypeOf, hasModule, hasRole, isPerson, rolesOf,
   ENTITY_TYPES, AX_ROLES,
@@ -140,8 +142,16 @@ export default function AthleteDetail() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [membershipOpen, setMembershipOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("");
-  const [mgmtTab, setMgmtTab] = useState<(typeof MGMT_TABS)[number]>("merch");
+  // Both tabs live in the URL, so leaving for a product and coming back lands
+  // exactly where you were rather than on the default.
+  const [activeTab, setActiveTab] = useFreeTabParam("team", "");
+  const [mgmtTab, setMgmtTab] = useTabParam("tab", MGMT_TABS, "merch");
+  // load() runs long after the render that created it; a ref keeps it reading
+  // the tab that is selected NOW rather than the one at closure time.
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  const location = useLocation();
   // Creating from the athlete page — the whole point is not leaving this context.
   const [addProduct, setAddProduct] = useState<{ concept: boolean } | null>(null);
   const [addDesign, setAddDesign] = useState(false);
@@ -238,12 +248,15 @@ export default function AthleteDetail() {
       })),
     );
 
-    // Default tab
-    if (memships.length === 0) {
-      setActiveTab(GENERAL_KEY);
-    } else {
-      const current = memships.find((m) => !m.end_date);
-      setActiveTab(current?.team_id ?? memships[0].team_id);
+    // Default era tab — but never override one the URL already carries, or a
+    // return trip would snap back to the current team.
+    if (!activeTabRef.current) {
+      if (memships.length === 0) {
+        setActiveTab(GENERAL_KEY);
+      } else {
+        const current = memships.find((m) => !m.end_date);
+        setActiveTab(current?.team_id ?? memships[0].team_id);
+      }
     }
     setLoading(false);
   }
@@ -460,6 +473,7 @@ export default function AthleteDetail() {
         <EntityMerchWorkspace
           entity={athlete}
           teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          backTo={backTargetOf(location.pathname, location.search, name)}
           products={products
             .map((pl) => pl.product)
             .filter(Boolean)
@@ -480,7 +494,11 @@ export default function AthleteDetail() {
           onAddInspiration={() => setAddInspiration(true)}
         />
       ) : mgmtTab === "collections" ? (
-        <AthleteCollectionsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
+        <AthleteCollectionsTab
+          athleteId={athlete.id}
+          organizationId={athlete.organization_id}
+          backTo={backTargetOf(location.pathname, location.search, name)}
+        />
       ) : mgmtTab === "drops" ? (
         <AthleteDropsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
       ) : mgmtTab === "content" ? (

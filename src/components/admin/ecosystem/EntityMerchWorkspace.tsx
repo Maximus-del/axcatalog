@@ -27,6 +27,7 @@ import {
 import { CHECKERBOARD, ImageLightbox, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
 import { CreatePngDialog } from "@/components/admin/ecosystem/CreatePngDialog";
 import { productionPngState } from "@/lib/ecosystem/prompts";
+import { backState, type BackTarget } from "@/hooks/useBackTarget";
 import { Input } from "@/components/ui/input";
 
 export interface WorkspaceProduct {
@@ -91,10 +92,12 @@ export function approvalLabelFor(entity: EntityLike): string {
 }
 
 export function EntityMerchWorkspace({
-  entity, teamId, products, designs, mockups, inspiration, collections, onChanged, onAddProduct, onUploadConcepts, onAddDesign, onCreateCollection, onAddMockups, onAddInspiration,
+  entity, teamId, backTo, products, designs, mockups, inspiration, collections, onChanged, onAddProduct, onUploadConcepts, onAddDesign, onCreateCollection, onAddMockups, onAddInspiration,
 }: {
   entity: EntityLike & { id: string; organization_id: string };
   teamId?: string | null;
+  /** Where the detail pages this board links into should send you back to. */
+  backTo?: BackTarget;
   products: WorkspaceProduct[];
   designs: WorkspaceDesign[];
   mockups: WorkspaceMockup[];
@@ -263,7 +266,12 @@ export function EntityMerchWorkspace({
               const approved = inCollection.filter((p) => p.approval_state === "approved").length;
               const liveCount = inCollection.filter((p) => !!p.shopify_product_id).length;
               return (
-                <Link key={c.id} to={`/admin/collections/${c.id}`} className="ax-card-hover block">
+                <Link
+                  key={c.id}
+                  to={`/admin/collections/${c.id}`}
+                  state={backTo ? backState(backTo) : undefined}
+                  className="ax-card-hover block"
+                >
                   <div className="grid grid-cols-2 gap-1 rounded-[10px] overflow-hidden h-32">
                     {thumbs.length > 0 ? (
                       thumbs.map((t, i) => (
@@ -331,7 +339,12 @@ export function EntityMerchWorkspace({
                     {on ? <CheckSquare className="h-5 w-5 text-[hsl(var(--ax-accent))]" /> : <Square className="h-5 w-5 opacity-70" />}
                   </button>
                   <span className="absolute top-3.5 right-3.5 z-10"><PendingClock product={like} /></span>
-                  <Link to={`/admin/products/${p.id}`} className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
+                  <Link
+                    to={`/admin/products/${p.id}`}
+                    state={backTo ? backState(backTo) : undefined}
+                    className="block aspect-square rounded-md overflow-hidden"
+                    style={CHECKERBOARD}
+                  >
                     {url ? (
                       <img src={url} alt={p.title} loading="lazy" className="h-full w-full object-cover" />
                     ) : (
@@ -357,6 +370,7 @@ export function EntityMerchWorkspace({
                     {png === "ready" ? (
                       <Link
                         to={`/admin/designs/${p.designs![0].design_id}`}
+                        state={backTo ? backState(backTo) : undefined}
                         className="text-[11px] font-semibold text-[hsl(var(--ax-accent))] inline-flex items-center gap-1"
                       >
                         <FileImage className="h-3 w-3" /> View PNG
@@ -450,7 +464,12 @@ export function EntityMerchWorkspace({
               const f = d.files?.[0];
               const url = f ? signed[storageKey(f)] ?? null : null;
               return (
-                <Link key={d.id} to={`/admin/designs/${d.id}`} className="ax-card-hover p-2">
+                <Link
+                  key={d.id}
+                  to={`/admin/designs/${d.id}`}
+                  state={backTo ? backState(backTo) : undefined}
+                  className="ax-card-hover p-2"
+                >
                   <span className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
                     {url ? (
                       <img src={url} alt={d.title} loading="lazy" className="h-full w-full object-contain" />
@@ -527,7 +546,12 @@ export function EntityMerchWorkspace({
               const shop = shopifyProductUrl(p.shopify_handle);
               return (
                 <div key={p.id} className="ax-card p-2.5">
-                  <Link to={`/admin/products/${p.id}`} className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
+                  <Link
+                    to={`/admin/products/${p.id}`}
+                    state={backTo ? backState(backTo) : undefined}
+                    className="block aspect-square rounded-md overflow-hidden"
+                    style={CHECKERBOARD}
+                  >
                     {url && <img src={url} alt={p.title} loading="lazy" className="h-full w-full object-cover" />}
                   </Link>
                   <div className="mt-2 text-[13px] font-semibold truncate">{p.title}</div>
