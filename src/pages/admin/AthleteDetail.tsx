@@ -22,6 +22,13 @@ import { AthleteCollectionsTab } from "@/components/admin/ecosystem/AthleteColle
 import { ApplyTemplateButton } from "@/components/admin/ecosystem/ApplyTemplateButton";
 import { ApplyDesignTemplateButton } from "@/components/admin/ecosystem/ApplyDesignTemplateButton";
 import { RapidStartButton } from "@/components/admin/ecosystem/RapidStartButton";
+import {
+  QuickAddProductDialog,
+  QuickAddDesignDialog,
+  QuickAddCollectionDialog,
+} from "@/components/admin/ecosystem/AthleteMerchDialogs";
+import { ProductStatusChip, PendingClock } from "@/components/admin/ecosystem/ProductStatusChip";
+import { toProductLike } from "@/lib/ecosystem/merch";
 
 const MGMT_TABS = ["products", "collections", "drops", "content", "access", "events"] as const;
 
@@ -58,6 +65,17 @@ interface ProductLink {
   product: {
     id: string;
     title: string;
+    description?: string | null;
+    blank_id?: string | null;
+    updated_at?: string | null;
+    approval_state?: string | null;
+    approval_note?: string | null;
+    shopify_product_id?: string | null;
+    shopify_handle?: string | null;
+    shopify_sync_status?: string | null;
+    shopify_last_synced_at?: string | null;
+    metadata?: Record<string, unknown> | null;
+    designs?: { design_id: string }[];
     price: number | null;
     status: string;
     images: Array<{ storage_path: string; storage_bucket: string }>;
@@ -109,6 +127,10 @@ export default function AthleteDetail() {
   const [membershipOpen, setMembershipOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("");
   const [mgmtTab, setMgmtTab] = useState<(typeof MGMT_TABS)[number]>("products");
+  // Creating from the athlete page — the whole point is not leaving this context.
+  const [addProduct, setAddProduct] = useState<{ concept: boolean } | null>(null);
+  const [addDesign, setAddDesign] = useState(false);
+  const [addCollection, setAddCollection] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -125,8 +147,12 @@ export default function AthleteDetail() {
         .from("product_athletes")
         .select(
           `id, team_id_at_release,
-           product:products(id, title, price, status,
-             images:product_images(storage_path, storage_bucket))`,
+           product:products(id, title, description, price, status, blank_id, updated_at,
+             approval_state, approval_note,
+             shopify_product_id, shopify_handle, shopify_sync_status, shopify_last_synced_at,
+             metadata,
+             images:product_images(storage_path, storage_bucket),
+             designs:product_designs(design_id))`,
         )
         .eq("athlete_id", id),
       supabase
@@ -414,7 +440,14 @@ export default function AthleteDetail() {
                 title="Products"
                 icon={<Package className="h-4 w-4" />}
                 count={tabProducts.length}
-                emptyText="No products yet for this era"
+                emptyText="No products yet"
+                emptyHint="Create this athlete's first product, or upload a concept while the setup gets finished."
+                actions={
+                  <>
+                    <SectionAction onClick={() => setAddProduct({ concept: false })}>+ Add Product</SectionAction>
+                    <SectionAction onClick={() => setAddProduct({ concept: true })}>+ Upload Concept</SectionAction>
+                  </>
+                }
               >
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {tabProducts.slice(0, 12).map((pl) =>
@@ -423,7 +456,10 @@ export default function AthleteDetail() {
                         key={pl.id}
                         className="ax-card-hover w-44 shrink-0 p-3"
                       >
-                        <div className="aspect-square rounded-md bg-muted mb-2 overflow-hidden">
+                        <div className="aspect-square rounded-md bg-muted mb-2 overflow-hidden relative">
+                          <span className="absolute top-1.5 right-1.5 z-10">
+                            <PendingClock product={toProductLike(pl.product)} />
+                          </span>
                           {pl.product.images?.[0] && (
                             <img
                               src={
@@ -441,15 +477,13 @@ export default function AthleteDetail() {
                         <div className="text-sm font-medium truncate">
                           {pl.product.title}
                         </div>
-                        <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center justify-between mt-1 gap-1">
                           <span className="text-xs text-muted-foreground">
                             {pl.product.price != null
                               ? `$${Number(pl.product.price).toFixed(2)}`
                               : "—"}
                           </span>
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {pl.product.status}
-                          </span>
+                          <ProductStatusChip product={toProductLike(pl.product)} />
                         </div>
                       </div>
                     ) : null,
@@ -462,7 +496,9 @@ export default function AthleteDetail() {
                 title="Designs"
                 icon={<Palette className="h-4 w-4" />}
                 count={tabDesigns.length}
-                emptyText="No designs yet for this era"
+                emptyText="No designs yet"
+                emptyHint="Upload final artwork — transparent PNG, isolated, high resolution."
+                actions={<SectionAction onClick={() => setAddDesign(true)}>+ Add Design</SectionAction>}
               >
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {tabDesigns.slice(0, 12).map((dl, i) =>
@@ -491,7 +527,9 @@ export default function AthleteDetail() {
                 title="Collections"
                 icon={<FolderOpen className="h-4 w-4" />}
                 count={tabCollections.length}
-                emptyText="No collections yet for this era"
+                emptyText="No collections yet"
+                emptyHint="A collection is the permanent creative family. Drops release from it."
+                actions={<SectionAction onClick={() => setAddCollection(true)}>+ Create Collection</SectionAction>}
               >
                 <div className="space-y-2">
                   {tabCollections.map((c) => (
@@ -555,7 +593,43 @@ export default function AthleteDetail() {
         organizationId={athlete.organization_id}
         onSaved={load}
       />
+
+      {addProduct && athlete && (
+        <QuickAddProductDialog
+          athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          conceptOnly={addProduct.concept}
+          onClose={() => setAddProduct(null)}
+          onCreated={load}
+        />
+      )}
+      {addDesign && athlete && (
+        <QuickAddDesignDialog
+          athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setAddDesign(false)}
+          onCreated={load}
+        />
+      )}
+      {addCollection && athlete && (
+        <QuickAddCollectionDialog
+          athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setAddCollection(false)}
+          onCreated={load}
+        />
+      )}
     </div>
+  );
+}
+
+function SectionAction({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-xs font-semibold text-[hsl(var(--ax-accent))] hover:underline whitespace-nowrap"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -564,12 +638,17 @@ function EraSection({
   icon,
   count,
   emptyText,
+  emptyHint,
+  actions,
   children,
 }: {
   title: string;
   icon: React.ReactNode;
   count: number;
   emptyText: string;
+  emptyHint?: string;
+  /** Create affordances — shown in the header and again in the empty state. */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -582,19 +661,18 @@ function EraSection({
             ({count})
           </span>
         </div>
-        {count > 12 && (
-          <button
-            type="button"
-            className="text-xs text-accent hover:underline"
-            onClick={() => console.log(`View all ${title.toLowerCase()}`)}
-          >
-            View all {count} {title.toLowerCase()} →
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {count > 12 && (
+            <span className="text-xs text-muted-foreground">{count} total</span>
+          )}
+          {actions}
+        </div>
       </div>
       {count === 0 ? (
-        <div className="ax-card p-6 text-center text-sm text-muted-foreground">
-          {emptyText}
+        <div className="ax-card p-6 text-center space-y-2">
+          <div className="text-sm text-muted-foreground">{emptyText}</div>
+          {emptyHint && <div className="text-xs text-muted-foreground">{emptyHint}</div>}
+          {actions && <div className="flex items-center justify-center gap-2 pt-1">{actions}</div>}
         </div>
       ) : (
         children
