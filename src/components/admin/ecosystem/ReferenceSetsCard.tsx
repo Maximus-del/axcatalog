@@ -435,6 +435,7 @@ function ImagesPanel({
     onUrls,
     accept: ["image/"],
     disabled: busy,
+    paste: true,
   });
 
   return (
@@ -450,7 +451,7 @@ function ImagesPanel({
         <div className="mx-1 mb-1 rounded-lg border border-dashed border-[hsl(var(--ax-border))] py-6 text-center">
           <ImageDown className="h-5 w-5 mx-auto text-[hsl(var(--ax-faint))]" />
           <p className="text-[12px] text-muted-foreground mt-1.5">
-            Drop images here — files, or drag straight from a browser tab
+            Drop images here, paste with Ctrl+V, or drag straight from a browser tab
           </p>
         </div>
       )}

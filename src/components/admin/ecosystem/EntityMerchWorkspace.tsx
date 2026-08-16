@@ -16,7 +16,9 @@ import { createCollection } from "@/lib/ecosystem/commerce";
 import { lifecycleOf, shopifyProductUrl, toProductLike, type ProductLike } from "@/lib/ecosystem/merch";
 import { displayNameOf, hasRole, type EntityLike } from "@/lib/ecosystem/entity";
 import { ProductStatusChip, PendingClock } from "@/components/admin/ecosystem/ProductStatusChip";
-import { CHECKERBOARD } from "@/components/admin/ecosystem/ImageLightbox";
+
+import { useSignedUrls, storageKey } from "@/hooks/useSignedUrls";
+import { CHECKERBOARD, ImageLightbox, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
 import { Input } from "@/components/ui/input";
 
 export interface WorkspaceProduct {
@@ -43,6 +45,15 @@ export interface WorkspaceDesign {
   title: string;
   status: string;
   files: { storage_path: string; storage_bucket: string }[];
+}
+
+export interface WorkspaceMockup {
+  id: string;
+  title: string;
+  shot_type: string | null;
+  status: string;
+  storage_bucket: string | null;
+  storage_path: string | null;
 }
 
 export interface WorkspaceCollection {
@@ -72,25 +83,39 @@ export function approvalLabelFor(entity: EntityLike): string {
 }
 
 export function EntityMerchWorkspace({
-  entity, teamId, products, designs, collections, onChanged, onAddProduct, onUploadConcepts, onAddDesign, onCreateCollection,
+  entity, teamId, products, designs, mockups, collections, onChanged, onAddProduct, onUploadConcepts, onAddDesign, onCreateCollection, onAddMockups,
 }: {
   entity: EntityLike & { id: string; organization_id: string };
   teamId?: string | null;
   products: WorkspaceProduct[];
   designs: WorkspaceDesign[];
+  mockups: WorkspaceMockup[];
   collections: WorkspaceCollection[];
   onChanged: () => void;
   onAddProduct: () => void;
   onUploadConcepts: () => void;
   onAddDesign: () => void;
   onCreateCollection: () => void;
+  onAddMockups: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [namingCollection, setNamingCollection] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
 
   const name = displayNameOf(entity);
+
+  // design-files and mockups are private buckets — these need signing or the
+  // thumbnails silently render as blanks.
+  const privateFiles = useMemo(
+    () => [
+      ...designs.flatMap((d) => d.files ?? []),
+      ...mockups.map((m) => ({ storage_bucket: m.storage_bucket, storage_path: m.storage_path })),
+    ],
+    [designs, mockups],
+  );
+  const signed = useSignedUrls(privateFiles);
 
   // Concepts and in-progress items on one board; anything live moves to commerce.
   const { concepts, live } = useMemo(() => {
@@ -261,6 +286,49 @@ export function EntityMerchWorkspace({
         )}
       </section>
 
+      {/* MOCKUPS */}
+      <section className="space-y-3">
+        <SectionHead
+          title="Mockups"
+          count={mockups.length}
+          action={<HeadAction onClick={onAddMockups} icon={<Images className="h-3.5 w-3.5" />}>Upload mockups</HeadAction>}
+        />
+        {mockups.length === 0 ? (
+          <p className="text-[12px] text-muted-foreground">
+            Presentation imagery — flat lays, on-model shots, lookbook frames. Not tied to a product until you attach one.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+            {mockups.map((m, i) => {
+              const url = signed[storageKey(m)] ?? null;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => setLightbox(i)}
+                  className="ax-card-hover p-2 text-left"
+                  title="Click to view full size"
+                >
+                  <span className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
+                    {url ? (
+                      <img src={url} alt={m.title} loading="lazy" className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="h-full w-full flex items-center justify-center bg-[hsl(var(--ax-line))]">
+                        <Images className="h-4 w-4 text-[hsl(var(--ax-faint))]" />
+                      </span>
+                    )}
+                  </span>
+                  <div className="mt-1.5 text-[12px] font-semibold truncate">{m.title}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {(m.shot_type ?? "").replace(/_/g, " ") || m.status}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       {/* DESIGNS */}
       <section className="space-y-3">
         <SectionHead
@@ -274,7 +342,7 @@ export function EntityMerchWorkspace({
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
             {designs.map((d) => {
               const f = d.files?.[0];
-              const url = f && f.storage_bucket === "product-images" ? imageUrl(f.storage_bucket, f.storage_path) : null;
+              const url = f ? signed[storageKey(f)] ?? null : null;
               return (
                 <Link key={d.id} to={`/admin/designs/${d.id}`} className="ax-card-hover p-2">
                   <span className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
@@ -327,6 +395,17 @@ export function EntityMerchWorkspace({
           </div>
         )}
       </section>
+
+      {lightbox !== null && (
+        <ImageLightbox
+          items={mockups
+            .map((m) => ({ id: m.id, url: signed[storageKey(m)] ?? "", title: m.title }))
+            .filter((i) => i.url) as LightboxItem[]}
+          index={lightbox}
+          onIndexChange={setLightbox}
+          onClose={() => setLightbox(null)}
+        />
+      )}
 
       {/* BULK BAR */}
       {selected.length > 0 && (

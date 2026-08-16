@@ -3,7 +3,7 @@
 // Returns { isOver, dropProps } that you spread onto the wrapper element.
 // We use a counter to avoid the "flicker" caused by dragenter/dragleave
 // firing on every child element.
-import { useCallback, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 
 interface Options {
   /**
@@ -24,6 +24,12 @@ interface Options {
   accept?: string[];
   /** Disable the drop zone entirely. */
   disabled?: boolean;
+  /**
+   * Also accept Ctrl/Cmd+V while mounted. Screenshots and AI output usually
+   * arrive on the clipboard, never as a file on disk, so pasting is often the
+   * fastest path in and the only one that doesn't require saving first.
+   */
+  paste?: boolean;
 }
 
 /**
@@ -56,7 +62,7 @@ function extractUrls(dt: DataTransfer | null): string[] {
   return Array.from(new Set(urls.filter((u) => /^https?:\/\//i.test(u) || u.startsWith("data:image/"))));
 }
 
-export function useFileDropZone({ onFiles, onUrls, accept, disabled }: Options) {
+export function useFileDropZone({ onFiles, onUrls, accept, disabled, paste }: Options) {
   const [isOver, setIsOver] = useState(false);
   const counter = useRef(0);
 
@@ -131,6 +137,48 @@ export function useFileDropZone({ onFiles, onUrls, accept, disabled }: Options) 
     },
     [disabled, matchesAccept, onFiles, onUrls],
   );
+
+  // Clipboard images. Ignored while typing in a text field, so pasting a prompt
+  // into a textarea never gets mistaken for pasting an image.
+  useEffect(() => {
+    if (!paste || disabled) return;
+
+    function onPaste(e: ClipboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+
+      const items = Array.from(e.clipboardData?.items ?? []);
+      const files = items
+        .filter((i) => i.kind === "file" && i.type.startsWith("image/"))
+        .map((i) => i.getAsFile())
+        .filter((f): f is File => !!f)
+        .filter(matchesAccept)
+        .map((f, idx) =>
+          // Clipboard files are usually named "image.png" or nothing at all.
+          f.name && f.name !== "image.png"
+            ? f
+            : new File([f], `pasted-${Date.now()}-${idx + 1}.${(f.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: f.type }),
+        );
+
+      if (files.length > 0) {
+        e.preventDefault();
+        onFiles(files);
+        return;
+      }
+
+      if (onUrls) {
+        const text = e.clipboardData?.getData("text/plain")?.trim();
+        if (text && /^https?:\/\/\S+\.(png|jpe?g|gif|webp|avif)(\?|$)/i.test(text)) {
+          e.preventDefault();
+          onUrls([text]);
+        }
+      }
+    }
+
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [paste, disabled, matchesAccept, onFiles, onUrls]);
 
   return {
     isOver,

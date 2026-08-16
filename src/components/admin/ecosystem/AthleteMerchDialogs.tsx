@@ -16,7 +16,7 @@ import {
 import { createCollection } from "@/lib/ecosystem/commerce";
 import { uploadDesignFromFile } from "@/lib/upload-design";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
-import { useAuth } from "@/auth/AuthProvider";
+import { CHECKERBOARD } from "@/components/admin/ecosystem/ImageLightbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -145,6 +145,7 @@ export function QuickAddProductDialog({
   const { isOver, dropProps } = useFileDropZone({
     onFiles: (f) => setFiles((prev) => [...prev, ...f]),
     accept: ["image/"],
+    paste: true,
   });
 
   async function save() {
@@ -211,7 +212,7 @@ export function QuickAddProductDialog({
           {files.length === 0 ? (
             <>
               <Upload className="h-5 w-5 mx-auto text-[hsl(var(--ax-faint))]" />
-              <p className="text-[12px] text-muted-foreground mt-1.5">Drop mockups here</p>
+              <p className="text-[12px] text-muted-foreground mt-1.5">Drop mockups here, or paste with Ctrl+V</p>
             </>
           ) : (
             <div className="flex flex-wrap gap-2 justify-center">
@@ -352,28 +353,42 @@ export function QuickAddDesignDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const { user } = useAuth();
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [drafts, setDrafts] = useState<{ file: File; title: string; preview: string }[]>([]);
   const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState(0);
 
-  const { isOver, dropProps } = useFileDropZone({
-    onFiles: (f) => { setFile(f[0]); if (!title) setTitle(f[0].name.replace(/\.[^.]+$/, "")); },
-    accept: ["image/"],
-  });
+  function addFiles(files: File[]) {
+    const pngs = files.filter((f) => f.type === "image/png");
+    const rejected = files.length - pngs.length;
+    if (rejected > 0) toast.error(`${rejected} file${rejected === 1 ? "" : "s"} skipped — designs must be PNG`);
+    setDrafts((prev) => [
+      ...prev,
+      ...pngs.map((file) => ({
+        file,
+        title: file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || "Design",
+        preview: URL.createObjectURL(file),
+      })),
+    ]);
+  }
+
+  const { isOver, dropProps } = useFileDropZone({ onFiles: addFiles, accept: ["image/"], paste: true });
 
   async function save() {
-    if (!file || !title.trim()) return;
+    if (drafts.length === 0) return;
     setSaving(true);
+    setProgress(0);
     try {
-      const { designId } = await uploadDesignFromFile({
-        file,
-        organizationId: athlete.organization_id,
-        collectionId: null,
-        titleOverride: title.trim(),
-      });
-      await supabase.from("design_athletes").insert({ design_id: designId, athlete_id: athlete.id } as never);
-      toast.success("Design added");
+      for (const [i, d] of drafts.entries()) {
+        const { designId } = await uploadDesignFromFile({
+          file: d.file,
+          organizationId: athlete.organization_id,
+          collectionId: null,
+          titleOverride: d.title.trim(),
+        });
+        await supabase.from("design_athletes").insert({ design_id: designId, athlete_id: athlete.id } as never);
+        setProgress(i + 1);
+      }
+      toast.success(`${drafts.length} design${drafts.length === 1 ? "" : "s"} added`);
       onCreated();
       onClose();
     } catch (e) {
@@ -382,36 +397,66 @@ export function QuickAddDesignDialog({
   }
 
   return (
-    <Shell title="Add design" blurb={`Final artwork for ${athlete.name} — transparent PNG, isolated, high resolution.`} onClose={onClose}>
+    <Shell
+      title="Add designs"
+      blurb={`Final artwork for ${athlete.name} — transparent PNG, isolated, high resolution. Drop several, or paste from the clipboard.`}
+      onClose={onClose}
+    >
       <div
         {...dropProps}
         className={`rounded-lg border border-dashed p-6 text-center transition-colors ${
           isOver ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.08)]" : "border-[hsl(var(--ax-border))]"
         }`}
       >
-        {file ? (
-          <img src={URL.createObjectURL(file)} alt="" className="h-28 mx-auto object-contain" />
-        ) : (
-          <>
-            <Palette className="h-5 w-5 mx-auto text-[hsl(var(--ax-faint))]" />
-            <p className="text-[12px] text-muted-foreground mt-1.5">Drop the final PNG here</p>
-          </>
-        )}
+        <Palette className="h-6 w-6 mx-auto text-[hsl(var(--ax-faint))]" />
+        <p className="text-[13px] text-muted-foreground mt-1.5">Drop PNGs here, paste with Ctrl+V</p>
+        <label className="inline-block mt-2 text-[12px] font-semibold text-[hsl(var(--ax-accent))] cursor-pointer">
+          or browse
+          <input
+            type="file" accept="image/png" multiple className="hidden"
+            onChange={(e) => { addFiles(Array.from(e.target.files ?? [])); e.target.value = ""; }}
+          />
+        </label>
       </div>
 
-      <Field label="Design name">
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Mooney Collegiate 01" />
-      </Field>
+      {drafts.length > 0 && (
+        <div className="space-y-2 max-h-[45vh] overflow-y-auto">
+          {drafts.map((d, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <span className="h-14 w-14 rounded overflow-hidden border border-[hsl(var(--ax-border))] shrink-0" style={CHECKERBOARD}>
+                <img src={d.preview} alt="" className="h-full w-full object-contain" />
+              </span>
+              <Input
+                value={d.title}
+                onChange={(e) => setDrafts((prev) => prev.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
+                className="h-9 text-[13px]"
+              />
+              <button
+                onClick={() => setDrafts((prev) => prev.filter((_, j) => j !== i))}
+                className="text-muted-foreground hover:text-destructive shrink-0"
+                aria-label="Remove"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} className="h-9 px-4 rounded-lg border border-[hsl(var(--ax-border))] font-semibold text-sm">Cancel</button>
-        <button
-          onClick={save}
-          disabled={saving || !file || !title.trim()}
-          className="h-9 px-4 rounded-lg bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] font-bold text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
-        >
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />} Add design
-        </button>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[12px] text-muted-foreground">
+          {saving ? `Uploading ${progress} of ${drafts.length}…` : `${drafts.length} design${drafts.length === 1 ? "" : "s"}`}
+        </span>
+        <div className="flex gap-2">
+          <button onClick={onClose} className="h-9 px-4 rounded-lg border border-[hsl(var(--ax-border))] font-semibold text-sm">Cancel</button>
+          <button
+            onClick={save}
+            disabled={saving || drafts.length === 0}
+            className="h-9 px-4 rounded-lg bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] font-bold text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Palette className="h-4 w-4" />} Add designs
+          </button>
+        </div>
       </div>
     </Shell>
   );

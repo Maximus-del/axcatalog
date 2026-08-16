@@ -24,6 +24,7 @@ export function TemplateCoverButton({ template }: { template: DesignTemplateFull
     onUrls: async (urls) => { setUrl(urls[0]); await saveUrlValue(urls[0]); },
     accept: ["image/"],
     disabled: busy,
+    paste: true,
   });
 
   function refresh() {

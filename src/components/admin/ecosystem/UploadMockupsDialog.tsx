@@ -1,49 +1,40 @@
-// Drop a stack of mockups, get a stack of product concepts.
+// Mockups: presentation imagery that isn't a product.
 //
-// The creative process starts with an image, not a SKU. Each upload becomes a
-// real product row immediately — no blank, no price, no Shopify — so it can go
-// into a collection and be approved while the commerce setup happens later. It
-// is the same record that eventually goes live; nothing is re-created.
+// Flat lays, on-model shots, lookbook frames. They live in their own private
+// bucket and are attached to the entity, so they can exist before any product
+// does — and a product can borrow one later without the image being re-uploaded.
 import { useState } from "react";
 import { Loader2, X, Images, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { createAthleteProduct } from "@/lib/ecosystem/merch";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { CHECKERBOARD } from "@/components/admin/ecosystem/ImageLightbox";
 import { Input } from "@/components/ui/input";
 
-interface Draft { file: File; name: string; preview: string }
+const SHOT_TYPES = ["flat_lay", "model_front", "model_back", "detail_close_up", "lookbook", "action", "other"] as const;
 
-/** "AbbotsfordHeritage_hoodie-01.png" → "Abbotsford Heritage Hoodie 01" */
-function nameFromFile(fileName: string): string {
-  return fileName
-    .replace(/\.[^.]+$/, "")
-    .replace(/[_-]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (c) => c.toUpperCase()) || "Concept";
-}
+interface Draft { file: File; title: string; preview: string }
 
-export function UploadConceptsDialog({
-  entity, teamId, collectionId, onClose, onCreated,
+export function UploadMockupsDialog({
+  entity, onClose, onCreated,
 }: {
   entity: { id: string; organization_id: string; name: string };
-  teamId?: string | null;
-  /** When opened from a collection, everything lands in it directly. */
-  collectionId?: string | null;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [shotType, setShotType] = useState<string>("flat_lay");
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState(0);
 
   function addFiles(files: File[]) {
     setDrafts((prev) => [
       ...prev,
-      ...files.map((file) => ({ file, name: nameFromFile(file.name), preview: URL.createObjectURL(file) })),
+      ...files.map((file) => ({
+        file,
+        title: file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || "Mockup",
+        preview: URL.createObjectURL(file),
+      })),
     ]);
   }
 
@@ -55,35 +46,41 @@ export function UploadConceptsDialog({
     setProgress(0);
     try {
       for (const [i, d] of drafts.entries()) {
-        const productId = await createAthleteProduct({
-          organization_id: entity.organization_id,
-          athlete_id: entity.id,
-          title: d.name.trim() || "Concept",
-          collection_id: collectionId ?? null,
-          team_id_at_release: teamId ?? null,
-        });
+        // The row comes first: storage policy keys off the mockup id in the path.
+        const { data, error } = await supabase
+          .from("mockups" as never)
+          .insert({
+            organization_id: entity.organization_id,
+            athlete_id: entity.id,
+            title: d.title.trim() || "Mockup",
+            shot_type: shotType,
+            status: "draft",
+            storage_bucket: "mockups",
+            storage_path: "",
+            file_name: d.file.name,
+            file_type: d.file.type,
+            file_size: d.file.size,
+          } as never)
+          .select("id")
+          .single();
+        if (error) throw error;
+        const mockupId = (data as unknown as { id: string }).id;
 
-        // A concept without its image is a ghost row, so the product only
-        // survives if its image does. Roll back on any upload failure.
         try {
           const ext = d.file.name.split(".").pop()?.toLowerCase() || "png";
-          const path = `${productId}/${crypto.randomUUID()}.${ext}`;
-          const up = await supabase.storage.from("product-images").upload(path, d.file);
+          const path = `${mockupId}/${crypto.randomUUID()}.${ext}`;
+          const up = await supabase.storage.from("mockups").upload(path, d.file);
           if (up.error) throw up.error;
-          const linked = await supabase.from("product_images").insert({
-            product_id: productId,
-            storage_bucket: "product-images",
-            storage_path: path,
-            sort_order: 0,
-          } as never);
+          const linked = await supabase.from("mockups" as never).update({ storage_path: path } as never).eq("id", mockupId);
           if (linked.error) throw linked.error;
         } catch (inner) {
-          await supabase.from("products" as never).delete().eq("id", productId);
+          // A mockup row with no file is just a broken thumbnail — don't keep it.
+          await supabase.from("mockups" as never).delete().eq("id", mockupId);
           throw inner;
         }
         setProgress(i + 1);
       }
-      toast.success(`${drafts.length} concept${drafts.length === 1 ? "" : "s"} created`);
+      toast.success(`${drafts.length} mockup${drafts.length === 1 ? "" : "s"} uploaded`);
       onCreated();
       onClose();
     } catch (e) {
@@ -96,13 +93,32 @@ export function UploadConceptsDialog({
       <div className="w-full max-w-2xl ax-card p-5 my-8 space-y-4" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="font-bold text-lg">Upload concepts</h3>
+            <h3 className="font-bold text-lg">Upload mockups</h3>
             <p className="text-[12px] text-[hsl(var(--ax-faint))] mt-0.5">
-              Mockups for {entity.name}. No blank, price or Shopify setup needed — these become real items you can put in
-              a collection and send for approval right away.
+              Presentation imagery for {entity.name} — flat lays, on-model shots, lookbook frames. Drop, browse, or paste
+              with Ctrl+V.
             </p>
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        </div>
+
+        <div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-[hsl(var(--ax-faint))] mb-1.5">Shot type</div>
+          <div className="flex flex-wrap gap-1.5">
+            {SHOT_TYPES.map((t) => (
+              <button
+                key={t}
+                onClick={() => setShotType(t)}
+                className={`text-[11px] font-semibold rounded-full px-2.5 py-1 border capitalize ${
+                  shotType === t
+                    ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                    : "border-[hsl(var(--ax-border))] text-muted-foreground"
+                }`}
+              >
+                {t.replace(/_/g, " ")}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div
@@ -123,15 +139,15 @@ export function UploadConceptsDialog({
         </div>
 
         {drafts.length > 0 && (
-          <div className="space-y-2 max-h-[45vh] overflow-y-auto">
+          <div className="space-y-2 max-h-[40vh] overflow-y-auto">
             {drafts.map((d, i) => (
               <div key={i} className="flex items-center gap-3">
                 <span className="h-14 w-14 rounded overflow-hidden border border-[hsl(var(--ax-border))] shrink-0" style={CHECKERBOARD}>
                   <img src={d.preview} alt="" className="h-full w-full object-contain" />
                 </span>
                 <Input
-                  value={d.name}
-                  onChange={(e) => setDrafts((prev) => prev.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+                  value={d.title}
+                  onChange={(e) => setDrafts((prev) => prev.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
                   className="h-9 text-[13px]"
                 />
                 <button
@@ -148,7 +164,7 @@ export function UploadConceptsDialog({
 
         <div className="flex items-center justify-between gap-2">
           <span className="text-[12px] text-muted-foreground">
-            {saving ? `Uploading ${progress} of ${drafts.length}…` : `${drafts.length} concept${drafts.length === 1 ? "" : "s"}`}
+            {saving ? `Uploading ${progress} of ${drafts.length}…` : `${drafts.length} mockup${drafts.length === 1 ? "" : "s"}`}
           </span>
           <div className="flex gap-2">
             <button onClick={onClose} className="h-9 px-4 rounded-lg border border-[hsl(var(--ax-border))] font-semibold text-sm">Cancel</button>
@@ -157,7 +173,7 @@ export function UploadConceptsDialog({
               disabled={saving || drafts.length === 0}
               className="h-9 px-4 rounded-lg bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] font-bold text-sm inline-flex items-center gap-1.5 disabled:opacity-60"
             >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Save concepts
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Save mockups
             </button>
           </div>
         </div>

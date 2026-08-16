@@ -32,6 +32,7 @@ import { toProductLike } from "@/lib/ecosystem/merch";
 import { EntityRolesDialog } from "@/components/admin/ecosystem/EntityRolesDialog";
 import { EntityMerchWorkspace } from "@/components/admin/ecosystem/EntityMerchWorkspace";
 import { UploadConceptsDialog } from "@/components/admin/ecosystem/UploadConceptsDialog";
+import { UploadMockupsDialog } from "@/components/admin/ecosystem/UploadMockupsDialog";
 import {
   displayNameOf, entityTypeOf, hasModule, hasRole, isPerson, rolesOf,
   ENTITY_TYPES, AX_ROLES,
@@ -145,12 +146,14 @@ export default function AthleteDetail() {
   const [addCollection, setAddCollection] = useState(false);
   const [entityOpen, setEntityOpen] = useState(false);
   const [uploadConcepts, setUploadConcepts] = useState(false);
+  const [uploadMockups, setUploadMockups] = useState(false);
+  const [mockups, setMockups] = useState<Array<{ id: string; title: string; shot_type: string | null; status: string; storage_bucket: string | null; storage_path: string | null }>>([]);
 
   async function load() {
     if (!id) return;
     setLoading(true);
 
-    const [aRes, mRes, pRes, dRes, cRes] = await Promise.all([
+    const [aRes, mRes, pRes, dRes, cRes, mkRes] = await Promise.all([
       supabase.from("athletes").select("*").eq("id", id).maybeSingle(),
       supabase
         .from("team_memberships")
@@ -182,9 +185,15 @@ export default function AthleteDetail() {
         .from("collections")
         .select("id, name, description, status, team_id")
         .eq("athlete_id", id),
+      supabase
+        .from("mockups")
+        .select("id, title, shot_type, status, storage_bucket, storage_path")
+        .eq("athlete_id", id)
+        .order("created_at", { ascending: false }),
     ]);
 
     setAthlete((aRes.data as Athlete | null) ?? null);
+    setMockups((mkRes.data ?? []) as never);
     const memships = (mRes.data ?? []).map((m) => ({
       ...m,
       team: Array.isArray(m.team) ? (m.team[0] ?? null) : (m.team as Membership["team"]),
@@ -452,12 +461,14 @@ export default function AthleteDetail() {
               collection_ids: (p!.collections ?? []).map((c) => c.collection_id),
             }))}
           designs={designs.map((d) => d.design).filter(Boolean) as never}
+          mockups={mockups}
           collections={collections}
           onChanged={load}
           onAddProduct={() => setAddProduct({ concept: false })}
           onUploadConcepts={() => setUploadConcepts(true)}
           onAddDesign={() => setAddDesign(true)}
           onCreateCollection={() => setAddCollection(true)}
+          onAddMockups={() => setUploadMockups(true)}
         />
       ) : mgmtTab === "collections" ? (
         <AthleteCollectionsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
@@ -659,6 +670,13 @@ export default function AthleteDetail() {
         <QuickAddDesignDialog
           athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
           onClose={() => setAddDesign(false)}
+          onCreated={load}
+        />
+      )}
+      {uploadMockups && athlete && (
+        <UploadMockupsDialog
+          entity={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setUploadMockups(false)}
           onCreated={load}
         />
       )}
