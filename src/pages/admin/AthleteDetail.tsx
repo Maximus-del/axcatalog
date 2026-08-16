@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { differenceInYears, parseISO } from "date-fns";
-import { Pencil, Plus, Package, Palette, FolderOpen, Eye } from "lucide-react";
+import { Pencil, Plus, Package, Palette, FolderOpen, Eye, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,11 @@ import {
 } from "@/components/admin/ecosystem/AthleteMerchDialogs";
 import { ProductStatusChip, PendingClock } from "@/components/admin/ecosystem/ProductStatusChip";
 import { toProductLike } from "@/lib/ecosystem/merch";
+import { EntityRolesDialog } from "@/components/admin/ecosystem/EntityRolesDialog";
+import {
+  displayNameOf, entityTypeOf, hasModule, hasRole, isPerson, rolesOf,
+  ENTITY_TYPES, AX_ROLES,
+} from "@/lib/ecosystem/entity";
 
 const MGMT_TABS = ["products", "collections", "drops", "content", "access", "events"] as const;
 
@@ -49,6 +54,10 @@ interface Athlete {
   current_team_id: string | null;
   notes: string | null;
   metadata: Record<string, unknown> | null;
+  entity_type?: string | null;
+  roles?: string[] | null;
+  display_name?: string | null;
+  capabilities?: Record<string, boolean> | null;
 }
 
 interface Membership {
@@ -131,6 +140,7 @@ export default function AthleteDetail() {
   const [addProduct, setAddProduct] = useState<{ concept: boolean } | null>(null);
   const [addDesign, setAddDesign] = useState(false);
   const [addCollection, setAddCollection] = useState(false);
+  const [entityOpen, setEntityOpen] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -222,7 +232,7 @@ export default function AthleteDetail() {
   }, [id]);
 
   const name = athlete
-    ? athlete.full_name ?? `${athlete.first_name} ${athlete.last_name}`
+    ? displayNameOf(athlete)
     : "";
 
   const tabs = useMemo(() => {
@@ -357,29 +367,47 @@ export default function AthleteDetail() {
                   {currentTeam.name}
                 </span>
               )}
-              {athlete.position && <span>{athlete.position}</span>}
-              {athlete.jersey_number && (
+              {/* Athletic detail only makes sense for a person. */}
+              {isPerson(athlete.entity_type) && athlete.position && <span>{athlete.position}</span>}
+              {isPerson(athlete.entity_type) && athlete.jersey_number && (
                 <span>#{athlete.jersey_number.replace(/^#/, "")}</span>
               )}
-              {athlete.league && <span>{athlete.league}</span>}
+              {isPerson(athlete.entity_type) && athlete.league && <span>{athlete.league}</span>}
+              {!isPerson(athlete.entity_type) && (
+                <span className="px-2 py-0.5 rounded-md bg-muted text-foreground text-xs capitalize">
+                  {ENTITY_TYPES.find((t) => t.value === entityTypeOf(athlete))?.label ?? "Entity"}
+                </span>
+              )}
+              {rolesOf(athlete).map((r) => (
+                <span key={r} className="px-2 py-0.5 rounded-md bg-[hsl(var(--ax-accent)/0.15)] text-[hsl(var(--ax-accent))] text-[10px] font-bold uppercase tracking-wider">
+                  {AX_ROLES.find((x) => x.value === r)?.label ?? r}
+                </span>
+              ))}
               <span className={STATUS_BADGE[athlete.status]}>{athlete.status}</span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {hasModule(athlete, "fan_profile") && (
           <Button variant="outline" asChild className="gap-2">
             <Link to={`/a/${athlete.slug}`}>
               <Eye className="h-4 w-4" /> View Fan Profile
             </Link>
           </Button>
+          )}
+          {hasModule(athlete, "athlete_dashboard") && (
           <Button variant="outline" asChild className="gap-2">
             <Link to={`/portal?as=${athlete.id}`}>
               <Eye className="h-4 w-4" /> Athlete Dashboard
             </Link>
           </Button>
+          )}
           <ApplyTemplateButton athleteId={athlete.id} />
           <ApplyDesignTemplateButton athleteId={athlete.id} organizationId={athlete.organization_id} />
           <RapidStartButton athleteId={athlete.id} organizationId={athlete.organization_id} lastName={athlete.last_name} />
+          <Button variant="outline" onClick={() => setEntityOpen(true)} className="gap-2">
+            <ShieldCheck className="h-4 w-4" /> Type &amp; Roles
+          </Button>
           <Button variant="outline" onClick={() => setMembershipOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Add Team Membership
           </Button>
@@ -608,6 +636,13 @@ export default function AthleteDetail() {
           athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
           onClose={() => setAddDesign(false)}
           onCreated={load}
+        />
+      )}
+      {entityOpen && athlete && (
+        <EntityRolesDialog
+          entity={athlete}
+          onClose={() => setEntityOpen(false)}
+          onSaved={load}
         />
       )}
       {addCollection && athlete && (

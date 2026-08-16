@@ -10,6 +10,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
+import { displayNameOf, entityTypeOf, rolesOf, AX_ROLES, ENTITY_TYPES } from "@/lib/ecosystem/entity";
 import {
   Package,
   User,
@@ -93,10 +94,12 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
       const like = `%${term}%`;
       const [aRes, pRes, oRes, dRes] = await Promise.all([
         // Athletes first — match first, last, OR full name so "Darnell Mooney" works.
+        // The athletes table, not the fan-facing view: organizations, schools and
+        // partners live here too and must be findable.
         supabase
-          .from("public_athletes" as never)
-          .select("id, first_name, last_name, full_name, position, team_name, league")
-          .or(`first_name.ilike.${like},last_name.ilike.${like},full_name.ilike.${like}`)
+          .from("athletes" as never)
+          .select("id, first_name, last_name, full_name, display_name, entity_type, roles, position, league")
+          .or(`first_name.ilike.${like},last_name.ilike.${like},full_name.ilike.${like},display_name.ilike.${like}`)
           .limit(8),
         supabase.from("products").select("id, title, status").ilike("title", like).limit(6),
         supabase
@@ -109,14 +112,19 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
       ]);
       if (cancelled) return;
       const aRows = (aRes.data ?? []) as unknown as Array<{
-        id: string; first_name: string; last_name: string; full_name: string | null;
-        position: string | null; team_name: string | null; league: string | null;
+        id: string; first_name: string; last_name: string | null; full_name: string | null;
+        display_name: string | null; entity_type: string | null; roles: string[] | null;
+        position: string | null; league: string | null;
       }>;
       setHits({
         athletes: aRows.map((a) => ({
           id: a.id,
-          label: (a.full_name && a.full_name.trim()) || `${a.first_name ?? ""} ${a.last_name ?? ""}`.trim(),
-          sub: [a.position, a.team_name].filter(Boolean).join(" · ") || a.league || undefined,
+          label: displayNameOf(a),
+          sub: [
+            entityTypeOf(a) !== "person" ? ENTITY_TYPES.find((t) => t.value === entityTypeOf(a))?.label : null,
+            ...rolesOf(a).filter((r) => r !== "athlete").map((r) => AX_ROLES.find((x) => x.value === r)?.label ?? r),
+            a.position,
+          ].filter(Boolean).join(" · ") || undefined,
           to: `/admin/athletes/${a.id}`,
         })),
         products: (pRes.data ?? []).map((p) => ({
@@ -175,7 +183,7 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
-        placeholder="Search athletes, products, pages…"
+        placeholder="Search profiles, products, pages…"
         value={q}
         onValueChange={setQ}
       />
@@ -194,7 +202,7 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
         {noHits && <CommandEmpty>No results for "{q}".</CommandEmpty>}
 
         {hits.athletes.length > 0 && (
-          <CommandGroup heading="Athletes">
+          <CommandGroup heading="Profiles">
             {hits.athletes.map((h) => (
               <CommandItem key={h.id} value={`${h.label} ${h.sub ?? ""} athlete`} onSelect={() => go(h.to)} className="gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />

@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  DIRECTORY_FILTERS, displayNameOf, entityTypeOf, matchesFilter, rolesOf,
+  AX_ROLES, ENTITY_TYPES, isPerson,
+} from "@/lib/ecosystem/entity";
 import { Link } from "react-router-dom";
 import { Plus, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,6 +21,9 @@ import { AthleteFormDialog } from "@/components/admin/athletes/AthleteFormDialog
 
 interface AthleteRow {
   id: string;
+  display_name?: string | null;
+  entity_type?: string | null;
+  roles?: string[] | null;
   first_name: string;
   last_name: string;
   full_name: string | null;
@@ -38,6 +45,9 @@ export default function AthletesList() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [leagueFilter, setLeagueFilter] = useState<string>("all");
+  // Directory tabs are role/type based: a person who is both athlete and client
+  // appears under both, as the same record.
+  const [directory, setDirectory] = useState<string>("all");
   const [addOpen, setAddOpen] = useState(false);
 
   async function load() {
@@ -45,7 +55,7 @@ export default function AthletesList() {
     const { data: rows } = await supabase
       .from("athletes")
       .select(
-        `id, first_name, last_name, full_name, position, jersey_number, league, status,
+`id, first_name, last_name, full_name, display_name, entity_type, roles, position, jersey_number, league, status,
          current_team:teams!athletes_current_team_id_fkey(id, name)`,
       )
       .order("status", { ascending: true })
@@ -98,10 +108,11 @@ export default function AthletesList() {
       if (statusFilter !== "all" && a.status !== statusFilter) return false;
       if (leagueFilter !== "all" && a.league !== leagueFilter) return false;
       if (!q) return true;
-      const name = (a.full_name ?? `${a.first_name} ${a.last_name}`).toLowerCase();
+      if (!matchesFilter(a, directory)) return false;
+      const name = displayNameOf(a).toLowerCase();
       return name.includes(q);
     });
-  }, [athletes, search, statusFilter, leagueFilter]);
+  }, [athletes, search, statusFilter, leagueFilter, directory]);
 
   const isEmpty = !loading && athletes && athletes.length === 0;
 
@@ -118,6 +129,23 @@ export default function AthletesList() {
       </header>
 
       {!isEmpty && (
+        <>
+        <div className="flex flex-wrap gap-1.5">
+          {DIRECTORY_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setDirectory(f.key)}
+              className={`text-[12px] font-semibold rounded-full px-3 py-1 border ${
+                directory === f.key
+                  ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                  : "border-[hsl(var(--ax-border))] text-muted-foreground"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[220px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -153,6 +181,7 @@ export default function AthletesList() {
             </SelectContent>
           </Select>
         </div>
+        </>
       )}
 
       {loading && (
@@ -187,7 +216,7 @@ export default function AthletesList() {
       {!loading && filtered.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((a) => {
-            const name = a.full_name ?? `${a.first_name} ${a.last_name}`;
+            const name = displayNameOf(a);
             const meta = [
               a.position,
               a.jersey_number ? `#${a.jersey_number.replace(/^#/, "")}` : null,
