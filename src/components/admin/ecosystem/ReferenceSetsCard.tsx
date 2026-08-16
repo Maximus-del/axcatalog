@@ -39,6 +39,7 @@ import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { getCurrentOrgId } from "@/hooks/useTasks";
 import { useAuth } from "@/auth/AuthProvider";
 import { ExtractPromptDialog } from "@/components/admin/ecosystem/ExtractPromptDialog";
+import { ImageLightbox, CHECKERBOARD, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -90,7 +91,9 @@ export function ReferenceSetsCard({ templateId, templateName, referencePolicy }:
                   {s.images.slice(0, 3).map((img) => {
                     const url = referenceImageUrl(img);
                     return url ? (
-                      <img key={img.id} src={url} alt="" className="h-7 w-7 rounded object-cover border border-[hsl(var(--ax-border))]" />
+                      <span key={img.id} className="h-7 w-7 rounded overflow-hidden border border-[hsl(var(--ax-border))] block" style={CHECKERBOARD}>
+                        <img src={url} alt="" className="h-full w-full object-contain" />
+                      </span>
                     ) : null;
                   })}
                   {s.images.length === 0 && <span className="h-7 w-7 rounded bg-[hsl(var(--ax-line))]" />}
@@ -299,34 +302,7 @@ function ReferenceSetsManager({
                         onChange={refresh}
                       >
                         {s.images.length > 0 && (
-                          <div className="grid grid-cols-6 gap-2">
-                            {s.images.map((img) => {
-                              const url = referenceImageUrl(img);
-                              return (
-                                <div key={img.id} className="relative group aspect-square">
-                                  {url ? (
-                                    <img src={url} alt="" className={`h-full w-full object-cover rounded border-2 ${img.is_recommended ? "border-[hsl(var(--ax-accent))]" : "border-[hsl(var(--ax-border))]"}`} />
-                                  ) : (
-                                    <div className="h-full w-full rounded bg-[hsl(var(--ax-line))]" />
-                                  )}
-                                  <button
-                                    onClick={async () => { await setImageRecommended(img.id, !img.is_recommended); refresh(); }}
-                                    className="absolute bottom-1 left-1 h-5 w-5 rounded-full bg-black/70 flex items-center justify-center"
-                                    title={img.is_recommended ? "Recommended — click to unmark" : "Mark recommended"}
-                                  >
-                                    <Star className={`h-3 w-3 ${img.is_recommended ? "fill-current text-[hsl(var(--ax-accent))]" : "text-white/70"}`} />
-                                  </button>
-                                  <button
-                                    onClick={async () => { await removeReferenceImage(img.id); refresh(); }}
-                                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center"
-                                    aria-label="Remove image"
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <ReferenceThumbGrid set={s} onChange={refresh} />
                         )}
                         <div className="flex gap-2">
                           <div className="relative flex-1">
@@ -371,6 +347,69 @@ function ReferenceSetsManager({
         </div>
       </div>
     </div>
+  );
+}
+
+// ---- Thumbnails --------------------------------------------------------
+
+/**
+ * Clickable thumbnails on a checkerboard. Transparent PNGs are the normal case
+ * here — isolated artwork — and against the dark panel they would otherwise
+ * look like empty squares.
+ */
+function ReferenceThumbGrid({ set, onChange }: { set: ReferenceSet; onChange: () => void }) {
+  const [lightbox, setLightbox] = useState<number | null>(null);
+
+  const items: LightboxItem[] = set.images
+    .map((img) => ({ id: img.id, url: referenceImageUrl(img) ?? "", title: img.title }))
+    .filter((i) => i.url);
+
+  return (
+    <>
+      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+        {set.images.map((img) => {
+          const url = referenceImageUrl(img);
+          const idx = items.findIndex((i) => i.id === img.id);
+          return (
+            <div key={img.id} className="relative group aspect-square">
+              <button
+                type="button"
+                onClick={() => idx >= 0 && setLightbox(idx)}
+                className={`block h-full w-full rounded overflow-hidden border-2 ${
+                  img.is_recommended ? "border-[hsl(var(--ax-accent))]" : "border-[hsl(var(--ax-border))]"
+                }`}
+                style={CHECKERBOARD}
+                title="Click to view full size"
+              >
+                {url ? (
+                  <img src={url} alt={img.title ?? ""} loading="lazy" className="h-full w-full object-contain" />
+                ) : (
+                  <span className="block h-full w-full bg-[hsl(var(--ax-line))]" />
+                )}
+              </button>
+              <button
+                onClick={async () => { await setImageRecommended(img.id, !img.is_recommended); onChange(); }}
+                className="absolute bottom-1 left-1 h-6 w-6 rounded-full bg-black/75 flex items-center justify-center"
+                title={img.is_recommended ? "Recommended — click to unmark" : "Mark recommended"}
+              >
+                <Star className={`h-3.5 w-3.5 ${img.is_recommended ? "fill-current text-[hsl(var(--ax-accent))]" : "text-white/70"}`} />
+              </button>
+              <button
+                onClick={async () => { await removeReferenceImage(img.id); onChange(); }}
+                className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/85 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                aria-label="Remove image"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {lightbox !== null && (
+        <ImageLightbox items={items} index={lightbox} onIndexChange={setLightbox} onClose={() => setLightbox(null)} />
+      )}
+    </>
   );
 }
 

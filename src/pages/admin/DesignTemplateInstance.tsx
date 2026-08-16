@@ -42,6 +42,7 @@ import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
 import { CreateConceptDialog } from "@/components/admin/ecosystem/CreateConceptDialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageLightbox, CHECKERBOARD, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DesignTemplateInstance() {
@@ -73,6 +74,7 @@ export default function DesignTemplateInstance() {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [conceptOpen, setConceptOpen] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null);
 
   // Seed local editing state once the instance loads.
   useEffect(() => {
@@ -507,12 +509,19 @@ export default function DesignTemplateInstance() {
                   </button>
                 </div>
                 <div className="grid grid-cols-6 gap-2">
-                  {attachments.map((img) => {
+                  {attachments.map((img, i) => {
                     const url = referenceImageUrl(img);
                     return url ? (
-                      <a key={img.id} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square">
-                        <img src={url} alt="" className="h-full w-full object-cover rounded border border-[hsl(var(--ax-border))]" />
-                      </a>
+                      <button
+                        key={img.id}
+                        type="button"
+                        onClick={() => setLightbox(i)}
+                        className="aspect-square rounded overflow-hidden border border-[hsl(var(--ax-border))]"
+                        style={CHECKERBOARD}
+                        title="Click to view full size"
+                      >
+                        <img src={url} alt="" className="h-full w-full object-contain" />
+                      </button>
                     ) : null;
                   })}
                 </div>
@@ -651,6 +660,15 @@ export default function DesignTemplateInstance() {
           Generated → Shortlisted → Revision → Approved → Final PNG → Collection design
         </div>
       </section>
+
+      {lightbox !== null && (
+        <ImageLightbox
+          items={attachments.map((img) => ({ id: img.id, url: referenceImageUrl(img) ?? "", title: img.title })).filter((i) => i.url) as LightboxItem[]}
+          index={lightbox}
+          onIndexChange={setLightbox}
+          onClose={() => setLightbox(null)}
+        />
+      )}
 
       {conceptOpen && athlete && (
         <CreateConceptDialog

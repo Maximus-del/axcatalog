@@ -21,6 +21,7 @@ import {
 } from "@/lib/ecosystem/creative";
 import { getCurrentOrgId } from "@/hooks/useTasks";
 import { useAuth } from "@/auth/AuthProvider";
+import { ImageLightbox, CHECKERBOARD, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
 import { Textarea } from "@/components/ui/textarea";
 
 export function ExtractPromptDialog({
@@ -43,6 +44,7 @@ export function ExtractPromptDialog({
   const [copied, setCopied] = useState(false);
   const [reply, setReply] = useState("");
   const [saving, setSaving] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null);
 
   const images = useMemo(() => packagedReferences(set), [set]);
   const request = useMemo(
@@ -148,12 +150,19 @@ export function ExtractPromptDialog({
                   </button>
                 </div>
                 <div className="grid grid-cols-6 gap-2">
-                  {images.map((img) => {
+                  {images.map((img, i) => {
                     const url = referenceImageUrl(img);
                     return url ? (
-                      <a key={img.id} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square">
-                        <img src={url} alt="" className="h-full w-full object-cover rounded border border-[hsl(var(--ax-border))]" />
-                      </a>
+                      <button
+                        key={img.id}
+                        type="button"
+                        onClick={() => setLightbox(i)}
+                        className="aspect-square rounded overflow-hidden border border-[hsl(var(--ax-border))]"
+                        style={CHECKERBOARD}
+                        title="Click to view full size"
+                      >
+                        <img src={url} alt="" className="h-full w-full object-contain" />
+                      </button>
                     ) : null;
                   })}
                 </div>
@@ -231,6 +240,15 @@ export function ExtractPromptDialog({
           </>
         )}
       </div>
+
+      {lightbox !== null && (
+        <ImageLightbox
+          items={images.map((img) => ({ id: img.id, url: referenceImageUrl(img) ?? "", title: img.title })).filter((i) => i.url) as LightboxItem[]}
+          index={lightbox}
+          onIndexChange={setLightbox}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }
