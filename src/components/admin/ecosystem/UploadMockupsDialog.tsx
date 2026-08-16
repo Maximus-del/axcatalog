@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { CHECKERBOARD } from "@/components/admin/ecosystem/ImageLightbox";
+import { PngCreationPanel } from "@/components/admin/ecosystem/PngCreationPanel";
 import { Input } from "@/components/ui/input";
 
 const SHOT_TYPES = ["flat_lay", "model_front", "model_back", "detail_close_up", "lookbook", "action", "other"] as const;
@@ -120,6 +121,11 @@ export function UploadMockupsDialog({
             ))}
           </div>
         </div>
+
+        <PngCreationPanel
+          organizationId={entity.organization_id}
+          designName={drafts.length === 1 ? drafts[0].title : undefined}
+        />
 
         <div
           {...dropProps}

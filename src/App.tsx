@@ -74,6 +74,7 @@ const CollectionsList = lazy(() => import("./pages/admin/CollectionsList"));
 const CollectionDetail = lazy(() => import("./pages/admin/CollectionDetail"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+const AdminPrompts = lazy(() => import("./pages/admin/AdminPrompts"));
 const AdminMockups = lazy(() => import("./pages/admin/AdminMockups"));
 const AdminBrandAssets = lazy(() => import("./pages/admin/AdminBrandAssets"));
 const AdminFulfillment = lazy(() => import("./pages/admin/AdminFulfillment"));
@@ -176,6 +177,7 @@ const App = () => (
                 <Route path="print-queue" element={<AdminPrintQueue />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="settings" element={<AdminSettings />} />
+                <Route path="prompts" element={<AdminPrompts />} />
                 <Route path="team" element={<TeamUsers />} />
                 <Route path="users" element={<TeamUsers />} />
                 <Route path="ingestion" element={<IngestionQueue />} />

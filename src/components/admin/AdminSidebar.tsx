@@ -23,6 +23,7 @@ import {
   Star,
   CalendarDays,
   LayoutTemplate,
+  FileImage,
   type LucideIcon,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -98,6 +99,7 @@ const GROUPS: NavGroup[] = [
     label: "System",
     items: [
       { label: "Templates", to: "/admin/templates", icon: LayoutTemplate },
+      { label: "Prompts", to: "/admin/prompts", icon: FileImage },
       { label: "Team", to: "/admin/users", icon: UserCog },
       { label: "Settings", to: "/admin/settings", icon: Settings },
     ],

@@ -478,7 +478,7 @@ export default function DesignDetail() {
         </TabsList>
 
         <TabsContent value="files" className="mt-4">
-          <DesignFilesTab designId={designId} onPrimaryChanged={loadHero} />
+          <DesignFilesTab designId={designId} designTitle={design?.title} onPrimaryChanged={loadHero} />
         </TabsContent>
 
         <TabsContent value="links" className="mt-4 space-y-6">

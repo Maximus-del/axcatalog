@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createAthleteProduct } from "@/lib/ecosystem/merch";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { CHECKERBOARD } from "@/components/admin/ecosystem/ImageLightbox";
+import { PngCreationPanel } from "@/components/admin/ecosystem/PngCreationPanel";
 import { Input } from "@/components/ui/input";
 
 interface Draft { file: File; name: string; preview: string }
@@ -104,6 +105,11 @@ export function UploadConceptsDialog({
           </div>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         </div>
+
+        <PngCreationPanel
+          organizationId={entity.organization_id}
+          designName={drafts.length === 1 ? drafts[0].name : undefined}
+        />
 
         <div
           {...dropProps}

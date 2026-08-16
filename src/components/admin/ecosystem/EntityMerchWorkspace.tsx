@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FolderPlus, Images, Plus, Loader2, CheckSquare, Square, Send, X, Package, Palette, ExternalLink,
-  Lightbulb, ArrowUpCircle, GripVertical, Trash2,
+  Lightbulb, ArrowUpCircle, GripVertical, Trash2, FileImage,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +25,8 @@ import {
   promoteMockupToConcept, removeInspiration, inspirationUrl, type InspirationImage,
 } from "@/lib/ecosystem/board";
 import { CHECKERBOARD, ImageLightbox, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
+import { CreatePngDialog } from "@/components/admin/ecosystem/CreatePngDialog";
+import { productionPngState } from "@/lib/ecosystem/prompts";
 import { Input } from "@/components/ui/input";
 
 export interface WorkspaceProduct {
@@ -111,6 +113,7 @@ export function EntityMerchWorkspace({
   const [namingCollection, setNamingCollection] = useState(false);
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
+  const [pngFor, setPngFor] = useState<{ product: WorkspaceProduct; url: string | null } | null>(null);
 
   const name = displayNameOf(entity);
 
@@ -308,6 +311,7 @@ export function EntityMerchWorkspace({
               const url = productImage(p);
               const like = toProductLike(p);
               const on = selected.includes(p.id);
+              const png = productionPngState(p);
               return (
                 <div
                   key={p.id}
@@ -340,6 +344,32 @@ export function EntityMerchWorkspace({
                   <div className="mt-1 flex items-center justify-between gap-1">
                     <ProductStatusChip product={like} />
                     {p.price != null && <span className="text-[11px] text-muted-foreground">${Number(p.price).toFixed(0)}</span>}
+                  </div>
+                  {/* The print file is a separate question from the product's
+                      lifecycle — a concept can be approved and still have no
+                      artwork to send to production. */}
+                  <div className="mt-1.5 pt-1.5 border-t border-[hsl(var(--ax-border))] flex items-center justify-between gap-1">
+                    <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+                      png === "ready" ? "text-[hsl(var(--ax-accent))]" : "text-[hsl(var(--ax-faint))]"
+                    }`}>
+                      PNG {png}
+                    </span>
+                    {png === "ready" ? (
+                      <Link
+                        to={`/admin/designs/${p.designs![0].design_id}`}
+                        className="text-[11px] font-semibold text-[hsl(var(--ax-accent))] inline-flex items-center gap-1"
+                      >
+                        <FileImage className="h-3 w-3" /> View PNG
+                      </Link>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setPngFor({ product: p, url })}
+                        className="text-[11px] font-semibold text-[hsl(var(--ax-accent))] inline-flex items-center gap-1"
+                      >
+                        <FileImage className="h-3 w-3" /> Create PNG
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -517,6 +547,16 @@ export function EntityMerchWorkspace({
           </div>
         )}
       </section>
+
+      {pngFor && (
+        <CreatePngDialog
+          entity={{ id: entity.id, organization_id: entity.organization_id }}
+          product={{ id: pngFor.product.id, title: pngFor.product.title }}
+          sourceUrl={pngFor.url}
+          onClose={() => setPngFor(null)}
+          onCreated={onChanged}
+        />
+      )}
 
       {lightbox !== null && (
         <ImageLightbox
