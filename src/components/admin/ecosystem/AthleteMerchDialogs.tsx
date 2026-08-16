@@ -17,6 +17,7 @@ import { createCollection } from "@/lib/ecosystem/commerce";
 import { uploadDesignFromFile } from "@/lib/upload-design";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { CHECKERBOARD } from "@/components/admin/ecosystem/ImageLightbox";
+import { DesignPromptPanel } from "@/components/admin/ecosystem/DesignPromptPanel";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -402,6 +403,8 @@ export function QuickAddDesignDialog({
       blurb={`Final artwork for ${athlete.name} — transparent PNG, isolated, high resolution. Drop several, or paste from the clipboard.`}
       onClose={onClose}
     >
+      <DesignPromptPanel entity={{ id: athlete.id, name: athlete.name }} />
+
       <div
         {...dropProps}
         className={`rounded-lg border border-dashed p-6 text-center transition-colors ${

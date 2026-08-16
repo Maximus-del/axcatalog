@@ -33,6 +33,8 @@ import { EntityRolesDialog } from "@/components/admin/ecosystem/EntityRolesDialo
 import { EntityMerchWorkspace } from "@/components/admin/ecosystem/EntityMerchWorkspace";
 import { UploadConceptsDialog } from "@/components/admin/ecosystem/UploadConceptsDialog";
 import { UploadMockupsDialog } from "@/components/admin/ecosystem/UploadMockupsDialog";
+import { AddInspirationDialog } from "@/components/admin/ecosystem/AddInspirationDialog";
+import { listInspiration, type InspirationImage } from "@/lib/ecosystem/board";
 import {
   displayNameOf, entityTypeOf, hasModule, hasRole, isPerson, rolesOf,
   ENTITY_TYPES, AX_ROLES,
@@ -147,6 +149,8 @@ export default function AthleteDetail() {
   const [entityOpen, setEntityOpen] = useState(false);
   const [uploadConcepts, setUploadConcepts] = useState(false);
   const [uploadMockups, setUploadMockups] = useState(false);
+  const [addInspiration, setAddInspiration] = useState(false);
+  const [inspiration, setInspiration] = useState<InspirationImage[]>([]);
   const [mockups, setMockups] = useState<Array<{ id: string; title: string; shot_type: string | null; status: string; storage_bucket: string | null; storage_path: string | null }>>([]);
 
   async function load() {
@@ -163,7 +167,7 @@ export default function AthleteDetail() {
       supabase
         .from("product_athletes")
         .select(
-          `id, team_id_at_release,
+          `id, team_id_at_release, sort_order,
            product:products(id, title, description, price, status, blank_id, updated_at,
              approval_state, approval_note,
              shopify_product_id, shopify_handle, shopify_sync_status, shopify_last_synced_at,
@@ -172,7 +176,8 @@ export default function AthleteDetail() {
              designs:product_designs(design_id),
              collections:collection_products(collection_id))`,
         )
-        .eq("athlete_id", id),
+        .eq("athlete_id", id)
+        .order("sort_order"),
       supabase
         .from("design_athletes")
         .select(
@@ -189,11 +194,13 @@ export default function AthleteDetail() {
         .from("mockups")
         .select("id, title, shot_type, status, storage_bucket, storage_path")
         .eq("athlete_id", id)
+        .order("sort_order")
         .order("created_at", { ascending: false }),
     ]);
 
     setAthlete((aRes.data as Athlete | null) ?? null);
     setMockups((mkRes.data ?? []) as never);
+    listInspiration(id).then(setInspiration).catch(() => setInspiration([]));
     const memships = (mRes.data ?? []).map((m) => ({
       ...m,
       team: Array.isArray(m.team) ? (m.team[0] ?? null) : (m.team as Membership["team"]),
@@ -462,6 +469,7 @@ export default function AthleteDetail() {
             }))}
           designs={designs.map((d) => d.design).filter(Boolean) as never}
           mockups={mockups}
+          inspiration={inspiration}
           collections={collections}
           onChanged={load}
           onAddProduct={() => setAddProduct({ concept: false })}
@@ -469,6 +477,7 @@ export default function AthleteDetail() {
           onAddDesign={() => setAddDesign(true)}
           onCreateCollection={() => setAddCollection(true)}
           onAddMockups={() => setUploadMockups(true)}
+          onAddInspiration={() => setAddInspiration(true)}
         />
       ) : mgmtTab === "collections" ? (
         <AthleteCollectionsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
@@ -670,6 +679,13 @@ export default function AthleteDetail() {
         <QuickAddDesignDialog
           athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
           onClose={() => setAddDesign(false)}
+          onCreated={load}
+        />
+      )}
+      {addInspiration && athlete && (
+        <AddInspirationDialog
+          entity={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setAddInspiration(false)}
           onCreated={load}
         />
       )}

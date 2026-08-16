@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FolderPlus, Images, Plus, Loader2, CheckSquare, Square, Send, X, Package, Palette, ExternalLink,
+  Lightbulb, ArrowUpCircle, GripVertical, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +19,11 @@ import { displayNameOf, hasRole, type EntityLike } from "@/lib/ecosystem/entity"
 import { ProductStatusChip, PendingClock } from "@/components/admin/ecosystem/ProductStatusChip";
 
 import { useSignedUrls, storageKey } from "@/hooks/useSignedUrls";
+import { useDragReorder } from "@/hooks/useDragReorder";
+import {
+  saveConceptOrder, saveMockupOrder, saveInspirationOrder,
+  promoteMockupToConcept, removeInspiration, inspirationUrl, type InspirationImage,
+} from "@/lib/ecosystem/board";
 import { CHECKERBOARD, ImageLightbox, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
 import { Input } from "@/components/ui/input";
 
@@ -83,13 +89,14 @@ export function approvalLabelFor(entity: EntityLike): string {
 }
 
 export function EntityMerchWorkspace({
-  entity, teamId, products, designs, mockups, collections, onChanged, onAddProduct, onUploadConcepts, onAddDesign, onCreateCollection, onAddMockups,
+  entity, teamId, products, designs, mockups, inspiration, collections, onChanged, onAddProduct, onUploadConcepts, onAddDesign, onCreateCollection, onAddMockups, onAddInspiration,
 }: {
   entity: EntityLike & { id: string; organization_id: string };
   teamId?: string | null;
   products: WorkspaceProduct[];
   designs: WorkspaceDesign[];
   mockups: WorkspaceMockup[];
+  inspiration: InspirationImage[];
   collections: WorkspaceCollection[];
   onChanged: () => void;
   onAddProduct: () => void;
@@ -97,6 +104,7 @@ export function EntityMerchWorkspace({
   onAddDesign: () => void;
   onCreateCollection: () => void;
   onAddMockups: () => void;
+  onAddInspiration: () => void;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -126,6 +134,51 @@ export function EntityMerchWorkspace({
     }
     return { concepts: c, live: l };
   }, [products]);
+
+  // Board order is committed on drop; the grid reorders live while dragging.
+  const conceptDrag = useDragReorder(concepts, async (ordered) => {
+    try {
+      await saveConceptOrder(entity.id, ordered.map((p) => p.id));
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save order");
+    }
+  });
+
+  const mockupDrag = useDragReorder(mockups, async (ordered) => {
+    try {
+      await saveMockupOrder(ordered.map((m) => m.id));
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save order");
+    }
+  });
+
+  const inspirationDrag = useDragReorder(inspiration, async (ordered) => {
+    try {
+      await saveInspirationOrder(ordered.map((i) => i.id));
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save order");
+    }
+  });
+
+  /** A mockup that turned out to be a product idea, promoted without losing the original. */
+  async function promote(m: WorkspaceMockup) {
+    setBusy(true);
+    try {
+      await promoteMockupToConcept({
+        organization_id: entity.organization_id,
+        athlete_id: entity.id,
+        mockup: m,
+        team_id_at_release: teamId ?? null,
+      });
+      toast.success(`${m.title} is now a concept`);
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not promote");
+    } finally { setBusy(false); }
+  }
 
   const toggle = (id: string) =>
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -251,12 +304,21 @@ export function EntityMerchWorkspace({
           />
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {concepts.map((p) => {
+            {conceptDrag.items.map((p, index) => {
               const url = productImage(p);
               const like = toProductLike(p);
               const on = selected.includes(p.id);
               return (
-                <div key={p.id} className={`ax-card p-2.5 relative ${on ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""}`}>
+                <div
+                  key={p.id}
+                  {...conceptDrag.itemProps(index)}
+                  className={`ax-card p-2.5 relative transition-opacity ${on ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""} ${
+                    conceptDrag.draggingIndex === index ? "opacity-50" : ""
+                  }`}
+                >
+                  <span className="absolute bottom-3.5 right-3.5 z-10 cursor-grab active:cursor-grabbing text-white/60" title="Drag to reorder">
+                    <GripVertical className="h-4 w-4 drop-shadow" />
+                  </span>
                   <button
                     onClick={() => toggle(p.id)}
                     className="absolute top-3.5 left-3.5 z-10 text-white drop-shadow"
@@ -299,16 +361,29 @@ export function EntityMerchWorkspace({
           </p>
         ) : (
           <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-            {mockups.map((m, i) => {
+            {mockupDrag.items.map((m, i) => {
               const url = signed[storageKey(m)] ?? null;
               return (
-                <button
+                <div
                   key={m.id}
-                  type="button"
-                  onClick={() => setLightbox(i)}
-                  className="ax-card-hover p-2 text-left"
-                  title="Click to view full size"
+                  {...mockupDrag.itemProps(i)}
+                  className={`ax-card p-2 relative group ${mockupDrag.draggingIndex === i ? "opacity-50" : ""}`}
                 >
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); promote(m); }}
+                    disabled={busy}
+                    className="absolute top-3 right-3 z-10 h-6 w-6 rounded-full bg-black/75 flex items-center justify-center opacity-0 group-hover:opacity-100 disabled:opacity-40"
+                    title="Make this a product concept"
+                  >
+                    <ArrowUpCircle className="h-3.5 w-3.5 text-[hsl(var(--ax-accent))]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLightbox(i)}
+                    className="block w-full text-left"
+                    title="Click to view full size"
+                  >
                   <span className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
                     {url ? (
                       <img src={url} alt={m.title} loading="lazy" className="h-full w-full object-cover" />
@@ -322,7 +397,8 @@ export function EntityMerchWorkspace({
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                     {(m.shot_type ?? "").replace(/_/g, " ") || m.status}
                   </div>
-                </button>
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -357,6 +433,52 @@ export function EntityMerchWorkspace({
                   <div className="mt-1.5 text-[12px] font-semibold truncate">{d.title}</div>
                   <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{d.status}</div>
                 </Link>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* INSPIRATION — what we looked at, kept apart from what we made */}
+      <section className="space-y-3">
+        <SectionHead
+          title="Inspiration"
+          count={inspiration.length}
+          action={<HeadAction onClick={onAddInspiration} icon={<Lightbulb className="h-3.5 w-3.5" />}>Add inspiration</HeadAction>}
+        />
+        {inspiration.length === 0 ? (
+          <p className="text-[12px] text-muted-foreground">
+            Reference imagery you drew from — kept here so you can check later that the finished work didn't land too
+            close to it. Never shown to clients.
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-8 gap-2">
+            {inspirationDrag.items.map((img, i) => {
+              const url = inspirationUrl(img);
+              return (
+                <div
+                  key={img.id}
+                  {...inspirationDrag.itemProps(i)}
+                  className={`relative group aspect-square ${inspirationDrag.draggingIndex === i ? "opacity-50" : ""}`}
+                >
+                  <a
+                    href={url ?? "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block h-full w-full rounded overflow-hidden border border-[hsl(var(--ax-border))]"
+                    style={CHECKERBOARD}
+                    title={img.title ?? "Inspiration"}
+                  >
+                    {url && <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />}
+                  </a>
+                  <button
+                    onClick={async () => { await removeInspiration(img.id); onChanged(); }}
+                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-black/85 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center"
+                    aria-label="Remove"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
               );
             })}
           </div>
