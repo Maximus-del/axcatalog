@@ -23,10 +23,11 @@ import { ContentCard } from "@/components/fan/ui/ContentCard";
 import { AccessPlans } from "@/components/fan/ui/AccessPlans";
 import { ProductCard } from "@/components/fan/ProductCard";
 import { HorizontalSection } from "@/components/fan/ui/HorizontalSection";
+import { FanIdeasTab } from "@/components/fan/ui/FanIdeasTab";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-const TABS = ["home", "access", "shop", "camps", "about"] as const;
+const TABS = ["home", "access", "shop", "ideas", "camps", "about"] as const;
 type Tab = (typeof TABS)[number];
 
 function mockFollowers(slug: string): string {
@@ -146,6 +147,9 @@ export default function AthletePublicProfile() {
                 </div>
               )}
               {tab === "shop" && <ProfileShop products={products} loading={productsLoading} />}
+              {tab === "ideas" && (
+                <FanIdeasTab athlete={athlete} isMember={access.isMember} canFollow={canFollow} />
+              )}
               {tab === "camps" && (
                 <div className="space-y-3 max-w-lg">
                   {realEvents.map((e) => <EventRow key={e.id} event={e} isMember={access.isMember} />)}

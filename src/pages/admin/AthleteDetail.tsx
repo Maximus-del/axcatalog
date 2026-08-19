@@ -34,6 +34,7 @@ import { EntityMerchWorkspace } from "@/components/admin/ecosystem/EntityMerchWo
 import { UploadConceptsDialog } from "@/components/admin/ecosystem/UploadConceptsDialog";
 import { UploadMockupsDialog } from "@/components/admin/ecosystem/UploadMockupsDialog";
 import { AddInspirationDialog } from "@/components/admin/ecosystem/AddInspirationDialog";
+import { SubmissionsTab } from "@/components/admin/ecosystem/SubmissionsTab";
 import { listInspiration, type InspirationImage } from "@/lib/ecosystem/board";
 import { useTabParam, useFreeTabParam } from "@/hooks/useTabParam";
 import { backTargetOf } from "@/hooks/useBackTarget";
@@ -42,7 +43,7 @@ import {
   ENTITY_TYPES, AX_ROLES,
 } from "@/lib/ecosystem/entity";
 
-const MGMT_TABS = ["merch", "collections", "drops", "content", "access", "events"] as const;
+const MGMT_TABS = ["merch", "ideas", "collections", "drops", "content", "access", "events"] as const;
 
 const UNTAGGED_KEY = "__untagged__";
 const GENERAL_KEY = "__general__";
@@ -492,6 +493,13 @@ export default function AthleteDetail() {
           onCreateCollection={() => setAddCollection(true)}
           onAddMockups={() => setUploadMockups(true)}
           onAddInspiration={() => setAddInspiration(true)}
+        />
+      ) : mgmtTab === "ideas" ? (
+        <SubmissionsTab
+          athleteId={athlete.id}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          backTo={backTargetOf(location.pathname, location.search, name)}
+          onConverted={load}
         />
       ) : mgmtTab === "collections" ? (
         <AthleteCollectionsTab
