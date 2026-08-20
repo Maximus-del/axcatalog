@@ -5,7 +5,7 @@
 // because when you're working through 92 trucker colourways the fastest input
 // is whichever one your hands are already doing.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Upload, X, Check, FolderOpen } from "lucide-react";
+import { Loader2, Upload, X, Check, FolderOpen, LinkIcon, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import {
   clearColorPhoto,
@@ -14,19 +14,24 @@ import {
   isImportableImage,
   loadColorsFor,
   matchFilesToColors,
+  normalizeUrl,
+  hostOf,
+  saveBlankUrl,
   uploadColorPhoto,
   type ColorRow,
   type Surface,
 } from "@/lib/ecosystem/blank-images";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export function BlankColorPhotoGrid({
-  blankId, sku, styleNumber, onChanged,
+  blankId, sku, styleNumber, productUrl, onChanged,
 }: {
   blankId: string;
   sku: string | null;
   styleNumber?: string | null;
+  productUrl?: string | null;
   onChanged?: () => void;
 }) {
   const [colors, setColors] = useState<ColorRow[] | null>(null);
@@ -92,6 +97,8 @@ export function BlankColorPhotoGrid({
 
   return (
     <div className="p-4 space-y-4 bg-[hsl(var(--ax-line)/0.35)]">
+      <ProductLinkRow blankId={blankId} url={productUrl ?? null} onSaved={onChanged} />
+
       <FolderDrop
         sku={sku}
         styleNumber={styleNumber}
@@ -393,6 +400,81 @@ function Slot({
             <X className="h-2.5 w-2.5" />
           </button>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The vendor product page for this blank.
+ *
+ * Kept on the blank rather than in someone's bookmarks because it is the
+ * source of truth for colourway names and photography — the thing you reopen
+ * every time a colour doesn't match or a photo is missing.
+ */
+function ProductLinkRow({
+  blankId, url, onSaved,
+}: {
+  blankId: string;
+  url: string | null;
+  onSaved?: () => void;
+}) {
+  const [value, setValue] = useState(url ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { setValue(url ?? ""); }, [url]);
+
+  const dirty = value.trim() !== (url ?? "");
+  const host = hostOf(url);
+
+  async function save(next: string) {
+    const cleaned = next.trim() === "" ? null : normalizeUrl(next);
+    if (next.trim() !== "" && !cleaned) {
+      toast.error("That doesn't look like a web address");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveBlankUrl(blankId, cleaned);
+      setValue(cleaned ?? "");
+      toast.success(cleaned ? "Product link saved" : "Product link cleared");
+      onSaved?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save");
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <LinkIcon className="h-4 w-4 shrink-0 text-[hsl(var(--ax-faint))]" />
+      <Input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        // Pasting a link is the whole interaction — commit it without
+        // making someone find a button afterwards.
+        onPaste={(e) => {
+          const text = e.clipboardData.getData("text");
+          if (text.trim()) {
+            e.preventDefault();
+            setValue(text.trim());
+            void save(text);
+          }
+        }}
+        onKeyDown={(e) => { if (e.key === "Enter") void save(value); }}
+        onBlur={() => { if (dirty) void save(value); }}
+        placeholder="Vendor product page — paste the link here"
+        className="h-8 text-[12px] flex-1 min-w-[220px]"
+      />
+      {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+      {url && !saving && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[12px] font-semibold text-[hsl(var(--ax-accent))] inline-flex items-center gap-1 shrink-0"
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> {host ?? "Open"}
+        </a>
       )}
     </div>
   );

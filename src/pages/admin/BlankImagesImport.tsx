@@ -6,7 +6,7 @@
 // something you find out about afterwards.
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Upload, Check, AlertTriangle, FolderOpen, ArrowLeft, ChevronDown } from "lucide-react";
+import { Loader2, Upload, Check, AlertTriangle, FolderOpen, ArrowLeft, ChevronDown, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   coveragePercent,
@@ -230,6 +230,9 @@ export default function BlankImagesImport() {
                     <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", open ? "rotate-0" : "-rotate-90")} />
                     <span className="w-24 shrink-0 text-[12px] font-mono text-muted-foreground">{b.sku ?? "—"}</span>
                     <span className="flex-1 min-w-0 text-[13px] font-semibold truncate">{b.name}</span>
+                    {b.url && (
+                      <LinkIcon className="h-3 w-3 shrink-0 text-[hsl(var(--ax-accent))]" aria-label="Has a product link" />
+                    )}
                     <span className="w-40 shrink-0 text-[11px] text-muted-foreground tabular-nums text-right hidden sm:block">
                       {b.haveFront}/{b.colorways} front · {b.haveBack}/{b.colorways} back
                     </span>
@@ -246,7 +249,13 @@ export default function BlankImagesImport() {
                     </span>
                   </button>
                   {open && (
-                    <BlankColorPhotoGrid blankId={b.id} sku={b.sku} styleNumber={b.style_number} onChanged={refresh} />
+                    <BlankColorPhotoGrid
+                      blankId={b.id}
+                      sku={b.sku}
+                      styleNumber={b.style_number}
+                      productUrl={b.url}
+                      onChanged={refresh}
+                    />
                   )}
                 </div>
               );

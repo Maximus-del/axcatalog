@@ -290,9 +290,51 @@ export interface BlankCoverage {
   style_number: string | null;
   name: string;
   garment_type: string | null;
+  /** Vendor product page — where the colourway names and photos come from. */
+  url: string | null;
   colorways: number;
   haveFront: number;
   haveBack: number;
+}
+
+/**
+ * Tidy a pasted link.
+ *
+ * People paste "ottocap.com/31-069" as often as a full URL, and a bare domain
+ * saved verbatim produces a link that resolves against our own site. Returns
+ * null for anything that isn't a plausible web address rather than storing
+ * junk that looks clickable.
+ */
+export function normalizeUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withScheme);
+    // A hostname with no dot is a typo, not a site.
+    if (!parsed.hostname.includes(".")) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+/** "https://www.ottocap.com/products/31-069" → "ottocap.com" */
+export function hostOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+export async function saveBlankUrl(blankId: string, url: string | null): Promise<void> {
+  const { error } = await supabase
+    .from("blanks" as never)
+    .update({ url } as never)
+    .eq("id", blankId);
+  if (error) throw error;
 }
 
 export function coveragePercent(c: BlankCoverage): number {
@@ -304,7 +346,7 @@ export function coveragePercent(c: BlankCoverage): number {
 export async function loadCoverage(): Promise<BlankCoverage[]> {
   const { data, error } = await supabase
     .from("blanks")
-    .select("id, sku, style_number, name, garment_type, blank_colors(id, image_url, image_url_back)")
+    .select("id, sku, style_number, name, garment_type, url, blank_colors(id, image_url, image_url_back)")
     .order("sku");
   if (error) throw error;
 
@@ -318,6 +360,7 @@ export async function loadCoverage(): Promise<BlankCoverage[]> {
       style_number: b.style_number,
       name: b.name,
       garment_type: b.garment_type,
+      url: b.url,
       colorways: colors.length,
       haveFront: colors.filter((c) => c.image_url).length,
       haveBack: colors.filter((c) => c.image_url_back).length,

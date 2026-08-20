@@ -6,6 +6,8 @@ import {
   matchFilesToColors,
   parseFileName,
   skuFromPath,
+  normalizeUrl,
+  hostOf,
   type ColorRow,
 } from "./blank-images";
 
@@ -136,7 +138,7 @@ describe("groupBySku", () => {
 });
 
 describe("coveragePercent", () => {
-  const base = { id: "b", sku: null, style_number: null, name: "x", garment_type: null };
+  const base = { id: "b", sku: null, style_number: null, name: "x", garment_type: null, url: null };
 
   it("counts both surfaces as the target", () => {
     expect(coveragePercent({ ...base, colorways: 10, haveFront: 10, haveBack: 10 })).toBe(100);
@@ -145,5 +147,40 @@ describe("coveragePercent", () => {
 
   it("does not divide by zero on a blank with no colourways", () => {
     expect(coveragePercent({ ...base, colorways: 0, haveFront: 0, haveBack: 0 })).toBe(0);
+  });
+});
+
+describe("normalizeUrl", () => {
+  it("keeps a full URL", () => {
+    expect(normalizeUrl("https://ottocap.com/products/31-069")).toBe("https://ottocap.com/products/31-069");
+  });
+
+  it("adds a scheme to a bare domain, which is how links usually get pasted", () => {
+    // Without this the stored value resolves against our own site.
+    expect(normalizeUrl("ottocap.com/products/31-069")).toBe("https://ottocap.com/products/31-069");
+    expect(normalizeUrl("www.ottocap.com")).toBe("https://www.ottocap.com/");
+  });
+
+  it("trims surrounding whitespace from a paste", () => {
+    expect(normalizeUrl("  https://ottocap.com  ")).toBe("https://ottocap.com/");
+  });
+
+  it("rejects things that are not addresses", () => {
+    expect(normalizeUrl("")).toBeNull();
+    expect(normalizeUrl("   ")).toBeNull();
+    expect(normalizeUrl("just some words")).toBeNull();
+    expect(normalizeUrl("localhost")).toBeNull();
+  });
+});
+
+describe("hostOf", () => {
+  it("gives a short label for the link", () => {
+    expect(hostOf("https://www.ottocap.com/products/31-069")).toBe("ottocap.com");
+    expect(hostOf("https://comfortcolors.com/x")).toBe("comfortcolors.com");
+  });
+
+  it("is null-safe", () => {
+    expect(hostOf(null)).toBeNull();
+    expect(hostOf("not a url")).toBeNull();
   });
 });
