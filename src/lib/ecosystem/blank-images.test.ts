@@ -328,6 +328,13 @@ describe("resolveBlankFolder", () => {
     expect(resolveBlankFolder("garment wash hoodie 14oz", blanks)?.id).toBe("1");
   });
 
+  it("matches a folder named for BOTH the SKU and the vendor product", () => {
+    // What the local library looks like after tidying: the AX code for the
+    // system, the vendor name so a human still knows what it is.
+    expect(resolveBlankFolder("AX-HOOD-05 Special-Hoodie-14oz", blanks)?.id).toBe("1");
+    expect(resolveBlankFolder("AX-TRK-01 39-165 trucker", blanks)?.id).toBe("2");
+  });
+
   it("finds a style code buried in a folder name", () => {
     // Real folder name from the Drive library.
     expect(resolveBlankFolder("OttoCap 31-069 Front View", blanks)?.id).toBe("4");

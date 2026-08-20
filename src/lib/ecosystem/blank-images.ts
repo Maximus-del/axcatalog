@@ -283,12 +283,16 @@ export function resolveBlankFolder<T extends BlankIdentity>(folder: string, blan
   const byName = blanks.find((b) => colorSlug(b.name) === wanted);
   if (byName) return byName;
 
-  // "CC - Oversized-Box-SS-Tee" and "OttoCap 31-069 Front View" — the code or
-  // name is in there with packaging around it. Longest wins so a short style
-  // number can't beat the fuller name it appears inside.
+  // "AX-CRW-02 Heavy-Crew-15oz" and "OttoCap 31-069 Front View" — the SKU,
+  // code or name is in there with something else alongside it. Longest wins so
+  // a short style number can't beat the fuller name it appears inside.
+  //
+  // The SKU belongs in here as much as the style code: naming a folder for
+  // both the SKU and the vendor's product is the sensible way to file it, and
+  // that shouldn't cost you the automatic match.
   let best: { blank: T; length: number } | null = null;
   for (const b of blanks) {
-    for (const candidate of [b.style_number, b.name]) {
+    for (const candidate of [b.sku, b.style_number, b.name]) {
       if (!candidate) continue;
       const slug = colorSlug(candidate);
       if (slug.length < 4 || !wanted.includes(slug)) continue;
