@@ -4,25 +4,29 @@
 // three ways — click to browse, drag one on, or hover it and hit Ctrl+V —
 // because when you're working through 92 trucker colourways the fastest input
 // is whichever one your hands are already doing.
-import { useEffect, useRef, useState } from "react";
-import { Loader2, Upload, X, Check } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Upload, X, Check, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import {
   clearColorPhoto,
   colorSlug,
+  importMatchedFiles,
   isImportableImage,
   loadColorsFor,
+  matchFilesToColors,
   uploadColorPhoto,
   type ColorRow,
   type Surface,
 } from "@/lib/ecosystem/blank-images";
+import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { cn } from "@/lib/utils";
 
 export function BlankColorPhotoGrid({
-  blankId, sku, onChanged,
+  blankId, sku, styleNumber, onChanged,
 }: {
   blankId: string;
   sku: string | null;
+  styleNumber?: string | null;
   onChanged?: () => void;
 }) {
   const [colors, setColors] = useState<ColorRow[] | null>(null);
@@ -87,7 +91,14 @@ export function BlankColorPhotoGrid({
   const shown = filter === "missing" && incomplete.length > 0 ? incomplete : colors;
 
   return (
-    <div className="p-4 space-y-3 bg-[hsl(var(--ax-line)/0.35)]">
+    <div className="p-4 space-y-4 bg-[hsl(var(--ax-line)/0.35)]">
+      <FolderDrop
+        sku={sku}
+        styleNumber={styleNumber}
+        colors={colors}
+        onDone={async () => { await load(); onChanged?.(); }}
+      />
+
       <div className="flex items-center gap-3">
         <span className="text-[11px] text-muted-foreground">
           {incomplete.length === 0
@@ -125,6 +136,178 @@ export function BlankColorPhotoGrid({
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Drop a whole folder for this one blank.
+ *
+ * Same matcher as the bulk importer, scoped to this blank's colourways — and
+ * anything the matcher can't place is kept on screen with a dropdown rather
+ * than discarded, so a vendor's odd naming costs one click instead of a
+ * re-export.
+ */
+function FolderDrop({
+  sku, styleNumber, colors, onDone,
+}: {
+  sku: string | null;
+  styleNumber?: string | null;
+  colors: ColorRow[];
+  onDone: () => Promise<void> | void;
+}) {
+  const [files, setFiles] = useState<File[]>([]);
+  const [manual, setManual] = useState<Record<string, { colorId: string; surface: Surface }>>({});
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+
+  function take(incoming: File[]) {
+    const images = incoming.filter(isImportableImage);
+    const skipped = incoming.length - images.length;
+    if (skipped > 0) toast.error(`${skipped} non-image file${skipped === 1 ? "" : "s"} ignored`);
+    if (images.length) setFiles((prev) => [...prev, ...images]);
+  }
+
+  const { isOver, dropProps } = useFileDropZone({
+    onFiles: take,
+    accept: ["image/"],
+    folders: true,
+  });
+
+  const report = useMemo(
+    () => (files.length ? matchFilesToColors(files, colors, [styleNumber ?? ""].filter(Boolean)) : null),
+    [files, colors, styleNumber],
+  );
+
+  async function run() {
+    if (!report || !sku) { toast.error("This blank has no SKU"); return; }
+
+    // Auto-matched, plus anything assigned by hand.
+    const assigned = report.unmatched
+      .map((u) => {
+        const pick = manual[u.fileName];
+        if (!pick?.colorId) return null;
+        const color = colors.find((c) => c.id === pick.colorId);
+        if (!color) return null;
+        return { ...u, color, surface: pick.surface, colorSlug: colorSlug(color.color_name) };
+      })
+      .filter(Boolean) as typeof report.matched;
+
+    const all = [...report.matched, ...assigned];
+    if (all.length === 0) return;
+
+    setBusy(true);
+    setProgress({ done: 0, total: all.length });
+    try {
+      const out = await importMatchedFiles(sku, all, (done, total) => setProgress({ done, total }));
+      if (out.imported) toast.success(`${out.imported} photo${out.imported === 1 ? "" : "s"} added`);
+      if (out.failed.length) toast.error(`${out.failed.length} failed — ${out.failed[0].error}`);
+      setFiles([]);
+      setManual({});
+      await onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }
+
+  const assignedCount = Object.values(manual).filter((m) => m.colorId).length;
+  const total = (report?.matched.length ?? 0) + assignedCount;
+
+  return (
+    <div
+      {...dropProps}
+      className={cn(
+        "rounded-lg border border-dashed p-3 transition-colors",
+        isOver ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.1)]" : "border-[hsl(var(--ax-border))]",
+      )}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <FolderOpen className="h-4 w-4 text-[hsl(var(--ax-faint))] shrink-0" />
+        <span className="text-[12px] text-muted-foreground">
+          Drag a folder in — or individual images — and they'll be matched to these colourways.
+        </span>
+        <label className="text-[12px] font-semibold text-[hsl(var(--ax-accent))] cursor-pointer">
+          browse folder
+          <input
+            type="file"
+            className="hidden"
+            multiple
+            // @ts-expect-error non-standard, supported where it matters
+            webkitdirectory=""
+            onChange={(e) => { take(Array.from(e.target.files ?? [])); e.target.value = ""; }}
+          />
+        </label>
+        <span className="text-[hsl(var(--ax-faint))] text-[12px]">·</span>
+        <label className="text-[12px] font-semibold text-[hsl(var(--ax-accent))] cursor-pointer">
+          files
+          <input
+            type="file" accept="image/*" multiple className="hidden"
+            onChange={(e) => { take(Array.from(e.target.files ?? [])); e.target.value = ""; }}
+          />
+        </label>
+        {files.length > 0 && (
+          <button onClick={() => { setFiles([]); setManual({}); }} className="text-[12px] text-muted-foreground hover:text-foreground ml-auto">
+            Clear
+          </button>
+        )}
+      </div>
+
+      {report && (
+        <div className="mt-3 space-y-2">
+          <div className="text-[12px]">
+            <span className="font-semibold text-[hsl(var(--ax-accent))]">{report.matched.length} matched</span>
+            {report.unmatched.length > 0 && (
+              <span className="text-amber-600"> · {report.unmatched.length} need a colour</span>
+            )}
+          </div>
+
+          {report.unmatched.length > 0 && (
+            <ul className="space-y-1 max-h-56 overflow-y-auto">
+              {report.unmatched.map((u) => {
+                const pick = manual[u.fileName] ?? { colorId: "", surface: u.surface };
+                return (
+                  <li key={u.fileName} className="flex items-center gap-2 text-[12px]">
+                    <span className="flex-1 min-w-0 truncate" title={u.fileName}>{u.fileName}</span>
+                    <select
+                      value={pick.colorId}
+                      onChange={(e) => setManual((m) => ({ ...m, [u.fileName]: { ...pick, colorId: e.target.value } }))}
+                      className="h-7 rounded-md border border-[hsl(var(--ax-border))] bg-transparent px-1.5 text-[11px] max-w-[160px]"
+                    >
+                      <option value="">— skip —</option>
+                      {colors.map((c) => <option key={c.id} value={c.id}>{c.color_name}</option>)}
+                    </select>
+                    <select
+                      value={pick.surface}
+                      onChange={(e) => setManual((m) => ({ ...m, [u.fileName]: { ...pick, surface: e.target.value as Surface } }))}
+                      className="h-7 rounded-md border border-[hsl(var(--ax-border))] bg-transparent px-1.5 text-[11px]"
+                    >
+                      <option value="front">front</option>
+                      <option value="back">back</option>
+                    </select>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground">
+              {progress ? `Uploading ${progress.done} of ${progress.total}…` : `${files.length} file${files.length === 1 ? "" : "s"} staged`}
+            </span>
+            <button
+              onClick={run}
+              disabled={busy || total === 0}
+              className="h-8 px-3 rounded-lg bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] text-[12px] font-bold inline-flex items-center gap-1.5 disabled:opacity-60"
+            >
+              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+              Add {total}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

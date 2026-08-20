@@ -4,6 +4,7 @@
 // We use a counter to avoid the "flicker" caused by dragenter/dragleave
 // firing on every child element.
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { filesFromDrop } from "@/lib/dropped-entries";
 
 interface Options {
   /**
@@ -24,6 +25,12 @@ interface Options {
   accept?: string[];
   /** Disable the drop zone entirely. */
   disabled?: boolean;
+  /**
+   * Expand dropped folders into their contents. Off by default because it
+   * costs an async traversal; on where someone would reasonably drag a
+   * directory rather than select 184 files by hand.
+   */
+  folders?: boolean;
   /**
    * Also accept Ctrl/Cmd+V while mounted. Screenshots and AI output usually
    * arrive on the clipboard, never as a file on disk, so pasting is often the
@@ -62,7 +69,7 @@ function extractUrls(dt: DataTransfer | null): string[] {
   return Array.from(new Set(urls.filter((u) => /^https?:\/\//i.test(u) || u.startsWith("data:image/"))));
 }
 
-export function useFileDropZone({ onFiles, onUrls, accept, disabled, paste }: Options) {
+export function useFileDropZone({ onFiles, onUrls, accept, disabled, paste, folders }: Options) {
   const [isOver, setIsOver] = useState(false);
   const counter = useRef(0);
 
@@ -123,6 +130,21 @@ export function useFileDropZone({ onFiles, onUrls, accept, disabled, paste }: Op
       e.preventDefault();
       counter.current = 0;
       setIsOver(false);
+
+      if (folders) {
+        // dataTransfer.files is EMPTY for a directory drop, so the traversal
+        // has to start from the entries — and they must be read before this
+        // handler returns, which is why the promise is kicked off here rather
+        // than awaited.
+        const urls = onUrls ? extractUrls(e.dataTransfer) : [];
+        void filesFromDrop(e.dataTransfer).then((all) => {
+          const filtered = all.filter(matchesAccept);
+          if (filtered.length > 0) onFiles(filtered);
+          else if (onUrls && urls.length > 0) onUrls(urls);
+        });
+        return;
+      }
+
       const all = Array.from(e.dataTransfer?.files ?? []);
       const filtered = all.filter(matchesAccept);
       if (filtered.length > 0) {
@@ -135,7 +157,7 @@ export function useFileDropZone({ onFiles, onUrls, accept, disabled, paste }: Op
         if (urls.length > 0) onUrls(urls);
       }
     },
-    [disabled, matchesAccept, onFiles, onUrls],
+    [disabled, matchesAccept, onFiles, onUrls, folders],
   );
 
   // Clipboard images. Ignored while typing in a text field, so pasting a prompt

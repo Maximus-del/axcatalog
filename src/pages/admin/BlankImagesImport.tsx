@@ -63,7 +63,7 @@ export default function BlankImagesImport() {
     setFiles((prev) => [...prev, ...images]);
   }
 
-  const { isOver, dropProps } = useFileDropZone({ onFiles: take, accept: ["image/"], paste: true });
+  const { isOver, dropProps } = useFileDropZone({ onFiles: take, accept: ["image/"], paste: true, folders: true });
 
   const report: MatchReport | null = useMemo(() => {
     if (!blank || files.length === 0) return null;
@@ -114,7 +114,7 @@ export default function BlankImagesImport() {
         )}
       >
         <FolderOpen className="h-7 w-7 mx-auto text-[hsl(var(--ax-faint))]" />
-        <p className="text-[13px] text-muted-foreground mt-2">Drop a SKU folder here, or paste images</p>
+        <p className="text-[13px] text-muted-foreground mt-2">Drag a SKU folder in, or paste images</p>
         <div className="mt-2 flex items-center justify-center gap-4">
           <label className="text-[12px] font-semibold text-[hsl(var(--ax-accent))] cursor-pointer">
             choose a folder
@@ -246,7 +246,7 @@ export default function BlankImagesImport() {
                     </span>
                   </button>
                   {open && (
-                    <BlankColorPhotoGrid blankId={b.id} sku={b.sku} onChanged={refresh} />
+                    <BlankColorPhotoGrid blankId={b.id} sku={b.sku} styleNumber={b.style_number} onChanged={refresh} />
                   )}
                 </div>
               );
