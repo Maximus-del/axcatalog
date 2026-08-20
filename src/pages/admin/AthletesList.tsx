@@ -43,7 +43,10 @@ export default function AthletesList() {
   const [athletes, setAthletes] = useState<AthleteRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  // Archived is how a profile gets retired, so the default view leaves it out.
+  // The count of what's hidden is shown below the filters rather than being
+  // silent about it.
+  const [statusFilter, setStatusFilter] = useState<string>("active");
   const [leagueFilter, setLeagueFilter] = useState<string>("all");
   // Directory tabs are role/type based: a person who is both athlete and client
   // appears under both, as the same record.
@@ -107,12 +110,19 @@ export default function AthletesList() {
     return athletes.filter((a) => {
       if (statusFilter !== "all" && a.status !== statusFilter) return false;
       if (leagueFilter !== "all" && a.league !== leagueFilter) return false;
-      if (!q) return true;
+      // Directory tabs used to be skipped whenever the search box was empty,
+      // which made them look broken until you typed something.
       if (!matchesFilter(a, directory)) return false;
+      if (!q) return true;
       const name = displayNameOf(a).toLowerCase();
       return name.includes(q);
     });
   }, [athletes, search, statusFilter, leagueFilter, directory]);
+
+  const archivedCount = useMemo(
+    () => (athletes ?? []).filter((a) => a.status === "archived").length,
+    [athletes],
+  );
 
   const isEmpty = !loading && athletes && athletes.length === 0;
 
@@ -161,7 +171,7 @@ export default function AthletesList() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="all">All, incl. archived</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
               <SelectItem value="archived">Archived</SelectItem>
@@ -181,6 +191,19 @@ export default function AthletesList() {
             </SelectContent>
           </Select>
         </div>
+
+        {statusFilter === "active" && archivedCount > 0 && (
+          <p className="text-[12px] text-muted-foreground">
+            {archivedCount} archived {archivedCount === 1 ? "profile is" : "profiles are"} hidden.{" "}
+            <button
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              className="font-semibold text-[hsl(var(--ax-accent))] hover:underline"
+            >
+              Show them
+            </button>
+          </p>
+        )}
         </>
       )}
 
