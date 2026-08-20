@@ -75,6 +75,7 @@ const CollectionDetail = lazy(() => import("./pages/admin/CollectionDetail"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
 const AdminPrompts = lazy(() => import("./pages/admin/AdminPrompts"));
+const BlankImagesImport = lazy(() => import("./pages/admin/BlankImagesImport"));
 const AdminMockups = lazy(() => import("./pages/admin/AdminMockups"));
 const AdminBrandAssets = lazy(() => import("./pages/admin/AdminBrandAssets"));
 const AdminFulfillment = lazy(() => import("./pages/admin/AdminFulfillment"));
@@ -160,6 +161,7 @@ const App = () => (
                 <Route path="designs" element={<DesignsList />} />
                 <Route path="designs/:id" element={<DesignDetail />} />
                 <Route path="blanks" element={<BlanksList />} />
+                <Route path="blanks/import-images" element={<BlankImagesImport />} />
                 <Route path="blanks/:id" element={<BlankDetail />} />
                 <Route path="athletes" element={<AthletesList />} />
                 <Route path="athletes/:id" element={<AthleteDetail />} />

@@ -1,0 +1,300 @@
+// Import garment photography for blanks.
+//
+// The vendor drops arrive in two shapes and both should just work:
+//
+//   cleaned    AX-HOOD-03/greyheather.png,  greyheather-back.png
+//   raw        7102-Grey-Heather b.png,     7102-Grey-Heather (Flat Lay).png
+//
+// So the parser strips a leading style number, recognises several ways of
+// saying "this is the back", and compares colours on a squashed slug rather
+// than exact text — "Grey Heather", "grey-heather" and "GreyHeather" are one
+// colour, and a human naming files at 11pm should not have to know that.
+import { supabase } from "@/integrations/supabase/client";
+
+export const BLANKS_BUCKET = "blanks";
+
+export type Surface = "front" | "back";
+
+export interface ParsedFileName {
+  colorSlug: string;
+  surface: Surface;
+  /** Style number found at the front of the name, if any. */
+  stylePrefix: string | null;
+}
+
+/** "Grey Heather" / "grey-heather" / "GreyHeather" all collapse to "greyheather". */
+export function colorSlug(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+// Markers that mean "back view", longest first so " back" wins over " b".
+const BACK_MARKERS = [/\bback\b/, /-back$/, /_back$/, /\sb$/, /-b$/];
+
+// Stripped BEFORE the surface check, because they sit after the surface
+// marker: "5102-Ecru b 2.png" is a back photo, and testing for a trailing
+// " b" while the " 2" is still attached quietly files it as a colour called
+// "ecrub".
+const TRAILING_NOISE = [
+  /\s*\(\d+\)$/,      // "(1)" from a download collision
+  /\s+\d+$/,          // trailing " 2" on a duplicate export
+  /\s*-\s*copy$/i,
+];
+
+// Noise that says nothing about colour or surface.
+const NOISE = [
+  /\(flat\s*lay\)/gi,
+  /\(front\s*view\)/gi,
+  /\bfront\s*view\b/gi,
+  /\bflat\s*lay\b/gi,
+  /\bfront\b/gi,
+  /\bcopy\b/gi,
+];
+
+/**
+ * Pull the colour and surface out of a filename.
+ *
+ * `knownStyleNumbers` lets a leading "7102-" be dropped only when it really is
+ * this blank's style number — otherwise a colour that happens to start with
+ * digits would lose its first word.
+ */
+export function parseFileName(fileName: string, knownStyleNumbers: string[] = []): ParsedFileName {
+  let base = fileName.replace(/\.[^.]+$/, "").trim();
+
+  let stylePrefix: string | null = null;
+  for (const style of knownStyleNumbers.filter(Boolean)) {
+    const re = new RegExp(`^${style.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s._-]+`, "i");
+    if (re.test(base)) {
+      stylePrefix = style;
+      base = base.replace(re, "");
+      break;
+    }
+  }
+  // A bare leading number followed by a separator is a style code too.
+  if (!stylePrefix) {
+    const m = base.match(/^(\d{3,6})[\s._-]+/);
+    if (m) {
+      stylePrefix = m[1];
+      base = base.slice(m[0].length);
+    }
+  }
+
+  // Peel off "(1)" / " 2" first so the surface marker is at the end where the
+  // patterns below expect it.
+  let peeled = true;
+  while (peeled) {
+    peeled = false;
+    for (const n of TRAILING_NOISE) {
+      if (n.test(base)) {
+        base = base.replace(n, "");
+        peeled = true;
+      }
+    }
+  }
+
+  let surface: Surface = "front";
+  for (const marker of BACK_MARKERS) {
+    if (marker.test(base)) {
+      surface = "back";
+      base = base.replace(marker, " ");
+      break;
+    }
+  }
+
+  for (const n of NOISE) base = base.replace(n, " ");
+
+  return { colorSlug: colorSlug(base), surface, stylePrefix };
+}
+
+export interface ColorRow {
+  id: string;
+  blank_id: string;
+  color_name: string;
+  image_url: string | null;
+  image_url_back: string | null;
+}
+
+export interface MatchedFile {
+  file: File;
+  fileName: string;
+  colorSlug: string;
+  surface: Surface;
+  color: ColorRow | null;
+  /** Set when a photo is already on file for this colour and surface. */
+  replaces: boolean;
+}
+
+export interface MatchReport {
+  matched: MatchedFile[];
+  unmatched: MatchedFile[];
+  /** Colours on the blank that still have no file in this drop. */
+  stillMissing: { color_name: string; surface: Surface }[];
+}
+
+/**
+ * Line up a pile of files against a blank's colourways.
+ *
+ * Nothing is uploaded here — the operator sees exactly what will happen first,
+ * including which existing photos would be replaced, because a bulk overwrite
+ * of good imagery is not something to discover afterwards.
+ */
+export function matchFilesToColors(
+  files: File[],
+  colors: ColorRow[],
+  styleNumbers: string[] = [],
+): MatchReport {
+  const bySlug = new Map(colors.map((c) => [colorSlug(c.color_name), c]));
+
+  const matched: MatchedFile[] = [];
+  const unmatched: MatchedFile[] = [];
+
+  for (const file of files) {
+    const parsed = parseFileName(file.name, styleNumbers);
+    const color = bySlug.get(parsed.colorSlug) ?? null;
+    const entry: MatchedFile = {
+      file,
+      fileName: file.name,
+      colorSlug: parsed.colorSlug,
+      surface: parsed.surface,
+      color,
+      replaces: !!color && !!(parsed.surface === "back" ? color.image_url_back : color.image_url),
+    };
+    (color ? matched : unmatched).push(entry);
+  }
+
+  const covered = new Set(matched.map((m) => `${m.color!.id}:${m.surface}`));
+  const stillMissing: MatchReport["stillMissing"] = [];
+  for (const c of colors) {
+    if (!c.image_url && !covered.has(`${c.id}:front`)) stillMissing.push({ color_name: c.color_name, surface: "front" });
+    if (!c.image_url_back && !covered.has(`${c.id}:back`)) stillMissing.push({ color_name: c.color_name, surface: "back" });
+  }
+
+  return { matched, unmatched, stillMissing };
+}
+
+/** Only images, and only ones a browser will actually render. */
+export function isImportableImage(file: File): boolean {
+  return /^image\/(png|jpeg|webp)$/.test(file.type);
+}
+
+/**
+ * The SKU folder a dropped file came from, e.g. "AX-HOOD-03/black.png".
+ * Directory uploads carry this; a flat multi-select does not.
+ */
+export function skuFromPath(file: File): string | null {
+  const path = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+  if (!path) return null;
+  const parts = path.split("/").filter(Boolean);
+  // Last segment is the file; walk back for something shaped like a SKU.
+  for (let i = parts.length - 2; i >= 0; i--) {
+    if (/^AX-[A-Z]+-\d+$/i.test(parts[i])) return parts[i].toUpperCase();
+  }
+  return null;
+}
+
+/** Group a directory drop by the SKU folder each file sat in. */
+export function groupBySku(files: File[]): Map<string | null, File[]> {
+  const groups = new Map<string | null, File[]>();
+  for (const file of files) {
+    const sku = skuFromPath(file);
+    const list = groups.get(sku) ?? [];
+    list.push(file);
+    groups.set(sku, list);
+  }
+  return groups;
+}
+
+export interface ImportOutcome {
+  imported: number;
+  failed: { fileName: string; error: string }[];
+}
+
+export async function importMatchedFiles(
+  sku: string,
+  matched: MatchedFile[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<ImportOutcome> {
+  const failed: ImportOutcome["failed"] = [];
+  let imported = 0;
+
+  for (const [i, m] of matched.entries()) {
+    onProgress?.(i, matched.length);
+    if (!m.color) continue;
+    try {
+      const ext = m.fileName.split(".").pop()?.toLowerCase() || "png";
+      // Deterministic path: re-importing a colour overwrites its own file
+      // rather than littering the bucket with orphans.
+      const path = `${sku}/${m.colorSlug}${m.surface === "back" ? "-back" : ""}.${ext}`;
+      const up = await supabase.storage
+        .from(BLANKS_BUCKET)
+        .upload(path, m.file, { upsert: true, contentType: m.file.type || "image/png" });
+      if (up.error) throw up.error;
+
+      const publicUrl = supabase.storage.from(BLANKS_BUCKET).getPublicUrl(path).data.publicUrl;
+      const field = m.surface === "back" ? "image_url_back" : "image_url";
+      const { error } = await supabase
+        .from("blank_colors" as never)
+        .update({ [field]: publicUrl } as never)
+        .eq("id", m.color.id);
+      if (error) throw error;
+      imported += 1;
+    } catch (e) {
+      failed.push({ fileName: m.fileName, error: e instanceof Error ? e.message : "Failed" });
+    }
+  }
+
+  onProgress?.(matched.length, matched.length);
+  return { imported, failed };
+}
+
+// ---- Coverage -------------------------------------------------------------
+
+export interface BlankCoverage {
+  id: string;
+  sku: string | null;
+  style_number: string | null;
+  name: string;
+  garment_type: string | null;
+  colorways: number;
+  haveFront: number;
+  haveBack: number;
+}
+
+export function coveragePercent(c: BlankCoverage): number {
+  const needed = c.colorways * 2;
+  if (needed === 0) return 0;
+  return Math.round(((c.haveFront + c.haveBack) / needed) * 100);
+}
+
+export async function loadCoverage(): Promise<BlankCoverage[]> {
+  const { data, error } = await supabase
+    .from("blanks")
+    .select("id, sku, style_number, name, garment_type, blank_colors(id, image_url, image_url_back)")
+    .order("sku");
+  if (error) throw error;
+
+  return ((data ?? []) as unknown as (Omit<BlankCoverage, "colorways" | "haveFront" | "haveBack"> & {
+    blank_colors: { id: string; image_url: string | null; image_url_back: string | null }[];
+  })[]).map((b) => {
+    const colors = b.blank_colors ?? [];
+    return {
+      id: b.id,
+      sku: b.sku,
+      style_number: b.style_number,
+      name: b.name,
+      garment_type: b.garment_type,
+      colorways: colors.length,
+      haveFront: colors.filter((c) => c.image_url).length,
+      haveBack: colors.filter((c) => c.image_url_back).length,
+    };
+  });
+}
+
+export async function loadColorsFor(blankId: string): Promise<ColorRow[]> {
+  const { data, error } = await supabase
+    .from("blank_colors" as never)
+    .select("id, blank_id, color_name, image_url, image_url_back")
+    .eq("blank_id", blankId)
+    .order("sort_order");
+  if (error) throw error;
+  return (data ?? []) as unknown as ColorRow[];
+}

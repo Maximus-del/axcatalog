@@ -16,7 +16,7 @@
 import {
   Home, Inbox, ListChecks, BarChart3,
   Palette, Shapes, Image as ImageIcon, Sparkles, Newspaper,
-  Package, FolderKanban, Shirt, DollarSign, Link2,
+  Package, FolderKanban, Shirt, DollarSign, Link2, ImagePlus,
   Gauge, ClipboardList, Truck, Printer, Ruler, FileDown, Download,
   Users, Trophy, Building2, Star, CalendarDays, Share2, Coins,
   FileQuestion, FileImage, LayoutTemplate, UserCog, Settings,
@@ -60,6 +60,7 @@ export const GROUPS: NavGroup[] = [
       { label: "Products", to: "/admin/products", icon: Package },
       { label: "Collections", to: "/admin/collections", icon: FolderKanban },
       { label: "Blanks", to: "/admin/blanks", icon: Shirt },
+      { label: "Blank Photos", to: "/admin/blanks/import-images", icon: ImagePlus },
       { label: "Pricing", to: "/admin/pricing", icon: DollarSign },
       { label: "Pricing Links", to: "/admin/pricing-links", icon: Link2 },
     ],
