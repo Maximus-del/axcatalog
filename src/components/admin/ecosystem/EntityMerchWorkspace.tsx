@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   FolderPlus, Images, Plus, Loader2, CheckSquare, Square, Send, X, Package, Palette, ExternalLink,
-  Lightbulb, ArrowUpCircle, GripVertical, Trash2, FileImage,
+  Lightbulb, ArrowUpCircle, GripVertical, Trash2, FileImage, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -28,6 +28,7 @@ import { CHECKERBOARD, ImageLightbox, type LightboxItem } from "@/components/adm
 import { CreatePngDialog } from "@/components/admin/ecosystem/CreatePngDialog";
 import { productionPngState } from "@/lib/ecosystem/prompts";
 import { backState, type BackTarget } from "@/hooks/useBackTarget";
+import { ApplyToBlanksDialog } from "@/components/admin/ecosystem/ApplyToBlanksDialog";
 import { Input } from "@/components/ui/input";
 
 export interface WorkspaceProduct {
@@ -117,6 +118,7 @@ export function EntityMerchWorkspace({
   const [lightbox, setLightbox] = useState<number | null>(null);
   const [newName, setNewName] = useState("");
   const [pngFor, setPngFor] = useState<{ product: WorkspaceProduct; url: string | null } | null>(null);
+  const [applyDesign, setApplyDesign] = useState<{ id: string; title: string; url: string } | null>(null);
 
   const name = displayNameOf(entity);
 
@@ -464,24 +466,36 @@ export function EntityMerchWorkspace({
               const f = d.files?.[0];
               const url = f ? signed[storageKey(f)] ?? null : null;
               return (
-                <Link
-                  key={d.id}
-                  to={`/admin/designs/${d.id}`}
-                  state={backTo ? backState(backTo) : undefined}
-                  className="ax-card-hover p-2"
-                >
-                  <span className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
-                    {url ? (
-                      <img src={url} alt={d.title} loading="lazy" className="h-full w-full object-contain" />
-                    ) : (
-                      <span className="h-full w-full flex items-center justify-center bg-[hsl(var(--ax-line))]">
-                        <Palette className="h-4 w-4 text-[hsl(var(--ax-faint))]" />
-                      </span>
-                    )}
-                  </span>
-                  <div className="mt-1.5 text-[12px] font-semibold truncate">{d.title}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{d.status}</div>
-                </Link>
+                <div key={d.id} className="ax-card p-2 group">
+                  <Link
+                    to={`/admin/designs/${d.id}`}
+                    state={backTo ? backState(backTo) : undefined}
+                    className="block"
+                  >
+                    <span className="block aspect-square rounded-md overflow-hidden" style={CHECKERBOARD}>
+                      {url ? (
+                        <img src={url} alt={d.title} loading="lazy" className="h-full w-full object-contain" />
+                      ) : (
+                        <span className="h-full w-full flex items-center justify-center bg-[hsl(var(--ax-line))]">
+                          <Palette className="h-4 w-4 text-[hsl(var(--ax-faint))]" />
+                        </span>
+                      )}
+                    </span>
+                    <div className="mt-1.5 text-[12px] font-semibold truncate">{d.title}</div>
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{d.status}</div>
+                  </Link>
+                  {/* The step that was missing: a finished design becoming
+                      products, without six trips through the product form. */}
+                  <button
+                    type="button"
+                    disabled={!url}
+                    onClick={() => url && setApplyDesign({ id: d.id, title: d.title, url })}
+                    title={url ? "Put this on garments" : "No artwork file to place"}
+                    className="mt-1 w-full h-7 rounded-md text-[11px] font-semibold text-[hsl(var(--ax-accent))] inline-flex items-center justify-center gap-1 hover:bg-[hsl(var(--ax-accent)/0.1)] disabled:opacity-40"
+                  >
+                    <Layers className="h-3 w-3" /> Put on garments
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -571,6 +585,16 @@ export function EntityMerchWorkspace({
           </div>
         )}
       </section>
+
+      {applyDesign && (
+        <ApplyToBlanksDialog
+          entity={{ id: entity.id, organization_id: entity.organization_id, name }}
+          design={applyDesign}
+          teamId={teamId}
+          onClose={() => setApplyDesign(null)}
+          onCreated={onChanged}
+        />
+      )}
 
       {pngFor && (
         <CreatePngDialog
