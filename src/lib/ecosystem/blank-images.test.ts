@@ -8,6 +8,7 @@ import {
   skuFromPath,
   normalizeUrl,
   hostOf,
+  planPhotoMove,
   type ColorRow,
 } from "./blank-images";
 
@@ -182,5 +183,52 @@ describe("hostOf", () => {
   it("is null-safe", () => {
     expect(hostOf(null)).toBeNull();
     expect(hostOf("not a url")).toBeNull();
+  });
+});
+
+describe("planPhotoMove", () => {
+  const rows: ColorRow[] = [
+    { id: "sand", blank_id: "b", color_name: "Sand", image_url: "F_sand", image_url_back: "B_sand" },
+    { id: "bone", blank_id: "b", color_name: "Bone", image_url: null, image_url_back: null },
+  ];
+
+  it("swaps front and back on one row in a SINGLE patch", () => {
+    // Two separate updates to the same row would clobber each other — the
+    // second write would overwrite the first with a stale value.
+    const patches = planPhotoMove(rows, { colorId: "sand", surface: "front" }, { colorId: "sand", surface: "back" });
+    expect(patches).toHaveLength(1);
+    expect(patches[0]).toEqual({ colorId: "sand", image_url_back: "F_sand", image_url: "B_sand" });
+  });
+
+  it("moves a photo to an empty slot on another colourway", () => {
+    const patches = planPhotoMove(rows, { colorId: "sand", surface: "front" }, { colorId: "bone", surface: "front" });
+    expect(patches).toEqual([
+      { colorId: "bone", image_url: "F_sand" },
+      { colorId: "sand", image_url: null },
+    ]);
+  });
+
+  it("swaps across colourways when the target is occupied", () => {
+    const occupied: ColorRow[] = [
+      rows[0],
+      { id: "bone", blank_id: "b", color_name: "Bone", image_url: "F_bone", image_url_back: null },
+    ];
+    const patches = planPhotoMove(occupied, { colorId: "sand", surface: "front" }, { colorId: "bone", surface: "front" });
+    expect(patches).toEqual([
+      { colorId: "bone", image_url: "F_sand" },
+      { colorId: "sand", image_url: "F_bone" },
+    ]);
+  });
+
+  it("does nothing when dropped on itself", () => {
+    expect(planPhotoMove(rows, { colorId: "sand", surface: "front" }, { colorId: "sand", surface: "front" })).toEqual([]);
+  });
+
+  it("does nothing when the source slot is empty", () => {
+    expect(planPhotoMove(rows, { colorId: "bone", surface: "front" }, { colorId: "sand", surface: "front" })).toEqual([]);
+  });
+
+  it("is safe when a slot references a colour that isn't loaded", () => {
+    expect(planPhotoMove(rows, { colorId: "ghost", surface: "front" }, { colorId: "sand", surface: "front" })).toEqual([]);
   });
 });

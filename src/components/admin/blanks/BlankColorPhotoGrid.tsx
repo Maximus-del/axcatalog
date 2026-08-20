@@ -5,7 +5,7 @@
 // because when you're working through 92 trucker colourways the fastest input
 // is whichever one your hands are already doing.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Upload, X, Check, FolderOpen, LinkIcon, ExternalLink } from "lucide-react";
+import { Loader2, Upload, X, Check, FolderOpen, LinkIcon, ExternalLink, Trash2, Maximize2, Replace } from "lucide-react";
 import { toast } from "sonner";
 import {
   clearColorPhoto,
@@ -14,15 +14,19 @@ import {
   isImportableImage,
   loadColorsFor,
   matchFilesToColors,
+  planPhotoMove,
+  applyColorPatches,
   normalizeUrl,
   hostOf,
   saveBlankUrl,
   uploadColorPhoto,
   type ColorRow,
+  type SlotRef,
   type Surface,
 } from "@/lib/ecosystem/blank-images";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { Input } from "@/components/ui/input";
+import { ImageLightbox, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
 import { cn } from "@/lib/utils";
 
 export function BlankColorPhotoGrid({
@@ -39,6 +43,8 @@ export function BlankColorPhotoGrid({
   const [filter, setFilter] = useState<"missing" | "all">("missing");
   // Ctrl+V needs a target; the tile under the cursor is the one you mean.
   const hovered = useRef<{ color: ColorRow; surface: Surface } | null>(null);
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<SlotRef | null>(null);
 
   async function load() {
     setColors(await loadColorsFor(blankId).catch(() => []));
@@ -71,6 +77,21 @@ export function BlankColorPhotoGrid({
     } finally { setBusy(null); }
   }
 
+  /** Drag a photo onto another slot: swap if occupied, move if empty. */
+  async function movePhoto(from: SlotRef, to: SlotRef) {
+    if (!colors) return;
+    const patches = planPhotoMove(colors, from, to);
+    if (patches.length === 0) return;
+    setBusy(`${to.colorId}:${to.surface}`);
+    try {
+      await applyColorPatches(patches);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not move that photo");
+    } finally { setBusy(null); }
+  }
+
   // Paste anywhere on the page lands in whichever tile you're pointing at.
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
@@ -94,6 +115,15 @@ export function BlankColorPhotoGrid({
 
   const incomplete = colors.filter((c) => !c.image_url || !c.image_url_back);
   const shown = filter === "missing" && incomplete.length > 0 ? incomplete : colors;
+
+  // Everything currently on screen, so arrow keys walk the whole blank rather
+  // than trapping you on one colourway.
+  const photos: LightboxItem[] = shown.flatMap((c) => {
+    const out: LightboxItem[] = [];
+    if (c.image_url) out.push({ id: `${c.id}:front`, url: c.image_url, title: `${c.color_name} — front` });
+    if (c.image_url_back) out.push({ id: `${c.id}:back`, url: c.image_url_back, title: `${c.color_name} — back` });
+    return out;
+  });
 
   return (
     <div className="p-4 space-y-4 bg-[hsl(var(--ax-line)/0.35)]">
@@ -127,24 +157,76 @@ export function BlankColorPhotoGrid({
           <div key={c.id} className="space-y-1">
             <div className="text-[11px] font-semibold truncate" title={c.color_name}>{c.color_name}</div>
             <div className="grid grid-cols-2 gap-1">
-              {(["front", "back"] as Surface[]).map((surface) => (
-                <Slot
-                  key={surface}
-                  color={c}
-                  surface={surface}
-                  url={surface === "back" ? c.image_url_back : c.image_url}
-                  busy={busy === `${c.id}:${surface}`}
-                  onFile={(f) => put(c, surface, f)}
-                  onClear={() => clear(c, surface)}
-                  onHover={(on) => { hovered.current = on ? { color: c, surface } : null; }}
-                />
-              ))}
+              {(["front", "back"] as Surface[]).map((surface) => {
+                const url = surface === "back" ? c.image_url_back : c.image_url;
+                return (
+                  <Slot
+                    key={surface}
+                    color={c}
+                    surface={surface}
+                    url={url}
+                    busy={busy === `${c.id}:${surface}`}
+                    isDragging={dragging?.colorId === c.id && dragging.surface === surface}
+                    onFile={(f) => put(c, surface, f)}
+                    onClear={() => clear(c, surface)}
+                    onHover={(on) => { hovered.current = on ? { color: c, surface } : null; }}
+                    onPreview={() => {
+                      const i = photos.findIndex((p) => p.id === `${c.id}:${surface}`);
+                      if (i >= 0) setLightbox(i);
+                    }}
+                    onDragStartSlot={() => setDragging({ colorId: c.id, surface })}
+                    onDragEndSlot={() => setDragging(null)}
+                    onDropSlot={(from) => movePhoto(from, { colorId: c.id, surface })}
+                  />
+                );
+              })}
             </div>
           </div>
         ))}
       </div>
+
+      {/* Only while something is in the air — a permanent bin invites accidents. */}
+      {dragging && (
+        <div
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+          onDrop={(e) => {
+            e.preventDefault();
+            const from = readSlotDrag(e.dataTransfer);
+            setDragging(null);
+            if (!from) return;
+            const color = colors.find((x) => x.id === from.colorId);
+            if (color) void clear(color, from.surface);
+          }}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 h-14 px-6 rounded-2xl border-2 border-dashed border-destructive bg-background/95 shadow-xl flex items-center gap-2 text-destructive font-semibold text-[13px]"
+        >
+          <Trash2 className="h-4 w-4" /> Drop here to remove
+        </div>
+      )}
+
+      {lightbox !== null && photos.length > 0 && (
+        <ImageLightbox
+          items={photos}
+          index={Math.min(lightbox, photos.length - 1)}
+          onIndexChange={setLightbox}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
+}
+
+/** Internal photo drags carry this, so a file drop is never mistaken for one. */
+const SLOT_MIME = "application/x-ax-slot";
+
+function readSlotDrag(dt: DataTransfer | null): SlotRef | null {
+  const raw = dt?.getData(SLOT_MIME);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as SlotRef;
+    return parsed?.colorId ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -320,15 +402,21 @@ function FolderDrop({
 }
 
 function Slot({
-  color, surface, url, busy, onFile, onClear, onHover,
+  color, surface, url, busy, isDragging, onFile, onClear, onHover,
+  onPreview, onDragStartSlot, onDragEndSlot, onDropSlot,
 }: {
   color: ColorRow;
   surface: Surface;
   url: string | null;
   busy: boolean;
+  isDragging: boolean;
   onFile: (file: File) => void;
   onClear: () => void;
   onHover: (on: boolean) => void;
+  onPreview: () => void;
+  onDragStartSlot: () => void;
+  onDragEndSlot: () => void;
+  onDropSlot: (from: SlotRef) => void;
 }) {
   const [over, setOver] = useState(false);
   const inputId = `slot-${color.id}-${surface}`;
@@ -343,36 +431,58 @@ function Slot({
         e.preventDefault();
         e.stopPropagation();
         setOver(false);
+        // A photo dragged from another tile, or a file from the desktop.
+        const from = readSlotDrag(e.dataTransfer);
+        if (from) { onDropSlot(from); return; }
         const file = Array.from(e.dataTransfer.files ?? [])[0];
         if (file) onFile(file);
       }}
-      className="relative group"
+      className={cn("relative group", isDragging && "opacity-40")}
       title={`${color.color_name} — ${surface}`}
     >
-      <label
-        htmlFor={inputId}
-        className={cn(
-          "block aspect-square rounded-md border cursor-pointer overflow-hidden transition-colors",
-          over
-            ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)]"
-            : url
-              ? "border-[hsl(var(--ax-border))] bg-white"
+      {url && !busy ? (
+        // Filled: click previews, drag moves. Replacing is its own small
+        // button, because opening a file picker when someone wanted a closer
+        // look is the more annoying way round to get it wrong.
+        <button
+          type="button"
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData(SLOT_MIME, JSON.stringify({ colorId: color.id, surface }));
+            e.dataTransfer.effectAllowed = "move";
+            onDragStartSlot();
+          }}
+          onDragEnd={onDragEndSlot}
+          onClick={onPreview}
+          className={cn(
+            "block w-full aspect-square rounded-md border overflow-hidden bg-white cursor-grab active:cursor-grabbing",
+            over ? "border-[hsl(var(--ax-accent))] ring-2 ring-[hsl(var(--ax-accent))]" : "border-[hsl(var(--ax-border))]",
+          )}
+        >
+          <img src={url} alt="" loading="lazy" className="h-full w-full object-cover pointer-events-none" />
+        </button>
+      ) : (
+        <label
+          htmlFor={inputId}
+          className={cn(
+            "block aspect-square rounded-md border cursor-pointer overflow-hidden transition-colors",
+            over
+              ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)]"
               : "border-dashed border-[hsl(var(--ax-border))] hover:border-[hsl(var(--ax-accent))] bg-transparent",
-        )}
-      >
-        {busy ? (
-          <span className="h-full w-full flex items-center justify-center">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          </span>
-        ) : url ? (
-          <img src={url} alt="" loading="lazy" className="h-full w-full object-cover" />
-        ) : (
-          <span className="h-full w-full flex flex-col items-center justify-center gap-0.5 text-[hsl(var(--ax-faint))]">
-            <Upload className="h-3.5 w-3.5" />
-            <span className="text-[9px] uppercase tracking-wider">{surface}</span>
-          </span>
-        )}
-      </label>
+          )}
+        >
+          {busy ? (
+            <span className="h-full w-full flex items-center justify-center">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </span>
+          ) : (
+            <span className="h-full w-full flex flex-col items-center justify-center gap-0.5 text-[hsl(var(--ax-faint))]">
+              <Upload className="h-3.5 w-3.5" />
+              <span className="text-[9px] uppercase tracking-wider">{surface}</span>
+            </span>
+          )}
+        </label>
+      )}
 
       <input
         id={inputId}
@@ -388,9 +498,19 @@ function Slot({
 
       {url && !busy && (
         <>
-          <span className="absolute bottom-0.5 left-0.5 h-3.5 w-3.5 rounded-full bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] flex items-center justify-center">
+          <span className="absolute bottom-0.5 left-0.5 h-3.5 w-3.5 rounded-full bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] flex items-center justify-center pointer-events-none">
             <Check className="h-2.5 w-2.5" />
           </span>
+          <span className="absolute bottom-0.5 right-0.5 opacity-0 group-hover:opacity-100 text-white/90 pointer-events-none">
+            <Maximize2 className="h-3 w-3 drop-shadow" />
+          </span>
+          <label
+            htmlFor={inputId}
+            title="Replace"
+            className="absolute -top-1 -left-1 h-4 w-4 rounded-full bg-black/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer"
+          >
+            <Replace className="h-2.5 w-2.5" />
+          </label>
           <button
             type="button"
             onClick={onClear}

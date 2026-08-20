@@ -244,6 +244,71 @@ export async function uploadColorPhoto(input: {
   return versioned;
 }
 
+export interface SlotRef {
+  colorId: string;
+  surface: Surface;
+}
+
+export interface ColorPatch {
+  colorId: string;
+  image_url?: string | null;
+  image_url_back?: string | null;
+}
+
+function urlAt(colors: ColorRow[], ref: SlotRef): string | null {
+  const c = colors.find((x) => x.id === ref.colorId);
+  if (!c) return null;
+  return ref.surface === "back" ? c.image_url_back : c.image_url;
+}
+
+function field(surface: Surface): "image_url" | "image_url_back" {
+  return surface === "back" ? "image_url_back" : "image_url";
+}
+
+/**
+ * Work out the row updates for dragging a photo from one slot to another.
+ *
+ * Swaps when the target is occupied and moves when it's empty, which is the
+ * behaviour that matches the two real mistakes: a front and back the matcher
+ * got the wrong way round, and a photo filed under the wrong colourway.
+ *
+ * Returns patches rather than writing, so the interesting case — both slots on
+ * the SAME row, where two naive updates would clobber each other — is provable
+ * without a database.
+ */
+export function planPhotoMove(colors: ColorRow[], from: SlotRef, to: SlotRef): ColorPatch[] {
+  if (from.colorId === to.colorId && from.surface === to.surface) return [];
+
+  const moving = urlAt(colors, from);
+  if (!moving) return [];
+  const displaced = urlAt(colors, to);
+
+  if (from.colorId === to.colorId) {
+    // One row, both fields — must be a single patch or the second write wins.
+    return [{
+      colorId: from.colorId,
+      [field(to.surface)]: moving,
+      [field(from.surface)]: displaced,
+    } as ColorPatch];
+  }
+
+  return [
+    { colorId: to.colorId, [field(to.surface)]: moving } as ColorPatch,
+    { colorId: from.colorId, [field(from.surface)]: displaced } as ColorPatch,
+  ];
+}
+
+export async function applyColorPatches(patches: ColorPatch[]): Promise<void> {
+  for (const patch of patches) {
+    const { colorId, ...fields } = patch;
+    const { error } = await supabase
+      .from("blank_colors" as never)
+      .update(fields as never)
+      .eq("id", colorId);
+    if (error) throw error;
+  }
+}
+
 export async function clearColorPhoto(colorId: string, surface: Surface): Promise<void> {
   const field = surface === "back" ? "image_url_back" : "image_url";
   const { error } = await supabase
