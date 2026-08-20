@@ -142,7 +142,11 @@ export function BlankColorPhotoGrid({
             ? "Every colourway has both views."
             : `${incomplete.length} of ${colors.length} colourways still need a photo.`}
         </span>
-        {incomplete.length > 0 && (
+        {/* Only offer the filter when it would actually change what's on
+            screen. With every colourway missing, both states show the same
+            tiles — a control that flips its own label while doing nothing is
+            worse than no control. */}
+        {incomplete.length > 0 && incomplete.length < colors.length && (
           <button
             onClick={() => setFilter((f) => (f === "missing" ? "all" : "missing"))}
             className="text-[11px] font-semibold text-[hsl(var(--ax-accent))] ml-auto"
