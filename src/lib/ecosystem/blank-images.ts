@@ -121,6 +121,30 @@ export interface MatchedFile {
   color: ColorRow | null;
   /** Set when a photo is already on file for this colour and surface. */
   replaces: boolean;
+  /**
+   * exact  — the filename is the colour
+   * suffix — the colour was found after an unrecognised code prefix
+   */
+  confidence?: "exact" | "suffix";
+}
+
+/**
+ * Find the colourway hiding at the end of a filename.
+ *
+ * Vendors prefix with codes we can't enumerate — "BCHT-Black-Cheetah.png",
+ * "RBK-Black.png". Stripping any leading token would eat real colour words, so
+ * instead: does the file slug END with a colour slug? The LONGEST match wins,
+ * which is what keeps "BCHT-Black-Cheetah" landing on "Black Cheetah" rather
+ * than on "Cheetah".
+ */
+function matchBySuffix(fileSlug: string, bySlug: Map<string, ColorRow>): ColorRow | null {
+  let best: { color: ColorRow; length: number } | null = null;
+  for (const [slug, color] of bySlug) {
+    // Two or three letters would collide with the code prefixes themselves.
+    if (slug.length < 4 || !fileSlug.endsWith(slug)) continue;
+    if (!best || slug.length > best.length) best = { color, length: slug.length };
+  }
+  return best?.color ?? null;
 }
 
 export interface MatchReport {
@@ -149,14 +173,18 @@ export function matchFilesToColors(
 
   for (const file of files) {
     const parsed = parseFileName(file.name, styleNumbers);
-    const color = bySlug.get(parsed.colorSlug) ?? null;
+    const exact = bySlug.get(parsed.colorSlug) ?? null;
+    const color = exact ?? matchBySuffix(parsed.colorSlug, bySlug);
     const entry: MatchedFile = {
       file,
       fileName: file.name,
-      colorSlug: parsed.colorSlug,
+      // Report the colour we landed on, so the upload path names the file
+      // after the colourway rather than after the vendor's code.
+      colorSlug: color ? colorSlug(color.color_name) : parsed.colorSlug,
       surface: parsed.surface,
       color,
       replaces: !!color && !!(parsed.surface === "back" ? color.image_url_back : color.image_url),
+      confidence: color ? (exact ? "exact" : "suffix") : undefined,
     };
     (color ? matched : unmatched).push(entry);
   }

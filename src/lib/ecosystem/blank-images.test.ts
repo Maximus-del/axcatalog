@@ -232,3 +232,72 @@ describe("planPhotoMove", () => {
     expect(planPhotoMove(rows, { colorId: "ghost", surface: "front" }, { colorId: "sand", surface: "front" })).toEqual([]);
   });
 });
+
+describe("matching past a vendor code prefix", () => {
+  // The real AX-BAG-01 drop: every file carries a code we can't enumerate,
+  // so all nine landed in "needs a colour" before suffix matching.
+  const bagColors: ColorRow[] = [
+    "Black Cheetah", "Black Camo", "Black Checker Strap", "Cheetah",
+    "Forest Camo", "Polka Dot", "Black", "Southwest", "Tiger Camo",
+  ].map((color_name, i) => ({
+    id: `c${i}`, blank_id: "bag", color_name, image_url: null, image_url_back: null,
+  }));
+
+  function matchOne(name: string) {
+    const r = matchFilesToColors([fakeFile(name)], bagColors);
+    return r.matched[0]?.color?.color_name ?? null;
+  }
+
+  it("finds the colour after an alphabetic code", () => {
+    expect(matchOne("BCHT-Black-Cheetah.png")).toBe("Black Cheetah");
+    expect(matchOne("BKCH-Black-Checker-Strap.png")).toBe("Black Checker Strap");
+    expect(matchOne("FCMO-Forest-Camo.png")).toBe("Forest Camo");
+    expect(matchOne("PDOT-Polka-Dot.png")).toBe("Polka Dot");
+    expect(matchOne("RBK-Black.png")).toBe("Black");
+  });
+
+  it("prefers the longest colour when one name contains another", () => {
+    // "BCHT-Black-Cheetah" ends with both "cheetah" and "blackcheetah".
+    expect(matchOne("BCHT-Black-Cheetah.png")).toBe("Black Cheetah");
+    expect(matchOne("CHTA-Cheetah.png")).toBe("Cheetah");
+    expect(matchOne("BCMO-Black-Camo.png")).toBe("Black Camo");
+  });
+
+  it("marks a fragment match so it can be shown differently", () => {
+    const r = matchFilesToColors([fakeFile("BCHT-Black-Cheetah.png"), fakeFile("Southwest.png")], bagColors);
+    const byName = Object.fromEntries(r.matched.map((m) => [m.fileName, m.confidence]));
+    expect(byName["BCHT-Black-Cheetah.png"]).toBe("suffix");
+    expect(byName["Southwest.png"]).toBe("exact");
+  });
+
+  it("names the stored file after the colourway, not the vendor code", () => {
+    const r = matchFilesToColors([fakeFile("BKCH-Black-Checker-Strap.png")], bagColors);
+    expect(r.matched[0].colorSlug).toBe("blackcheckerstrap");
+  });
+
+  it("still refuses a file with no colour in it", () => {
+    const r = matchFilesToColors([fakeFile("IMG_4821.png")], bagColors);
+    expect(r.matched).toHaveLength(0);
+    expect(r.unmatched).toHaveLength(1);
+  });
+
+  it("will not match on a fragment shorter than four characters", () => {
+    // Guards against a code prefix accidentally being read as a colour.
+    const shortColors: ColorRow[] = [
+      { id: "x", blank_id: "b", color_name: "Red", image_url: null, image_url_back: null },
+    ];
+    const r = matchFilesToColors([fakeFile("ABCRED.png")], shortColors);
+    expect(r.matched).toHaveLength(0);
+  });
+
+  it("resolves the whole nine-file drop", () => {
+    const names = [
+      "BCHT-Black-Cheetah.png", "BCMO-Black-Camo.png", "BKCH-Black-Checker-Strap.png",
+      "CHTA-Cheetah.png", "FCMO-Forest-Camo.png", "PDOT-Polka-Dot.png",
+      "RBK-Black.png", "SW-Southwest.png", "TCMO-Tiger-Camo.png",
+    ];
+    const r = matchFilesToColors(names.map((n) => fakeFile(n)), bagColors);
+    expect(r.matched).toHaveLength(9);
+    expect(r.unmatched).toHaveLength(0);
+  });
+});

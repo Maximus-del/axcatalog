@@ -254,6 +254,15 @@ function FolderDrop({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
+  // Thumbnails for staged files. Object URLs leak until revoked, and a folder
+  // of 184 photos makes that a real leak rather than a pedantic one.
+  const previews = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const f of files) if (!map.has(f.name)) map.set(f.name, URL.createObjectURL(f));
+    return map;
+  }, [files]);
+  useEffect(() => () => { previews.forEach((url) => URL.revokeObjectURL(url)); }, [previews]);
+
   function take(incoming: File[]) {
     const images = incoming.filter(isImportableImage);
     const skipped = incoming.length - images.length;
@@ -357,12 +366,32 @@ function FolderDrop({
             )}
           </div>
 
+          {report.matched.length > 0 && (
+            <ul className="space-y-1 max-h-56 overflow-y-auto">
+              {report.matched.map((m) => (
+                <li key={m.fileName} className="flex items-center gap-2 text-[12px]">
+                  <Thumb src={previews.get(m.fileName)} />
+                  <span className="flex-1 min-w-0 truncate" title={m.fileName}>{m.fileName}</span>
+                  <span className="shrink-0 font-semibold">{m.color?.color_name}</span>
+                  {/* Say when the colour came from a fragment rather than the
+                      whole name, so a wrong guess is visible before import. */}
+                  {m.confidence === "suffix" && (
+                    <span className="shrink-0 text-[10px] uppercase tracking-wider text-amber-600">matched</span>
+                  )}
+                  <span className="shrink-0 text-[11px] text-muted-foreground w-9 text-right">{m.surface}</span>
+                  {m.replaces && <span className="shrink-0 text-[10px] text-amber-600">replaces</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+
           {report.unmatched.length > 0 && (
             <ul className="space-y-1 max-h-56 overflow-y-auto">
               {report.unmatched.map((u) => {
                 const pick = manual[u.fileName] ?? { colorId: "", surface: u.surface };
                 return (
                   <li key={u.fileName} className="flex items-center gap-2 text-[12px]">
+                    <Thumb src={previews.get(u.fileName)} />
                     <span className="flex-1 min-w-0 truncate" title={u.fileName}>{u.fileName}</span>
                     <select
                       value={pick.colorId}
@@ -601,5 +630,16 @@ function ProductLinkRow({
         </a>
       )}
     </div>
+  );
+}
+
+/** Small preview of a staged file, so you can see what you're assigning. */
+function Thumb({ src }: { src?: string }) {
+  return (
+    <span className="h-9 w-9 shrink-0 rounded border border-[hsl(var(--ax-border))] overflow-hidden bg-[hsl(var(--ax-line))] flex items-center justify-center">
+      {src
+        ? <img src={src} alt="" className="h-full w-full object-cover" />
+        : <Upload className="h-3 w-3 text-[hsl(var(--ax-faint))]" />}
+    </span>
   );
 }
