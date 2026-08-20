@@ -9,6 +9,8 @@ import {
   normalizeUrl,
   hostOf,
   planPhotoMove,
+  resolveBlankFolder,
+  folderOfPath,
   type ColorRow,
 } from "./blank-images";
 
@@ -299,5 +301,65 @@ describe("matching past a vendor code prefix", () => {
     const r = matchFilesToColors(names.map((n) => fakeFile(n)), bagColors);
     expect(r.matched).toHaveLength(9);
     expect(r.unmatched).toHaveLength(0);
+  });
+});
+
+describe("resolveBlankFolder", () => {
+  const blanks = [
+    { id: "1", sku: "AX-HOOD-05", style_number: "CCHOD475", name: "Garment-Wash Hoodie 14oz" },
+    { id: "2", sku: "AX-TRK-01", style_number: "39-165", name: "5-Panel High-Crown Mesh Trucker Hat" },
+    { id: "3", sku: "AX-TEE-06", style_number: "CCSST250", name: "Oversized Boxy Tee 7.5oz" },
+    { id: "4", sku: "AX-CAP-01", style_number: "31-069", name: "5-Panel Mid-Profile Cap" },
+  ];
+
+  it("resolves the AX SKU we renamed things to", () => {
+    expect(resolveBlankFolder("AX-HOOD-05", blanks)?.id).toBe("1");
+    expect(resolveBlankFolder("ax-hood-05", blanks)?.id).toBe("1");
+  });
+
+  it("resolves the vendor style code the download arrived with", () => {
+    expect(resolveBlankFolder("CCHOD475", blanks)?.id).toBe("1");
+    expect(resolveBlankFolder("39-165", blanks)?.id).toBe("2");
+    expect(resolveBlankFolder("39165", blanks)?.id).toBe("2");
+  });
+
+  it("resolves the product name off the vendor's page", () => {
+    expect(resolveBlankFolder("Garment-Wash Hoodie 14oz", blanks)?.id).toBe("1");
+    expect(resolveBlankFolder("garment wash hoodie 14oz", blanks)?.id).toBe("1");
+  });
+
+  it("finds a style code buried in a folder name", () => {
+    // Real folder name from the Drive library.
+    expect(resolveBlankFolder("OttoCap 31-069 Front View", blanks)?.id).toBe("4");
+  });
+
+  it("does not stretch to reach a name that genuinely differs", () => {
+    // "CC - Oversized-Box-SS-Tee" vs our "Oversized Boxy Tee" — Box SS is not
+    // Boxy. Loosening the match far enough to bridge that would start pairing
+    // unrelated blanks, so this correctly falls through to the operator, who
+    // gets a "couldn't tell which blank this is" prompt and a dropdown.
+    expect(resolveBlankFolder("CC - Oversized-Box-SS-Tee-7-5oz", blanks)).toBeNull();
+  });
+
+  it("prefers an exact style code over a loose containment match", () => {
+    expect(resolveBlankFolder("CCHOD475", blanks)?.sku).toBe("AX-HOOD-05");
+  });
+
+  it("gives up rather than guessing", () => {
+    expect(resolveBlankFolder("_unzipped", blanks)).toBeNull();
+    expect(resolveBlankFolder("", blanks)).toBeNull();
+    expect(resolveBlankFolder("random folder", blanks)).toBeNull();
+  });
+});
+
+describe("folderOfPath", () => {
+  it("returns the folder a file sat directly inside, whatever it's called", () => {
+    expect(folderOfPath(fakeFile("a.png", "clean/CCHOD475/a.png"))).toBe("CCHOD475");
+    expect(folderOfPath(fakeFile("a.png", "AX-TEE-06/a.png"))).toBe("AX-TEE-06");
+  });
+
+  it("is null for a loose file", () => {
+    expect(folderOfPath(fakeFile("a.png"))).toBeNull();
+    expect(folderOfPath(fakeFile("a.png", "a.png"))).toBeNull();
   });
 });

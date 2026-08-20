@@ -9,8 +9,10 @@ import { Link } from "react-router-dom";
 import { Loader2, Upload, Check, AlertTriangle, FolderOpen, ArrowLeft, ChevronDown, Link as LinkIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
+  colorSlug,
   coveragePercent,
-  groupBySku,
+  groupByFolder,
+  resolveBlankFolder,
   importMatchedFiles,
   isImportableImage,
   loadColorsFor,
@@ -52,14 +54,25 @@ export default function BlankImagesImport() {
     if (images.length === 0) return;
 
     // A directory drop tells us which blank it belongs to; a flat selection
-    // doesn't, so the operator picks.
-    const groups = groupBySku(images);
-    const skus = [...groups.keys()].filter(Boolean) as string[];
-    if (skus.length > 1) {
-      toast.error(`That folder covers ${skus.length} blanks — drop one SKU folder at a time`);
+    // doesn't, so the operator picks. The folder can be named for the AX SKU,
+    // the vendor style code, or the product name — all three resolve.
+    const groups = groupByFolder(images);
+    const folders = [...groups.keys()].filter(Boolean) as string[];
+    if (folders.length > 1) {
+      toast.error(`That drop covers ${folders.length} folders — one blank at a time`);
       return;
     }
-    if (skus[0]) setSku(skus[0]);
+    if (folders[0] && coverage) {
+      const match = resolveBlankFolder(folders[0], coverage);
+      if (match?.sku) {
+        setSku(match.sku);
+        if (colorSlug(match.sku) !== colorSlug(folders[0])) {
+          toast.success(`"${folders[0]}" → ${match.sku} · ${match.name}`);
+        }
+      } else {
+        toast.error(`Couldn't tell which blank "${folders[0]}" is — pick it below`);
+      }
+    }
     setFiles((prev) => [...prev, ...images]);
   }
 

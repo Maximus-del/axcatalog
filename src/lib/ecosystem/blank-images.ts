@@ -231,6 +231,73 @@ export function groupBySku(files: File[]): Map<string | null, File[]> {
   return groups;
 }
 
+/** The folder a file sat directly inside, whatever it happens to be called. */
+export function folderOfPath(file: File): string | null {
+  const path = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
+  if (!path) return null;
+  const parts = path.split("/").filter(Boolean);
+  return parts.length >= 2 ? parts[parts.length - 2] : null;
+}
+
+export function groupByFolder(files: File[]): Map<string | null, File[]> {
+  const groups = new Map<string | null, File[]>();
+  for (const file of files) {
+    const folder = folderOfPath(file);
+    const list = groups.get(folder) ?? [];
+    list.push(file);
+    groups.set(folder, list);
+  }
+  return groups;
+}
+
+export interface BlankIdentity {
+  id: string;
+  sku: string | null;
+  style_number: string | null;
+  name: string;
+}
+
+/**
+ * Work out which blank a folder belongs to, whatever it's named.
+ *
+ * Folders arrive named three ways and all of them are legitimate: the AX SKU
+ * we renamed things to ("AX-HOOD-05"), the vendor style code the download came
+ * with ("CCHOD475", "31-069"), or the product name off the vendor's page
+ * ("Garment-Wash Hoodie 14oz"). Requiring the first means keeping a crosswalk
+ * in your head while dragging folders, which is exactly the kind of clerical
+ * work the importer exists to remove.
+ *
+ * Tried in order of how certain each is, so a style code can never lose to a
+ * loose name match.
+ */
+export function resolveBlankFolder<T extends BlankIdentity>(folder: string, blanks: T[]): T | null {
+  const wanted = colorSlug(folder);
+  if (!wanted) return null;
+
+  const bySku = blanks.find((b) => b.sku && colorSlug(b.sku) === wanted);
+  if (bySku) return bySku;
+
+  const byStyle = blanks.find((b) => b.style_number && colorSlug(b.style_number) === wanted);
+  if (byStyle) return byStyle;
+
+  const byName = blanks.find((b) => colorSlug(b.name) === wanted);
+  if (byName) return byName;
+
+  // "CC - Oversized-Box-SS-Tee" and "OttoCap 31-069 Front View" — the code or
+  // name is in there with packaging around it. Longest wins so a short style
+  // number can't beat the fuller name it appears inside.
+  let best: { blank: T; length: number } | null = null;
+  for (const b of blanks) {
+    for (const candidate of [b.style_number, b.name]) {
+      if (!candidate) continue;
+      const slug = colorSlug(candidate);
+      if (slug.length < 4 || !wanted.includes(slug)) continue;
+      if (!best || slug.length > best.length) best = { blank: b, length: slug.length };
+    }
+  }
+  return best?.blank ?? null;
+}
+
 export interface ImportOutcome {
   imported: number;
   failed: { fileName: string; error: string }[];
