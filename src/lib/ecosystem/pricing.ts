@@ -108,6 +108,38 @@ export function profitOf(price: number | null, cost: number | null): number | nu
   return Math.round((price - cost) * 100) / 100;
 }
 
+/**
+ * The hand-entered selling prices stored on a blank, one column per tier.
+ *
+ * These exist because someone typed a number on the pricing sheet, and that
+ * decision has to outrank the margin rule wherever a price is shown or charged
+ * — otherwise the concept a customer buys is priced differently from the row
+ * the operator was looking at when they set it.
+ */
+export interface PriceOverrides {
+  price_standard?: number | string | null;
+  price_athlete?: number | string | null;
+  price_corporate?: number | string | null;
+}
+
+export const PRICE_FIELD: Record<PriceTier, keyof PriceOverrides> = {
+  standard: "price_standard",
+  athlete: "price_athlete",
+  corporate: "price_corporate",
+};
+
+/** The typed price for a tier, or null when the rule is still in charge. */
+export function overrideFor(b: PriceOverrides, tier: PriceTier): number | null {
+  const v = num(b[PRICE_FIELD[tier]]);
+  // Zero and negatives are not a price; they mean "nothing set here".
+  return v !== null && v > 0 ? v : null;
+}
+
+/** What we actually charge: the typed price if there is one, else the rule's. */
+export function sellingPrice(b: CostInput & PriceOverrides, rule: PricingRule): number | null {
+  return overrideFor(b, rule.tier) ?? priceFrom(trueCostOf(b), rule);
+}
+
 export interface PricedBlank {
   cost: number | null;
   price: number | null;

@@ -59,9 +59,11 @@ export const GROUPS: NavGroup[] = [
     items: [
       { label: "Products", to: "/admin/products", icon: Package },
       { label: "Collections", to: "/admin/collections", icon: FolderKanban },
+      // Blanks, blank photography and pricing were three entries describing the
+      // same records. They are now views inside one destination, reachable at
+      // /admin/blanks?view=… — so the sidebar names the thing, not the screen.
       { label: "Blanks", to: "/admin/blanks", icon: Shirt },
-      { label: "Blank Photos", to: "/admin/blanks/import-images", icon: ImagePlus },
-      { label: "Pricing", to: "/admin/pricing", icon: DollarSign },
+      { label: "Print Zones", to: "/admin/print-zones", icon: Ruler },
       { label: "Pricing Links", to: "/admin/pricing-links", icon: Link2 },
     ],
   },
@@ -72,7 +74,6 @@ export const GROUPS: NavGroup[] = [
       { label: "Orders", to: "/admin/orders", icon: ClipboardList },
       { label: "Fulfillment", to: "/admin/fulfillment", icon: Truck },
       { label: "Print Queue", to: "/admin/print-queue", icon: Printer },
-      { label: "Print Zones", to: "/admin/print-zones", icon: Ruler },
       { label: "Order Imports", to: "/admin/imports/orders", icon: FileDown },
       { label: "Ingestion", to: "/admin/ingestion", icon: Download },
     ],

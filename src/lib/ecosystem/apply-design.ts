@@ -11,7 +11,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createAthleteProduct } from "@/lib/ecosystem/merch";
 import { renderMockupPng } from "@/lib/render-mockup";
-import { priceFrom, trueCostOf, type PricingRule } from "@/lib/ecosystem/pricing";
+import { sellingPrice, trueCostOf, type PricingRule } from "@/lib/ecosystem/pricing";
 import { garmentCategoryFor, type PrintZone, type SurfaceKey } from "@/lib/print-zones";
 
 export interface BlankOption {
@@ -23,8 +23,13 @@ export interface BlankOption {
   decoration_cost: number | string | null;
   additional_cost: number | string | null;
   cost: number | string | null;
+  price_standard: number | string | null;
+  price_athlete: number | string | null;
+  price_corporate: number | string | null;
   colors: { color_name: string; image_url: string | null; image_url_back: string | null }[];
   sizes: string[];
+  /** Assortment keys this blank belongs to — who is allowed to put art on it. */
+  assortments: string[];
 }
 
 export interface BlankSelection {
@@ -94,7 +99,9 @@ export async function applyDesignToBlanks(input: ApplyDesignInput): Promise<Appl
 
     try {
       const cost = trueCostOf(sel.blank);
-      const price = priceFrom(cost, input.rule);
+      // sellingPrice, not priceFrom: a hand-set price on the blank has to reach
+      // the concept, or the catalogue and the product disagree about the money.
+      const price = sellingPrice(sel.blank, input.rule);
 
       productId = await createAthleteProduct({
         organization_id: input.organization_id,
@@ -185,15 +192,38 @@ export function defaultZoneFor(
   return null;
 }
 
-/** Load the blanks that can actually be decorated, with colors and sizes. */
+/**
+ * Load the blanks that can actually be decorated, with colors, sizes, prices
+ * and the assortments they belong to.
+ *
+ * Membership comes along rather than being filtered here on purpose: the caller
+ * decides whether to show only an athlete's catalogue or everything with the
+ * out-of-catalogue ones marked. Filtering in the query would make "why can't I
+ * see that hoodie?" unanswerable from the UI.
+ */
 export async function listDecoratableBlanks(): Promise<BlankOption[]> {
-  const { data, error } = await supabase
-    .from("blanks")
-    .select(
-      "id, name, garment_type, image_url, blank_cost, decoration_cost, additional_cost, cost, availability_status, internal_only, blank_colors(color_name, image_url, image_url_back, available, sort_order), blank_sizes(size, available, sort_order)",
-    )
-    .order("name");
+  const [res, itemsRes] = await Promise.all([
+    supabase
+      .from("blanks")
+      .select(
+        "id, name, garment_type, image_url, blank_cost, decoration_cost, additional_cost, cost, price_standard, price_athlete, price_corporate, availability_status, internal_only, blank_colors(color_name, image_url, image_url_back, available, sort_order), blank_sizes(size, available, sort_order)",
+      )
+      .order("name"),
+    supabase
+      .from("blank_assortment_items" as never)
+      .select("blank_id, assortment:blank_assortments(key)"),
+  ]);
+  const { data, error } = res;
   if (error) throw error;
+
+  const byBlank = new Map<string, string[]>();
+  for (const row of (itemsRes.data ?? []) as unknown as {
+    blank_id: string; assortment: { key: string } | { key: string }[] | null;
+  }[]) {
+    const a = Array.isArray(row.assortment) ? row.assortment[0] : row.assortment;
+    if (!a?.key) continue;
+    byBlank.set(row.blank_id, [...(byBlank.get(row.blank_id) ?? []), a.key]);
+  }
 
   return ((data ?? []) as unknown as (BlankOption & {
     internal_only: boolean | null;
@@ -210,6 +240,10 @@ export async function listDecoratableBlanks(): Promise<BlankOption[]> {
       decoration_cost: b.decoration_cost,
       additional_cost: b.additional_cost,
       cost: b.cost,
+      price_standard: b.price_standard,
+      price_athlete: b.price_athlete,
+      price_corporate: b.price_corporate,
+      assortments: byBlank.get(b.id) ?? [],
       colors: (b.blank_colors ?? [])
         .filter((c) => c.available)
         .sort((a, z) => a.sort_order - z.sort_order)

@@ -14,6 +14,7 @@ import {
   generateProductTitle,
 } from "@/lib/ecosystem/merch";
 import { createCollection } from "@/lib/ecosystem/commerce";
+import { DEFAULT_RULES, sellingPrice } from "@/lib/ecosystem/pricing";
 import { uploadDesignFromFile } from "@/lib/upload-design";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { CHECKERBOARD } from "@/components/admin/ecosystem/ImageLightbox";
@@ -30,8 +31,15 @@ interface BlankOption {
   fabric_specs: Record<string, unknown> | null;
   price_athlete: number | null;
   price_standard: number | null;
+  price_corporate: number | null;
+  blank_cost: number | string | null;
+  decoration_cost: number | string | null;
+  additional_cost: number | string | null;
+  cost: number | string | null;
   colors: string[];
   sizes: string[];
+  /** Which catalogues offer this blank — the athlete's comes first in the list. */
+  assortments: string[];
 }
 
 interface NamedRow { id: string; name?: string; title?: string }
@@ -96,16 +104,25 @@ export function QuickAddProductDialog({
 
   useEffect(() => {
     (async () => {
-      const [b, d, c] = await Promise.all([
-        supabase.from("blanks").select("id, name, garment_type, fabric, fabric_specs, price_athlete, price_standard, blank_colors(color_name, available, sort_order), blank_sizes(size, available, sort_order)").order("name"),
+      const [b, d, c, m] = await Promise.all([
+        supabase.from("blanks").select("id, name, garment_type, fabric, fabric_specs, price_athlete, price_standard, price_corporate, blank_cost, decoration_cost, additional_cost, cost, blank_colors(color_name, available, sort_order), blank_sizes(size, available, sort_order)").order("name"),
         supabase.from("design_athletes").select("design:designs(id, title)").eq("athlete_id", athlete.id),
         supabase.from("collections").select("id, name").eq("athlete_id", athlete.id).order("created_at", { ascending: false }),
+        supabase.from("blank_assortment_items" as never).select("blank_id, assortment:blank_assortments(key)"),
       ]);
+      const byBlank = new Map<string, string[]>();
+      for (const row of (m.data ?? []) as unknown as {
+        blank_id: string; assortment: { key: string } | { key: string }[] | null;
+      }[]) {
+        const a = Array.isArray(row.assortment) ? row.assortment[0] : row.assortment;
+        if (a?.key) byBlank.set(row.blank_id, [...(byBlank.get(row.blank_id) ?? []), a.key]);
+      }
       setBlanks(((b.data ?? []) as unknown as (BlankOption & {
         blank_colors: { color_name: string; available: boolean; sort_order: number }[];
         blank_sizes: { size: string; available: boolean; sort_order: number }[];
       })[]).map((row) => ({
         ...row,
+        assortments: byBlank.get(row.id) ?? [],
         colors: (row.blank_colors ?? []).filter((x) => x.available).sort((a, z) => a.sort_order - z.sort_order).map((x) => x.color_name),
         sizes: (row.blank_sizes ?? []).filter((x) => x.available).sort((a, z) => a.sort_order - z.sort_order).map((x) => x.size),
       })));
@@ -123,7 +140,10 @@ export function QuickAddProductDialog({
     setColors(blank.colors.slice(0, 1));
     setSizes(blank.sizes.length ? blank.sizes : ["S", "M", "L", "XL", "2XL", "3XL"]);
     if (!price) {
-      const p = blank.price_athlete ?? blank.price_standard;
+      // Same answer the catalogue gives: a typed price if there is one, else
+      // the athlete margin rule applied to cost. Falling back to "no price"
+      // just meant retyping a number the system already knew.
+      const p = sellingPrice(blank, DEFAULT_RULES.athlete) ?? sellingPrice(blank, DEFAULT_RULES.standard);
       if (p) setPrice(String(p));
     }
   }, [blankId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -242,7 +262,23 @@ export function QuickAddProductDialog({
                 className="w-full h-10 rounded-lg border border-[hsl(var(--ax-border))] bg-transparent px-2 text-[13px]"
               >
                 <option value="">— none yet (creates a concept) —</option>
-                {blanks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                {/* The athlete catalogue first, the rest still reachable
+                    underneath — grouping says what's on offer without making
+                    anything unpickable. */}
+                {blanks.some((b) => b.assortments.includes("athlete")) ? (
+                  <>
+                    <optgroup label="Athlete catalog">
+                      {blanks.filter((b) => b.assortments.includes("athlete"))
+                        .map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </optgroup>
+                    <optgroup label="Other blanks">
+                      {blanks.filter((b) => !b.assortments.includes("athlete"))
+                        .map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </optgroup>
+                  </>
+                ) : (
+                  blanks.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)
+                )}
               </select>
             </Field>
 

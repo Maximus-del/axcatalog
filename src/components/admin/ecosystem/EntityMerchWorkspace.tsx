@@ -589,6 +589,7 @@ export function EntityMerchWorkspace({
       {applyDesign && (
         <ApplyToBlanksDialog
           entity={{ id: entity.id, organization_id: entity.organization_id, name }}
+          assortment={hasRole(entity, "client") ? "client" : "athlete"}
           design={applyDesign}
           teamId={teamId}
           onClose={() => setApplyDesign(null)}

@@ -17,7 +17,7 @@ import {
   type BlankSelection,
 } from "@/lib/ecosystem/apply-design";
 import {
-  DEFAULT_RULES, formatMoney, loadPricingRules, priceFrom, trueCostOf,
+  DEFAULT_RULES, formatMoney, loadPricingRules, sellingPrice, trueCostOf,
   PRICE_TIERS, type PriceTier, type PricingRule,
 } from "@/lib/ecosystem/pricing";
 import { garmentCategoryFor, surfacesFor, type PrintZone, type SurfaceKey } from "@/lib/print-zones";
@@ -28,9 +28,15 @@ import { cn } from "@/lib/utils";
 interface ZoneRow { surface: SurfaceKey; zone: PrintZone; category: string }
 
 export function ApplyToBlanksDialog({
-  entity, design, teamId, onClose, onCreated,
+  entity, design, teamId, assortment = "athlete", onClose, onCreated,
 }: {
   entity: { id: string; organization_id: string; name: string };
+  /**
+   * Which blank assortment this entity draws from. Athlete surfaces pass
+   * "athlete", client surfaces "client"; the picker opens on that catalogue and
+   * you can widen to everything, so a restriction is visible rather than felt.
+   */
+  assortment?: string;
   design: { id: string; title: string; url: string };
   teamId?: string | null;
   onClose: () => void;
@@ -40,6 +46,7 @@ export function ApplyToBlanksDialog({
   const [zones, setZones] = useState<ZoneRow[]>([]);
   const [chosen, setChosen] = useState<Record<string, BlankSelection>>({});
   const [tier, setTier] = useState<PriceTier>("standard");
+  const [scoped, setScoped] = useState(true);
   const [rules, setRules] = useState<Record<PriceTier, PricingRule>>(DEFAULT_RULES);
   const [saving, setSaving] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number; label: string } | null>(null);
@@ -71,6 +78,14 @@ export function ApplyToBlanksDialog({
   }, [entity.organization_id]);
 
   const rule = rules[tier];
+
+  // In-catalogue blanks first. Scoped off shows everything, because "it isn't
+  // in the Athlete catalogue yet" is a fixable state, not a dead end.
+  const inCatalog = useMemo(
+    () => (blanks ?? []).filter((b) => b.assortments.includes(assortment)),
+    [blanks, assortment],
+  );
+  const visible = scoped && inCatalog.length > 0 ? inCatalog : (blanks ?? []);
 
   function zonesFor(garmentType: string | null): Record<SurfaceKey, PrintZone[]> {
     const category = garmentCategoryFor(garmentType);
@@ -173,18 +188,29 @@ export function ApplyToBlanksDialog({
                 ))}
               </div>
               <span className="text-[11px] text-[hsl(var(--ax-faint))]">
-                {Math.round(rule.margin * 100)}% margin on cost — prices below are computed, not typed.
+                {Math.round(rule.margin * 100)}% margin, unless a price is set on the blank.
               </span>
+
+              {inCatalog.length > 0 && inCatalog.length < (blanks?.length ?? 0) && (
+                <button
+                  onClick={() => setScoped((v) => !v)}
+                  className="ml-auto text-[11px] font-semibold text-[hsl(var(--ax-accent))]"
+                >
+                  {scoped
+                    ? `Showing the ${assortment} catalogue (${inCatalog.length}) · show all ${blanks?.length}`
+                    : `Showing all ${blanks?.length} · back to the ${assortment} catalogue`}
+                </button>
+              )}
             </div>
 
             {blanks === null ? (
               <div className="p-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[45vh] overflow-y-auto pr-1">
-                {blanks.map((b) => {
+                {visible.map((b) => {
                   const on = !!chosen[b.id];
                   const cost = trueCostOf(b);
-                  const price = priceFrom(cost, rule);
+                  const price = sellingPrice(b, rule);
                   return (
                     <button
                       key={b.id}

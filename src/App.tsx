@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -51,6 +51,7 @@ const AdminProductDetail = lazy(() => import("./pages/admin/ProductDetail"));
 const IngestionQueue = lazy(() => import("./pages/admin/IngestionQueue"));
 const DesignsList = lazy(() => import("./pages/admin/DesignsList"));
 const DesignDetail = lazy(() => import("./pages/admin/DesignDetail"));
+const BlankCatalog = lazy(() => import("./pages/admin/BlankCatalog"));
 const BlanksList = lazy(() => import("./pages/admin/BlanksList"));
 const BlankDetail = lazy(() => import("./pages/admin/BlankDetail"));
 const OrdersList = lazy(() => import("./pages/admin/OrdersList"));
@@ -160,7 +161,12 @@ const App = () => (
                 <Route path="products/:id" element={<AdminProductDetail />} />
                 <Route path="designs" element={<DesignsList />} />
                 <Route path="designs/:id" element={<DesignDetail />} />
-                <Route path="blanks" element={<BlanksList />} />
+                {/* Blanks, pricing and blank photography are one experience.
+                    The old destinations still resolve — /admin/blanks/list is
+                    the previous list, and /admin/pricing lands on the pricing
+                    view of the catalogue rather than 404ing. */}
+                <Route path="blanks" element={<BlankCatalog />} />
+                <Route path="blanks/list" element={<BlanksList />} />
                 <Route path="blanks/import-images" element={<BlankImagesImport />} />
                 <Route path="blanks/:id" element={<BlankDetail />} />
                 <Route path="athletes" element={<AthletesList />} />
@@ -186,7 +192,8 @@ const App = () => (
                 <Route path="ingestion/:id" element={<IngestionQueue />} />
                 <Route path="orders" element={<OrdersList />} />
                 <Route path="orders/:id" element={<OrderDetail />} />
-                <Route path="pricing" element={<PricingMaster />} />
+                <Route path="pricing" element={<Navigate to="/admin/blanks?view=pricing" replace />} />
+                <Route path="pricing/sheet" element={<PricingMaster />} />
                 <Route path="credits" element={<AthleteCredits />} />
                 <Route path="affiliates" element={<AffiliatesList />} />
                 <Route path="questionnaires" element={<QuestionnairesList />} />

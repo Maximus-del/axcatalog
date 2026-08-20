@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_RULES,
   priceBlank,
+  overrideFor,
   priceFrom,
   profitOf,
   realisedMargin,
   roundPrice,
+  sellingPrice,
   trueCostOf,
   type PricingRule,
 } from "./pricing";
@@ -118,5 +120,42 @@ describe("shipped defaults", () => {
   it("prices an athlete's own store below the public one", () => {
     const cost = 18;
     expect(priceFrom(cost, DEFAULT_RULES.athlete)!).toBeLessThan(priceFrom(cost, DEFAULT_RULES.standard)!);
+  });
+});
+
+describe("sellingPrice", () => {
+  // One definition of "what do we charge", used by the catalogue, the drawer
+  // and the design-application path alike. Before this each of them decided
+  // for itself, and the pricing sheet's typed numbers were only honoured by
+  // the pricing sheet.
+  const cost = { blank_cost: 12, decoration_cost: 4 };
+
+  it("falls back to the rule when nothing is typed", () => {
+    expect(sellingPrice(cost, plain)).toBe(priceFrom(16, plain));
+  });
+
+  it("prefers the typed price for that tier", () => {
+    expect(sellingPrice({ ...cost, price_standard: 49 }, plain)).toBe(49);
+  });
+
+  it("reads the column belonging to the rule's tier, not just any of them", () => {
+    const withAthlete = { ...cost, price_athlete: 21 };
+    expect(sellingPrice(withAthlete, plain)).toBe(priceFrom(16, plain));
+    expect(sellingPrice(withAthlete, DEFAULT_RULES.athlete)).toBe(21);
+  });
+
+  it("does not read zero or empty as a free product", () => {
+    expect(overrideFor({ price_standard: 0 }, "standard")).toBeNull();
+    expect(overrideFor({ price_standard: "" }, "standard")).toBeNull();
+    expect(overrideFor({ price_standard: -5 }, "standard")).toBeNull();
+    expect(sellingPrice({ ...cost, price_standard: 0 }, plain)).toBe(priceFrom(16, plain));
+  });
+
+  it("accepts a numeric string, which is how Postgres numerics arrive", () => {
+    expect(overrideFor({ price_standard: "42.50" }, "standard")).toBe(42.5);
+  });
+
+  it("honours a typed price even on a blank with no cost recorded", () => {
+    expect(sellingPrice({ price_standard: 30 }, plain)).toBe(30);
   });
 });
