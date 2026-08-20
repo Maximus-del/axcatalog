@@ -6,7 +6,7 @@
 // something you find out about afterwards.
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Upload, Check, AlertTriangle, FolderOpen, ArrowLeft } from "lucide-react";
+import { Loader2, Upload, Check, AlertTriangle, FolderOpen, ArrowLeft, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import {
   coveragePercent,
@@ -21,6 +21,7 @@ import {
   type MatchReport,
 } from "@/lib/ecosystem/blank-images";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
+import { BlankColorPhotoGrid } from "@/components/admin/blanks/BlankColorPhotoGrid";
 import { cn } from "@/lib/utils";
 
 export default function BlankImagesImport() {
@@ -30,6 +31,7 @@ export default function BlankImagesImport() {
   const [colors, setColors] = useState<ColorRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   async function refresh() {
     setCoverage(await loadCoverage().catch(() => []));
@@ -213,24 +215,39 @@ export default function BlankImagesImport() {
           <div className="ax-card divide-y divide-[hsl(var(--ax-border))]">
             {coverage.map((b) => {
               const pct = coveragePercent(b);
+              const open = expanded === b.id;
               return (
-                <div key={b.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="w-28 shrink-0 text-[12px] font-mono text-muted-foreground">{b.sku ?? "—"}</span>
-                  <span className="flex-1 min-w-0 text-[13px] font-semibold truncate">{b.name}</span>
-                  <span className="w-40 shrink-0 text-[11px] text-muted-foreground tabular-nums text-right">
-                    {b.haveFront}/{b.colorways} front · {b.haveBack}/{b.colorways} back
-                  </span>
-                  <span className="w-28 shrink-0">
-                    <span className="block h-1.5 rounded-full bg-[hsl(var(--ax-line))] overflow-hidden">
-                      <span
-                        className={cn("block h-full", pct === 100 ? "bg-[hsl(var(--ax-accent))]" : "bg-amber-500")}
-                        style={{ width: `${pct}%` }}
-                      />
+                <div key={b.id}>
+                  {/* The whole row is the control — name, bar and percentage
+                      all open the same editor, because any of them is what
+                      someone reaches for. */}
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? null : b.id)}
+                    aria-expanded={open}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-[hsl(var(--ax-line)/0.5)] transition-colors"
+                  >
+                    <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", open ? "rotate-0" : "-rotate-90")} />
+                    <span className="w-24 shrink-0 text-[12px] font-mono text-muted-foreground">{b.sku ?? "—"}</span>
+                    <span className="flex-1 min-w-0 text-[13px] font-semibold truncate">{b.name}</span>
+                    <span className="w-40 shrink-0 text-[11px] text-muted-foreground tabular-nums text-right hidden sm:block">
+                      {b.haveFront}/{b.colorways} front · {b.haveBack}/{b.colorways} back
                     </span>
-                  </span>
-                  <span className="w-10 shrink-0 text-[11px] tabular-nums text-right">
-                    {pct === 100 ? <Check className="h-3.5 w-3.5 inline text-[hsl(var(--ax-accent))]" /> : `${pct}%`}
-                  </span>
+                    <span className="w-28 shrink-0 hidden sm:block">
+                      <span className="block h-1.5 rounded-full bg-[hsl(var(--ax-line))] overflow-hidden">
+                        <span
+                          className={cn("block h-full", pct === 100 ? "bg-[hsl(var(--ax-accent))]" : "bg-amber-500")}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </span>
+                    </span>
+                    <span className="w-10 shrink-0 text-[11px] tabular-nums text-right">
+                      {pct === 100 ? <Check className="h-3.5 w-3.5 inline text-[hsl(var(--ax-accent))]" /> : `${pct}%`}
+                    </span>
+                  </button>
+                  {open && (
+                    <BlankColorPhotoGrid blankId={b.id} sku={b.sku} onChanged={refresh} />
+                  )}
                 </div>
               );
             })}

@@ -208,6 +208,51 @@ export interface ImportOutcome {
   failed: { fileName: string; error: string }[];
 }
 
+/**
+ * Upload one photo and point its colourway at it.
+ *
+ * The single source of truth for where a blank photo lives — both the bulk
+ * import and the one-slot-at-a-time editor go through here, so the two can't
+ * drift into writing different paths.
+ */
+export async function uploadColorPhoto(input: {
+  sku: string;
+  colorId: string;
+  colorSlug: string;
+  surface: Surface;
+  file: File;
+}): Promise<string> {
+  const ext = input.file.name.split(".").pop()?.toLowerCase() || "png";
+  // Deterministic path: re-importing a colour overwrites its own file rather
+  // than littering the bucket with orphans.
+  const path = `${input.sku}/${input.colorSlug}${input.surface === "back" ? "-back" : ""}.${ext}`;
+  const up = await supabase.storage
+    .from(BLANKS_BUCKET)
+    .upload(path, input.file, { upsert: true, contentType: input.file.type || "image/png" });
+  if (up.error) throw up.error;
+
+  const publicUrl = supabase.storage.from(BLANKS_BUCKET).getPublicUrl(path).data.publicUrl;
+  // Cache-bust: the path is stable on purpose, so a replaced photo would keep
+  // showing the old bytes without this.
+  const versioned = `${publicUrl}?v=${Date.now()}`;
+  const field = input.surface === "back" ? "image_url_back" : "image_url";
+  const { error } = await supabase
+    .from("blank_colors" as never)
+    .update({ [field]: versioned } as never)
+    .eq("id", input.colorId);
+  if (error) throw error;
+  return versioned;
+}
+
+export async function clearColorPhoto(colorId: string, surface: Surface): Promise<void> {
+  const field = surface === "back" ? "image_url_back" : "image_url";
+  const { error } = await supabase
+    .from("blank_colors" as never)
+    .update({ [field]: null } as never)
+    .eq("id", colorId);
+  if (error) throw error;
+}
+
 export async function importMatchedFiles(
   sku: string,
   matched: MatchedFile[],
@@ -220,22 +265,13 @@ export async function importMatchedFiles(
     onProgress?.(i, matched.length);
     if (!m.color) continue;
     try {
-      const ext = m.fileName.split(".").pop()?.toLowerCase() || "png";
-      // Deterministic path: re-importing a colour overwrites its own file
-      // rather than littering the bucket with orphans.
-      const path = `${sku}/${m.colorSlug}${m.surface === "back" ? "-back" : ""}.${ext}`;
-      const up = await supabase.storage
-        .from(BLANKS_BUCKET)
-        .upload(path, m.file, { upsert: true, contentType: m.file.type || "image/png" });
-      if (up.error) throw up.error;
-
-      const publicUrl = supabase.storage.from(BLANKS_BUCKET).getPublicUrl(path).data.publicUrl;
-      const field = m.surface === "back" ? "image_url_back" : "image_url";
-      const { error } = await supabase
-        .from("blank_colors" as never)
-        .update({ [field]: publicUrl } as never)
-        .eq("id", m.color.id);
-      if (error) throw error;
+      await uploadColorPhoto({
+        sku,
+        colorId: m.color.id,
+        colorSlug: m.colorSlug,
+        surface: m.surface,
+        file: m.file,
+      });
       imported += 1;
     } catch (e) {
       failed.push({ fileName: m.fileName, error: e instanceof Error ? e.message : "Failed" });

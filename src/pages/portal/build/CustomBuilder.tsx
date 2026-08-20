@@ -118,12 +118,13 @@ export default function CustomBuilder() {
           )}
         </div>
         <div className="text-center text-[11px] text-muted-foreground mt-2">
-          {blank?.name ?? "Pick a blank"}{color ? ` · ${color.name}` : ""} · {place.surface} {place.label}
+          {blank?.name ?? "Pick a product"}{color ? ` · ${color.name}` : ""} · {place.surface} {place.label}
         </div>
       </div>
 
-      {/* Blank */}
-      <Field label="Blank">
+      {/* The garment choice is a step in making something — the athlete picks
+          a product, not a blank from our supply catalogue. */}
+      <Field label="Product">
         <div className="flex gap-2 flex-wrap">
           {(blanks ?? []).map((b) => (
             <Chip key={b.id} label={b.name} active={blankId === b.id} onClick={() => { setBlankId(b.id); setColorIdx(0); }} />
