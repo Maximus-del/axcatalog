@@ -13,6 +13,7 @@
 // assortment can still be priced differently per audience. Fold them together
 // and one of those becomes impossible to say.
 import { supabase } from "@/integrations/supabase/client";
+import type { BlankAvailability } from "@/lib/blank-status";
 import {
   DEFAULT_RULES, PRICE_FIELD, overrideFor, priceBlank, realisedMargin,
   type PriceTier, type PricingRule,
@@ -241,7 +242,11 @@ function haystack(b: CatalogBlank): string {
  */
 export function isActive(b: CatalogBlank): boolean {
   const s = (b.availability_status ?? "").toLowerCase();
-  return s === "" || s === "active" || s === "available" || s === "in_stock";
+  // The real enum is in_stock | low_stock | out_of_stock | discontinued |
+  // preorder. Only the last two mean "you cannot put this on a garment today":
+  // low stock still ships and a preorder is a thing you can still sell.
+  if (s === "") return true;
+  return s !== "out_of_stock" && s !== "discontinued";
 }
 
 export function matchesFilters(b: PricedCatalogBlank, f: CatalogFilters): boolean {
@@ -371,7 +376,12 @@ export async function createAssortment(input: {
   return (data as unknown as { id: string }).id;
 }
 
-export async function setAvailability(blankIds: string[], status: string): Promise<void> {
+/**
+ * availability_status is a Postgres enum, so an invented value is rejected by
+ * the database rather than stored. Callers must pass a BlankAvailability —
+ * "active" is not one of them, however natural it reads.
+ */
+export async function setAvailability(blankIds: string[], status: BlankAvailability): Promise<void> {
   if (blankIds.length === 0) return;
   const { error } = await supabase
     .from("blanks" as never)

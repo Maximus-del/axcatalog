@@ -23,7 +23,7 @@ function blank(over: Partial<CatalogBlank> = {}): CatalogBlank {
   return {
     id: "b1", sku: "AX-TEE-01", style_number: "7010", name: "Oversized Heavyweight Tee",
     brand: "AXISM", garment_type: "tee", fabric: null, fabric_specs: null, notes: null,
-    url: null, availability_status: "active", internal_only: false, sellable_as_blank: true,
+    url: null, availability_status: "in_stock", internal_only: false, sellable_as_blank: true,
     moq: 3, blank_cost: 12, decoration_cost: 4, additional_cost: null, cost: null,
     price_athlete: null, price_corporate: null, price_standard: null,
     colors: [color("Black", "f", "b"), color("White", "f", null)],
@@ -180,14 +180,6 @@ describe("filtering", () => {
   });
 });
 
-describe("isActive", () => {
-  it("treats an unset status as still on offer", () => {
-    expect(isActive(blank({ availability_status: null }))).toBe(true);
-    expect(isActive(blank({ availability_status: "active" }))).toBe(true);
-    expect(isActive(blank({ availability_status: "discontinued" }))).toBe(false);
-  });
-});
-
 describe("facets and grouping", () => {
   it("lists the values actually present", () => {
     const f = facetsOf([blank(), blank({ id: "b2", garment_type: "hoodie", brand: "Independent" })]);
@@ -225,5 +217,27 @@ describe("previewFor", () => {
   it("falls back to standard pricing for an access-only assortment", () => {
     const camp: Assortment = { ...athlete, key: "camp", default_price_tier: null };
     expect(previewFor(camp, []).tier).toBe("standard");
+  });
+});
+
+describe("isActive against the real availability enum", () => {
+  // availability_status is a Postgres enum: in_stock | low_stock |
+  // out_of_stock | discontinued | preorder. An earlier version of this
+  // function tested for "active", which is not one of them — so the check
+  // passed only by way of the empty-string fallback.
+  it("keeps sellable states on offer", () => {
+    for (const s of ["in_stock", "low_stock", "preorder"]) {
+      expect(isActive(blank({ availability_status: s }))).toBe(true);
+    }
+  });
+
+  it("takes the two unsellable states off offer", () => {
+    for (const s of ["out_of_stock", "discontinued"]) {
+      expect(isActive(blank({ availability_status: s }))).toBe(false);
+    }
+  });
+
+  it("treats an unset status as still on offer", () => {
+    expect(isActive(blank({ availability_status: null }))).toBe(true);
   });
 });

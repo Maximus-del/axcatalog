@@ -21,6 +21,7 @@ import {
   DEFAULT_RULES, PRICE_TIERS, formatMoney, formatPercent, loadPricingRules,
   type PriceTier, type PricingRule,
 } from "@/lib/ecosystem/pricing";
+import { BLANK_AVAILABILITIES, formatAvailability, type BlankAvailability } from "@/lib/blank-status";
 import { getCurrentOrgId } from "@/hooks/useTasks";
 import { useTabParam } from "@/hooks/useTabParam";
 import { BlankGrid, BlankTable } from "@/components/admin/blanks/BlankCatalogCards";
@@ -98,7 +99,7 @@ export default function BlankCatalog() {
     } finally { setBusy(false); }
   }
 
-  async function bulkAvailability(status: string) {
+  async function bulkAvailability(status: BlankAvailability) {
     setBusy(true);
     try {
       await setAvailability(selected, status);
@@ -282,14 +283,15 @@ export default function BlankCatalog() {
             className="h-8 px-3 rounded-lg border border-[hsl(var(--ax-border))] text-[12px] font-semibold inline-flex items-center gap-1.5"
           ><DollarSign className="h-3.5 w-3.5" /> Pricing</button>
           <select
-            onChange={(e) => { if (e.target.value) bulkAvailability(e.target.value); e.target.value = ""; }}
+            onChange={(e) => { if (e.target.value) bulkAvailability(e.target.value as BlankAvailability); e.target.value = ""; }}
             disabled={busy}
             defaultValue=""
             className="h-8 rounded-lg border border-[hsl(var(--ax-border))] bg-card text-foreground text-[12px] px-2"
           >
             <option value="">Set availability…</option>
-            <option value="active">Active</option>
-            <option value="discontinued">Discontinued</option>
+            {BLANK_AVAILABILITIES.map((a) => (
+              <option key={a} value={a}>{formatAvailability(a)}</option>
+            ))}
           </select>
           <button onClick={() => setSelected([])} className="text-muted-foreground hover:text-foreground" aria-label="Clear">
             <X className="h-4 w-4" />
