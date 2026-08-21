@@ -149,6 +149,14 @@ const App = () => (
               {/* Admin */}
               <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
                 <Route index element={<AdminOverview />} />
+
+                {/* A department is a grouping, not a page — so its URL lands on
+                    its first tool and the tab strip takes over from there.
+                    Having them resolve at all matters: they are what the cards
+                    and the icon rail would otherwise 404 on. */}
+                <Route path="creative" element={<Navigate to="/admin/designs" replace />} />
+                <Route path="commerce" element={<Navigate to="/admin/products" replace />} />
+                <Route path="people" element={<Navigate to="/admin/athletes" replace />} />
                 <Route path="pulse" element={<AdminDashboard />} />
                 <Route path="content" element={<AdminContent />} />
                 <Route path="access" element={<AdminAccess />} />

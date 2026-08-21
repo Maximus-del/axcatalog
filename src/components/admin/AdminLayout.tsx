@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AdminSidebar } from "./AdminSidebar";
 import { AdminBottomNav } from "./AdminBottomNav";
 import { AdminTopBar } from "./AdminTopBar";
+import { DepartmentBar } from "./DepartmentBar";
 import { QuickActionsFab } from "./QuickActionsFab";
 
 export default function AdminLayout() {
@@ -31,6 +32,9 @@ export default function AdminLayout() {
 
       <div className="flex-1 flex flex-col min-w-0">
         <AdminTopBar onOpenMobileNav={() => setMobileNavOpen(true)} />
+        {/* Renders only inside a department, so the homepage and the utilities
+            stay chrome-free. */}
+        <DepartmentBar pathname={location.pathname} />
         <main className="flex-1 scroll-touch pb-bottom-nav md:pb-0 min-w-0">
           <div key={location.pathname} className="animate-fade-in">
             <Outlet />

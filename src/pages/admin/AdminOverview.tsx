@@ -1,13 +1,14 @@
-// Operator Overview — ecosystem health at a glance + Action Required.
-// Counts come straight from shared objects (one source of truth).
+// The command center.
+//
+// Six numbers for where the business stands, four cards for where you want to
+// work, and a queue of things actually waiting on you. Everything else that
+// used to be here — an activity feed, a grid of athlete portraits — was a
+// second copy of navigation that already exists one click away.
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Users, Star, ShoppingBag, Newspaper, CalendarDays, TrendingUp, AlertCircle, ArrowRight, Activity } from "lucide-react";
+import { Users, Star, ShoppingBag, Newspaper, CalendarDays, TrendingUp, AlertCircle, ArrowRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useDiscoverAthletes } from "@/hooks/useDiscoverAthletes";
-import { useDomainEvents } from "@/hooks/useContent";
-import { athleteName, type PublicAthlete } from "@/lib/ecosystem/types";
-import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
+import { DEPARTMENTS, toolCount } from "@/lib/admin-ia";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Q = any;
@@ -48,17 +49,8 @@ const KPI = [
   { key: "events", label: "Events", icon: CalendarDays },
 ] as const;
 
-function timeAgo(iso: string): string {
-  const h = (Date.now() - new Date(iso).getTime()) / 3_600_000;
-  if (h < 1) return "just now";
-  if (h < 24) return `${Math.round(h)}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
-
 export default function AdminOverview() {
   const { data: stats } = useEcosystemStats();
-  const { data: athletes = [] } = useDiscoverAthletes();
-  const { data: activity = [] } = useDomainEvents(12);
 
   const actions = [
     { label: "products waiting for athlete approval", value: stats?.pendingApproval ?? 0, to: "/admin/athletes" },
@@ -71,8 +63,10 @@ export default function AdminOverview() {
   return (
     <div className="p-6 lg:p-8 max-w-[1400px] mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Ecosystem Overview</h1>
-        <p className="text-sm text-muted-foreground mt-1">One control center for athletes, content, commerce, access, and events.</p>
+        <h1 className="text-2xl font-bold">Command center</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Where things stand, and where you want to work.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -89,55 +83,54 @@ export default function AdminOverview() {
         })}
       </div>
 
+      {/* The four departments. Entry points, not mini dashboards — a card says
+          what is inside and how much of it, and nothing else. Listing the tools
+          here would put the whole navigation back on the homepage, which is the
+          thing this replaced. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {DEPARTMENTS.map((d) => {
+          const Icon = d.icon;
+          return (
+            <Link
+              key={d.key}
+              to={d.home}
+              className="ax-card group p-5 flex flex-col min-h-[190px] hover:border-[hsl(var(--ax-accent)/0.5)] transition-colors"
+            >
+              <span className="h-11 w-11 rounded-[13px] bg-[hsl(var(--ax-accent)/0.12)] flex items-center justify-center">
+                <Icon className="h-5 w-5 text-[hsl(var(--ax-accent))]" />
+              </span>
+              <h2 className="mt-4 text-lg font-bold">{d.label}</h2>
+              <p className="mt-1 text-[13px] text-muted-foreground leading-snug">{d.description}</p>
+              <div className="mt-auto pt-4 flex items-center justify-between">
+                <span className="text-[12px] text-[hsl(var(--ax-faint))]">
+                  {toolCount(d)} tools
+                </span>
+                <ArrowRight className="h-4 w-4 text-[hsl(var(--ax-faint))] group-hover:text-[hsl(var(--ax-accent))] group-hover:translate-x-0.5 transition-all" />
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Kept, deliberately: this is the one thing on the homepage that is work
+          rather than navigation, and it is empty whenever there is nothing to
+          do — so it costs nothing on a quiet day. */}
       {actions.length > 0 && (
         <section>
           <h2 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--ax-secondary))] mb-3 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-[hsl(var(--ax-amber))]" /> Action Required
+            <AlertCircle className="h-4 w-4 text-[hsl(var(--ax-amber))]" /> Needs you
           </h2>
           <div className="ax-card divide-y divide-[hsl(var(--ax-line))]">
             {actions.map((a) => (
-              <Link key={a.label} to={a.to} className="flex items-center gap-3 px-4 h-14 hover:bg-[hsl(var(--ax-line))] transition-colors">
+              <Link key={a.label} to={a.to} className="flex items-center gap-3 px-4 py-3 hover:bg-[hsl(var(--ax-line))] transition-colors">
                 <span className="h-7 min-w-7 px-2 rounded-lg bg-[hsl(var(--ax-amber)/0.15)] text-[hsl(var(--ax-amber))] font-black text-sm flex items-center justify-center">{a.value}</span>
-                <span className="flex-1 text-sm font-medium capitalize">{a.value} {a.label}</span>
+                <span className="flex-1 text-sm font-medium">{a.label}</span>
                 <ArrowRight className="h-4 w-4 text-[hsl(var(--ax-faint))]" />
               </Link>
             ))}
           </div>
         </section>
       )}
-
-      {activity.length > 0 && (
-        <section>
-          <h2 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--ax-secondary))] mb-3 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-[hsl(var(--ax-accent))]" /> Activity
-          </h2>
-          <div className="ax-card divide-y divide-[hsl(var(--ax-line))]">
-            {activity.map((e) => (
-              <div key={e.id} className="flex items-center gap-3 px-4 h-11">
-                <span className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-accent))] shrink-0" />
-                <span className="flex-1 text-[13px] truncate">{e.title}</span>
-                <span className="text-[11px] text-[hsl(var(--ax-faint))] shrink-0">{timeAgo(e.occurred_at)}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-[hsl(var(--ax-secondary))]">Athletes</h2>
-          <Link to="/admin/athletes" className="text-[12px] font-semibold text-[hsl(var(--ax-accent))]">Manage all →</Link>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {(athletes as PublicAthlete[]).slice(0, 12).map((a) => (
-            <Link key={a.id} to={`/admin/athletes/${a.id}`} className="ax-card p-3 text-center hover:border-[hsl(var(--ax-accent)/0.5)] transition-colors">
-              <AthletePhoto athlete={a} className="h-16 w-16 rounded-full mx-auto" textClass="text-lg" />
-              <div className="font-semibold text-sm truncate mt-2">{athleteName(a)}</div>
-              <div className="text-[11px] text-[hsl(var(--ax-faint))] truncate">{[a.position, a.league].filter(Boolean).join(" · ")}</div>
-            </Link>
-          ))}
-        </div>
-      </section>
     </div>
   );
 }

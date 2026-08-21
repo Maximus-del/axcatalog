@@ -1,132 +1,132 @@
-// The admin sidebar: a short pinned list, then collapsible groups.
+// A rail, not a menu.
 //
-// Groups remember whether you left them open, so folding is a one-time cost
-// rather than a click you pay on every visit. On a first run only the group
-// holding the current page is open.
-import { useEffect, useState } from "react";
+// This used to be twenty-six labelled rows in collapsible groups — the entire
+// navigation hierarchy, restated in full, next to a homepage that restated it
+// again. Now the homepage is where you choose a department and the rail is how
+// you switch between them once you are working: four departments, four
+// utilities, no text unless you hover.
+//
+// The rule that keeps it honest: nothing goes in this rail that is a TOOL. If
+// it is somewhere you work rather than somewhere you go, it is a tab inside a
+// department, and it belongs to the department bar instead.
 import { NavLink, useLocation } from "react-router-dom";
-import { ChevronDown } from "lucide-react";
+import { Home, Inbox, ListChecks, BarChart3, Settings, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GROUPS, PINNED, activeGroupFor, isItemActive, type NavItem } from "@/lib/admin-nav";
-
-const OPEN_KEY = "ax.admin.nav.open";
-
-function readOpen(): Record<string, boolean> | null {
-  try {
-    const raw = localStorage.getItem(OPEN_KEY);
-    return raw ? (JSON.parse(raw) as Record<string, boolean>) : null;
-  } catch {
-    return null;
-  }
-}
+import { DEPARTMENTS, departmentFor, isItemActive } from "@/lib/admin-ia";
 
 interface Props {
   onNavigate?: () => void;
 }
 
+interface RailItem {
+  label: string;
+  to: string;
+  icon: LucideIcon;
+  end?: boolean;
+  /** Set when this icon stands for a whole department. */
+  deptKey?: string;
+}
+
+const TOP: RailItem[] = [
+  { label: "Command center", to: "/admin", icon: Home, end: true },
+];
+
+const UTILITIES: RailItem[] = [
+  { label: "Inbox", to: "/admin/inbox", icon: Inbox },
+  { label: "Tasks", to: "/admin/tasks", icon: ListChecks },
+  { label: "Analytics", to: "/admin/analytics", icon: BarChart3 },
+  { label: "Settings", to: "/admin/settings", icon: Settings },
+];
+
 export function AdminSidebar({ onNavigate }: Props) {
   const { pathname } = useLocation();
-  const activeGroup = activeGroupFor(pathname);
+  const dept = departmentFor(pathname);
 
-  const [open, setOpen] = useState<Record<string, boolean>>(
-    () => readOpen() ?? (activeGroup ? { [activeGroup]: true } : {}),
-  );
-
-  // Navigating into a collapsed group opens it — you should always be able to
-  // see where you are without hunting.
-  useEffect(() => {
-    if (activeGroup && !open[activeGroup]) {
-      setOpen((prev) => ({ ...prev, [activeGroup]: true }));
-    }
-  }, [activeGroup]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    try { localStorage.setItem(OPEN_KEY, JSON.stringify(open)); } catch { /* private mode */ }
-  }, [open]);
+  const departments: RailItem[] = DEPARTMENTS.map((d) => ({
+    label: d.label,
+    to: d.home,
+    icon: d.icon,
+    deptKey: d.key,
+  }));
 
   return (
-    <aside className="h-full w-64 shrink-0 bg-[hsl(var(--ax-sidebar))] border-r border-[hsl(var(--ax-border))] flex flex-col">
-      <div className="h-16 flex items-center px-5 border-b border-[hsl(var(--ax-border))]">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-[10px] bg-[hsl(var(--ax-accent))] text-white flex items-center justify-center font-bold">
-            X
-          </div>
-          <div className="leading-tight">
-            <div className="text-[13px] font-bold text-[hsl(var(--ax-ink))]">AthleteXclusive</div>
-            <div className="text-[10px] uppercase tracking-[0.14em] text-[hsl(var(--ax-faint))]">OS</div>
-          </div>
-        </div>
-      </div>
+    <aside className="h-full w-[68px] shrink-0 bg-[hsl(var(--ax-sidebar))] border-r border-[hsl(var(--ax-border))] flex flex-col items-center">
+      <NavLink
+        to="/admin"
+        onClick={onNavigate}
+        className="h-16 flex items-center justify-center shrink-0"
+        aria-label="AthleteXclusive"
+      >
+        <span className="h-9 w-9 rounded-[11px] bg-[hsl(var(--ax-accent))] text-white flex items-center justify-center font-bold text-[15px]">
+          AX
+        </span>
+      </NavLink>
 
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-4 scroll-touch">
-        <ul className="space-y-0.5">
-          {PINNED.map((it) => (
-            <li key={it.to}>
-              <Row item={it} pathname={pathname} onNavigate={onNavigate} />
-            </li>
-          ))}
-        </ul>
+      <nav className="flex-1 w-full flex flex-col items-center gap-1 pt-2 overflow-y-auto scroll-touch">
+        {TOP.map((it) => (
+          <Rail key={it.to} item={it} pathname={pathname} deptKey={dept?.key} onNavigate={onNavigate} />
+        ))}
 
-        <div className="pt-1 space-y-1">
-          {GROUPS.map((g) => {
-            const isOpen = !!open[g.label];
-            const holdsActive = activeGroup === g.label;
-            return (
-              <div key={g.label}>
-                <button
-                  type="button"
-                  onClick={() => setOpen((prev) => ({ ...prev, [g.label]: !prev[g.label] }))}
-                  aria-expanded={isOpen}
-                  className="w-full flex items-center gap-1.5 px-3 h-7 rounded-lg text-[10px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-secondary))] hover:bg-[hsl(var(--ax-line))] transition-colors"
-                >
-                  <ChevronDown
-                    className={cn(
-                      "h-3 w-3 shrink-0 transition-transform",
-                      isOpen ? "rotate-0" : "-rotate-90",
-                    )}
-                  />
-                  <span>{g.label}</span>
-                  {/* Collapsed but you're inside it — say so rather than hide it. */}
-                  {holdsActive && !isOpen && (
-                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-accent))]" />
-                  )}
-                </button>
+        <span className="my-2 h-px w-8 bg-[hsl(var(--ax-border))]" />
 
-                {isOpen && (
-                  <ul className="space-y-0.5 mt-0.5">
-                    {g.items.map((it) => (
-                      <li key={it.to}>
-                        <Row item={it} pathname={pathname} onNavigate={onNavigate} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {departments.map((it) => (
+          <Rail key={it.to} item={it} pathname={pathname} deptKey={dept?.key} onNavigate={onNavigate} />
+        ))}
+
+        <span className="my-2 h-px w-8 bg-[hsl(var(--ax-border))]" />
+
+        {UTILITIES.map((it) => (
+          <Rail key={it.to} item={it} pathname={pathname} deptKey={dept?.key} onNavigate={onNavigate} />
+        ))}
       </nav>
     </aside>
   );
 }
 
-function Row({ item, pathname, onNavigate }: { item: NavItem; pathname: string; onNavigate?: () => void }) {
-  const active = isItemActive(item.to, pathname, item.end);
+function Rail({
+  item, pathname, deptKey, onNavigate,
+}: {
+  item: RailItem;
+  pathname: string;
+  deptKey?: string;
+  onNavigate?: () => void;
+}) {
+  // A department icon stays lit anywhere inside that department, not only on
+  // the one page it links to — otherwise the rail goes dark the moment you
+  // move to a second tab and you lose your sense of place.
+  const active = item.deptKey
+    ? deptKey === item.deptKey
+    : isItemActive(item.to, pathname, item.end);
+
   const Icon = item.icon;
+
   return (
     <NavLink
       to={item.to}
       end={item.end}
       onClick={onNavigate}
+      title={item.label}
+      aria-label={item.label}
       className={cn(
-        "group flex items-center gap-2.5 h-9 px-3 rounded-[10px] text-[13px] font-medium transition-colors",
+        "group relative h-11 w-11 rounded-[12px] flex items-center justify-center transition-colors",
         active
-          ? "bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
-          : "text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))] hover:bg-[hsl(var(--ax-line))]",
+          ? "bg-[hsl(var(--ax-accent)/0.14)] text-[hsl(var(--ax-accent))]"
+          : "text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-ink))] hover:bg-[hsl(var(--ax-line))]",
       )}
     >
-      <Icon className={cn("h-[15px] w-[15px] shrink-0", active && "text-[hsl(var(--ax-accent))]")} />
-      <span className="truncate">{item.label}</span>
+      {/* The lit pill alone reads as hover on a dark ground; the marker on the
+          rail edge is what actually says "you are here". */}
+      {active && (
+        <span className="absolute left-[-10px] h-5 w-[3px] rounded-r bg-[hsl(var(--ax-accent))]" />
+      )}
+      <Icon className="h-[18px] w-[18px]" />
+
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-[54px] z-50 whitespace-nowrap rounded-md bg-[hsl(var(--ax-card))] border border-[hsl(var(--ax-border))] px-2 py-1 text-[12px] font-medium text-[hsl(var(--ax-ink))] opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      >
+        {item.label}
+      </span>
     </NavLink>
   );
 }
