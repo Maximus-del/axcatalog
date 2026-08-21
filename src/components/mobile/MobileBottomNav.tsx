@@ -100,7 +100,9 @@ export function MobileBottomNav({ primary, more }: Props) {
           <SheetHeader className="text-left">
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
-          <ul className="mt-4 divide-y divide-border">
+          {/* The list grew past a phone screen once the admin sheet covered
+              everything the sidebar does — cap it and let it scroll. */}
+          <ul className="mt-4 divide-y divide-border max-h-[60vh] overflow-y-auto scroll-touch">
             {more.map((item) => {
               const Icon = item.icon;
               return (

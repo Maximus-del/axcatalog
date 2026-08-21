@@ -5,6 +5,7 @@
 // in ProductDetailDrawer for now — a "Quick edit" button opens it here.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { useBackTarget } from "@/hooks/useBackTarget";
 import {
   ArrowLeft,
   Download,
@@ -84,6 +85,8 @@ function publicUrl(bucket: string, path: string): string {
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // Opened from an athlete board? Go back to that board, on the tab you left.
+  const back = useBackTarget({ to: "/admin/products", label: "Products" });
   const [product, setProduct] = useState<ProductLite | null>(null);
   const [shopDomain, setShopDomain] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -257,8 +260,8 @@ export default function ProductDetail() {
     return (
       <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-4">
         <Button variant="ghost" asChild className="gap-2">
-          <Link to="/admin/products">
-            <ArrowLeft className="h-4 w-4" /> Back to products
+          <Link to={back.to}>
+            <ArrowLeft className="h-4 w-4" /> Back to {back.label}
           </Link>
         </Button>
         <div className="ax-card p-12 text-center text-sm text-muted-foreground">
@@ -297,8 +300,8 @@ export default function ProductDetail() {
     <div className="p-4 lg:p-8 max-w-[1400px] mx-auto space-y-6">
       {/* Back + actions */}
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <Button variant="ghost" onClick={() => navigate("/admin/products")} className="gap-2 -ml-2">
-          <ArrowLeft className="h-4 w-4" /> Products
+        <Button variant="ghost" onClick={() => navigate(back.to)} className="gap-2 -ml-2">
+          <ArrowLeft className="h-4 w-4" /> {back.label}
         </Button>
         <div className="flex items-center gap-2">
           {product.shopify_product_id && (
