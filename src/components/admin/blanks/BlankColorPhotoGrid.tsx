@@ -24,6 +24,14 @@ import {
   type SlotRef,
   type Surface,
 } from "@/lib/ecosystem/blank-images";
+import {
+  createColorways,
+  planStorage,
+  readLibraryDrop,
+  VIEW_LABELS,
+  type LibraryReport,
+  type StoragePlan,
+} from "@/lib/ecosystem/library-import";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
 import { Input } from "@/components/ui/input";
 import { ImageLightbox, type LightboxItem } from "@/components/admin/ecosystem/ImageLightbox";
@@ -276,10 +284,74 @@ function FolderDrop({
     folders: true,
   });
 
-  const report = useMemo(
-    () => (files.length ? matchFilesToColors(files, colors, [styleNumber ?? ""].filter(Boolean)) : null),
-    [files, colors, styleNumber],
+  // Two shapes of drop, decided by what the files actually look like rather
+  // than by a mode switch: an approved-library folder tree (COLOUR/VIEW/…) or
+  // a flat pile of vendor files. Library wins when it explains anything at all,
+  // because its folders are better evidence than a filename ever is.
+  const library = useMemo(
+    () => (files.length ? readLibraryDrop(files, colors) : null),
+    [files, colors],
   );
+  const isLibrary = !!library && (library.matched.length > 0 || library.newColors.length > 0);
+  const plan = useMemo(() => (library ? planStorage(library.matched) : null), [library]);
+
+  const report = useMemo(
+    () => {
+      if (!files.length) return null;
+      // In library mode only the leftovers go through the filename parser.
+      const rest = isLibrary ? (library?.unparsed ?? []) : files;
+      return rest.length ? matchFilesToColors(rest, colors, [styleNumber ?? ""].filter(Boolean)) : null;
+    },
+    [files, colors, styleNumber, isLibrary, library],
+  );
+
+  const [addNewColors, setAddNewColors] = useState(true);
+
+  async function runLibrary() {
+    if (!library || !plan || !sku) { toast.error("This blank has no SKU"); return; }
+
+    setBusy(true);
+    try {
+      let entries = plan.storable;
+
+      // Create the colourways first, then re-read the drop so their files stop
+      // being "new" and become ordinary matches.
+      if (addNewColors && library.newColors.length > 0) {
+        const created = await createColorways(
+          colors[0]?.blank_id ?? "",
+          library.newColors.map((n) => n.colorFolder),
+          colors.length,
+        );
+        if (created.length) {
+          const again = readLibraryDrop(files, [...colors, ...created]);
+          entries = planStorage(again.matched).storable;
+          toast.success(`${created.length} new colourway${created.length === 1 ? "" : "s"} added`);
+        }
+      }
+
+      if (entries.length === 0) { toast.error("Nothing to import"); return; }
+
+      setProgress({ done: 0, total: entries.length });
+      const asMatched = entries.map((e) => ({
+        file: e.file,
+        fileName: e.file.name,
+        colorSlug: e.colorSlug,
+        surface: (e.field === "image_url_back" ? "back" : "front") as Surface,
+        color: e.color,
+        confidence: "exact" as const,
+      }));
+      const out = await importMatchedFiles(sku, asMatched, (done, total) => setProgress({ done, total }));
+      if (out.imported) toast.success(`${out.imported} photo${out.imported === 1 ? "" : "s"} added`);
+      if (out.failed.length) toast.error(`${out.failed.length} failed — ${out.failed[0].error}`);
+      setFiles([]);
+      await onDone();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed");
+    } finally {
+      setBusy(false);
+      setProgress(null);
+    }
+  }
 
   async function run() {
     if (!report || !sku) { toast.error("This blank has no SKU"); return; }
@@ -356,6 +428,18 @@ function FolderDrop({
           </button>
         )}
       </div>
+
+      {isLibrary && library && plan && (
+        <LibraryPanel
+          library={library}
+          plan={plan}
+          busy={busy}
+          progress={progress}
+          addNewColors={addNewColors}
+          setAddNewColors={setAddNewColors}
+          onRun={runLibrary}
+        />
+      )}
 
       {report && (
         <div className="mt-3 space-y-2">
@@ -641,5 +725,83 @@ function Thumb({ src }: { src?: string }) {
         ? <img src={src} alt="" className="h-full w-full object-cover" />
         : <Upload className="h-3 w-3 text-[hsl(var(--ax-faint))]" />}
     </span>
+  );
+}
+
+/**
+ * What an approved-library drop is about to do, before it does it.
+ *
+ * The parked count is the part worth reading. Six views exist in the library
+ * and `blank_colors` has two URL columns, so hood-up and the side angles have
+ * real files and nowhere to store them. Saying so beats importing 60% of a
+ * folder and calling it done.
+ */
+function LibraryPanel({
+  library, plan, busy, progress, addNewColors, setAddNewColors, onRun,
+}: {
+  library: LibraryReport;
+  plan: StoragePlan;
+  busy: boolean;
+  progress: { done: number; total: number } | null;
+  addNewColors: boolean;
+  setAddNewColors: (v: boolean) => void;
+  onRun: () => void;
+}) {
+  const parkedTotal = plan.parked.reduce((n, p) => n + p.count, 0);
+
+  return (
+    <div className="mt-3 rounded-lg border border-[hsl(var(--ax-accent)/0.4)] bg-[hsl(var(--ax-accent)/0.06)] p-3 space-y-2.5">
+      <div className="flex items-center gap-2 flex-wrap text-[12px]">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[hsl(var(--ax-accent))]">
+          Approved library
+        </span>
+        <span className="font-semibold">{plan.storable.length} ready to import</span>
+        {library.newColors.length > 0 && (
+          <span className="text-[hsl(var(--ax-accent))]">· {library.newColors.length} new colourways</span>
+        )}
+        {parkedTotal > 0 && <span className="text-amber-600">· {parkedTotal} parked</span>}
+        {library.missingColors.length > 0 && (
+          <span className="text-muted-foreground">· {library.missingColors.length} not in this drop</span>
+        )}
+      </div>
+
+      {library.newColors.length > 0 && (
+        <label className="flex items-start gap-2 text-[12px] cursor-pointer">
+          <input
+            type="checkbox"
+            checked={addNewColors}
+            onChange={(e) => setAddNewColors(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>
+            Create {library.newColors.length} colourway{library.newColors.length === 1 ? "" : "s"} this
+            library has and the catalogue does not
+            <span className="block text-[11px] text-muted-foreground">
+              {library.newColors.slice(0, 6).map((n) => n.colorFolder).join(", ")}
+              {library.newColors.length > 6 ? `, +${library.newColors.length - 6} more` : ""}
+            </span>
+          </span>
+        </label>
+      )}
+
+      {parkedTotal > 0 && (
+        <p className="text-[11px] text-amber-600 max-w-[70ch]">
+          {plan.parked.map((p) => `${p.count} ${VIEW_LABELS[p.view].toLowerCase()}`).join(", ")} —
+          these have nowhere to be stored yet. A colourway holds one front and one back today, and
+          hood-down takes the back slot because it is the view a back print has to sit under. Nothing
+          is deleted; re-drop the folder once there is somewhere to put them.
+        </p>
+      )}
+
+      <button
+        onClick={onRun}
+        disabled={busy || plan.storable.length === 0}
+        className="h-8 px-3 rounded-lg bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))] text-[12px] font-bold disabled:opacity-50"
+      >
+        {busy
+          ? progress ? `Importing ${progress.done}/${progress.total}…` : "Importing…"
+          : `Import ${plan.storable.length} photo${plan.storable.length === 1 ? "" : "s"}`}
+      </button>
+    </div>
   );
 }
