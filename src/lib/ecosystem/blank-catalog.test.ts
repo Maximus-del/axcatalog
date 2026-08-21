@@ -4,6 +4,7 @@ import {
   facetsOf,
   groupByCategory,
   isActive,
+  isHidden,
   matchesFilters,
   mediaPercentOf,
   previewFor,
@@ -239,5 +240,53 @@ describe("isActive against the real availability enum", () => {
 
   it("treats an unset status as still on offer", () => {
     expect(isActive(blank({ availability_status: null }))).toBe(true);
+  });
+});
+
+describe("hiding a blank", () => {
+  // Hiding reuses internal_only, which the public catalog view, the public
+  // colours view and the decoratable-blanks query already honour — so the flag
+  // is enforced in every customer-facing path without new plumbing.
+  it("reads internal_only as the hidden flag", () => {
+    expect(isHidden(blank({ internal_only: true }))).toBe(true);
+    expect(isHidden(blank({ internal_only: false }))).toBe(false);
+    expect(isHidden(blank({ internal_only: null }))).toBe(false);
+  });
+
+  it("splits the catalogue into the two tabs", () => {
+    const shown = priced({ internal_only: false });
+    const gone = priced({ internal_only: true });
+    expect(matchesFilters(shown, { visibility: "visible" })).toBe(true);
+    expect(matchesFilters(gone, { visibility: "visible" })).toBe(false);
+    expect(matchesFilters(gone, { visibility: "hidden" })).toBe(true);
+    expect(matchesFilters(shown, { visibility: "hidden" })).toBe(false);
+  });
+
+  it("shows both when no tab is chosen, so old callers are unaffected", () => {
+    expect(matchesFilters(priced({ internal_only: true }), {})).toBe(true);
+    expect(matchesFilters(priced({ internal_only: false }), {})).toBe(true);
+  });
+
+  it("is not counted as a filter — a tab is not a filter chip", () => {
+    expect(activeFilterCount({ visibility: "hidden" })).toBe(0);
+  });
+
+  it("keeps working with the other filters", () => {
+    const hoodie = priced({ garment_type: "hoodie", internal_only: true });
+    expect(matchesFilters(hoodie, { visibility: "hidden", categories: ["hoodie"] })).toBe(true);
+    expect(matchesFilters(hoodie, { visibility: "hidden", categories: ["tee"] })).toBe(false);
+  });
+
+  it("leaves assortment membership alone, so un-hiding restores the curation", () => {
+    // The distinction worth defending: hidden answers "on offer at all",
+    // membership answers "to whom". A hidden blank still remembers its
+    // assortments, which is why setHidden touches only internal_only.
+    const hidden = priced({ internal_only: true, assortments: ["athlete", "standard"] });
+    expect(hidden.assortments).toEqual(["athlete", "standard"]);
+    expect(matchesFilters(hidden, { assortments: ["athlete"] })).toBe(true);
+  });
+
+  it("keeps pricing while hidden", () => {
+    expect(priced({ internal_only: true }).prices.standard).not.toBeNull();
   });
 });

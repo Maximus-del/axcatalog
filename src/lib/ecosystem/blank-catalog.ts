@@ -218,6 +218,8 @@ export interface CatalogFilters {
   /** "complete" | "missing" */
   media?: "complete" | "missing" | null;
   status?: "active" | "inactive" | null;
+  /** Which side of the hidden line to show. Undefined shows both. */
+  visibility?: "visible" | "hidden";
   /** Selling price at this tier must fall in the range. */
   priceTier?: PriceTier;
   maxPrice?: number | null;
@@ -249,7 +251,30 @@ export function isActive(b: CatalogBlank): boolean {
   return s !== "out_of_stock" && s !== "discontinued";
 }
 
+/**
+ * Is this blank withheld from everything customer-facing?
+ *
+ * `internal_only` already meant exactly this and was already enforced in the
+ * three places that matter — the public_catalog view, the public_catalog_colors
+ * view, and the decoratable-blanks query behind design application. Hiding is
+ * therefore a flag flip, not a new concept: the blank keeps its SKU, prices,
+ * colourways, photos and assortment membership, and simply stops being offered.
+ *
+ * Deliberately NOT the same as assortment membership. Membership answers "which
+ * audience gets this blank"; hidden answers "is this blank on offer at all". A
+ * blank can sit in the athlete assortment and still be hidden, and un-hiding it
+ * puts it straight back where it was rather than losing the curation.
+ */
+export function isHidden(b: CatalogBlank): boolean {
+  return b.internal_only === true;
+}
+
 export function matchesFilters(b: PricedCatalogBlank, f: CatalogFilters): boolean {
+  // Visibility is a tab, not a filter: undefined means "don't care", so every
+  // existing caller keeps its behaviour.
+  if (f.visibility === "visible" && isHidden(b)) return false;
+  if (f.visibility === "hidden" && !isHidden(b)) return false;
+
   if (f.search?.trim()) {
     const q = f.search.trim().toLowerCase();
     if (!haystack(b).includes(q)) return false;
@@ -386,6 +411,23 @@ export async function setAvailability(blankIds: string[], status: BlankAvailabil
   const { error } = await supabase
     .from("blanks" as never)
     .update({ availability_status: status } as never)
+    .in("id", blankIds);
+  if (error) throw error;
+}
+
+/**
+ * Take blanks off offer, or put them back.
+ *
+ * Nothing else is touched — prices, colourways, photography and assortment
+ * membership all survive, so un-hiding restores exactly what was there rather
+ * than leaving you to rebuild it. This is why hiding is a separate flag from
+ * emptying an assortment.
+ */
+export async function setHidden(blankIds: string[], hidden: boolean): Promise<void> {
+  if (blankIds.length === 0) return;
+  const { error } = await supabase
+    .from("blanks" as never)
+    .update({ internal_only: hidden } as never)
     .in("id", blankIds);
   if (error) throw error;
 }

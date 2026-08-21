@@ -338,6 +338,9 @@ function FolderDrop({
         colorSlug: e.colorSlug,
         surface: (e.field === "image_url_back" ? "back" : "front") as Surface,
         color: e.color,
+        // Whether this overwrites a photo already on file, so the importer can
+        // say "replaced" rather than "added".
+        replaces: e.color[e.field] != null,
         confidence: "exact" as const,
       }));
       const out = await importMatchedFiles(sku, asMatched, (done, total) => setProgress({ done, total }));

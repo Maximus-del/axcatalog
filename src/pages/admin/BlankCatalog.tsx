@@ -8,13 +8,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LayoutGrid, Table2, SlidersHorizontal, X, Loader2, Plus, Check,
-  Eye, FolderPlus, Trash2, ImageOff, DollarSign,
+  Eye, EyeOff, FolderPlus, Trash2, ImageOff, DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   EMPTY_FILTERS, activeFilterCount, addToAssortment, bulkPrice, createAssortment, facetsOf,
   groupByCategory, loadAssortments, loadCatalog, matchesFilters, prettyCategory,
-  previewFor, priceCatalogBlank, removeFromAssortment, setAvailability,
+  isHidden, previewFor, priceCatalogBlank, removeFromAssortment, setAvailability, setHidden,
   type Assortment, type CatalogFilters, type PricedCatalogBlank,
 } from "@/lib/ecosystem/blank-catalog";
 import {
@@ -50,6 +50,8 @@ export default function BlankCatalog() {
   const [previewKey, setPreviewKey] = useState<string | null>(null);
   const [pricingOpen, setPricingOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [tab, setTab] = useTabParam<"available" | "hidden">("show", ["available", "hidden"] as const, "available");
+  const [hidingId, setHidingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function load() {
@@ -71,9 +73,14 @@ export default function BlankCatalog() {
   const facets = useMemo(() => facetsOf(blanks), [blanks]);
   const tier = filters.priceTier ?? "standard";
 
+  // The Hidden tab is a lens on the same catalogue, not a different query —
+  // one fetch, filtered two ways, so the counts can never disagree.
+  const hiddenCount = useMemo(() => blanks.filter(isHidden).length, [blanks]);
+
   const shown = useMemo(
-    () => blanks.filter((b) => matchesFilters(b, filters)),
-    [blanks, filters],
+    () => blanks.filter((b) =>
+      matchesFilters(b, { ...filters, visibility: tab === "hidden" ? "hidden" : "visible" })),
+    [blanks, filters, tab],
   );
 
   const detailBlank = blanks.find((b) => b.id === detail) ?? null;
@@ -93,6 +100,29 @@ export default function BlankCatalog() {
       else await removeFromAssortment(a.id, selected);
       toast.success(`${selected.length} blank${selected.length === 1 ? "" : "s"} ${action === "add" ? "added to" : "removed from"} ${a.name}`);
       setAssortPicker(null);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally { setBusy(false); }
+  }
+
+  async function toggleHidden(b: PricedCatalogBlank) {
+    setHidingId(b.id);
+    try {
+      await setHidden([b.id], !isHidden(b));
+      toast.success(isHidden(b) ? `${b.name} is back on offer` : `${b.name} hidden`);
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not change visibility");
+    } finally { setHidingId(null); }
+  }
+
+  async function bulkHidden(hidden: boolean) {
+    setBusy(true);
+    try {
+      await setHidden(selected, hidden);
+      toast.success(`${selected.length} blank${selected.length === 1 ? "" : "s"} ${hidden ? "hidden" : "back on offer"}`);
+      setSelected([]);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
@@ -166,6 +196,31 @@ export default function BlankCatalog() {
               <SlidersHorizontal className="h-4 w-4" /> Filters{filterCount > 0 ? ` (${filterCount})` : ""}
             </button>
 
+            {/* Available / Hidden. A tab rather than a filter chip, because
+                these are two disjoint halves of the catalogue and you are
+                always in exactly one of them. */}
+            <div className="flex gap-0.5 rounded-lg bg-[hsl(var(--ax-line))] p-0.5">
+              {([
+                ["available", "Available", blanks.length - hiddenCount],
+                ["hidden", "Hidden", hiddenCount],
+              ] as const).map(([key, label, count]) => (
+                <button
+                  key={key}
+                  onClick={() => { setTab(key); setSelected([]); }}
+                  className={cn(
+                    "h-8 px-3 rounded-md text-[12px] font-semibold inline-flex items-center gap-1.5 transition-colors",
+                    tab === key
+                      ? "bg-[hsl(var(--ax-card))] text-[hsl(var(--ax-ink))]"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {key === "hidden" ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  {label}
+                  <span className="tabular-nums text-[hsl(var(--ax-faint))]">{count}</span>
+                </button>
+              ))}
+            </div>
+
             {view === "catalog" && (
               <div className="flex gap-1 rounded-lg bg-[hsl(var(--ax-line))] p-0.5 ml-auto">
                 <button
@@ -202,6 +257,14 @@ export default function BlankCatalog() {
             </div>
           )}
 
+          {tab === "hidden" && hiddenCount === 0 && (
+            <p className="ax-card p-6 text-center text-[13px] text-muted-foreground">
+              Nothing is hidden. Hiding a blank takes it off every customer-facing surface —
+              the storefront, the portal and the design picker — while keeping its prices,
+              colourways, photos and assortments exactly as they are.
+            </p>
+          )}
+
           {view === "pricing" && <PricingSummary blanks={shown} tier={tier} />}
 
           {view === "pricing" || mode === "table" ? (
@@ -213,6 +276,8 @@ export default function BlankCatalog() {
               onToggleAll={toggleAll}
               onOpen={(b) => setDetail(b.id)}
               tier={tier}
+              onToggleHidden={toggleHidden}
+              hidingId={hidingId}
             />
           ) : (
             <BlankGrid
@@ -221,6 +286,8 @@ export default function BlankCatalog() {
               selected={selected}
               onToggle={toggle}
               onOpen={(b) => setDetail(b.id)}
+              onToggleHidden={toggleHidden}
+              hidingId={hidingId}
             />
           )}
         </>
@@ -282,6 +349,15 @@ export default function BlankCatalog() {
             disabled={busy}
             className="h-8 px-3 rounded-lg border border-[hsl(var(--ax-border))] text-[12px] font-semibold inline-flex items-center gap-1.5"
           ><DollarSign className="h-3.5 w-3.5" /> Pricing</button>
+          <button
+            onClick={() => bulkHidden(tab !== "hidden")}
+            disabled={busy}
+            className="h-8 px-3 rounded-lg border border-[hsl(var(--ax-border))] text-[12px] font-semibold inline-flex items-center gap-1.5"
+          >
+            {tab === "hidden"
+              ? <><Eye className="h-3.5 w-3.5" /> Put back on offer</>
+              : <><EyeOff className="h-3.5 w-3.5" /> Hide</>}
+          </button>
           <select
             onChange={(e) => { if (e.target.value) bulkAvailability(e.target.value as BlankAvailability); e.target.value = ""; }}
             disabled={busy}

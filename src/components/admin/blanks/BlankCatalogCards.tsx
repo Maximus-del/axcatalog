@@ -4,9 +4,10 @@
 // Table is operations — cost, margin and SKU in columns you can scan down.
 // Both render the SAME PricedCatalogBlank records; nothing is recomputed or
 // re-fetched per view, so the two can never disagree.
-import { Check, ImageOff, CheckSquare, Square, ExternalLink } from "lucide-react";
+import { Check, ImageOff, CheckSquare, Square, ExternalLink, Eye, EyeOff } from "lucide-react";
 import {
   isActive,
+  isHidden,
   prettyCategory,
   type Assortment,
   type PricedCatalogBlank,
@@ -70,6 +71,40 @@ function Price({ b, tier, bold }: { b: PricedCatalogBlank; tier: PriceTier; bold
   );
 }
 
+/**
+ * On offer, or withheld.
+ *
+ * A slashed eye is the only affordance on the card that changes what customers
+ * can see, so it says which state it is IN rather than which action it takes —
+ * an open eye on a visible blank, struck through on a hidden one — and the
+ * tooltip carries the verb.
+ */
+function VisibilityToggle({
+  hidden, onToggle, busy, size = "card",
+}: {
+  hidden: boolean;
+  onToggle: () => void;
+  busy?: boolean;
+  size?: "card" | "row";
+}) {
+  const Icon = hidden ? EyeOff : Eye;
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      disabled={busy}
+      title={hidden ? "Hidden — click to put back on offer" : "On offer — click to hide"}
+      aria-label={hidden ? "Unhide this blank" : "Hide this blank"}
+      aria-pressed={hidden}
+      className={cn(
+        "transition-colors disabled:opacity-40",
+        hidden ? "text-amber-500" : "text-muted-foreground hover:text-[hsl(var(--ax-ink))]",
+      )}
+    >
+      <Icon className={size === "card" ? "h-5 w-5 drop-shadow" : "h-4 w-4"} />
+    </button>
+  );
+}
+
 function sizeRange(sizes: string[]): string {
   if (sizes.length === 0) return "—";
   if (sizes.length === 1) return sizes[0];
@@ -77,18 +112,21 @@ function sizeRange(sizes: string[]): string {
 }
 
 export function BlankGrid({
-  blanks, assortments, selected, onToggle, onOpen,
+  blanks, assortments, selected, onToggle, onOpen, onToggleHidden, hidingId,
 }: {
   blanks: PricedCatalogBlank[];
   assortments: Assortment[];
   selected: string[];
   onToggle: (id: string) => void;
   onOpen: (b: PricedCatalogBlank) => void;
+  onToggleHidden: (b: PricedCatalogBlank) => void;
+  hidingId: string | null;
 }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {blanks.map((b) => {
         const on = selected.includes(b.id);
+        const gone = isHidden(b);
         return (
           <div
             key={b.id}
@@ -96,6 +134,9 @@ export function BlankGrid({
               "ax-card p-3 relative transition-colors",
               on && "ring-2 ring-[hsl(var(--ax-accent))]",
               !isActive(b) && "opacity-60",
+              // Hidden reads as withheld rather than broken: the card dims and
+              // the image desaturates, but every number stays legible.
+              gone && "opacity-70 border-amber-500/40",
             )}
           >
             <button
@@ -108,14 +149,25 @@ export function BlankGrid({
                 : <Square className="h-5 w-5 opacity-70" />}
             </button>
 
+            <span className="absolute top-4 right-4 z-10">
+              <VisibilityToggle hidden={gone} busy={hidingId === b.id} onToggle={() => onToggleHidden(b)} />
+            </span>
+
             <button onClick={() => onOpen(b)} className="block w-full text-left">
               <span className="block aspect-square rounded-lg overflow-hidden bg-[hsl(var(--ax-line))]">
                 {b.primaryImage
-                  ? <img src={b.primaryImage} alt={b.name} loading="lazy" className="h-full w-full object-cover" />
+                  ? <img src={b.primaryImage} alt={b.name} loading="lazy" className={cn("h-full w-full object-cover", gone && "grayscale")} />
                   : <span className="h-full w-full flex items-center justify-center"><ImageOff className="h-5 w-5 text-[hsl(var(--ax-faint))]" /></span>}
               </span>
 
-              <div className="mt-2.5 font-bold text-[14px] leading-tight truncate">{b.name}</div>
+              <div className="mt-2.5 flex items-center gap-1.5">
+                <span className="font-bold text-[14px] leading-tight truncate">{b.name}</span>
+                {gone && (
+                  <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-500">
+                    Hidden
+                  </span>
+                )}
+              </div>
               <div className="text-[11px] font-mono text-muted-foreground">{b.style_number ?? b.sku ?? "—"}</div>
               <div className="text-[11px] text-[hsl(var(--ax-faint))]">
                 {prettyCategory(b.garment_type)}{b.brand ? ` · ${b.brand}` : ""}
@@ -161,7 +213,7 @@ export function BlankGrid({
 }
 
 export function BlankTable({
-  blanks, assortments, selected, onToggle, onOpen, onToggleAll, tier,
+  blanks, assortments, selected, onToggle, onOpen, onToggleAll, tier, onToggleHidden, hidingId,
 }: {
   blanks: PricedCatalogBlank[];
   assortments: Assortment[];
@@ -170,6 +222,8 @@ export function BlankTable({
   onToggleAll: () => void;
   onOpen: (b: PricedCatalogBlank) => void;
   tier: PriceTier;
+  onToggleHidden: (b: PricedCatalogBlank) => void;
+  hidingId: string | null;
 }) {
   const allOn = blanks.length > 0 && blanks.every((b) => selected.includes(b.id));
 
@@ -185,6 +239,7 @@ export function BlankTable({
                   : <Square className="h-4 w-4" />}
               </button>
             </th>
+            <th className="p-2 w-8" />
             <th className="p-2 w-12" />
             <th className="p-2 text-left">Blank</th>
             <th className="p-2 text-left">Style</th>
@@ -202,6 +257,7 @@ export function BlankTable({
         <tbody>
           {blanks.map((b) => {
             const on = selected.includes(b.id);
+            const gone = isHidden(b);
             return (
               <tr
                 key={b.id}
@@ -209,6 +265,7 @@ export function BlankTable({
                   "border-b border-[hsl(var(--ax-border))] last:border-0 hover:bg-[hsl(var(--ax-line)/0.5)]",
                   on && "bg-[hsl(var(--ax-accent)/0.08)]",
                   !isActive(b) && "opacity-60",
+                  gone && "opacity-70",
                 )}
               >
                 <td className="p-2">
@@ -217,6 +274,9 @@ export function BlankTable({
                       ? <CheckSquare className="h-4 w-4 text-[hsl(var(--ax-accent))]" />
                       : <Square className="h-4 w-4 text-muted-foreground" />}
                   </button>
+                </td>
+                <td className="p-2">
+                  <VisibilityToggle hidden={gone} size="row" busy={hidingId === b.id} onToggle={() => onToggleHidden(b)} />
                 </td>
                 <td className="p-2">
                   {/* A thumbnail in the operational view too, so pricing stops
@@ -229,7 +289,9 @@ export function BlankTable({
                   <button onClick={() => onOpen(b)} className="font-semibold text-left hover:text-[hsl(var(--ax-accent))]">
                     {b.name}
                   </button>
-                  <div className="text-[10px] text-[hsl(var(--ax-faint))] font-mono">{b.sku ?? "—"}</div>
+                  <div className="text-[10px] text-[hsl(var(--ax-faint))] font-mono">
+                    {b.sku ?? "—"}{gone ? " · hidden" : ""}
+                  </div>
                 </td>
                 <td className="p-2 font-mono text-muted-foreground">{b.style_number ?? "—"}</td>
                 <td className="p-2 text-muted-foreground">{prettyCategory(b.garment_type)}</td>
