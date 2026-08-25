@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   coloursMissingImages,
+  COVERAGE_LABELS,
+  coverageOf,
+  expectedViews,
+  missingViews,
   matchProduct,
   normalizeColor,
   normalizeName,
@@ -243,5 +247,72 @@ describe("11: a Drive file is renamed but keeps its id", () => {
     const plan = planRescan([img({ fileId: "file9" })], stored);
     expect(plan.added.map((a) => a.fileId)).toEqual(["file9"]);
     expect(plan.missing.map((m) => m.drive_file_id)).toEqual(["file1"]);
+  });
+});
+
+describe("11–12, 17: image coverage states", () => {
+  const colors = ["Black", "Sand", "Cub"];
+  const shot = (c: string) => ({ normalizedColor: normalizeColor(c) });
+
+  it("11. says Drive Connection Required before anything else", () => {
+    // With no credentials we know nothing about coverage; calling it "missing"
+    // would blame the library for our own configuration.
+    expect(coverageOf({
+      driveConnected: false, matchStatus: "confirmed", colors, images: colors.map(shot),
+    })).toBe("drive_connection_required");
+  });
+
+  it("12. counts coverage once Drive is connected", () => {
+    expect(coverageOf({
+      driveConnected: true, matchStatus: "confirmed", colors, images: colors.map(shot),
+    })).toBe("complete");
+  });
+
+  it("13. an ambiguous folder outranks counting", () => {
+    expect(coverageOf({
+      driveConnected: true, matchStatus: "image_match_required", colors, images: colors.map(shot),
+    })).toBe("image_match_required");
+  });
+
+  it("calls a partly shot blank partial, not complete", () => {
+    expect(coverageOf({
+      driveConnected: true, matchStatus: "confirmed", colors, images: [shot("Black")],
+    })).toBe("partial");
+  });
+
+  it("calls a blank with nothing missing_image", () => {
+    expect(coverageOf({
+      driveConnected: true, matchStatus: "matched", colors, images: [],
+    })).toBe("missing_image");
+  });
+
+  it("ignores images marked missing when counting coverage", () => {
+    expect(coverageOf({
+      driveConnected: true, matchStatus: "confirmed", colors: ["Black"],
+      images: [{ normalizedColor: normalizeColor("Black"), missing: true }],
+    })).toBe("missing_image");
+  });
+
+  it("17. a hoodie with front and back but no hood-up is not complete on views", () => {
+    const hoodie = [
+      img({ viewType: "FRONT", fileId: "f" }),
+      img({ viewType: "BACK_HOOD_DOWN", fileId: "d" }),
+    ];
+    expect(missingViews(hoodie, "pf1", "BLACK", expectedViews("hoodie"))).toEqual(["BACK_HOOD_UP"]);
+  });
+
+  it("expects the right views per garment type", () => {
+    expect(expectedViews("hoodie")).toContain("BACK_HOOD_UP");
+    expect(expectedViews("zip_hoodie")).toContain("BACK_HOOD_UP");
+    expect(expectedViews("tee")).toEqual(["FRONT", "BACK"]);
+    expect(expectedViews("hat")).toContain("SIDE");
+    expect(expectedViews(null)).toEqual(["FRONT", "BACK"]);
+  });
+
+  it("labels every coverage state", () => {
+    expect(Object.keys(COVERAGE_LABELS).sort()).toEqual([
+      "complete", "drive_connection_required", "image_match_required",
+      "missing_image", "partial",
+    ]);
   });
 });

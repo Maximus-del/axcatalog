@@ -310,3 +310,74 @@ export function planRescan(seen: DriveImage[], stored: StoredImage[]): RescanPla
     unchanged,
   };
 }
+
+// ---- Image coverage state -------------------------------------------------
+
+export type ImageCoverage =
+  | "complete"
+  | "partial"
+  | "missing_image"
+  | "image_match_required"
+  | "drive_connection_required";
+
+export const COVERAGE_LABELS: Record<ImageCoverage, string> = {
+  complete: "Complete",
+  partial: "Partial Coverage",
+  missing_image: "Missing Image",
+  image_match_required: "Image Match Required",
+  drive_connection_required: "Drive Connection Required",
+};
+
+/**
+ * How well photographed a blank is, as one word.
+ *
+ * The order of the checks is the point. "Drive isn't connected" outranks
+ * everything, because with no credentials we know nothing about coverage and
+ * reporting "Missing Image" would blame the library for our own configuration.
+ * "Needs a human to pick a folder" outranks coverage for the same reason: we
+ * cannot count images in a folder we have not agreed on.
+ *
+ * Only then does it become a counting question, and a blank that is partly shot
+ * is called partial rather than complete — one colour with no photograph is a
+ * customer seeing a blank tile, whatever the other forty say.
+ */
+export function coverageOf(input: {
+  driveConnected: boolean;
+  matchStatus: MatchStatus | "unmatched";
+  /** Colours the blank offers. */
+  colors: string[];
+  /** Approved images already indexed for this blank. */
+  images: { normalizedColor: string | null; missing?: boolean }[];
+}): ImageCoverage {
+  if (!input.driveConnected) return "drive_connection_required";
+  if (input.matchStatus === "image_match_required") return "image_match_required";
+
+  const live = input.images.filter((i) => !i.missing);
+  if (input.colors.length === 0) return live.length > 0 ? "complete" : "missing_image";
+
+  const have = new Set(live.map((i) => i.normalizedColor ?? ""));
+  const covered = input.colors.filter((c) => have.has(normalizeColor(c))).length;
+
+  if (covered === 0) return "missing_image";
+  return covered === input.colors.length ? "complete" : "partial";
+}
+
+/** Which of the expected views a colour is still missing. */
+export function missingViews(
+  images: DriveImage[],
+  productFolderId: string,
+  color: string,
+  expected: ViewType[],
+): ViewType[] {
+  const have = new Set(viewsFor(images, productFolderId, color).map((i) => i.viewType));
+  return expected.filter((v) => !have.has(v));
+}
+
+/** The views a garment type is expected to have. */
+export function expectedViews(garmentType: string | null): ViewType[] {
+  const t = (garmentType ?? "").toLowerCase();
+  if (t.includes("hood")) return ["FRONT", "BACK_HOOD_DOWN", "BACK_HOOD_UP"];
+  if (t === "hat" || t === "beanie") return ["FRONT", "FRONT_ANGLE", "SIDE"];
+  if (t === "sweatpants" || t === "shorts") return ["FRONT", "BACK", "SIDE"];
+  return ["FRONT", "BACK"];
+}

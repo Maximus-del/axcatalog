@@ -6,17 +6,26 @@
 //
 // The distinction the whole thing rests on:
 //
-//   AVAILABLE  offered, and something is in stock
-//   SOLD OUT   offered, and nothing is in stock right now
-//   HIDDEN     not offered, whatever the stock says
+//   AVAILABLE   linked, offered, and something is in stock
+//   SOLD OUT    linked, offered, and nothing is in stock right now
+//   HIDDEN      not offered, whatever the stock says
+//   NOT LINKED  offered, but no Shopify product to get a quantity from
+//
+// Each is a different sentence about a different thing, and every pair of them
+// would be destructive to merge.
 //
 // "Hidden" is a decision a person made; "sold out" is a fact Shopify reported.
-// Collapsing them into one "unavailable" would lose which of those it is, and
-// with it the ability to tell "we stopped selling this" from "we sold through".
-// So hidden is checked FIRST and wins outright — a hidden blank with 400 units
-// is still hidden.
+// Merging those loses whether we stopped selling something or sold through it.
+// Hidden is therefore checked FIRST and wins outright — a hidden blank with 400
+// units is still hidden.
+//
+// "Not linked" is an absence of information, and it is emphatically NOT sold
+// out. Forty-five of the forty-eight blanks have no Shopify product; reading
+// their missing quantity as zero would put "Sold Out" against garments sitting
+// in the warehouse, and an operator acting on that would decline real orders.
+// Absence of evidence gets its own name.
 
-export type AvailabilityStatus = "available" | "sold_out" | "hidden";
+export type AvailabilityStatus = "available" | "sold_out" | "hidden" | "not_linked";
 
 /** Shopify's own product status, which is a different question entirely. */
 export type ShopifyStatus = "active" | "draft" | "archived";
@@ -63,15 +72,33 @@ export function totalAvailable(variants: VariantLike[]): number {
  */
 export function availabilityStatusOf(input: {
   isHidden: boolean;
+  /** The Shopify product this blank maps to. Null means we cannot know a quantity. */
+  shopifyProductId?: string | null;
   totalAvailable: number;
 }): AvailabilityStatus {
   if (input.isHidden) return "hidden";
+  if (!input.shopifyProductId) return "not_linked";
   return input.totalAvailable > 0 ? "available" : "sold_out";
 }
 
-export function statusOfProduct(isHidden: boolean, variants: VariantLike[]): AvailabilityStatus {
-  return availabilityStatusOf({ isHidden, totalAvailable: totalAvailable(variants) });
+export function statusOfProduct(
+  isHidden: boolean,
+  variants: VariantLike[],
+  shopifyProductId?: string | null,
+): AvailabilityStatus {
+  return availabilityStatusOf({
+    isHidden,
+    shopifyProductId,
+    totalAvailable: totalAvailable(variants),
+  });
 }
+
+export const STATUS_LABELS: Record<AvailabilityStatus, string> = {
+  available: "Available",
+  sold_out: "Sold Out",
+  hidden: "Hidden",
+  not_linked: "Not Linked",
+};
 
 // ---- Colour and size breakdown --------------------------------------------
 

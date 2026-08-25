@@ -21,7 +21,7 @@ import {
   Package, FolderKanban, Shirt, Link2,
   ClipboardList, Printer, FileDown, Gauge,
   Users, Users2, Trophy, Building2, Star, CalendarDays, Share2, Coins,
-  PenTool, ShoppingBag, PackageCheck,
+  PenTool, ShoppingBag, PackageCheck, Boxes,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +74,9 @@ export const DEPARTMENTS: Department[] = [
       { label: "Collections", to: "/admin/collections", icon: FolderKanban },
       // Blanks already swallowed photography and pricing as views of itself.
       { label: "Blanks", to: "/admin/blanks", icon: Shirt, within: ["Catalog", "Assortments", "Pricing", "Photos"] },
+      // Inventory is its own tool: it answers "what do we have", which is a
+      // different question from "what do we offer" and comes from Shopify.
+      { label: "Inventory", to: "/admin/blanks/inventory", icon: Boxes, within: ["Available", "Sold Out", "Not Linked", "Hidden"] },
       { label: "Quote Links", to: "/admin/pricing-links", icon: Link2 },
     ],
   },

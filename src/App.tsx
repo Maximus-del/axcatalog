@@ -52,6 +52,7 @@ const IngestionQueue = lazy(() => import("./pages/admin/IngestionQueue"));
 const DesignsList = lazy(() => import("./pages/admin/DesignsList"));
 const DesignDetail = lazy(() => import("./pages/admin/DesignDetail"));
 const BlankCatalog = lazy(() => import("./pages/admin/BlankCatalog"));
+const BlanksInventory = lazy(() => import("./pages/admin/BlanksInventory"));
 const BlanksList = lazy(() => import("./pages/admin/BlanksList"));
 const BlankDetail = lazy(() => import("./pages/admin/BlankDetail"));
 const OrdersList = lazy(() => import("./pages/admin/OrdersList"));
@@ -174,6 +175,7 @@ const App = () => (
                     the previous list, and /admin/pricing lands on the pricing
                     view of the catalogue rather than 404ing. */}
                 <Route path="blanks" element={<BlankCatalog />} />
+                <Route path="blanks/inventory" element={<BlanksInventory />} />
                 <Route path="blanks/list" element={<BlanksList />} />
                 <Route path="blanks/import-images" element={<BlankImagesImport />} />
                 <Route path="blanks/:id" element={<BlankDetail />} />

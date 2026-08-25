@@ -6,6 +6,7 @@ import {
   byLocation,
   crossProductDuplicates,
   shouldApplyWebhook,
+  STATUS_LABELS,
   statusOfProduct,
   syncAge,
   totalAvailable,
@@ -37,26 +38,26 @@ function v(
 
 describe("1–4: the three states", () => {
   it("1. inventory and not hidden → available", () => {
-    expect(statusOfProduct(false, [v("Black", "M", 5)])).toBe("available");
+    expect(statusOfProduct(false, [v("Black", "M", 5)], "gid://p/1")).toBe("available");
   });
 
   it("2. zero inventory and not hidden → sold out", () => {
-    expect(statusOfProduct(false, [v("Black", "M", 0)])).toBe("sold_out");
+    expect(statusOfProduct(false, [v("Black", "M", 0)], "gid://p/1")).toBe("sold_out");
   });
 
   it("3. inventory but hidden → hidden", () => {
-    expect(statusOfProduct(true, [v("Black", "M", 400)])).toBe("hidden");
+    expect(statusOfProduct(true, [v("Black", "M", 400)], "gid://p/1")).toBe("hidden");
   });
 
   it("4. zero inventory and hidden → hidden", () => {
-    expect(statusOfProduct(true, [v("Black", "M", 0)])).toBe("hidden");
+    expect(statusOfProduct(true, [v("Black", "M", 0)], "gid://p/1")).toBe("hidden");
   });
 
   it("never reports the vague catch-all", () => {
     for (const hidden of [true, false]) {
       for (const qty of [-5, 0, 1, 999]) {
-        expect(["available", "sold_out", "hidden"]).toContain(
-          availabilityStatusOf({ isHidden: hidden, totalAvailable: qty }),
+        expect(["available", "sold_out", "hidden", "not_linked"]).toContain(
+          availabilityStatusOf({ isHidden: hidden, shopifyProductId: "gid://p/1", totalAvailable: qty }),
         );
       }
     }
@@ -65,16 +66,16 @@ describe("1–4: the three states", () => {
   it("treats an oversold negative total as sold out, not as stock", () => {
     // Shopify reports negatives after an oversell. Greater-than-zero is the
     // test, not non-zero.
-    expect(statusOfProduct(false, [v("Black", "M", -3)])).toBe("sold_out");
+    expect(statusOfProduct(false, [v("Black", "M", -3)], "gid://p/1")).toBe("sold_out");
   });
 
   it("does not hide a product just because it sold out", () => {
     // Hiding is a decision someone makes; selling through is not.
-    expect(statusOfProduct(false, [v("Black", "M", 0)])).not.toBe("hidden");
+    expect(statusOfProduct(false, [v("Black", "M", 0)], "gid://p/1")).not.toBe("hidden");
   });
 
   it("a product with no variants at all is sold out, not available", () => {
-    expect(statusOfProduct(false, [])).toBe("sold_out");
+    expect(statusOfProduct(false, [], "gid://p/1")).toBe("sold_out");
   });
 });
 
@@ -91,7 +92,7 @@ describe("5–6: partial availability", () => {
     expect(black.soldOut).toBe(false);
     expect(sand.soldOut).toBe(true);
     // The product overall is still available — one live colour is enough.
-    expect(statusOfProduct(false, variants)).toBe("available");
+    expect(statusOfProduct(false, variants, "gid://p/1")).toBe("available");
   });
 
   it("6. one size sold out while others remain", () => {
@@ -241,14 +242,66 @@ describe("12: a webhook delivered more than once", () => {
 describe("14: hiding and restoring never touches inventory", () => {
   it("returns to exactly the state it had before", () => {
     const variants = [v("Black", "S", 4), v("Black", "M", 0)];
-    const before = statusOfProduct(false, variants);
+    const before = statusOfProduct(false, variants, "gid://p/1");
     expect(before).toBe("available");
 
-    expect(statusOfProduct(true, variants)).toBe("hidden");
+    expect(statusOfProduct(true, variants, "gid://p/1")).toBe("hidden");
 
     // Same variants, unhidden: the status is derived, so nothing had to be
     // stored or restored for this to come back correct.
-    expect(statusOfProduct(false, variants)).toBe(before);
+    expect(statusOfProduct(false, variants, "gid://p/1")).toBe(before);
     expect(totalAvailable(variants)).toBe(4);
+  });
+});
+
+
+// The four acceptance cases the fourth state exists for.
+
+describe("not_linked: a blank with no Shopify product", () => {
+  const stock = [v("Black", "M", 5)];
+
+  it("2. not hidden and unlinked → Not Linked, never Sold Out", () => {
+    // 45 of 48 blanks are in this state. Reading their absent quantity as zero
+    // would put "Sold Out" on garments sitting in the warehouse.
+    expect(statusOfProduct(false, [], null)).toBe("not_linked");
+    expect(statusOfProduct(false, [], null)).not.toBe("sold_out");
+  });
+
+  it("1. hidden and unlinked → Hidden, because hidden is checked first", () => {
+    expect(statusOfProduct(true, [], null)).toBe("hidden");
+  });
+
+  it("3. linked with positive inventory → Available", () => {
+    expect(statusOfProduct(false, stock, "gid://shopify/Product/9")).toBe("available");
+  });
+
+  it("4. linked with zero inventory → Sold Out", () => {
+    expect(statusOfProduct(false, [v("Black", "M", 0)], "gid://shopify/Product/9")).toBe("sold_out");
+  });
+
+  it("5. linked with a negative total → Sold Out", () => {
+    expect(statusOfProduct(false, [v("Black", "M", -7)], "gid://shopify/Product/9")).toBe("sold_out");
+  });
+
+  it("stays Not Linked even when variant rows somehow exist", () => {
+    // Stale variants without a live product link are not evidence of stock.
+    expect(statusOfProduct(false, stock, null)).toBe("not_linked");
+    expect(statusOfProduct(false, stock, "")).toBe("not_linked");
+  });
+
+  it("6. sums a negative location against a positive one", () => {
+    const mixed = [v("Black", "M", [{ loc: MAIN, qty: -2 }, { loc: POPUP, qty: 5 }])];
+    expect(totalAvailable(mixed)).toBe(3);
+    expect(statusOfProduct(false, mixed, "gid://p/1")).toBe("available");
+
+    const netNegative = [v("Black", "M", [{ loc: MAIN, qty: -9 }, { loc: POPUP, qty: 4 }])];
+    expect(totalAvailable(netNegative)).toBe(-5);
+    expect(statusOfProduct(false, netNegative, "gid://p/1")).toBe("sold_out");
+  });
+
+  it("labels every state for the UI", () => {
+    expect(STATUS_LABELS.not_linked).toBe("Not Linked");
+    expect(Object.keys(STATUS_LABELS).sort())
+      .toEqual(["available", "hidden", "not_linked", "sold_out"]);
   });
 });

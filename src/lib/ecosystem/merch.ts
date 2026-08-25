@@ -383,29 +383,32 @@ export async function createAthleteProduct(input: CreateProductInput): Promise<s
   if (error) throw error;
   const productId = (data as unknown as { id: string }).id;
 
+  // Supabase query builders are thenable but are not Promises — they lack
+  // catch/finally, so they do not satisfy Promise<unknown>. Promise.resolve
+  // adopts them without changing when they execute.
   const links: Promise<unknown>[] = [
-    supabase.from("product_athletes" as never).insert({
+    Promise.resolve(supabase.from("product_athletes" as never).insert({
       product_id: productId,
       athlete_id: input.athlete_id,
       role: "primary",
       team_id_at_release: input.team_id_at_release ?? null,
-    } as never),
+    } as never)),
   ];
 
   if (input.design_ids?.length) {
     links.push(
-      supabase.from("product_designs" as never).insert(
+      Promise.resolve(supabase.from("product_designs" as never).insert(
         input.design_ids.map((design_id, i) => ({ product_id: productId, design_id, sort_order: i })) as never,
-      ),
+      )),
     );
   }
   if (input.collection_id) {
     links.push(
-      supabase.from("collection_products" as never).insert({
+      Promise.resolve(supabase.from("collection_products" as never).insert({
         collection_id: input.collection_id,
         product_id: productId,
         sort_order: 0,
-      } as never),
+      } as never)),
     );
   }
   await Promise.all(links);

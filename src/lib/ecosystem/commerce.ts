@@ -252,13 +252,15 @@ export async function listDesignTemplates(): Promise<DesignTemplate[]> {
 /** Returns the instance id. Re-applying an existing pairing returns the instance
  * that already exists rather than creating a duplicate working copy. */
 export async function applyDesignTemplate(organizationId: string, athleteId: string, templateId: string, createdBy: string | null): Promise<string> {
-  const existing = await supabase
+  // `as never` on the table widens the whole result to never, so the shape has
+  // to be reasserted here rather than read off the builder.
+  const existing = (await supabase
     .from("design_template_applications" as never)
     .select("id")
     .eq("template_id", templateId)
     .eq("athlete_id", athleteId)
-    .maybeSingle();
-  if (existing.data) return (existing.data as unknown as { id: string }).id;
+    .maybeSingle()) as { data: unknown };
+  if (existing.data) return (existing.data as { id: string }).id;
 
   const tpl = (await supabase.from("design_templates" as never).select("*").eq("id", templateId).single());
   if (tpl.error) throw tpl.error;
