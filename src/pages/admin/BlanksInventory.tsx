@@ -29,6 +29,8 @@ const STATUS_TONE: Record<AvailabilityStatus, string> = {
   // Deliberately its own tone. "Not linked" is missing information, not a
   // problem with the garment, so it must not read like sold out.
   not_linked: "text-sky-400 bg-sky-400/15",
+  // Not managed is a boundary fact, not a problem — the quietest tone there is.
+  not_managed: "text-[hsl(var(--ax-faint))] bg-transparent border border-[hsl(var(--ax-border))]",
 };
 
 export default function BlanksInventory() {

@@ -1,4 +1,16 @@
-// Shopify webhook receiver.
+// Shopify INVENTORY webhook receiver, for approved blanks only.
+//
+// Deliberately NOT named shopify-webhook: that slug is already deployed and has
+// been handling orders/* and products/* since April, fanning them out to
+// shopify-sync-orders and shopify-sync-products. Replacing it would silently
+// stop order sync for 646 orders and product sync for 168 decorated products.
+// This is a second, narrower endpoint; register only inventory_levels/update
+// against it and leave the existing one alone.
+//
+// The boundary is enforced here the same way it is in reconciliation: an
+// inventory event is applied only if its inventory_item_id already belongs to
+// a blank a person approved. Every other event is acknowledged and dropped. It
+// cannot create a link, cannot classify a product, cannot write a row.
 //
 // POST from Shopify with X-Shopify-Hmac-Sha256, X-Shopify-Topic,
 // X-Shopify-Shop-Domain and X-Shopify-Webhook-Id.
@@ -58,6 +70,7 @@ Deno.serve(async (req) => {
       ?? Deno.env.get("SHOPIFY_WEBHOOK_SECRET")
       ?? "";
 
+    if (!org?.id) return res({ error: "Unknown shop domain" }, 401);
     if (!secret) return res({ error: "No webhook secret configured for this shop" }, 401);
     if (!(await verifyShopifyWebhook(raw, hmac, secret))) {
       // Deliberately terse and 401: an attacker learns nothing about why.
@@ -80,8 +93,14 @@ Deno.serve(async (req) => {
     const { data: logged } = await supabase
       .from("shopify_webhooks")
       .insert({
-        organization_id: org?.id ?? null,
-        event: topic.replace("/", "_"),
+        // NOT NULL in the schema. Without a resolved org we cannot log, and we
+        // must not write inventory for a shop we cannot identify.
+        organization_id: org!.id,
+        // The enum's labels contain slashes ("products/create"), so the topic
+        // goes in verbatim. Replacing "/" with "_" produced an invalid label,
+        // and supabase-js does not throw on that — the insert silently returned
+        // null, which disabled the audit row AND the dedupe that reads it.
+        event: topic,
         shopify_topic: topic,
         shopify_webhook_id: webhookId,
         status: "received",
@@ -105,17 +124,22 @@ Deno.serve(async (req) => {
       case "inventory_levels/update": {
         const itemId = String(payload.inventory_item_id ?? "");
         const locId = String(payload.location_id ?? "");
-        if (!itemId || !locId) { await finish("ignored", "missing ids"); break; }
+        if (!itemId || !locId) { await finish("processed", "ignored: missing ids"); break; }
 
+        // The allowlist check, done in one query: the variant must exist AND
+        // its blank must be explicitly inventory-managed. A variant row alone
+        // is not permission — a blank could be unapproved later and its stale
+        // variants must stop accepting events immediately.
         const { data: variant } = await supabase
           .from("blank_variants")
-          .select("id")
+          .select("id, blanks!inner(id, is_inventory_managed)")
           .eq("shopify_inventory_item_id", itemId)
+          .eq("blanks.is_inventory_managed", true)
           .maybeSingle();
 
-        // Not one of ours — an athlete product's inventory moved. Acknowledge
-        // and do nothing; this endpoint only owns blanks.
-        if (!variant) { await finish("ignored", "inventory item is not a mapped blank variant"); break; }
+        // Not one of ours — a decorated product's inventory moved. Acknowledge
+        // and do nothing. No link is created, nothing is classified.
+        if (!variant) { await finish("processed", "ignored: not an approved blank"); break; }
 
         const { data: existing } = await supabase
           .from("blank_inventory_levels")
@@ -127,7 +151,7 @@ Deno.serve(async (req) => {
         // Out-of-order guard: never let an older event overwrite a newer figure.
         if (existing?.last_shopify_sync_at && eventAt
             && new Date(eventAt) < new Date(existing.last_shopify_sync_at)) {
-          await finish("ignored", "older than the stored quantity");
+          await finish("processed", "ignored: older than the stored quantity");
           break;
         }
 
@@ -142,51 +166,12 @@ Deno.serve(async (req) => {
         break;
       }
 
-      case "products/update":
-      case "products/create": {
-        const productId = String(payload.id ?? "");
-        const { data: blank } = await supabase
-          .from("blanks").select("id").eq("shopify_product_id", productId).maybeSingle();
-        if (!blank) { await finish("ignored", "product is not a linked blank"); break; }
-
-        await supabase.from("blanks").update({
-          shopify_status: (payload.status ?? "").toLowerCase() || null,
-          last_shopify_sync_at: new Date().toISOString(),
-        }).eq("id", blank.id);
-
-        // Variant detail is left to reconciliation on purpose: a product
-        // payload can arrive without its full variant list, and a partial
-        // write here would delete variants that still exist.
-        await finish("processed");
-        break;
-      }
-
-      case "products/delete": {
-        const productId = String(payload.id ?? "");
-        const { data: blank } = await supabase
-          .from("blanks").select("id").eq("shopify_product_id", productId).maybeSingle();
-        if (!blank) { await finish("ignored", "not a linked blank"); break; }
-
-        // The link is cleared; the blank is NOT deleted and its images,
-        // pricing and assortments are untouched. It falls back to Not Linked,
-        // which is exactly what it now is.
-        await supabase.from("blanks").update({
-          shopify_product_id: null,
-          shopify_status: null,
-          last_shopify_sync_at: new Date().toISOString(),
-        }).eq("id", blank.id);
-
-        await supabase.from("blank_inventory_audit").insert({
-          blank_id: blank.id, kind: "mapping", source: "webhook:products/delete",
-          before: { shopify_product_id: productId }, after: { shopify_product_id: null },
-        });
-
-        await finish("processed");
-        break;
-      }
-
+      // products/* and orders/* belong to the EXISTING shopify-webhook
+      // function, which fans them out to the product and order sync. This
+      // endpoint must never be registered for them; if one arrives anyway it
+      // is acknowledged and ignored rather than half-handled by both.
       default:
-        await finish("ignored", `unhandled topic ${topic}`);
+        await finish("processed", `ignored: unhandled topic ${topic}`);
     }
 
     return res({ ok: true });
@@ -194,7 +179,7 @@ Deno.serve(async (req) => {
     // 200 with a logged failure: Shopify should not retry a payload that makes
     // our handler throw, and reconciliation is the safety net that repairs it.
     await supabase.from("shopify_webhooks").insert({
-      event: topic.replace("/", "_"),
+      event: topic,
       shopify_topic: topic,
       shopify_webhook_id: webhookId,
       status: "failed",

@@ -6,10 +6,11 @@
 //
 // The distinction the whole thing rests on:
 //
-//   AVAILABLE   linked, offered, and something is in stock
-//   SOLD OUT    linked, offered, and nothing is in stock right now
-//   HIDDEN      not offered, whatever the stock says
-//   NOT LINKED  offered, but no Shopify product to get a quantity from
+//   AVAILABLE    managed, linked, offered, and something is in stock
+//   SOLD OUT     managed, linked, offered, and nothing is in stock right now
+//   HIDDEN       not offered, whatever the stock says
+//   NOT LINKED   managed and offered, but no Shopify product to read from
+//   NOT MANAGED  a reference blank whose stock we have never counted
 //
 // Each is a different sentence about a different thing, and every pair of them
 // would be destructive to merge.
@@ -20,12 +21,22 @@
 // units is still hidden.
 //
 // "Not linked" is an absence of information, and it is emphatically NOT sold
-// out. Forty-five of the forty-eight blanks have no Shopify product; reading
-// their missing quantity as zero would put "Sold Out" against garments sitting
-// in the warehouse, and an operator acting on that would decline real orders.
-// Absence of evidence gets its own name.
+// out. Reading a missing quantity as zero would put "Sold Out" against garments
+// sitting in the warehouse, and an operator acting on that would decline real
+// orders. Absence of evidence gets its own name.
+//
+// "Not managed" is the boundary itself. Most blanks are reference garments we
+// design against and have never counted. They are not out of stock — we simply
+// have no claim about their stock at all, and they must be excluded from every
+// inventory total rather than counted as zero. Saying "Sold Out" about a
+// garment nobody ever inventoried is a statement we have no basis for.
 
-export type AvailabilityStatus = "available" | "sold_out" | "hidden" | "not_linked";
+export type AvailabilityStatus =
+  | "available"
+  | "sold_out"
+  | "hidden"
+  | "not_linked"
+  | "not_managed";
 
 /** Shopify's own product status, which is a different question entirely. */
 export type ShopifyStatus = "active" | "draft" | "archived";
@@ -72,11 +83,23 @@ export function totalAvailable(variants: VariantLike[]): number {
  */
 export function availabilityStatusOf(input: {
   isHidden: boolean;
+  /** Explicit approval. Absent or false means we make no inventory claim. */
+  isInventoryManaged?: boolean;
   /** The Shopify product this blank maps to. Null means we cannot know a quantity. */
   shopifyProductId?: string | null;
   totalAvailable: number;
 }): AvailabilityStatus {
+  // Order matters and is load-bearing.
+  //
+  // Hidden first: a presentation decision overrides everything, so a hidden
+  // blank never leaks its stock into a customer-facing surface.
   if (input.isHidden) return "hidden";
+
+  // Managed second, BEFORE the link check. An unmanaged blank must never reach
+  // "not_linked" either — that would put it in an inventory queue asking to be
+  // linked, when the truth is we deliberately do not track it.
+  if (!input.isInventoryManaged) return "not_managed";
+
   if (!input.shopifyProductId) return "not_linked";
   return input.totalAvailable > 0 ? "available" : "sold_out";
 }
@@ -85,12 +108,25 @@ export function statusOfProduct(
   isHidden: boolean,
   variants: VariantLike[],
   shopifyProductId?: string | null,
+  isInventoryManaged = true,
 ): AvailabilityStatus {
   return availabilityStatusOf({
     isHidden,
+    isInventoryManaged,
     shopifyProductId,
     totalAvailable: totalAvailable(variants),
   });
+}
+
+/**
+ * The states that represent a real inventory claim.
+ *
+ * Anything outside this set must be left out of unit totals, barcode health,
+ * location coverage and sync health — not counted as zero. This is the single
+ * predicate every summary should filter on.
+ */
+export function countsTowardInventory(status: AvailabilityStatus): boolean {
+  return status === "available" || status === "sold_out";
 }
 
 export const STATUS_LABELS: Record<AvailabilityStatus, string> = {
@@ -98,6 +134,7 @@ export const STATUS_LABELS: Record<AvailabilityStatus, string> = {
   sold_out: "Sold Out",
   hidden: "Hidden",
   not_linked: "Not Linked",
+  not_managed: "Not Managed",
 };
 
 // ---- Colour and size breakdown --------------------------------------------

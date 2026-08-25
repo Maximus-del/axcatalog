@@ -18,9 +18,13 @@
 //   number labelled stale is useful; one that shows a confident zero because a
 //   fetch timed out will have someone decline a real order.
 //
-//   Blind to decorated merchandise. Only blanks with an explicit
-//   shopify_product_id are touched, so nothing here can sweep an athlete's
-//   "Jesus Bless Hoodie" into the blanks catalogue.
+//   Blind to decorated merchandise, structurally. This function does NOT list
+//   the store's products. It loads the blanks a person explicitly approved
+//   (is_inventory_managed = true) and fetches ONLY those product ids, one at a
+//   time. There is no code path from "a Shopify product exists" to "it is a
+//   blank" — so an athlete's "Jesus Bless Hoodie" cannot be swept in by a
+//   title that reads right or a vendor that matches. With zero approved
+//   blanks, this function fetches nothing at all.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
@@ -132,6 +136,7 @@ Deno.serve(async (req) => {
     inventory_levels_updated: 0,
     missing_barcodes: 0,
     duplicate_barcodes: 0,
+    approved_but_unlinked: 0,
     errors,
   };
 
@@ -153,13 +158,26 @@ Deno.serve(async (req) => {
     }
     const shop: Shop = { domain: org.shopify_shop_domain, token: org.shopify_access_token };
 
-    // Only verified mappings. This is the guard that keeps decorated merch out.
+    // THE ALLOWLIST. Two conditions, both required, neither inferred:
+    // a person approved this blank for inventory management, and a person
+    // verified which Shopify product it is.
     const { data: blanks, error: blankErr } = await supabase
       .from("blanks")
       .select("id, sku, shopify_product_id")
       .eq("organization_id", org.id)
+      .eq("is_inventory_managed", true)
       .not("shopify_product_id", "is", null);
     if (blankErr) throw blankErr;
+
+    // Reported so a run says plainly how many approved blanks still have no
+    // Shopify product, rather than quietly reconciling fewer than expected.
+    const { count: approvedUnlinked } = await supabase
+      .from("blanks")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", org.id)
+      .eq("is_inventory_managed", true)
+      .is("shopify_product_id", null);
+    stats.approved_but_unlinked = approvedUnlinked ?? 0;
 
     const blankByShopifyId = new Map<string, { id: string; sku: string | null }>();
     for (const b of blanks ?? []) {
@@ -175,15 +193,31 @@ Deno.serve(async (req) => {
     const locationName = new Map(activeLocations.map((l) => [String(l.id), l.name]));
     stats.locations = activeLocations.length;
 
-    // ---- Products, paginated in full --------------------------------------
-    // Every product is COUNTED so the totals are true for the whole store, but
-    // only mapped ones are WRITTEN.
-    const inventoryItemToVariant = new Map<string, string>();  // inventory_item_id -> blank_variant row id
     const allBarcodes = new Map<string, number>();
+
+    // ---- Products: ONLY the approved allowlist -------------------------
+    // One GET per approved product id. Not a paginated scan of the catalogue
+    // with a filter applied afterwards — the store is never enumerated, so an
+    // unapproved product is never even seen, let alone classified.
+    const inventoryItemToVariant = new Map<string, string>();  // inventory_item_id -> blank_variant row id
     const matchedProducts: { blankId: string; product: SProduct }[] = [];
 
-    for await (const page of pages<SProduct>(shop, "products.json?limit=250", "products")) {
-      for (const p of page) {
+    for (const [shopifyId, blank] of blankByShopifyId) {
+      const numericId = shopifyId.replace(/^.*\//, "");
+      try {
+        const res = await fetch(
+          `https://${shop.domain}/admin/api/${API}/products/${numericId}.json`,
+          { headers: { "X-Shopify-Access-Token": shop.token, "Content-Type": "application/json" } },
+        );
+        if (res.status === 404) {
+          // Approved and linked, but the product is gone from Shopify. Report
+          // it; do not unlink, and do not touch the last known quantities.
+          errors.push(`product ${shopifyId}: not found in Shopify (link may be stale)`);
+          continue;
+        }
+        if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
+
+        const p = (await res.json()).product as SProduct;
         stats.shopify_products_examined += 1;
         const status = (p.status ?? "").toLowerCase();
         if (status === "active") stats.shopify_active += 1;
@@ -195,9 +229,9 @@ Deno.serve(async (req) => {
           const bc = (v.barcode ?? "").trim();
           if (bc) allBarcodes.set(bc, (allBarcodes.get(bc) ?? 0) + 1);
         }
-
-        const blank = blankByShopifyId.get(String(p.id));
-        if (blank) matchedProducts.push({ blankId: blank.id, product: p });
+        matchedProducts.push({ blankId: blank.id, product: p });
+      } catch (e) {
+        errors.push(`product ${shopifyId}: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 

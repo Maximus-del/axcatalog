@@ -9,7 +9,8 @@ function blank(over: Partial<InventoryBlank> = {}): InventoryBlank {
   return {
     id: "b1", sku: "AX-TEE-01", name: "Oversized Heavyweight Tee",
     manufacturer: "AXISM", styleNumber: "7010", garmentType: "tee",
-    isHidden: false, shopifyProductId: null, shopifyStatus: null,
+    isHidden: false, isInventoryManaged: false, isMainRotation: false,
+    shopifyProductId: null, shopifyStatus: null,
     driveFolderId: null, driveFolderUrl: null, matchStatus: "unmatched",
     lastShopifySyncAt: null, lastDriveSyncAt: null,
     assortments: ["athlete", "standard"], colors: ["Black"], variants: [], images: [],
@@ -26,21 +27,56 @@ describe("summary counts", () => {
       blank({ status: "sold_out" }), blank({ status: "hidden" }),
       blank({ status: "not_linked" }), blank({ status: "not_linked" }),
     ]);
-    expect(s.status).toEqual({ available: 2, sold_out: 1, hidden: 1, not_linked: 2 });
+    expect(s.status).toEqual({ available: 2, sold_out: 1, hidden: 1, not_linked: 2, not_managed: 0 });
     const total = Object.values(s.status).reduce((a, b) => a + b, 0);
     expect(total).toBe(6);
   });
 
-  it("counts issues independently of status", () => {
+  it("counts barcode issues only for MANAGED blanks", () => {
+    // The denominator bug this replaces: counting barcode gaps across every
+    // blank — and, worse, across the decorated catalogue — then reporting the
+    // result as physical blank-inventory health.
     const s = summarize([
-      blank({ barcodesMissing: 3 }),
-      blank({ barcodesDuplicated: 1 }),
-      blank({ coverage: "partial" }),
-      blank({ coverage: "image_match_required" }),
+      blank({ isInventoryManaged: true, barcodesMissing: 3 }),
+      blank({ isInventoryManaged: false, barcodesMissing: 9 }),
+      blank({ isInventoryManaged: true, barcodesDuplicated: 1 }),
+      blank({ isInventoryManaged: false, barcodesDuplicated: 7 }),
     ]);
-    expect(s).toMatchObject({
-      missingBarcode: 1, duplicateBarcode: 1, partialImage: 1, matchRequired: 1,
-    });
+    expect(s.missingBarcode).toBe(1);
+    expect(s.duplicateBarcode).toBe(1);
+    expect(s.managed).toBe(2);
+  });
+
+  it("counts image coverage against the MAIN ROTATION, not every blank", () => {
+    // A reference blank with no photography is not a gap; we do not market it.
+    const s = summarize([
+      blank({ isMainRotation: true, coverage: "partial" }),
+      blank({ isMainRotation: false, coverage: "partial" }),
+      blank({ isMainRotation: true, coverage: "image_match_required" }),
+    ]);
+    expect(s.partialImage).toBe(1);
+    expect(s.matchRequired).toBe(1);
+    expect(s.mainRotation).toBe(2);
+  });
+
+  it("sums units only from managed blanks in a real inventory state", () => {
+    const s = summarize([
+      blank({ isInventoryManaged: true, status: "available", totalAvailable: 12 }),
+      blank({ isInventoryManaged: true, status: "sold_out", totalAvailable: 0 }),
+      blank({ isInventoryManaged: true, status: "not_linked", totalAvailable: 9999 }),
+      blank({ isInventoryManaged: false, status: "not_managed", totalAvailable: 500 }),
+    ]);
+    // 12 only. not_linked has no verified quantity; not_managed is outside.
+    expect(s.totalUnits).toBe(12);
+  });
+
+  it("scopes the page to the rotation, keeping reference blanks reachable", () => {
+    const rot = blank({ isMainRotation: true, isHidden: false });
+    const ref = blank({ id: "r", isMainRotation: false, isHidden: true });
+    expect(matchesInventoryFilters(rot, { scope: "rotation" })).toBe(true);
+    expect(matchesInventoryFilters(ref, { scope: "rotation" })).toBe(false);
+    expect(matchesInventoryFilters(ref, { scope: "reference" })).toBe(true);
+    expect(matchesInventoryFilters(ref, { scope: "all" })).toBe(true);
   });
 });
 

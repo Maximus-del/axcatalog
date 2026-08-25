@@ -6,7 +6,8 @@
 // disagree with them.
 import { supabase } from "@/integrations/supabase/client";
 import {
-  availabilityStatusOf, barcodeReport, byColor, byLocation, syncAge, totalAvailable,
+  availabilityStatusOf, barcodeReport, byColor, byLocation, countsTowardInventory,
+  syncAge, totalAvailable,
   type AvailabilityStatus, type VariantLike,
 } from "@/lib/ecosystem/blank-inventory";
 import {
@@ -32,6 +33,8 @@ export interface InventoryBlank {
   styleNumber: string | null;
   garmentType: string | null;
   isHidden: boolean;
+  isInventoryManaged: boolean;
+  isMainRotation: boolean;
   shopifyProductId: string | null;
   shopifyStatus: string | null;
   driveFolderId: string | null;
@@ -73,7 +76,8 @@ export async function loadInventory(opts: { driveConnected: boolean }): Promise<
       .from("blanks")
       .select(`
         id, sku, name, brand, vendor, supplier, style_number, garment_type,
-        internal_only, shopify_product_id, shopify_status,
+        internal_only, is_inventory_managed, is_main_rotation,
+        shopify_product_id, shopify_status,
         drive_product_folder_id, drive_product_folder_url, image_match_status,
         last_shopify_sync_at, last_drive_sync_at,
         blank_colors(color_name, available),
@@ -140,6 +144,8 @@ export async function loadInventory(opts: { driveConnected: boolean }): Promise<
       styleNumber: b.style_number ?? null,
       garmentType: b.garment_type ?? null,
       isHidden: b.internal_only === true,
+      isInventoryManaged: b.is_inventory_managed === true,
+      isMainRotation: b.is_main_rotation === true,
       shopifyProductId,
       shopifyStatus: b.shopify_status ?? null,
       driveFolderId: b.drive_product_folder_id ?? null,
@@ -154,6 +160,7 @@ export async function loadInventory(opts: { driveConnected: boolean }): Promise<
 
       status: availabilityStatusOf({
         isHidden: b.internal_only === true,
+        isInventoryManaged: b.is_inventory_managed === true,
         shopifyProductId,
         totalAvailable: totalAvailable(variants),
       }),
@@ -180,9 +187,16 @@ export interface InventoryFilters {
   manufacturer?: string | null;
   productType?: string | null;
   assortment?: string | null;
+  /** "rotation" is the default page; "reference" is the hidden library. */
+  scope?: "rotation" | "reference" | "all";
 }
 
 export function matchesInventoryFilters(b: InventoryBlank, f: InventoryFilters): boolean {
+  // The default page is the rotation. Reference blanks are reachable, never
+  // deleted, but they do not clutter the working view.
+  if (f.scope === "rotation" && (!b.isMainRotation || b.isHidden)) return false;
+  if (f.scope === "reference" && b.isMainRotation && !b.isHidden) return false;
+
   if (f.search?.trim()) {
     const q = f.search.trim().toLowerCase();
     const hay = [b.name, b.sku, b.styleNumber, b.manufacturer].filter(Boolean).join(" ").toLowerCase();
@@ -203,9 +217,23 @@ export function matchesInventoryFilters(b: InventoryBlank, f: InventoryFilters):
   }
 }
 
-/** Counts for the summary row. Every blank lands in exactly one status bucket. */
+/**
+ * Counts for the summary row.
+ *
+ * Every status bucket is populated for every blank, because a blank is always
+ * in exactly one state. But INVENTORY HEALTH — units, variants, barcode gaps,
+ * location coverage — counts only blanks inside the boundary. The denominator
+ * for "is my stock data any good" is the managed set, never the whole table.
+ *
+ * Image coverage is counted against the MAIN ROTATION, because photography
+ * matters for what we market; a reference blank with no pictures is not a gap.
+ */
 export function summarize(blanks: InventoryBlank[]): {
   status: Record<AvailabilityStatus, number>;
+  managed: number;
+  mainRotation: number;
+  totalUnits: number;
+  variants: number;
   missingBarcode: number;
   duplicateBarcode: number;
   missingImage: number;
@@ -213,19 +241,33 @@ export function summarize(blanks: InventoryBlank[]): {
   matchRequired: number;
 } {
   const status: Record<AvailabilityStatus, number> = {
-    available: 0, sold_out: 0, hidden: 0, not_linked: 0,
+    available: 0, sold_out: 0, hidden: 0, not_linked: 0, not_managed: 0,
   };
+  let managed = 0, mainRotation = 0, totalUnits = 0, variants = 0;
   let missingBarcode = 0, duplicateBarcode = 0, missingImage = 0, partialImage = 0, matchRequired = 0;
 
   for (const b of blanks) {
     status[b.status] += 1;
-    if (b.barcodesMissing > 0) missingBarcode += 1;
-    if (b.barcodesDuplicated > 0) duplicateBarcode += 1;
-    if (b.coverage === "missing_image") missingImage += 1;
-    if (b.coverage === "partial") partialImage += 1;
-    if (b.coverage === "image_match_required") matchRequired += 1;
+
+    if (b.isInventoryManaged) {
+      managed += 1;
+      variants += b.variants.length;
+      if (countsTowardInventory(b.status)) totalUnits += b.totalAvailable;
+      if (b.barcodesMissing > 0) missingBarcode += 1;
+      if (b.barcodesDuplicated > 0) duplicateBarcode += 1;
+    }
+
+    if (b.isMainRotation) {
+      mainRotation += 1;
+      if (b.coverage === "missing_image") missingImage += 1;
+      if (b.coverage === "partial") partialImage += 1;
+      if (b.coverage === "image_match_required") matchRequired += 1;
+    }
   }
-  return { status, missingBarcode, duplicateBarcode, missingImage, partialImage, matchRequired };
+  return {
+    status, managed, mainRotation, totalUnits, variants,
+    missingBarcode, duplicateBarcode, missingImage, partialImage, matchRequired,
+  };
 }
 
 // ---- Detail helpers -------------------------------------------------------

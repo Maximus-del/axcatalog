@@ -53,12 +53,18 @@ describe("1–4: the three states", () => {
     expect(statusOfProduct(true, [v("Black", "M", 0)], "gid://p/1")).toBe("hidden");
   });
 
-  it("never reports the vague catch-all", () => {
+  it("never reports the vague catch-all, across every input combination", () => {
+    const states = ["available", "sold_out", "hidden", "not_linked", "not_managed"];
     for (const hidden of [true, false]) {
-      for (const qty of [-5, 0, 1, 999]) {
-        expect(["available", "sold_out", "hidden", "not_linked"]).toContain(
-          availabilityStatusOf({ isHidden: hidden, shopifyProductId: "gid://p/1", totalAvailable: qty }),
-        );
+      for (const managed of [true, false]) {
+        for (const pid of ["gid://p/1", null]) {
+          for (const qty of [-5, 0, 1, 999]) {
+            expect(states).toContain(availabilityStatusOf({
+              isHidden: hidden, isInventoryManaged: managed,
+              shopifyProductId: pid, totalAvailable: qty,
+            }));
+          }
+        }
       }
     }
   });
@@ -301,7 +307,8 @@ describe("not_linked: a blank with no Shopify product", () => {
 
   it("labels every state for the UI", () => {
     expect(STATUS_LABELS.not_linked).toBe("Not Linked");
+    expect(STATUS_LABELS.not_managed).toBe("Not Managed");
     expect(Object.keys(STATUS_LABELS).sort())
-      .toEqual(["available", "hidden", "not_linked", "sold_out"]);
+      .toEqual(["available", "hidden", "not_linked", "not_managed", "sold_out"]);
   });
 });
