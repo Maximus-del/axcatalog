@@ -96,7 +96,8 @@ describe("an unapproved product cannot enter inventory", () => {
 
 describe("countsTowardInventory", () => {
   it("admits only the two states that are a real claim about stock", () => {
-    const all: AvailabilityStatus[] = ["available", "sold_out", "hidden", "not_linked", "not_managed"];
+    const all: AvailabilityStatus[] = ["available", "sold_out", "hidden", "not_linked",
+      "not_managed", "sync_pending", "sync_error"];
     expect(all.filter(countsTowardInventory)).toEqual(["available", "sold_out"]);
   });
 });

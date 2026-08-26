@@ -31,6 +31,10 @@ const STATUS_TONE: Record<AvailabilityStatus, string> = {
   not_linked: "text-sky-400 bg-sky-400/15",
   // Not managed is a boundary fact, not a problem — the quietest tone there is.
   not_managed: "text-[hsl(var(--ax-faint))] bg-transparent border border-[hsl(var(--ax-border))]",
+  // Waiting on Shopify, and unknown after a failure. Neither is a stock claim,
+  // so neither borrows the Sold Out amber.
+  sync_pending: "text-sky-300 bg-sky-400/10",
+  sync_error: "text-orange-400 bg-orange-400/15",
 };
 
 export default function BlanksInventory() {
@@ -166,7 +170,7 @@ export default function BlanksInventory() {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-        {(["available", "sold_out", "not_linked", "hidden"] as AvailabilityStatus[]).map((s) => (
+        {(["available", "sold_out", "sync_pending", "not_linked", "hidden"] as AvailabilityStatus[]).map((s) => (
           <button
             key={s}
             onClick={() => setFilters((f) => ({ ...f, status: f.status === s ? null : s }))}
@@ -291,7 +295,9 @@ export default function BlanksInventory() {
                     </span>
                   </td>
                   <td className="p-2 text-right tabular-nums font-semibold">
-                    {b.shopifyProductId ? b.totalAvailable : "—"}
+                    {/* A dash, never a 0, for anything that is not a confirmed
+                        figure. Printing 0 here is the same lie as Sold Out. */}
+                    {b.status === "available" || b.status === "sold_out" ? b.totalAvailable : "—"}
                   </td>
                   <td className="p-2 text-right tabular-nums">{b.colors.length}</td>
                   <td className="p-2 text-right tabular-nums">{b.variants.length}</td>

@@ -16,7 +16,7 @@
 // no-ops. Not "scan everything and find nothing". Actually nothing.
 import {
   availabilityStatusOf, barcodeReport, countsTowardInventory, totalAvailable,
-  type AvailabilityStatus, type VariantLike,
+  type AvailabilityStatus, type InventorySyncState, type VariantLike,
 } from "@/lib/ecosystem/blank-inventory";
 
 export interface ManagedBlank {
@@ -28,6 +28,10 @@ export interface ManagedBlank {
   isMainRotation: boolean;
   isHidden: boolean;
   shopifyProductId: string | null;
+  /** Whether Shopify has ever confirmed this blank's stock. */
+  syncState?: InventorySyncState;
+  /** True once any sync has succeeded — lets a later failure show a stale figure. */
+  hasConfirmedInventory?: boolean;
   variants: VariantLike[];
 }
 
@@ -95,6 +99,7 @@ export interface ManagedSummary {
   notLinked: number;
   notManaged: number;
   hidden: number;
+  syncPending: number;
   totalUnits: number;
   variants: number;
   missingBarcodes: number;
@@ -112,7 +117,7 @@ export interface ManagedSummary {
 export function summarizeManaged(blanks: ManagedBlank[]): ManagedSummary {
   const s: ManagedSummary = {
     total: blanks.length, managed: 0,
-    available: 0, soldOut: 0, notLinked: 0, notManaged: 0, hidden: 0,
+    available: 0, soldOut: 0, notLinked: 0, notManaged: 0, hidden: 0, syncPending: 0,
     totalUnits: 0, variants: 0, missingBarcodes: 0, duplicateBarcodes: 0,
   };
 
@@ -128,6 +133,7 @@ export function summarizeManaged(blanks: ManagedBlank[]): ManagedSummary {
       case "not_linked": s.notLinked += 1; break;
       case "not_managed": s.notManaged += 1; break;
       case "hidden": s.hidden += 1; break;
+      case "sync_pending": case "sync_error": s.syncPending += 1; break;
     }
 
     if (!b.isInventoryManaged) continue;
@@ -148,6 +154,8 @@ export function statusOf(b: ManagedBlank): AvailabilityStatus {
     isHidden: b.isHidden,
     isInventoryManaged: b.isInventoryManaged,
     shopifyProductId: b.shopifyProductId,
+    syncState: b.syncState ?? "success",
+    hasConfirmedInventory: b.hasConfirmedInventory ?? true,
     totalAvailable: totalAvailable(b.variants),
   });
 }
@@ -159,7 +167,9 @@ export function statusOf(b: ManagedBlank): AvailabilityStatus {
  * rotation blank stays on the page: it is still a garment we market and
  * reorder, and hiding it would make the catalogue lie about what we offer.
  */
-const ORDER: AvailabilityStatus[] = ["available", "sold_out", "not_linked", "not_managed", "hidden"];
+const ORDER: AvailabilityStatus[] = [
+  "available", "sold_out", "sync_pending", "sync_error", "not_linked", "not_managed", "hidden",
+];
 
 export function primaryRotationView(blanks: ManagedBlank[]): ManagedBlank[] {
   return blanks

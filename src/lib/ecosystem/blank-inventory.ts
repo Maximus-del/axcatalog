@@ -11,6 +11,8 @@
 //   HIDDEN       not offered, whatever the stock says
 //   NOT LINKED   managed and offered, but no Shopify product to read from
 //   NOT MANAGED  a reference blank whose stock we have never counted
+//   SYNC PENDING approved and linked, but Shopify has not answered yet
+//   SYNC ERROR   the last sync failed and we have no confirmed figure
 //
 // Each is a different sentence about a different thing, and every pair of them
 // would be destructive to merge.
@@ -25,6 +27,16 @@
 // sitting in the warehouse, and an operator acting on that would decline real
 // orders. Absence of evidence gets its own name.
 //
+// "Sync pending" and "sync error" exist because zero-because-we-never-asked and
+// zero-because-Shopify-said-zero are the same shape and opposite facts. Saying
+// "Sold Out" from an empty cache is a confident claim built on an absence of
+// data — the most damaging kind of wrong, because it looks authoritative. A
+// blank only reaches Available or Sold Out after a sync has actually completed.
+//
+// Note what does NOT count as proof: the presence of variant rows. A successful
+// sync can legitimately return zero variants, and a failed one can leave rows
+// behind from a previous good run. Only an explicit success flag counts.
+//
 // "Not managed" is the boundary itself. Most blanks are reference garments we
 // design against and have never counted. They are not out of stock — we simply
 // have no claim about their stock at all, and they must be excluded from every
@@ -36,10 +48,15 @@ export type AvailabilityStatus =
   | "sold_out"
   | "hidden"
   | "not_linked"
-  | "not_managed";
+  | "not_managed"
+  | "sync_pending"
+  | "sync_error";
 
 /** Shopify's own product status, which is a different question entirely. */
 export type ShopifyStatus = "active" | "draft" | "archived";
+
+/** Whether Shopify has ever answered about this blank's stock. */
+export type InventorySyncState = "never" | "in_progress" | "success" | "failed";
 
 export interface InventoryLevel {
   shopify_location_id: string;
@@ -87,9 +104,16 @@ export function availabilityStatusOf(input: {
   isInventoryManaged?: boolean;
   /** The Shopify product this blank maps to. Null means we cannot know a quantity. */
   shopifyProductId?: string | null;
+  /** Whether Shopify has ever confirmed this blank's stock. */
+  syncState?: InventorySyncState;
+  /**
+   * True once a sync has succeeded at least once, even if the latest attempt
+   * failed. A later failure must not erase a confirmed figure.
+   */
+  hasConfirmedInventory?: boolean;
   totalAvailable: number;
 }): AvailabilityStatus {
-  // Order matters and is load-bearing.
+  // Order matters and is load-bearing at every step.
   //
   // Hidden first: a presentation decision overrides everything, so a hidden
   // blank never leaks its stock into a customer-facing surface.
@@ -101,6 +125,16 @@ export function availabilityStatusOf(input: {
   if (!input.isInventoryManaged) return "not_managed";
 
   if (!input.shopifyProductId) return "not_linked";
+
+  // Nothing has ever answered. Zero here means "unknown", not "none".
+  const state = input.syncState ?? "never";
+  if (state === "never" || state === "in_progress") return "sync_pending";
+
+  // The latest attempt failed. If an earlier one succeeded we keep showing that
+  // figure — stale but real — and the caller labels it stale. Only when there
+  // has NEVER been a confirmed figure do we admit we do not know.
+  if (state === "failed" && !input.hasConfirmedInventory) return "sync_error";
+
   return input.totalAvailable > 0 ? "available" : "sold_out";
 }
 
@@ -109,11 +143,15 @@ export function statusOfProduct(
   variants: VariantLike[],
   shopifyProductId?: string | null,
   isInventoryManaged = true,
+  syncState: InventorySyncState = "success",
+  hasConfirmedInventory = true,
 ): AvailabilityStatus {
   return availabilityStatusOf({
     isHidden,
     isInventoryManaged,
     shopifyProductId,
+    syncState,
+    hasConfirmedInventory,
     totalAvailable: totalAvailable(variants),
   });
 }
@@ -135,6 +173,8 @@ export const STATUS_LABELS: Record<AvailabilityStatus, string> = {
   hidden: "Hidden",
   not_linked: "Not Linked",
   not_managed: "Not Managed",
+  sync_pending: "Sync Pending",
+  sync_error: "Inventory Unknown",
 };
 
 // ---- Colour and size breakdown --------------------------------------------

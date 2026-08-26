@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   availabilityStatusOf, barcodeReport, byColor, byLocation, countsTowardInventory,
   syncAge, totalAvailable,
-  type AvailabilityStatus, type VariantLike,
+  type AvailabilityStatus, type InventorySyncState, type VariantLike,
 } from "@/lib/ecosystem/blank-inventory";
 import {
   coverageOf, normalizeColor, type ImageCoverage, type MatchStatus, type ViewType,
@@ -42,6 +42,9 @@ export interface InventoryBlank {
   matchStatus: MatchStatus | "unmatched";
   lastShopifySyncAt: string | null;
   lastDriveSyncAt: string | null;
+  syncState: InventorySyncState;
+  lastInventorySuccessAt: string | null;
+  lastInventoryError: string | null;
   assortments: string[];
   colors: string[];
   variants: VariantLike[];
@@ -77,6 +80,7 @@ export async function loadInventory(opts: { driveConnected: boolean }): Promise<
       .select(`
         id, sku, name, brand, vendor, supplier, style_number, garment_type,
         internal_only, is_inventory_managed, is_main_rotation,
+        inventory_sync_state, last_inventory_success_at, last_inventory_error,
         shopify_product_id, shopify_status,
         drive_product_folder_id, drive_product_folder_url, image_match_status,
         last_shopify_sync_at, last_drive_sync_at,
@@ -153,6 +157,9 @@ export async function loadInventory(opts: { driveConnected: boolean }): Promise<
       matchStatus: (b.image_match_status ?? "unmatched") as MatchStatus | "unmatched",
       lastShopifySyncAt: b.last_shopify_sync_at ?? null,
       lastDriveSyncAt: b.last_drive_sync_at ?? null,
+      syncState: (b.inventory_sync_state ?? "never") as InventorySyncState,
+      lastInventorySuccessAt: b.last_inventory_success_at ?? null,
+      lastInventoryError: b.last_inventory_error ?? null,
       assortments: assortmentsByBlank.get(b.id) ?? [],
       colors,
       variants,
@@ -162,6 +169,11 @@ export async function loadInventory(opts: { driveConnected: boolean }): Promise<
         isHidden: b.internal_only === true,
         isInventoryManaged: b.is_inventory_managed === true,
         shopifyProductId,
+        syncState: (b.inventory_sync_state ?? "never") as InventorySyncState,
+        // A confirmed figure exists once ANY sync has succeeded — that is what
+        // lets a later failure keep showing the last good number as stale
+        // rather than collapsing it to zero.
+        hasConfirmedInventory: b.last_inventory_success_at != null,
         totalAvailable: totalAvailable(variants),
       }),
       totalAvailable: totalAvailable(variants),
@@ -242,6 +254,7 @@ export function summarize(blanks: InventoryBlank[]): {
 } {
   const status: Record<AvailabilityStatus, number> = {
     available: 0, sold_out: 0, hidden: 0, not_linked: 0, not_managed: 0,
+    sync_pending: 0, sync_error: 0,
   };
   let managed = 0, mainRotation = 0, totalUnits = 0, variants = 0;
   let missingBarcode = 0, duplicateBarcode = 0, missingImage = 0, partialImage = 0, matchRequired = 0;

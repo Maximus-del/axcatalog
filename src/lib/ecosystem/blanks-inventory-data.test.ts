@@ -13,6 +13,7 @@ function blank(over: Partial<InventoryBlank> = {}): InventoryBlank {
     shopifyProductId: null, shopifyStatus: null,
     driveFolderId: null, driveFolderUrl: null, matchStatus: "unmatched",
     lastShopifySyncAt: null, lastDriveSyncAt: null,
+    syncState: "success", lastInventorySuccessAt: "2026-08-25T00:00:00Z", lastInventoryError: null,
     assortments: ["athlete", "standard"], colors: ["Black"], variants: [], images: [],
     status: "not_linked", totalAvailable: 0, coverage: "missing_image",
     barcodesMissing: 0, barcodesDuplicated: 0,
@@ -27,7 +28,7 @@ describe("summary counts", () => {
       blank({ status: "sold_out" }), blank({ status: "hidden" }),
       blank({ status: "not_linked" }), blank({ status: "not_linked" }),
     ]);
-    expect(s.status).toEqual({ available: 2, sold_out: 1, hidden: 1, not_linked: 2, not_managed: 0 });
+    expect(s.status).toEqual({ available: 2, sold_out: 1, hidden: 1, not_linked: 2, not_managed: 0, sync_pending: 0, sync_error: 0 });
     const total = Object.values(s.status).reduce((a, b) => a + b, 0);
     expect(total).toBe(6);
   });

@@ -54,7 +54,8 @@ describe("1–4: the three states", () => {
   });
 
   it("never reports the vague catch-all, across every input combination", () => {
-    const states = ["available", "sold_out", "hidden", "not_linked", "not_managed"];
+    const states = ["available", "sold_out", "hidden", "not_linked", "not_managed",
+                    "sync_pending", "sync_error"];
     for (const hidden of [true, false]) {
       for (const managed of [true, false]) {
         for (const pid of ["gid://p/1", null]) {
@@ -308,7 +309,9 @@ describe("not_linked: a blank with no Shopify product", () => {
   it("labels every state for the UI", () => {
     expect(STATUS_LABELS.not_linked).toBe("Not Linked");
     expect(STATUS_LABELS.not_managed).toBe("Not Managed");
-    expect(Object.keys(STATUS_LABELS).sort())
-      .toEqual(["available", "hidden", "not_linked", "not_managed", "sold_out"]);
+    expect(Object.keys(STATUS_LABELS).sort()).toEqual([
+      "available", "hidden", "not_linked", "not_managed",
+      "sold_out", "sync_error", "sync_pending",
+    ]);
   });
 });
