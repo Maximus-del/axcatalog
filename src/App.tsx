@@ -84,6 +84,15 @@ const AdminFulfillment = lazy(() => import("./pages/admin/AdminFulfillment"));
 const AdminPrintQueue = lazy(() => import("./pages/admin/AdminPrintQueue"));
 const AdminInbox = lazy(() => import("./pages/admin/AdminInbox"));
 
+// AX OS V2 — parallel operator namespace. Everything above is V1 and untouched.
+const V2Layout = lazy(() => import("@/components/admin-v2/V2Layout"));
+const V2Overview = lazy(() => import("./pages/admin-v2/V2Overview"));
+const V2People = lazy(() => import("./pages/admin-v2/V2People"));
+const V2EntityWorkspace = lazy(() => import("./pages/admin-v2/V2EntityWorkspace"));
+const V2Creative = lazy(() => import("./pages/admin-v2/V2Creative"));
+const V2Commerce = lazy(() => import("./pages/admin-v2/V2Commerce"));
+const V2Orders = lazy(() => import("./pages/admin-v2/V2Orders"));
+
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
 const PortalProductDetail = lazy(() => import("./pages/portal/PortalProductDetail"));
@@ -212,6 +221,17 @@ const App = () => (
                 <Route path="print-zones" element={<PrintZonesEditor />} />
                 <Route path="imports/orders" element={<ImportsList />} />
                 <Route path="imports/orders/:id" element={<ImportBatchDetail />} />
+              </Route>
+
+              {/* AX OS V2 — built in parallel; V1 stays live at /admin */}
+              <Route path="/admin-v2" element={<RequireAdmin><V2Layout /></RequireAdmin>}>
+                <Route index element={<V2Overview />} />
+                <Route path="people" element={<V2People />} />
+                <Route path="people/:id" element={<V2EntityWorkspace />} />
+                <Route path="creative" element={<V2Creative />} />
+                <Route path="commerce" element={<V2Commerce />} />
+                <Route path="commerce/blanks" element={<V2Commerce />} />
+                <Route path="orders" element={<V2Orders />} />
               </Route>
 
               {/* Portal */}
