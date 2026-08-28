@@ -62,12 +62,15 @@ export function AssetImage({
 /* ---------------------------------------------------------------- structure */
 
 export function Section({
+  id,
   title,
   count,
   action,
   children,
   empty,
 }: {
+  /** Anchor id, so in-page workflow navigation can scroll here. Additive — every existing caller omits it. */
+  id?: string;
   title: string;
   count?: number;
   action?: ReactNode;
@@ -76,7 +79,7 @@ export function Section({
 }) {
   const isEmpty = count === 0;
   return (
-    <section className="mb-9">
+    <section id={id} className="mb-9 scroll-mt-32">
       <div className="mb-3 flex items-baseline gap-3">
         <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-secondary))]">
           {title}
