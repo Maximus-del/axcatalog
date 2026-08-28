@@ -6,8 +6,10 @@ import { roleLabel, typeLabel } from "@/lib/v2/entity";
 import { cleanDesignTitle, isConfigurable, stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { shopLink } from "@/lib/ecosystem/image";
-import { AssetImage, Card, Chip, EmptyState, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Card, Chip, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
 import WorkflowNav, { type WorkflowStep } from "@/components/admin-v2/WorkflowNav";
+import DesignShelf, { type ShelfFilter } from "@/components/admin-v2/DesignShelf";
+import ProductizeDrawer from "@/components/admin-v2/ProductizeDrawer";
 import ConceptBuilder from "@/components/admin-v2/ConceptBuilder";
 
 // The AX operator workspace for one entity.
@@ -24,14 +26,14 @@ import ConceptBuilder from "@/components/admin-v2/ConceptBuilder";
 type StepKey = "designs" | "mockups" | "products" | "collections" | "live";
 const STEP_ORDER: StepKey[] = ["designs", "mockups", "products", "collections", "live"];
 
-type DesignFilter = "all" | "ready" | "concept";
 
 export default function V2EntityWorkspace() {
   const { id } = useParams();
   const { data, isLoading } = useEntityWorkspace(id);
   const [building, setBuilding] = useState(false);
+  const [productizing, setProductizing] = useState<string | null>(null);
   const [active, setActive] = useState<StepKey>("designs");
-  const [designFilter, setDesignFilter] = useState<DesignFilter>("all");
+  const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
   const scrollingTo = useRef<StepKey | null>(null);
 
   const goTo = useCallback((key: string) => {
@@ -164,8 +166,6 @@ export default function V2EntityWorkspace() {
     },
   ].filter(Boolean) as { id: string; text: string; action: () => void; tone: string }[];
 
-  const filteredDesigns =
-    designFilter === "ready" ? productionReady : designFilter === "concept" ? missingArtwork : designs;
 
   return (
     <>
@@ -270,49 +270,12 @@ export default function V2EntityWorkspace() {
         }
         empty="No artwork linked to this entity yet. Designs are the starting point — everything downstream refers back to one."
       >
-        {filteredDesigns.length === 0 ? (
-          <EmptyState>
-            {designFilter === "ready"
-              ? "None of this entity's designs has an exported production file yet."
-              : "Every design here already has production artwork."}
-          </EmptyState>
-        ) : (
-          <>
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-8">
-              {filteredDesigns.slice(0, 24).map((d) => (
-                <a
-                  key={d.id}
-                  href={`/admin/designs/${d.id}`}
-                  className="ax-card ax-card-hover overflow-hidden transition-all"
-                >
-                  <AssetImage
-                    bucket={d.fileBucket}
-                    path={d.filePath}
-                    alt={d.title}
-                    className="aspect-square w-full bg-black/30"
-                    fit="contain"
-                  />
-                  <div className="p-1.5">
-                    <div className="truncate text-[10px] text-[hsl(var(--ax-secondary))]">
-                      {cleanDesignTitle(d.title) ?? "Untitled"}
-                    </div>
-                    <div
-                      className="mt-0.5 text-[9px]"
-                      style={{ color: d.productionReady ? "hsl(var(--ax-accent))" : "hsl(var(--ax-amber))" }}
-                    >
-                      {d.productionReady ? "production-ready" : "no artwork yet"}
-                    </div>
-                  </div>
-                </a>
-              ))}
-            </div>
-            {filteredDesigns.length > 24 && (
-              <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">
-                Showing 24 of {filteredDesigns.length}.
-              </p>
-            )}
-          </>
-        )}
+        <DesignShelf
+          entityId={entity.id}
+          organizationId={entity.organizationId}
+          entityName={entity.name}
+          filter={designFilter}
+        />
       </Section>
 
       {/* ------------------------------------------------------------ 2 MOCKUPS */}
@@ -345,9 +308,27 @@ export default function V2EntityWorkspace() {
                   <div className="mt-1 truncate text-[10px] text-[hsl(var(--ax-faint))]">
                     {[c.colorName, c.placementLabel].filter(Boolean).join(" · ") || "Unspecified"}
                   </div>
-                  <div className="mt-1.5">
+                  <div className="mt-1.5 flex items-center gap-1.5">
                     <Chip tone={STAGE_TONES[stage]}>{STAGE_LABELS[stage]}</Chip>
                   </div>
+                  {c.productId ? (
+                    <a
+                      href={`/admin/products/${c.productId}`}
+                      className="mt-2 block rounded-full border border-[hsl(var(--ax-border))] py-1 text-center text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+                    >
+                      View product
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setProductizing(c.id)}
+                      disabled={!c.blankId}
+                      title={c.blankId ? "Turn this mockup into a product" : "Add a blank to this mockup first"}
+                      className="mt-2 w-full rounded-full bg-[hsl(var(--ax-accent)/0.16)] py-1 text-[11px] font-semibold text-[hsl(var(--ax-accent))] disabled:opacity-40"
+                    >
+                      Create product
+                    </button>
+                  )}
                 </div>
               </Card>
             );
@@ -483,6 +464,21 @@ export default function V2EntityWorkspace() {
       </Section>
 
       {building && <ConceptBuilder entity={entity} onClose={() => setBuilding(false)} />}
+
+      {productizing &&
+        (() => {
+          const c = concepts.find((x) => x.id === productizing);
+          if (!c) return null;
+          return (
+            <ProductizeDrawer
+              entity={entity}
+              concept={c}
+              design={designs.find((d) => d.id === c.designId) ?? null}
+              collections={collections}
+              onClose={() => setProductizing(null)}
+            />
+          );
+        })()}
     </>
   );
 }

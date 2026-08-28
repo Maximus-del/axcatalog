@@ -10,6 +10,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { displayNameOf } from "./entity";
 import { draftToRow, type ConceptDraft } from "./concepts";
+import type { DesignGroup, OrderWrite } from "./design-groups";
+import { draftToProductRow, type ProductDraft } from "./productize";
 import type {
   Blank,
   BlankColor,
@@ -279,6 +281,9 @@ async function fetchWorkspace(entityId: string): Promise<EntityWorkspace | null>
     }),
     products: ((productsRes.data ?? []) as unknown as Row[]).map((p) => {
       const im = imageFor.get(String(p.id));
+      // A product created from a mockup has no product_images row of its own —
+      // show the concept's visual rather than an empty tile.
+      const fromConcept = concepts.find((c) => c.productId === String(p.id));
       return {
         id: String(p.id),
         title: String(p.title ?? ""),
@@ -290,7 +295,9 @@ async function fetchWorkspace(entityId: string): Promise<EntityWorkspace | null>
         shopifyProductId: str(p.shopify_product_id),
         shopifyHandle: str(p.shopify_handle),
         blankId: str(p.blank_id),
-        imageUrl: im ? publicUrl(str(im.storage_bucket), str(im.storage_path)) : null,
+        imageUrl: im ? publicUrl(str(im.storage_bucket), str(im.storage_path)) : (fromConcept?.imageUrl ?? null),
+        imageBucket: im ? null : (fromConcept?.imageBucket ?? null),
+        imagePath: im ? null : (fromConcept?.imagePath ?? null),
         createdAt: String(p.created_at ?? ""),
       };
     }),
@@ -729,3 +736,236 @@ async function fetchOverview() {
 export function useOverview() {
   return useQuery({ queryKey: ["v2", "overview"], queryFn: fetchOverview, staleTime: 30_000 });
 }
+
+/* ----------------------------------------------------- design shelf (groups) */
+
+export interface Membership {
+  groupId: string | null;
+  sortOrder: number;
+}
+
+export interface DesignShelfData {
+  designs: Design[];
+  groups: DesignGroup[];
+  membership: Map<string, Membership>;
+}
+
+/**
+ * Designs for one entity, plus the operator's grouping and ordering.
+ *
+ * Grouping lives on `design_athletes` (the per-entity link), never on
+ * `designs.design_collection_id` — that column is V1's folder assignment and is
+ * deliberately left untouched.
+ */
+async function fetchDesignShelf(entityId: string): Promise<DesignShelfData> {
+  const linkRes = await t("design_athletes")
+    .select("design_id, group_id, sort_order")
+    .eq("athlete_id", entityId);
+
+  const links = (linkRes.data ?? []) as unknown as Row[];
+  const designIds = links.map((r) => String(r.design_id));
+
+  const membership = new Map<string, Membership>();
+  for (const r of links) {
+    membership.set(String(r.design_id), {
+      groupId: str(r.group_id),
+      sortOrder: Number(r.sort_order ?? 0),
+    });
+  }
+
+  const [designsRes, filesRes, groupsRes] = await Promise.all([
+    designIds.length
+      ? t("designs").select("id, title, status, primary_athlete_id, created_at").in("id", designIds)
+      : Promise.resolve({ data: [] }),
+    designIds.length
+      ? t("design_files")
+          .select("design_id, storage_bucket, storage_path, file_type, is_primary, sort_order")
+          .in("design_id", designIds)
+      : Promise.resolve({ data: [] }),
+    t("design_collections")
+      .select("id, name, athlete_id, sort_order, cover_design_id")
+      .eq("athlete_id", entityId),
+  ]);
+
+  const fileFor = new Map<string, Row>();
+  const exportSet = new Set<string>();
+  for (const f of (filesRes.data ?? []) as unknown as Row[]) {
+    const key = String(f.design_id);
+    if (f.file_type === "export") exportSet.add(key);
+    const cur = fileFor.get(key);
+    if (!cur || (f.is_primary === true && cur.is_primary !== true)) fileFor.set(key, f);
+  }
+
+  const designs: Design[] = ((designsRes.data ?? []) as unknown as Row[]).map((d) => {
+    const f = fileFor.get(String(d.id));
+    return {
+      id: String(d.id),
+      title: String(d.title ?? ""),
+      status: String(d.status ?? ""),
+      entityId: str(d.primary_athlete_id),
+      fileBucket: f ? str(f.storage_bucket) : null,
+      filePath: f ? str(f.storage_path) : null,
+      fileType: f ? str(f.file_type) : null,
+      productionReady: exportSet.has(String(d.id)),
+      createdAt: String(d.created_at ?? ""),
+    };
+  });
+
+  const groups: DesignGroup[] = ((groupsRes.data ?? []) as unknown as Row[]).map((g) => ({
+    id: String(g.id),
+    name: String(g.name ?? "Untitled group"),
+    entityId: str(g.athlete_id),
+    sortOrder: Number(g.sort_order ?? 0),
+    coverDesignId: str(g.cover_design_id),
+  }));
+
+  return { designs, groups, membership };
+}
+
+export function useDesignShelf(entityId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "shelf", entityId],
+    queryFn: () => fetchDesignShelf(entityId as string),
+    enabled: Boolean(entityId),
+    staleTime: 15_000,
+  });
+}
+
+/**
+ * Grouping and ordering writes.
+ *
+ * `design_athletes` has a composite key, so every update is keyed on both
+ * design_id and athlete_id. Nothing here touches a `designs` row.
+ */
+export function useShelfActions(entityId: string, organizationId: string) {
+  const qc = useQueryClient();
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["v2", "shelf", entityId] });
+    void qc.invalidateQueries({ queryKey: ["v2", "workspace", entityId] });
+  };
+
+  const setDesignFields = (designId: string, fields: Record<string, unknown>) =>
+    t("design_athletes")
+      .update(fields as never)
+      .eq("design_id", designId)
+      .eq("athlete_id", entityId);
+
+  const mutation = useMutation({
+    mutationFn: async (job: ShelfJob) => {
+      switch (job.type) {
+        case "order": {
+          await Promise.all(
+            job.writes.map((w) =>
+              w.kind === "design"
+                ? setDesignFields(w.id, { sort_order: w.sortOrder })
+                : t("design_collections")
+                    .update({ sort_order: w.sortOrder } as never)
+                    .eq("id", w.id),
+            ),
+          );
+          return;
+        }
+        case "create-group": {
+          const { data, error } = await t("design_collections")
+            .insert({
+              organization_id: organizationId,
+              athlete_id: entityId,
+              name: job.name,
+              sort_order: job.sortOrder,
+            } as never)
+            .select("id")
+            .single();
+          if (error) throw error;
+          const groupId = String((data as unknown as Row).id);
+          await Promise.all(
+            job.designIds.map((id, i) => setDesignFields(id, { group_id: groupId, sort_order: i })),
+          );
+          return;
+        }
+        case "add-to-group": {
+          await setDesignFields(job.designId, { group_id: job.groupId, sort_order: job.sortOrder });
+          return;
+        }
+        case "remove-from-group": {
+          await setDesignFields(job.designId, { group_id: null, sort_order: job.sortOrder });
+          return;
+        }
+        case "rename-group": {
+          await t("design_collections")
+            .update({ name: job.name } as never)
+            .eq("id", job.groupId);
+          return;
+        }
+        case "ungroup": {
+          await Promise.all(
+            job.designIds.map((id, i) =>
+              setDesignFields(id, { group_id: null, sort_order: job.baseSortOrder + i }),
+            ),
+          );
+          // Only remove the container if V1 is not using it as a design folder.
+          const stillUsed = await t("designs").select("id").eq("design_collection_id", job.groupId).limit(1);
+          if (((stillUsed.data ?? []) as unknown as Row[]).length === 0) {
+            await t("design_collections").delete().eq("id", job.groupId).eq("athlete_id", entityId);
+          }
+          return;
+        }
+      }
+    },
+    onSuccess: refresh,
+  });
+
+  return mutation;
+}
+
+/* --------------------------------------------------- mockup -> product */
+
+/**
+ * Creates the product, links it to the entity, files it in the concept's
+ * collection, and points the concept at the product so the creative lineage
+ * survives. Four writes, no new tables, no Shopify call.
+ */
+export function useCreateProductFromConcept(entityId: string, organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (draft: ProductDraft) => {
+      const { data, error } = await t("products")
+        .insert(draftToProductRow(draft, organizationId) as never)
+        .select("id")
+        .single();
+      if (error) throw error;
+      const productId = String((data as unknown as Row).id);
+
+      await t("product_athletes").insert({ product_id: productId, athlete_id: entityId } as never);
+
+      if (draft.collectionId) {
+        await t("collection_products").insert({
+          collection_id: draft.collectionId,
+          product_id: productId,
+        } as never);
+      }
+
+      // Lineage: the concept now knows what it became.
+      await t("mockups")
+        .update({ product_id: productId } as never)
+        .eq("id", draft.conceptId);
+
+      return productId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace", entityId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "concepts"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "products"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "overview"] });
+    },
+  });
+}
+
+export type ShelfJob =
+  | { type: "order"; writes: OrderWrite[] }
+  | { type: "create-group"; name: string; designIds: string[]; sortOrder: number }
+  | { type: "add-to-group"; groupId: string; designId: string; sortOrder: number }
+  | { type: "remove-from-group"; designId: string; sortOrder: number }
+  | { type: "rename-group"; groupId: string; name: string }
+  | { type: "ungroup"; groupId: string; designIds: string[]; baseSortOrder: number };

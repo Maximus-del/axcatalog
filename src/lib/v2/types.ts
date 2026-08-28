@@ -176,6 +176,9 @@ export interface Product {
   shopifyHandle: string | null;
   blankId: string | null;
   imageUrl: string | null;
+  /** Fallback visual from the concept this product came from (private bucket). */
+  imageBucket?: string | null;
+  imagePath?: string | null;
   createdAt: string;
 }
 
