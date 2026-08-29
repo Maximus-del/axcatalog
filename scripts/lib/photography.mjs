@@ -1,57 +1,81 @@
-// AX Blank Photography — the rules that turn a Drive folder tree into rows.
+// AX V2 CATALOG — the rules that turn the Drive into a catalog.
 //
-// SOURCE OF TRUTH: the "AX Blank Photography" Drive is authoritative for what a
-// blank LOOKS like. It is deliberately NOT authoritative for which blanks exist
-// or what is in stock — Shopify owns that, and pricing lives in its own sheet.
-// So this module never invents a blank. A Drive style with no matching blank is
-// reported, loudly, and skipped.
+// The Drive is not a source of pictures for an existing catalog. It IS the
+// catalog: Chase re-did the physical range, photographed it, and organised the
+// result. So a style folder is a blank, a colour folder is a colourway, and
+// their folder names are their names.
 //
-// Everything here is pure so the matching can be tested without a network or a
-// database. The network and the writes live in ../sync-blank-photography.mjs.
+// NOTHING HERE LOOKS AT THE V1 `blanks` TABLE. There is no matching, no fuzzy
+// name comparison and no reconciliation, because those were solving a problem
+// that no longer exists — the two catalogs are different generations, not two
+// spellings of one thing.
+//
+// Shopify owns cost, price and quantity. Those columns stay null here rather
+// than being inferred, because a wrong price is worse than a missing one.
+//
+// Everything is pure; the network and the writes live in the sync script.
 
-/* ------------------------------------------------------------------ colours */
+/* ------------------------------------------------------------------ naming */
 
 /**
- * Colour names have to survive a round trip between three systems that each
- * spell them differently: Drive folders (VINTAGE_WOOD_CAMO), the database
- * (Vintage Wood Camo) and supplier sheets (vintage wood camo).
+ * Drive folder name → a name a person would write.
  *
- * Note what is NOT done here: no spelling correction. The AXISM supplier spells
- * it "Sulpher Brown" and their README says so explicitly. Silently fixing that
- * to "Sulphur" would break the match against the database, which also stores
- * the supplier's spelling. The library is the authority on its own names.
+ * The folder is the record ("VINTAGE_WOOD_CAMO"), and it is stored verbatim as
+ * `name`. This is only the presentation of it. Supplier spellings survive on
+ * purpose — AXISM's own README documents "Sulpher Brown", so correcting it here
+ * would put AX's catalog out of step with the supplier's.
  */
-export function normalizeColor(name) {
-  if (!name) return "";
-  return String(name)
+export function prettyName(raw) {
+  const words = String(raw ?? "")
+    .replace(/[_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean);
+
+  // Weights and sizes read better upper-case: "14 OZ", not "14 Oz".
+  const UNITS = new Set(["oz", "ozs"]);
+  return words
+    .map((w) => (UNITS.has(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(" ");
+}
+
+/** Stable comparison key, used only for de-duplicating within one sync run. */
+export function keyOf(name) {
+  return String(name ?? "")
     .replace(/[_\-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
 }
 
-/** Human-facing colour, derived from a Drive folder name. */
-export function prettyColor(name) {
-  return normalizeColor(name)
-    .split(" ")
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
+/**
+ * Style folders are named two ways, and both are the supplier's own choice:
+ *   "7010 — DRI EASE OVERSIZED TEE"   AXISM, style code first
+ *   "SPECIAL HOODIE 14 OZ"            Cotton Collective, name only
+ *
+ * A missing style code stays null. Inventing one would create an identifier
+ * that matches nothing in Shopify and looks authoritative.
+ */
+export function parseStyleFolder(title) {
+  const raw = String(title ?? "").trim();
+  const m = raw.match(/^([A-Za-z0-9][A-Za-z0-9.\-]*)\s*[—–-]\s*(.+)$/);
+  if (m) return { styleCode: m[1].trim(), name: m[2].trim(), raw };
+  return { styleCode: null, name: raw, raw };
 }
 
-/* -------------------------------------------------------------------- views */
+/* ------------------------------------------------------------------- views */
 
 /**
  * Which surface a folder represents, and whether it is the one to show.
  *
- * Hoodies are shot three ways: FRONT, BACK_HOOD_DOWN and BACK_HOOD_UP. Hood-down
- * is the canonical back because it is the one where the print area is flat and
- * unobstructed — a hood-up shot hides the top third of exactly the area an
- * operator is placing artwork on. Hood-up is kept as a secondary image rather
- * than discarded; it is the better shot for a client-facing gallery.
+ * Hood-down is the canonical back: hood-up hides the top third of exactly the
+ * area artwork gets placed on. Hood-up is kept as a secondary image rather than
+ * discarded — it is the better shot for a client-facing gallery.
  */
 export function classifyView(folderName) {
-  const key = normalizeColor(folderName).replace(/\s+/g, "_");
+  const key = keyOf(folderName).replace(/\s+/g, "_");
   if (key === "front") return { viewType: "front", variant: null, isPrimary: true };
   if (key === "back") return { viewType: "back", variant: null, isPrimary: true };
   if (key === "back_hood_down") return { viewType: "back", variant: "hood_down", isPrimary: true };
@@ -61,87 +85,33 @@ export function classifyView(folderName) {
   return { viewType: null, variant: null, isPrimary: false };
 }
 
-/* ------------------------------------------------------------------- styles */
+/* ----------------------------------------------------------- garment types */
+
+const GARMENT_RULES = [
+  [/\bzip\b.*\bhood/i, "zip_hoodie"],
+  [/\bhood/i, "hoodie"],
+  [/\bcrew/i, "crewneck"],
+  [/\b(l-?s|long[ _-]?sleeve)\b/i, "long_sleeve"],
+  [/\bpolo\b/i, "polo"],
+  [/\btank\b/i, "tank"],
+  [/\bshort\b/i, "shorts"],
+  [/\b(pant|jogger|sweatpant)/i, "sweatpants"],
+  [/\b(cap|hat|snapback|trucker)\b/i, "hat"],
+  [/\btee\b|\bt[ _-]?shirt\b/i, "tee"],
+];
 
 /**
- * Style folders are named two ways in the same library:
- *   "7010 — DRI EASE OVERSIZED TEE"   (AXISM: style number first)
- *   "SPECIAL HOODIE 14 OZ"            (Cotton Collective: name only)
+ * Best guess at the garment type from the style name.
  *
- * Both are parsed rather than one being declared correct, because the folders
- * are the supplier's own organisation and renaming them to suit the importer
- * would break the human workflow the library exists for.
+ * It matters because placement zones differ — a cap gets cap placements, a top
+ * gets chest and back. A guess is better than nothing here because the cost of
+ * being wrong is one wrong list of placement presets, visible immediately and
+ * editable. Returns null rather than defaulting to "tee" when nothing matches,
+ * so an unrecognised garment is obvious instead of silently mislabelled.
  */
-export function parseStyleFolder(title) {
-  const raw = String(title ?? "").trim();
-  const m = raw.match(/^([A-Za-z0-9][A-Za-z0-9.\-]*)\s*[—–-]\s*(.+)$/);
-  if (m) return { styleNumber: m[1].trim(), name: m[2].trim(), raw };
-  return { styleNumber: null, name: raw, raw };
-}
-
-/** Loose comparison key for style/blank names. */
-export function nameKey(s) {
-  return String(s ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    // "14oz" and "14 oz" are the same garment. The unit has to be stripped both
-    // when it is attached to the number and when it stands alone.
-    .replace(/(\d)\s*(oz|ounce|ounces)\b/g, "$1")
-    .replace(/\b(oz|ounce|ounces)\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-/**
- * Match a Drive style folder to an existing blank.
- *
- * FOUR STRATEGIES, IN ORDER OF HOW MUCH THEY CAN BE TRUSTED.
- *
- * 1. A stored binding (`blanks.drive_product_folder_id`). Once a human has
- *    confirmed that this folder is that blank, it is never guessed again.
- * 2. Style number — the supplier's own identifier, the one thing both systems
- *    agree on.
- * 3. An exact normalised name.
- * 4. An unambiguous containment match.
- *
- * Names alone are NOT enough and this is not theoretical: Cotton Collective's
- * folder is "SPECIAL HOODIE 14 OZ" while the catalog calls the same garment
- * "Garment-Wash Hoodie 14oz". Nothing short of a human saying so can connect
- * those, which is exactly why strategy 1 exists and why an unmatched style is
- * reported rather than guessed. A wrong match attaches a hoodie's photography
- * to a tee, and nobody notices until a client sees it.
- */
-export function matchBlank(styleFolder, blanks) {
-  const { styleNumber, name, folderId } = styleFolder;
-
-  if (folderId) {
-    const bound = blanks.filter((b) => b.drive_product_folder_id === folderId);
-    if (bound.length === 1) return { blank: bound[0], via: "stored_binding" };
-  }
-
-  if (styleNumber) {
-    const byNumber = blanks.filter(
-      (b) => b.style_number && b.style_number.toLowerCase() === styleNumber.toLowerCase(),
-    );
-    if (byNumber.length === 1) return { blank: byNumber[0], via: "style_number" };
-    if (byNumber.length > 1) return { blank: null, via: "ambiguous_style_number" };
-  }
-
-  const key = nameKey(name);
-  if (!key) return { blank: null, via: "no_name" };
-
-  const exact = blanks.filter((b) => nameKey(b.name) === key);
-  if (exact.length === 1) return { blank: exact[0], via: "name_exact" };
-  if (exact.length > 1) return { blank: null, via: "ambiguous_name" };
-
-  const contains = blanks.filter((b) => {
-    const bk = nameKey(b.name);
-    return bk.includes(key) || key.includes(bk);
-  });
-  if (contains.length === 1) return { blank: contains[0], via: "name_contains" };
-  if (contains.length > 1) return { blank: null, via: "ambiguous_name_contains" };
-
-  return { blank: null, via: "no_match" };
+export function inferGarmentType(name) {
+  for (const [re, type] of GARMENT_RULES) if (re.test(name ?? "")) return type;
+  return null;
 }
 
 /* -------------------------------------------------------------------- URLs */
@@ -149,109 +119,99 @@ export function matchBlank(styleFolder, blanks) {
 /**
  * A renderable URL for a public Drive file.
  *
- * This is Google's public thumbnail endpoint. It works because the library is
- * shared "anyone with the link", needs no key at render time, and costs nothing
- * to adopt — but it is undocumented and rate-limited, so it is a bridge rather
- * than a destination. Mirroring these into Supabase storage is the durable
- * version, and because every consumer resolves images through one module
- * (src/lib/v2/blank-image.ts), that swap changes this function and nothing else.
+ * Google's public thumbnail endpoint: no key needed at render time because the
+ * library is shared "anyone with the link". Undocumented and rate-limited, so
+ * it is a bridge rather than a destination — mirroring into Supabase storage is
+ * the durable version, and it changes this function and nothing else.
  */
 export function driveThumbUrl(fileId, size = 1600) {
   return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
 }
 
-/* -------------------------------------------------------------------- plan */
+/* ----------------------------------------------------------------- catalog */
 
 /**
- * Turn a walked Drive tree into the rows to write, plus everything that did not
- * match so a human can look at it.
+ * Build the whole catalog from a flat walk of the Drive.
  *
- * `entries` are flat: { styleFolder, colorFolder, viewFolder, file }.
+ * `entries` are { supplier, styleFolder, colorFolder, viewFolder, file }.
+ * Identity is the Drive folder id throughout, never the name — folders get
+ * renamed, and a rename should update a blank rather than create a second one.
  */
-export function buildPlan(entries, blanks) {
+export function buildCatalog(entries) {
+  const blanks = new Map();
+  const colors = new Map();
   const images = [];
-  const unmatchedStyles = new Map();
-  const unmatchedColors = [];
   const skippedViews = [];
 
-  const colorsByBlank = new Map();
-  for (const b of blanks) {
-    colorsByBlank.set(
-      b.id,
-      new Map((b.colors ?? []).map((c) => [normalizeColor(c.color_name), c])),
-    );
-  }
-
   for (const e of entries) {
-    const parsed = { ...parseStyleFolder(e.styleFolder.title), folderId: e.styleFolder.id };
-    const { blank, via } = matchBlank(parsed, blanks);
-    if (!blank) {
-      if (!unmatchedStyles.has(parsed.raw)) {
-        unmatchedStyles.set(parsed.raw, { style: parsed.raw, folderId: e.styleFolder.id, reason: via });
-      }
-      continue;
+    const parsed = parseStyleFolder(e.styleFolder.title);
+
+    if (!blanks.has(e.styleFolder.id)) {
+      blanks.set(e.styleFolder.id, {
+        drive_folder_id: e.styleFolder.id,
+        drive_folder_url: `https://drive.google.com/drive/folders/${e.styleFolder.id}`,
+        supplier: prettyName(e.supplier.title),
+        name: parsed.name,
+        style_code: parsed.styleCode,
+        garment_type: inferGarmentType(parsed.raw),
+      });
+    }
+
+    const colorKey = `${e.styleFolder.id}::${keyOf(e.colorFolder.title)}`;
+    if (!colors.has(colorKey)) {
+      colors.set(colorKey, {
+        key: colorKey,
+        blank_drive_folder_id: e.styleFolder.id,
+        name: e.colorFolder.title,
+        display_name: prettyName(e.colorFolder.title),
+        drive_folder_id: e.colorFolder.id,
+        sort_order: colors.size,
+      });
     }
 
     const view = classifyView(e.viewFolder?.title ?? "");
     if (!view.viewType) {
-      skippedViews.push({ blank: blank.name, folder: e.viewFolder?.title ?? "(none)" });
+      skippedViews.push({ style: parsed.raw, folder: e.viewFolder?.title ?? "(none)" });
       continue;
     }
 
-    const normalized = normalizeColor(e.colorFolder.title);
-    const dbColor = colorsByBlank.get(blank.id)?.get(normalized) ?? null;
-    if (!dbColor) {
-      unmatchedColors.push({ blank: blank.name, color: prettyColor(e.colorFolder.title) });
-    }
-
     images.push({
-      blank_id: blank.id,
-      blank_name: blank.name,
-      color: dbColor ? dbColor.color_name : prettyColor(e.colorFolder.title),
-      normalized_color: normalized,
+      blank_drive_folder_id: e.styleFolder.id,
+      color_key: colorKey,
       view_type: view.viewType,
       variant: view.variant,
+      is_primary: view.isPrimary,
       drive_file_id: e.file.id,
       drive_folder_id: e.viewFolder?.id ?? e.colorFolder.id,
+      drive_url: driveThumbUrl(e.file.id),
       filename: e.file.title,
       mime_type: e.file.mimeType ?? null,
-      drive_url: driveThumbUrl(e.file.id),
       modified_at: e.file.modifiedTime ?? null,
-      is_primary: view.isPrimary,
-      missing: false,
-      matched_color: Boolean(dbColor),
-      match_via: via,
     });
   }
 
-  return {
-    images,
-    unmatchedStyles: [...unmatchedStyles.values()],
-    unmatchedColors,
-    skippedViews,
-  };
+  // Colour order follows the Drive's own alphabetical listing rather than
+  // discovery order, so the picker is stable between runs.
+  const colorList = [...colors.values()].sort((a, b) =>
+    a.blank_drive_folder_id === b.blank_drive_folder_id
+      ? a.display_name.localeCompare(b.display_name)
+      : a.blank_drive_folder_id.localeCompare(b.blank_drive_folder_id),
+  );
+  let n = 0;
+  let currentBlank = null;
+  for (const c of colorList) {
+    if (c.blank_drive_folder_id !== currentBlank) {
+      currentBlank = c.blank_drive_folder_id;
+      n = 0;
+    }
+    c.sort_order = n++;
+  }
+
+  return { blanks: [...blanks.values()], colors: colorList, images, skippedViews };
 }
 
-/**
- * The derived `blank_colors` cache: one front and one back URL per colourway.
- *
- * blank_images is the record; these two columns are a convenience copy that the
- * app reads directly. Deriving them here rather than letting them drift is what
- * makes the Drive the source of truth in practice and not just on paper.
- */
-export function planColorCache(images) {
-  const best = new Map();
-  for (const img of images) {
-    if (!img.matched_color) continue;
-    const key = `${img.blank_id}::${img.normalized_color}`;
-    const slot = best.get(key) ?? { blank_id: img.blank_id, normalized_color: img.normalized_color, front: null, back: null };
-    const field = img.view_type === "back" ? "back" : "front";
-    // A primary view always wins; otherwise first one seen holds the slot.
-    if (!slot[field] || (img.is_primary && !slot[`${field}_primary`])) {
-      slot[field] = img.drive_url;
-      slot[`${field}_primary`] = img.is_primary;
-    }
-    best.set(key, slot);
-  }
-  return [...best.values()];
+/** Colourways with no photograph at all — worth knowing, not worth blocking on. */
+export function colorsWithoutImages(catalog) {
+  const withImages = new Set(catalog.images.map((i) => i.color_key));
+  return catalog.colors.filter((c) => !withImages.has(c.key));
 }
