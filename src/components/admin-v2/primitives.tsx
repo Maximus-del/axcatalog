@@ -21,6 +21,7 @@ export function AssetImage({
   className = "",
   fallbackSeed,
   fit = "cover",
+  onNaturalSize,
 }: {
   url?: string | null;
   bucket?: string | null;
@@ -29,6 +30,14 @@ export function AssetImage({
   className?: string;
   fallbackSeed?: string;
   fit?: "cover" | "contain";
+  /**
+   * Natural aspect ratio (w/h) once the image has decoded.
+   *
+   * The mockup canvas needs this to scale artwork without distorting it, and
+   * the only reliable source is the decoded image itself — the database records
+   * no dimensions for design files.
+   */
+  onNaturalSize?: (aspect: number) => void;
 }) {
   const needsSigning = !url && Boolean(bucket && path);
   const { url: signed } = useSignedUrl(needsSigning ? bucket ?? null : null, needsSigning ? path ?? null : null);
@@ -52,6 +61,13 @@ export function AssetImage({
       alt={alt}
       loading="lazy"
       className={`${fit === "cover" ? "object-cover" : "object-contain"} ${className}`}
+      onLoad={(e) => {
+        if (!onNaturalSize) return;
+        const img = e.currentTarget as HTMLImageElement;
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          onNaturalSize(img.naturalWidth / img.naturalHeight);
+        }
+      }}
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
       }}

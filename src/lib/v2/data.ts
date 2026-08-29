@@ -13,6 +13,7 @@ import { draftToRow, type ConceptDraft } from "./concepts";
 import type { DesignGroup, OrderWrite } from "./design-groups";
 import { draftToProductRow, type ProductDraft } from "./productize";
 import { mergeZones, type PrintZoneRow } from "./placements";
+import { fromRows, type PlacementRow } from "./placement-geometry";
 import type {
   Blank,
   BlankColor,
@@ -546,6 +547,56 @@ export function usePrintZones() {
       return mergeZones((res.data ?? []) as unknown as PrintZoneRow[]);
     },
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * Create the mockup and its placements together.
+ *
+ * Placements are written second because they need the mockup's id. If that
+ * second write fails the mockup is deleted rather than left behind: a concept
+ * whose artwork has no position is not a lesser version of what the operator
+ * asked for, it is a broken record they would have to find and clean up.
+ */
+export function useCreateMockup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ draft, placements }: { draft: ConceptDraft; placements: PlacementRow[] }) => {
+      const { data, error } = await t("mockups").insert(draftToRow(draft) as never).select("id").single();
+      if (error) throw error;
+      const mockupId = String((data as unknown as Row).id);
+
+      if (placements.length > 0) {
+        const rows = placements.map((p) => ({ ...p, mockup_id: mockupId, blank_id: draft.blankId ?? null, color_name: draft.colorName ?? null }));
+        const placed = await t("product_print_placements").insert(rows as never);
+        if (placed.error) {
+          await t("mockups").delete().eq("id", mockupId);
+          throw placed.error;
+        }
+      }
+      return mockupId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "concepts"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "overview"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "placements"] });
+    },
+  });
+}
+
+/** Placements already saved against a mockup, for reopening one. */
+export function useMockupPlacements(mockupId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "placements", mockupId],
+    enabled: Boolean(mockupId),
+    queryFn: async () => {
+      const res = await t("product_print_placements")
+        .select("design_id, surface, zone_id, zone_label, x_pct, y_pct, w_pct, h_pct, rotation_deg, sort_order")
+        .eq("mockup_id", mockupId as string);
+      return fromRows((res.data ?? []) as unknown as PlacementRow[]);
+    },
   });
 }
 

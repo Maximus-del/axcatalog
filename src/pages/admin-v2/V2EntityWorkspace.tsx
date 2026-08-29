@@ -11,6 +11,8 @@ import WorkflowNav, { type WorkflowStep } from "@/components/admin-v2/WorkflowNa
 import DesignShelf, { type ShelfFilter } from "@/components/admin-v2/DesignShelf";
 import ProductizeDrawer from "@/components/admin-v2/ProductizeDrawer";
 import ConceptBuilder from "@/components/admin-v2/ConceptBuilder";
+import DesignDrawer from "@/components/admin-v2/DesignDrawer";
+import type { Design } from "@/lib/v2/types";
 
 // The AX operator workspace for one entity.
 //
@@ -31,6 +33,11 @@ export default function V2EntityWorkspace() {
   const { id } = useParams();
   const { data, isLoading } = useEntityWorkspace(id);
   const [building, setBuilding] = useState(false);
+  // The design currently opened for its creative options, and the design the
+  // mockup builder was launched from (they differ for a moment while the drawer
+  // hands off to the builder).
+  const [openDesign, setOpenDesign] = useState<Design | null>(null);
+  const [mockupFrom, setMockupFrom] = useState<Design | null>(null);
   const [productizing, setProductizing] = useState<string | null>(null);
   const [active, setActive] = useState<StepKey>("designs");
   const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
@@ -275,6 +282,7 @@ export default function V2EntityWorkspace() {
           organizationId={entity.organizationId}
           entityName={entity.name}
           filter={designFilter}
+          onOpenDesign={setOpenDesign}
         />
       </Section>
 
@@ -463,8 +471,29 @@ export default function V2EntityWorkspace() {
         {orders.length > 0 && <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">{ordersNote}</p>}
       </Section>
 
+      {openDesign && (
+        <DesignDrawer
+          design={openDesign}
+          entity={entity}
+          onClose={() => setOpenDesign(null)}
+          onPlaceOnBlank={() => {
+            setMockupFrom(openDesign);
+            setOpenDesign(null);
+            setBuilding(true);
+          }}
+        />
+      )}
+
       {building && (
-        <ConceptBuilder entity={entity} initialFlow="design_first" onClose={() => setBuilding(false)} />
+        <ConceptBuilder
+          entity={entity}
+          initialFlow="design_first"
+          initialDesign={mockupFrom}
+          onClose={() => {
+            setBuilding(false);
+            setMockupFrom(null);
+          }}
+        />
       )}
 
       {productizing &&

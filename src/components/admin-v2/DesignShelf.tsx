@@ -60,11 +60,14 @@ export default function DesignShelf({
   organizationId,
   entityName,
   filter,
+  onOpenDesign,
 }: {
   entityId: string;
   organizationId: string;
   entityName: string;
   filter: ShelfFilter;
+  /** Open the design's own page — its creative options live there, not here. */
+  onOpenDesign?: (design: Design) => void;
 }) {
   const { data, isLoading } = useDesignShelf(entityId);
   const actions = useShelfActions(entityId, organizationId);
@@ -454,6 +457,7 @@ export default function DesignShelf({
       onToggleVisibility={() => toggleDesignVisibility(d)}
       onArchive={() => archive(d)}
       onUnlink={() => unlink(d)}
+      onOpen={onOpenDesign ? () => onOpenDesign(d) : undefined}
       onRenderPreview={() => {
         setMenuFor(null);
         void renderPreview(d).then((ok) => {
@@ -641,6 +645,7 @@ function DesignCard({
   rendering,
   menuOpen,
   onMenu,
+  onOpen,
   onToggleVisibility,
   onArchive,
   onUnlink,
@@ -651,6 +656,7 @@ function DesignCard({
   rendering: boolean;
   menuOpen: boolean;
   onMenu: () => void;
+  onOpen?: () => void;
   onToggleVisibility: () => void;
   onArchive: () => void;
   onUnlink: () => void;
@@ -660,14 +666,26 @@ function DesignCard({
   return (
     <div className={`ax-card ax-card-hover overflow-hidden transition-all ${archived ? "opacity-55" : ""}`}>
       <div className="relative">
-        <AssetImage
-          bucket={design.fileBucket}
-          path={design.filePath}
-          alt={design.title}
-          className="aspect-square w-full bg-black/30"
-          fit="contain"
-        />
-        <GripVertical className="absolute left-1 top-1 h-3.5 w-3.5 text-white/35" aria-hidden />
+        {onOpen ? (
+          <button type="button" onClick={onOpen} className="block w-full" title="Open this design">
+            <AssetImage
+              bucket={design.fileBucket}
+              path={design.filePath}
+              alt={design.title}
+              className="aspect-square w-full bg-black/30"
+              fit="contain"
+            />
+          </button>
+        ) : (
+          <AssetImage
+            bucket={design.fileBucket}
+            path={design.filePath}
+            alt={design.title}
+            className="aspect-square w-full bg-black/30"
+            fit="contain"
+          />
+        )}
+        <GripVertical className="pointer-events-none absolute left-1 top-1 h-3.5 w-3.5 text-white/35" aria-hidden />
 
         <button
           type="button"
@@ -706,12 +724,22 @@ function DesignCard({
       </div>
 
       <div className="space-y-1 p-1.5">
-        <a
-          href={`/admin/designs/${design.id}`}
-          className="block truncate text-[10px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
-        >
-          {nameOf(design)}
-        </a>
+        {onOpen ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="block w-full truncate text-left text-[10px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+          >
+            {nameOf(design)}
+          </button>
+        ) : (
+          <a
+            href={`/admin/designs/${design.id}`}
+            className="block truncate text-[10px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+          >
+            {nameOf(design)}
+          </a>
+        )}
         <div
           className="text-[9px]"
           style={{ color: design.productionReady ? "hsl(var(--ax-accent))" : "hsl(var(--ax-amber))" }}

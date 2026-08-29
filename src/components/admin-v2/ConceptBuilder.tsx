@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useBlanks, useCollections, useCreateConcept, useDesignShelf, useDesigns, usePrintZones } from "@/lib/v2/data";
+import { useBlanks, useCollections, useCreateMockup, useDesignShelf, useDesigns, usePrintZones } from "@/lib/v2/data";
+import MockupCanvas, { DRAG_MIME } from "./MockupCanvas";
+import {
+  boxAtPoint,
+  defaultBox,
+  fitToZone,
+  toRows,
+  usedSurfaces,
+  type PlacedDesign,
+} from "@/lib/v2/placement-geometry";
 import { presetById, presetsFor, type PlacementPreset } from "@/lib/v2/placements";
 import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
 import { photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
@@ -33,18 +42,27 @@ export default function ConceptBuilder({
   onClose,
   onCreated,
   initialFlow,
+  initialDesign,
 }: {
   entity: Entity;
   onClose: () => void;
   onCreated?: (id: string) => void;
   initialFlow?: Flow;
+  /** Opened from a design's own page — skip straight to choosing the blank. */
+  initialDesign?: Design | null;
 }) {
-  const [flow, setFlow] = useState<Flow | null>(initialFlow ?? null);
-  const [step, setStep] = useState<Step>(initialFlow ? (initialFlow === "design_first" ? "design" : "blank") : "flow");
-  const [design, setDesign] = useState<Design | null>(null);
+  const [flow, setFlow] = useState<Flow | null>(initialFlow ?? (initialDesign ? "design_first" : null));
+  const [step, setStep] = useState<Step>(
+    initialDesign ? "blank" : initialFlow ? (initialFlow === "design_first" ? "design" : "blank") : "flow",
+  );
+  const [design, setDesign] = useState<Design | null>(initialDesign ?? null);
   const [blank, setBlank] = useState<Blank | null>(null);
   const [colorName, setColorName] = useState<string | null>(null);
-  const [placement, setPlacement] = useState<PlacementPreset | null>(null);
+  // Artwork actually placed on the garment, front and back. `design` above stays
+  // the concept's headline design (the `design_id` column V1 and the rest of V2
+  // already read); this is the full arrangement.
+  const [placed, setPlaced] = useState<PlacedDesign[]>([]);
+  const [surface, setSurface] = useState<"front" | "back">("front");
   const [collectionId, setCollectionId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -52,9 +70,10 @@ export default function ConceptBuilder({
   const [onlyEligible, setOnlyEligible] = useState(true);
 
   const designsQ = useDesigns(scopeAllDesigns ? undefined : entity.id);
+  const shelfQ = useDesignShelf(entity.id);
   const blanksQ = useBlanks();
   const collectionsQ = useCollections();
-  const create = useCreateConcept();
+  const create = useCreateMockup();
 
   const audience = audienceForRoles(entity.roles);
 
@@ -82,20 +101,74 @@ export default function ConceptBuilder({
     return merged.filter((p) => p.garmentCategory === category);
   }, [zonesQ.data, blank?.garmentType]);
 
-  // Which surface the operator is currently placing on, so the preview can show
-  // the back of the garment when they pick a back placement.
-  const surface: Surface = placement?.surface === "back" ? "back" : "front";
   const garmentImage = useMemo(
-    () => resolveBlankImage({ blank, colorName, surface }),
+    () => resolveBlankImage({ blank, colorName, surface: surface as Surface }),
     [blank, colorName, surface],
   );
+  const frontImage = useMemo(
+    () => resolveBlankImage({ blank, colorName, surface: "front" }),
+    [blank, colorName],
+  );
+  const backImage = useMemo(
+    () => resolveBlankImage({ blank, colorName, surface: "back" }),
+    [blank, colorName],
+  );
+
+  const designsById = useMemo(() => {
+    const m = new Map<string, Design>();
+    for (const d of designsQ.data ?? []) m.set(d.id, d);
+    if (design) m.set(design.id, design);
+    for (const d of shelfQ.data?.designs ?? []) m.set(d.id, d);
+    return m;
+  }, [designsQ.data, design, shelfQ.data]);
+
+  const zonesForSurface = useMemo(
+    () =>
+      presets
+        .filter((p) => p.surface === surface)
+        .map((p) => ({ zoneId: p.zoneId, label: p.label, surface: p.surface, x: p.x, y: p.y, w: p.w, h: p.h })),
+    [presets, surface],
+  );
+
+  /** Put a design on the garment. Fits the default chest/back zone when dropped blind. */
+  const addPlacement = (designId: string, box: PlacedDesign["box"], zone: { zoneId: string; zoneLabel: string } | null) => {
+    setPlaced((prev) => [
+      ...prev,
+      {
+        id: `${designId}-${surface}-${Date.now()}`,
+        designId,
+        surface,
+        box,
+        rotation: 0,
+        zoneId: zone?.zoneId ?? null,
+        zoneLabel: zone?.zoneLabel ?? null,
+      },
+    ]);
+  };
 
   // Reset the colour when the blank changes; a colour name only means something
-  // inside one blank.
+  // inside one blank. Placements survive — the artwork arrangement is about the
+  // design, not the colourway, and re-placing it after every colour change would
+  // defeat the point of trying a design across a range.
   useEffect(() => {
     setColorName(null);
-    setPlacement(null);
   }, [blank?.id]);
+
+  // Choosing the headline design seeds a front placement, so the common case —
+  // one design, centred on the chest — needs no canvas work at all.
+  useEffect(() => {
+    if (!design) return;
+    setPlaced((prev) => (prev.length > 0 ? prev : [{
+      id: `${design.id}-front-seed`,
+      designId: design.id,
+      surface: "front",
+      box: defaultBox(1),
+      rotation: 0,
+      zoneId: null,
+      zoneLabel: null,
+    }]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [design?.id]);
 
   useEffect(() => {
     if (!title) {
@@ -121,7 +194,7 @@ export default function ConceptBuilder({
     (step === "design" && Boolean(design)) ||
     (step === "blank" && Boolean(blank)) ||
     (step === "color" && Boolean(colorName)) ||
-    (step === "placement" && Boolean(placement));
+    (step === "placement" && placed.length > 0);
 
   const goNext = () => {
     const i = order.indexOf(step);
@@ -135,20 +208,27 @@ export default function ConceptBuilder({
   const submit = async () => {
     if (!design && !blank) return;
     try {
+      // The headline placement mirrors onto the mockup row's own columns so V1
+      // and every existing V2 read keep working unchanged; the full arrangement
+      // lives in product_print_placements.
+      const headline = placed.find((p) => p.surface === "front") ?? placed[0] ?? null;
       const id = await create.mutateAsync({
-        title: title.trim() || "Untitled concept",
-        entityId: entity.id,
-        organizationId: entity.organizationId,
-        designId: design?.id ?? null,
-        blankId: blank?.id ?? null,
-        collectionId: collectionId || null,
-        colorName,
-        surface: placement?.surface ?? null,
-        zoneId: placement?.zoneId ?? null,
-        placementLabel: placement?.label ?? null,
-        imageUrl: garmentImage.url,
-        notes: notes.trim() || null,
-        flow: flow ?? "design_first",
+        draft: {
+          title: title.trim() || "Untitled mockup",
+          entityId: entity.id,
+          organizationId: entity.organizationId,
+          designId: headline?.designId ?? design?.id ?? null,
+          blankId: blank?.id ?? null,
+          collectionId: collectionId || null,
+          colorName,
+          surface: headline?.surface ?? null,
+          zoneId: headline?.zoneId ?? null,
+          placementLabel: headline?.zoneLabel ?? null,
+          imageUrl: garmentImage.url,
+          notes: notes.trim() || null,
+          flow: flow ?? "design_first",
+        },
+        placements: toRows(placed),
       });
       toast.success("Mockup created", {
         description: "Saved as a product concept. No product was created and nothing was sent to Shopify.",
@@ -190,7 +270,7 @@ export default function ConceptBuilder({
                 (s === "design" && design) ||
                 (s === "blank" && blank) ||
                 (s === "color" && colorName) ||
-                (s === "placement" && placement);
+                (s === "placement" && placed.length > 0);
               return (
                 <button
                   key={s}
@@ -376,40 +456,87 @@ export default function ConceptBuilder({
           )}
 
           {step === "placement" && (
-            <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-              <Preview blank={blank} image={garmentImage} design={design} placement={placement} />
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-                  Front
+            <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
+              <MockupDesignRail
+                entityId={entity.id}
+                onQuickAdd={(d) => {
+                  const zone = zonesForSurface.find((z) => z.zoneId === (surface === "front" ? "center_chest" : "center_back"));
+                  addPlacement(d.id, zone ? fitToZone(zone, 1) : defaultBox(1), zone ? { zoneId: zone.zoneId, zoneLabel: zone.label } : null);
+                }}
+              />
+
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex rounded-full border border-[hsl(var(--ax-border))] p-0.5">
+                    {(["front", "back"] as const).map((sf) => {
+                      const count = placed.filter((p) => p.surface === sf).length;
+                      const hasPhoto = Boolean((sf === "front" ? frontImage : backImage).url);
+                      return (
+                        <button
+                          key={sf}
+                          type="button"
+                          onClick={() => setSurface(sf)}
+                          className={`rounded-full px-3.5 py-1 text-[12px] font-medium capitalize transition-colors ${
+                            surface === sf
+                              ? "bg-[hsl(var(--ax-accent)/0.16)] text-[hsl(var(--ax-accent))]"
+                              : "text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-secondary))]"
+                          }`}
+                        >
+                          {sf}
+                          {count > 0 && <span className="ml-1 tabular-nums opacity-80">{count}</span>}
+                          {!hasPhoto && <span className="ml-1 text-[hsl(var(--ax-amber))]" title="No photograph for this side">•</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[11px] text-[hsl(var(--ax-faint))]">
+                    Drag artwork onto the garment. Front and back are placed separately — a front-only design saves a
+                    front-only mockup.
+                  </span>
                 </div>
-                <div className="mb-4 grid gap-1.5">
-                  {presets
-                    .filter((p) => p.surface === "front")
-                    .map((p) => (
-                      <PlacementRow key={p.zoneId} preset={p} active={placement?.zoneId === p.zoneId} onSelect={setPlacement} />
-                    ))}
-                </div>
-                {presets.some((p) => p.surface === "back") && (
-                  <>
-                    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-                      Back
-                    </div>
-                    <div className="grid gap-1.5">
-                      {presets
-                        .filter((p) => p.surface === "back")
-                        .map((p) => (
-                          <PlacementRow key={p.zoneId} preset={p} active={placement?.zoneId === p.zoneId} onSelect={setPlacement} />
-                        ))}
-                    </div>
-                  </>
-                )}
+
+                <MockupCanvas
+                  garmentUrl={garmentImage.url}
+                  garmentLabel={`${blank?.name ?? "Blank"} ${surface}`}
+                  approximate={garmentImage.approximate}
+                  approximateNote={
+                    garmentImage.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"
+                  }
+                  placed={placed}
+                  designsById={designsById}
+                  zones={zonesForSurface}
+                  surface={surface}
+                  onChange={setPlaced}
+                  onDropDesign={(designId, x, y, aspect) =>
+                    addPlacement(designId, boxAtPoint(x, y, aspect), null)
+                  }
+                />
               </div>
             </div>
           )}
 
           {step === "confirm" && (
             <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-              <Preview blank={blank} image={garmentImage} design={design} placement={placement} />
+              <div className="space-y-3">
+                {usedSurfaces(placed).map((sf) => (
+                  <div key={sf}>
+                    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
+                      {sf}
+                    </div>
+                    <StaticMockup
+                      image={sf === "front" ? frontImage : backImage}
+                      placed={placed.filter((p) => p.surface === sf)}
+                      designsById={designsById}
+                      blankName={blank?.name ?? "Blank"}
+                    />
+                  </div>
+                ))}
+                {placed.length === 0 && (
+                  <p className="py-8 text-center text-[13px] text-[hsl(var(--ax-faint))]">
+                    No artwork placed yet.
+                  </p>
+                )}
+              </div>
               <div className="space-y-3">
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
@@ -455,7 +582,16 @@ export default function ConceptBuilder({
                   <Line label="Design" value={design ? cleanDesignTitle(design.title) ?? design.title : "—"} />
                   <Line label="Blank" value={blank?.name ?? "—"} />
                   <Line label="Colour" value={colorName ?? "—"} />
-                  <Line label="Placement" value={placement ? `${placement.surface} · ${placement.label}` : "—"} />
+                  <Line
+                    label="Placement"
+                    value={
+                      placed.length === 0
+                        ? "—"
+                        : placed
+                            .map((p) => `${p.surface} · ${p.zoneLabel ?? "free"}`)
+                            .join(", ")
+                    }
+                  />
                   <Line
                     label={`${audience} price`}
                     value={blank ? fmtMoney(priceFor(blank, audience)) : "—"}
@@ -474,7 +610,12 @@ export default function ConceptBuilder({
         {step !== "flow" && (
           <div className="flex items-center gap-3 border-t border-[hsl(var(--ax-line))] px-4 py-3">
             <div className="min-w-0 flex-1 truncate text-[12px] text-[hsl(var(--ax-faint))]">
-              {[design && (cleanDesignTitle(design.title) ?? "Design"), blank?.name, colorName, placement?.label]
+              {[
+                design && (cleanDesignTitle(design.title) ?? "Design"),
+                blank?.name,
+                colorName,
+                placed.length > 0 ? `${placed.length} placement${placed.length === 1 ? "" : "s"}` : null,
+              ]
                 .filter(Boolean)
                 .join("  ·  ") || "Nothing chosen yet"}
             </div>
@@ -763,85 +904,173 @@ function ColorStepHeader({ blank }: { blank: Blank }) {
   );
 }
 
-function PlacementRow({
-  preset,
-  active,
-  onSelect,
-}: {
-  preset: PlacementPreset;
-  active: boolean;
-  onSelect: (p: PlacementPreset) => void;
-}) {
+/**
+ * The artwork rail beside the canvas.
+ *
+ * Folders are the organising unit here exactly as they are on the shelf, so a
+ * set of variations stays together while the operator tries them one after
+ * another. Tiles are HTML5 drag sources — drag onto the garment to place at a
+ * point, or click to drop into the centre zone for the surface being edited.
+ */
+function MockupDesignRail({ entityId, onQuickAdd }: { entityId: string; onQuickAdd: (d: Design) => void }) {
+  const { data, isLoading } = useDesignShelf(entityId);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+
+  const items = useMemo(
+    () => (data ? buildShelf(data.designs, data.groups, data.membership) : []),
+    [data],
+  );
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="aspect-square" />
+        ))}
+      </div>
+    );
+  }
+
+  const groups = items.filter((i): i is Extract<ShelfItem, { kind: "group" }> => i.kind === "group");
+  const loose = items.filter((i): i is Extract<ShelfItem, { kind: "design" }> => i.kind === "design");
+  const open = groups.find((g) => g.key === openGroup) ?? null;
+
+  return (
+    <div className="lg:max-h-[62vh] lg:overflow-y-auto lg:pr-1">
+      <p className="mb-2 text-[11px] text-[hsl(var(--ax-faint))]">
+        Drag onto the garment, or click to drop it in the centre.
+      </p>
+
+      {groups.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          {groups.map((g) => {
+            const isOpen = openGroup === g.key;
+            return (
+              <div key={g.key}>
+                <button
+                  type="button"
+                  onClick={() => setOpenGroup(isOpen ? null : g.key)}
+                  className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] transition-colors ${
+                    isOpen
+                      ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.08)]"
+                      : "border-[hsl(var(--ax-accent)/0.3)] hover:border-[hsl(var(--ax-accent)/0.6)]"
+                  }`}
+                >
+                  <FolderOpen className="h-3 w-3 shrink-0 text-[hsl(var(--ax-accent))]" aria-hidden />
+                  <span className="min-w-0 flex-1 truncate font-medium">{g.group.name}</span>
+                  <span className="tabular-nums text-[hsl(var(--ax-faint))]">{g.designs.length}</span>
+                  <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden />
+                </button>
+                {isOpen && (
+                  <div className="mt-1.5 grid grid-cols-3 gap-1.5 lg:grid-cols-2">
+                    {open?.designs.map((d) => (
+                      <RailTile key={d.id} design={d} onQuickAdd={onQuickAdd} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {loose.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-2">
+          {loose.map((i) => (
+            <RailTile key={i.design.id} design={i.design} onQuickAdd={onQuickAdd} />
+          ))}
+        </div>
+      )}
+
+      {items.length === 0 && (
+        <p className="py-6 text-center text-[12px] text-[hsl(var(--ax-faint))]">
+          No designs linked to this entity.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RailTile({ design, onQuickAdd }: { design: Design; onQuickAdd: (d: Design) => void }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(preset)}
-      className={`ax-card flex items-center gap-3 px-3 py-2 text-left text-[13px] transition-all ${
-        active ? "ring-2 ring-[hsl(var(--ax-accent))]" : "ax-card-hover"
-      }`}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_MIME, design.id);
+        e.dataTransfer.effectAllowed = "copy";
+      }}
+      onClick={() => onQuickAdd(design)}
+      title={`${cleanDesignTitle(design.title) ?? design.title} — drag onto the garment, or click to centre it`}
+      className="ax-card ax-card-hover overflow-hidden p-0 text-left"
     >
-      <span className="relative h-9 w-7 shrink-0 rounded border border-[hsl(var(--ax-border))] bg-white/[0.04]">
-        <span
-          className="absolute rounded-[1px] bg-[hsl(var(--ax-accent))]"
-          style={{
-            left: `${preset.x}%`,
-            top: `${preset.y}%`,
-            width: `${preset.w}%`,
-            height: `${preset.h}%`,
-          }}
-        />
-      </span>
-      {preset.label}
+      <AssetImage
+        bucket={design.fileBucket}
+        path={design.filePath}
+        alt={design.title}
+        className="aspect-square w-full bg-black/30"
+        fit="contain"
+      />
+      <div className="truncate p-1 text-[9px] text-[hsl(var(--ax-secondary))]">
+        {cleanDesignTitle(design.title) ?? "Untitled"}
+      </div>
     </button>
   );
 }
 
-function Preview({
-  blank,
+/**
+ * A non-interactive render of one surface, for the confirm step.
+ *
+ * Shares the percentage geometry with the live canvas rather than
+ * re-deriving it, so what the operator approves is what they arranged.
+ */
+function StaticMockup({
   image,
-  design,
-  placement,
+  placed,
+  designsById,
+  blankName,
 }: {
-  blank: Blank | null;
   image: ReturnType<typeof resolveBlankImage>;
-  design: Design | null;
-  placement: PlacementPreset | null;
+  placed: PlacedDesign[];
+  designsById: Map<string, Design>;
+  blankName: string;
 }) {
-  const box = placement ?? presetById("center_chest");
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[420px] overflow-hidden rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.04]">
       {image.url ? (
-        <img src={image.url} alt={blank?.name ?? "Blank"} className="h-full w-full object-contain" />
+        <img src={image.url} alt={blankName} className="h-full w-full object-contain" />
       ) : (
-        <div className="flex h-full items-center justify-center text-[12px] text-[hsl(var(--ax-faint))]">
-          {blank ? "No photo for this blank yet" : "Choose a blank"}
+        <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-[hsl(var(--ax-faint))]">
+          No photograph for this side yet — the placement is saved regardless.
         </div>
       )}
-      {/* Say so when the garment on screen is not the colourway being built.
-          Silently showing the wrong colour is how a mockup gets approved and
-          then turns out to be something else. */}
-      {image.approximate && (
-        <span className="absolute right-2 top-2 rounded-full bg-[hsl(var(--ax-amber)/0.9)] px-2 py-1 text-[10px] font-semibold text-black">
+      {placed.map((p) => {
+        const d = designsById.get(p.designId);
+        return (
+          <div
+            key={p.id}
+            className="pointer-events-none absolute"
+            style={{
+              left: `${p.box.x}%`,
+              top: `${p.box.y}%`,
+              width: `${p.box.w}%`,
+              height: `${p.box.h}%`,
+              transform: p.rotation ? `rotate(${p.rotation}deg)` : undefined,
+            }}
+          >
+            <AssetImage
+              bucket={d?.fileBucket}
+              path={d?.filePath}
+              alt={d?.title ?? "Artwork"}
+              className="h-full w-full"
+              fit="contain"
+            />
+          </div>
+        );
+      })}
+      {image.approximate && image.url && (
+        <span className="absolute right-2 top-2 rounded-full bg-[hsl(var(--ax-amber)/0.92)] px-2 py-1 text-[10px] font-semibold text-black">
           {image.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"}
-        </span>
-      )}
-      {design && box && (
-        <div
-          className="pointer-events-none absolute"
-          style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%` }}
-        >
-          <AssetImage
-            bucket={design.fileBucket}
-            path={design.filePath}
-            alt={design.title}
-            className="h-full w-full"
-            fit="contain"
-          />
-        </div>
-      )}
-      {placement && (
-        <span className="absolute bottom-2 left-2 rounded-full bg-black/60 px-2 py-1 text-[10px] text-white">
-          {placement.surface} · {placement.label}
         </span>
       )}
     </div>
