@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { useOverview } from "@/lib/v2/data";
-import { AssetImage, Card, PageHeader, Section, Skeleton, Stat } from "@/components/admin-v2/primitives";
+import { Layers3, Package, ShoppingBag, Users } from "lucide-react";
+import { AssetImage, Card, Metric, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
 import { stageOf, STAGE_LABELS } from "@/lib/v2/concepts";
 
 // Overview answers one question: what needs my attention?
@@ -18,25 +19,16 @@ export default function V2Overview() {
       />
 
       <div className="mb-9 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {isLoading || !data ? (
-          <>
-            <Skeleton className="h-[76px]" />
-            <Skeleton className="h-[76px]" />
-            <Skeleton className="h-[76px]" />
-            <Skeleton className="h-[76px]" />
-          </>
-        ) : (
-          <>
-            <Stat label="Active entities" value={data.stats.activeEntities} />
-            <Stat label="Concepts" value={data.stats.concepts} />
-            <Stat label="Live products" value={data.stats.liveProducts} />
-            <Stat label="Blanks" value={data.stats.blanks} />
-          </>
-        )}
+        <Metric label="Active entities" value={data?.stats.activeEntities ?? 0} loading={isLoading || !data} icon={<Users />} />
+        <Metric label="Concepts" value={data?.stats.concepts ?? 0} loading={isLoading || !data} icon={<Layers3 />} />
+        <Metric label="Live products" value={data?.stats.liveProducts ?? 0} loading={isLoading || !data} icon={<ShoppingBag />} />
+        <Metric label="Blanks" value={data?.stats.blanks ?? 0} loading={isLoading || !data} icon={<Package />} />
       </div>
 
       <Section
+        eyebrow="Today"
         title="Action required"
+        detail="Work that cannot move forward without a decision."
         count={data?.actions.length}
         empty="Nothing waiting. Every concept, product and blank is in a settled state."
       >
@@ -65,7 +57,9 @@ export default function V2Overview() {
       </Section>
 
       <Section
+        eyebrow="Across AX"
         title="Recent concepts"
+        detail="The newest ideas from every athlete, client and organisation."
         count={data?.recentConcepts.length}
         empty="No product concepts yet. Open an entity and start one from a design or a blank."
         action={
@@ -95,7 +89,9 @@ export default function V2Overview() {
       </Section>
 
       <Section
+        eyebrow="Directory"
         title="People"
+        detail="Athletes, clients and partners AX is currently working with."
         count={data?.recentEntities.length}
         action={
           <Link to="/admin-v2/people" className="text-[12px] text-[hsl(var(--ax-accent))]">

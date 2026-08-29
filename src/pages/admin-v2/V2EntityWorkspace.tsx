@@ -266,7 +266,9 @@ export default function V2EntityWorkspace() {
       {/* ------------------------------------------------------------ 1 DESIGNS */}
       <Section
         id="designs"
+        eyebrow="Step 1"
         title="Designs"
+        detail="Artwork linked to this entity. Everything downstream refers back to one."
         count={designs.length}
         action={
           designs.length > 0 ? (
@@ -303,7 +305,9 @@ export default function V2EntityWorkspace() {
       */}
       <Section
         id="mockups"
+        eyebrow="Step 2"
         title="Mockups"
+        detail="Artwork placed on a blank. A mockup is finished work in its own right."
         count={concepts.length}
         action={
           <button type="button" onClick={() => setBuilding(true)} className="text-[12px] text-[hsl(var(--ax-accent))]">
@@ -323,7 +327,9 @@ export default function V2EntityWorkspace() {
       {/* ----------------------------------------------------------- 3 PRODUCTS */}
       <Section
         id="products"
+        eyebrow="Step 3"
         title="Products"
+        detail="Configured, sellable objects with pricing and variants."
         count={products.length}
         empty="Nothing configured for sale yet. A product is a mockup that has been given the commerce details — colours, sizes, price."
       >
@@ -357,7 +363,9 @@ export default function V2EntityWorkspace() {
       {/* -------------------------------------------------------- 4 COLLECTIONS */}
       <Section
         id="collections"
+        eyebrow="Grouping"
         title="Collections"
+        detail="Drops, capsules and lookbooks this entity’s work belongs to."
         count={collections.length}
         empty="No collections yet. A collection is a permanent home for this entity's creative work — it does not need Shopify products to exist."
       >
@@ -383,7 +391,9 @@ export default function V2EntityWorkspace() {
       {/* --------------------------------------------------------------- 5 LIVE */}
       <Section
         id="live"
+        eyebrow="Storefront"
         title="Live"
+        detail="What a customer can actually buy right now."
         count={live.length}
         empty="Nothing is live yet. Products appear here once they are published and carry a Shopify product."
       >
@@ -424,7 +434,13 @@ export default function V2EntityWorkspace() {
       </Section>
 
       {/* Orders stay, quietly, below the pipeline — useful context, not a stage. */}
-      <Section title="Recent orders" count={orders.length} empty={ordersNote}>
+      <Section
+        eyebrow="Commerce"
+        title="Recent orders"
+        detail="Orders attributed to this entity’s organisation."
+        count={orders.length}
+        empty={ordersNote}
+      >
         <div className="ax-card divide-y divide-[hsl(var(--ax-line))] overflow-hidden">
           {orders.map((o) => (
             <a

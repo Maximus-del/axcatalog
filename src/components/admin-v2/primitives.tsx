@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { ArrowRight, CheckCircle2, Search } from "lucide-react";
 import { useSignedUrl } from "@/lib/storage";
 import { initialsOf, tintOf } from "@/lib/v2/entity";
 
@@ -80,6 +81,8 @@ export function AssetImage({
 export function Section({
   id,
   title,
+  eyebrow,
+  detail,
   count,
   action,
   children,
@@ -88,25 +91,259 @@ export function Section({
   /** Anchor id, so in-page workflow navigation can scroll here. Additive — every existing caller omits it. */
   id?: string;
   title: string;
+  /**
+   * Small accent label above the title.
+   *
+   * Optional, and every pre-existing caller omits it — a section without one
+   * renders exactly as it always did. With it, the section gets the same
+   * three-tier hierarchy the Creative page uses: category, then name, then
+   * explanation.
+   */
+  eyebrow?: string;
+  /** One line under the title saying what this section is for. */
+  detail?: string;
   count?: number;
   action?: ReactNode;
   children: ReactNode;
   empty?: ReactNode;
 }) {
   const isEmpty = count === 0;
+  const rich = Boolean(eyebrow || detail);
   return (
     <section id={id} className="mb-9 scroll-mt-32">
-      <div className="mb-3 flex items-baseline gap-3">
-        <h2 className="text-[13px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-secondary))]">
-          {title}
-        </h2>
-        {count != null && (
-          <span className="text-[13px] tabular-nums text-[hsl(var(--ax-faint))]">{count}</span>
-        )}
-        <div className="ml-auto">{action}</div>
+      <div className="mb-3 flex items-end gap-3">
+        <div className="min-w-0">
+          {eyebrow && (
+            <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[hsl(var(--ax-accent))]">
+              {eyebrow}
+            </div>
+          )}
+          <div className="flex items-baseline gap-3">
+            <h2
+              className={
+                rich
+                  ? "mt-1 text-[17px] font-semibold"
+                  : "text-[13px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-secondary))]"
+              }
+            >
+              {title}
+            </h2>
+            {count != null && (
+              <span className="text-[13px] tabular-nums text-[hsl(var(--ax-faint))]">{count}</span>
+            )}
+          </div>
+          {detail && <p className="text-[11px] text-[hsl(var(--ax-faint))]">{detail}</p>}
+        </div>
+        <div className="ml-auto shrink-0">{action}</div>
       </div>
       {isEmpty && empty ? <EmptyState>{empty}</EmptyState> : children}
     </section>
+  );
+}
+
+/* ------------------------------------------------------ the Creative look */
+//
+// These came out of V2Creative, which is the page whose visual language we
+// settled on. They live here rather than there so every V2 surface uses the
+// same components instead of re-implementing the same card six times — the
+// look stays consistent because there is one copy of it, not because six files
+// happen to agree.
+
+/**
+ * A headline number.
+ *
+ * Micro-label and icon on one row, the number below at a size you can read
+ * across the room. Tabular figures so a row of them does not jitter as values
+ * change.
+ */
+export function Metric({
+  label,
+  value,
+  loading,
+  icon,
+  onClick,
+}: {
+  label: string;
+  value: ReactNode;
+  loading?: boolean;
+  icon?: ReactNode;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <div className="mb-3 flex items-center justify-between text-[hsl(var(--ax-secondary))]">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{label}</span>
+        {icon && <span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span>}
+      </div>
+      {loading ? <Skeleton className="h-8 w-14" /> : <div className="text-[27px] font-semibold tabular-nums">{value}</div>}
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className="ax-card ax-card-hover px-4 py-3.5 text-left transition-all">
+      {body}
+    </button>
+  ) : (
+    <div className="ax-card px-4 py-3.5">{body}</div>
+  );
+}
+
+/** Section heading: accent eyebrow, title, one line of explanation. */
+export function Heading({ eyebrow, title, detail }: { eyebrow: string; title: string; detail?: string }) {
+  return (
+    <div className="mb-3">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[hsl(var(--ax-accent))]">
+        {eyebrow}
+      </div>
+      <h2 className="mt-1 text-[17px] font-semibold">{title}</h2>
+      {detail && <p className="text-[11px] text-[hsl(var(--ax-faint))]">{detail}</p>}
+    </div>
+  );
+}
+
+/**
+ * A destination card: icon tile, optional count, name, description, next action.
+ *
+ * `min-h-10` on the description is deliberate — it keeps the action lines of a
+ * row of cards on the same baseline even when the copy runs to different
+ * lengths, which is the difference between a grid that looks designed and one
+ * that looks assembled.
+ */
+export function WorkspaceCard({
+  icon,
+  title,
+  count,
+  description,
+  action,
+  onClick,
+  href,
+}: {
+  icon: ReactNode;
+  title: string;
+  count?: number;
+  description: string;
+  action: string;
+  onClick?: () => void;
+  href?: string;
+}) {
+  const body = (
+    <>
+      <div className="mb-5 flex justify-between">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))] [&>svg]:h-5 [&>svg]:w-5">
+          {icon}
+        </span>
+        {count != null && <span className="text-[22px] font-semibold tabular-nums">{count}</span>}
+      </div>
+      <div className="text-[14px] font-semibold">{title}</div>
+      <p className="mt-1.5 min-h-10 text-[11px] text-[hsl(var(--ax-faint))]">{description}</p>
+      <div className="mt-4 text-[11px] font-semibold text-[hsl(var(--ax-accent))]">
+        {action} <ArrowRight className="inline h-3 w-3" />
+      </div>
+    </>
+  );
+  return href ? (
+    <a href={href} className="ax-card ax-card-hover block p-4">
+      {body}
+    </a>
+  ) : (
+    <Card onClick={onClick} className="p-4">
+      {body}
+    </Card>
+  );
+}
+
+/**
+ * Something waiting on a decision.
+ *
+ * At zero it shows a check rather than an arrow and says nothing is waiting —
+ * an empty queue should read as finished, not as a dead link.
+ */
+export function ActionCard({
+  count,
+  title,
+  detail,
+  onClick,
+}: {
+  count: number;
+  title: string;
+  detail: string;
+  onClick: () => void;
+}) {
+  return (
+    <Card onClick={onClick} className="p-4">
+      <div className="flex items-start gap-3">
+        <div className="flex h-8 min-w-8 items-center justify-center rounded-full bg-white/[0.06] text-[14px] font-semibold tabular-nums">
+          {count}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-semibold">{title}</div>
+          <p className="mt-1 text-[11px] text-[hsl(var(--ax-faint))]">{count ? detail : "Nothing waiting here."}</p>
+        </div>
+        {count ? (
+          <ArrowRight className="h-4 w-4 shrink-0 text-[hsl(var(--ax-faint))]" />
+        ) : (
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-[hsl(var(--ax-accent))]" />
+        )}
+      </div>
+    </Card>
+  );
+}
+
+/** Pill search with the filters that belong to it sitting alongside. */
+export function Toolbar({
+  query,
+  onQuery,
+  placeholder = "Search…",
+  children,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  placeholder?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-2">
+      <label className="relative mr-auto min-w-[220px] max-w-sm flex-1">
+        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[hsl(var(--ax-faint))]" />
+        <input
+          value={query}
+          onChange={(e) => onQuery(e.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-full border border-[hsl(var(--ax-border))] bg-white/[0.03] py-2 pl-9 pr-3 text-[12px] outline-none focus:border-[hsl(var(--ax-accent))]"
+        />
+      </label>
+      {children}
+    </div>
+  );
+}
+
+/** Underlined tab bar. The active tab is marked by the rule, not by a filled pill. */
+export function TabBar<T extends string>({
+  tabs,
+  active,
+  onSelect,
+  label,
+}: {
+  tabs: readonly T[];
+  active: T;
+  onSelect: (tab: T) => void;
+  label: (tab: T) => string;
+}) {
+  return (
+    <div className="mb-6 flex border-b border-[hsl(var(--ax-line))]">
+      {tabs.map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          onClick={() => onSelect(tab)}
+          className={`relative px-4 pb-3 pt-1 text-[12px] font-semibold transition-colors ${
+            active === tab ? "text-[hsl(var(--ax-accent))]" : "text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+          }`}
+        >
+          {label(tab)}
+          {active === tab && <span className="absolute inset-x-2 -bottom-px h-0.5 bg-[hsl(var(--ax-accent))]" />}
+        </button>
+      ))}
+    </div>
   );
 }
 

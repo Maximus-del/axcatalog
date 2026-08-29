@@ -3,7 +3,20 @@ import { useSearchParams } from "react-router-dom";
 import { ArrowRight, ArrowUpRight, CheckCircle2, Clock3, FileImage, FolderOpen, ImagePlus, Layers3, Palette, Search, Shapes, Sparkles, Upload, WandSparkles } from "lucide-react";
 import { useConcepts, useDesigns, useEntities } from "@/lib/v2/data";
 import { cleanDesignTitle, stageOf, STAGE_LABELS, STAGE_TONES, type ConceptStage } from "@/lib/v2/concepts";
-import { AssetImage, Card, Chip, EmptyState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import {
+  ActionCard as Action,
+  AssetImage,
+  Card,
+  Chip,
+  EmptyState,
+  Heading,
+  Metric,
+  PageHeader,
+  Skeleton,
+  TabBar,
+  Toolbar,
+  WorkspaceCard as Workspace,
+} from "@/components/admin-v2/primitives";
 
 const TABS = ["home", "concepts", "designs"] as const;
 type Tab = (typeof TABS)[number];
@@ -50,7 +63,8 @@ export default function V2Creative() {
   const setTab = (nextTab: Tab) => {
     setTabState(nextTab);
     const next = new URLSearchParams(params);
-    nextTab === "home" ? next.delete("tab") : next.set("tab", nextTab);
+    if (nextTab === "home") next.delete("tab");
+    else next.set("tab", nextTab);
     if (nextTab !== "concepts") next.delete("stage");
     setParams(next, { replace: true });
   };
@@ -58,7 +72,8 @@ export default function V2Creative() {
     setTabState("concepts");
     const next = new URLSearchParams(params);
     next.set("tab", "concepts");
-    stage === "all" ? next.delete("stage") : next.set("stage", stage);
+    if (stage === "all") next.delete("stage");
+    else next.set("stage", stage);
     setParams(next, { replace: true });
   };
 
@@ -69,16 +84,16 @@ export default function V2Creative() {
       <a href="/admin/design-templates" className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))]">Templates <ArrowUpRight className="h-3.5 w-3.5" /></a>
     </>} />
 
-    <div className="mb-6 flex border-b border-[hsl(var(--ax-line))]">
-      {TABS.map((item) => <button key={item} type="button" onClick={() => setTab(item)} className={`relative px-4 pb-3 pt-1 text-[12px] font-semibold ${tab === item ? "text-[hsl(var(--ax-accent))]" : "text-[hsl(var(--ax-secondary))]"}`}>
-        {item === "home" ? "Creative home" : item === "concepts" ? "Product concepts" : "Designs"}
-        {tab === item && <span className="absolute inset-x-2 -bottom-px h-0.5 bg-[hsl(var(--ax-accent))]" />}
-      </button>)}
-    </div>
+    <TabBar
+      tabs={TABS}
+      active={tab}
+      onSelect={setTab}
+      label={(item) => (item === "home" ? "Creative home" : item === "concepts" ? "Product concepts" : "Designs")}
+    />
 
     {tab === "home" && <CreativeHome totals={totals} loading={conceptsQ.isLoading || designsQ.isLoading} concepts={conceptsQ.data ?? []} designs={designsQ.data ?? []} entityName={entityName} onNavigate={setTab} onStage={setStage} />}
-    {tab === "concepts" && <><Toolbar query={query} onQuery={setQuery}>{<><Chip active={stageFilter === "all"} onClick={() => setStage("all")}>All stages</Chip>{STAGES.map((s) => <Chip key={s} active={stageFilter === s} onClick={() => setStage(s)}>{STAGE_LABELS[s]}</Chip>)}</>}</Toolbar>{conceptsQ.isLoading ? <GridSkeleton /> : concepts.length === 0 ? <EmptyState>No concepts match these filters. Open an entity in People to start one.</EmptyState> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">{concepts.map((c) => <ConceptCard key={c.id} concept={c} owner={c.entityId ? entityName.get(c.entityId) : undefined} />)}</div>}</>}
-    {tab === "designs" && <><Toolbar query={query} onQuery={setQuery}><Chip active={!artworkOnly} onClick={() => setArtworkOnly(false)}>Everything</Chip><Chip active={artworkOnly} onClick={() => setArtworkOnly(true)}>Production artwork only</Chip></Toolbar>{designsQ.isLoading ? <GridSkeleton /> : designs.length === 0 ? <EmptyState>No designs match these filters.</EmptyState> : <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-8">{designs.map((d) => <DesignCard key={d.id} design={d} owner={d.entityId ? entityName.get(d.entityId) : undefined} />)}</div>}</>}
+    {tab === "concepts" && <><Toolbar query={query} onQuery={setQuery} placeholder="Search creative work…">{<><Chip active={stageFilter === "all"} onClick={() => setStage("all")}>All stages</Chip>{STAGES.map((s) => <Chip key={s} active={stageFilter === s} onClick={() => setStage(s)}>{STAGE_LABELS[s]}</Chip>)}</>}</Toolbar>{conceptsQ.isLoading ? <GridSkeleton /> : concepts.length === 0 ? <EmptyState>No concepts match these filters. Open an entity in People to start one.</EmptyState> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">{concepts.map((c) => <ConceptCard key={c.id} concept={c} owner={c.entityId ? entityName.get(c.entityId) : undefined} />)}</div>}</>}
+    {tab === "designs" && <><Toolbar query={query} onQuery={setQuery} placeholder="Search creative work…"><Chip active={!artworkOnly} onClick={() => setArtworkOnly(false)}>Everything</Chip><Chip active={artworkOnly} onClick={() => setArtworkOnly(true)}>Production artwork only</Chip></Toolbar>{designsQ.isLoading ? <GridSkeleton /> : designs.length === 0 ? <EmptyState>No designs match these filters.</EmptyState> : <div className="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-8">{designs.map((d) => <DesignCard key={d.id} design={d} owner={d.entityId ? entityName.get(d.entityId) : undefined} />)}</div>}</>}
   </>;
 }
 
@@ -117,11 +132,6 @@ function CreativeHome({ totals, loading, concepts, designs, entityName, onNaviga
   </div>;
 }
 
-function Metric({ label, value, loading, icon }: { label: string; value: number; loading: boolean; icon: ReactNode }) { return <div className="ax-card px-4 py-3.5"><div className="mb-3 flex items-center justify-between text-[hsl(var(--ax-secondary))]"><span className="text-[10px] font-semibold uppercase tracking-[0.12em]">{label}</span><span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span></div>{loading ? <Skeleton className="h-8 w-14" /> : <div className="text-[27px] font-semibold tabular-nums">{value}</div>}</div>; }
-function Action({ count, title, detail, onClick }: { count: number; title: string; detail: string; onClick: () => void }) { return <Card onClick={onClick} className="p-4"><div className="flex items-start gap-3"><div className="flex h-8 min-w-8 items-center justify-center rounded-full bg-white/[0.06] text-[14px] font-semibold">{count}</div><div className="min-w-0 flex-1"><div className="text-[12px] font-semibold">{title}</div><p className="mt-1 text-[11px] text-[hsl(var(--ax-faint))]">{count ? detail : "Nothing waiting here."}</p></div>{count ? <ArrowRight className="h-4 w-4 text-[hsl(var(--ax-faint))]" /> : <CheckCircle2 className="h-4 w-4 text-[hsl(var(--ax-accent))]" />}</div></Card>; }
-function Workspace({ icon, title, count, description, action, onClick, href }: { icon: ReactNode; title: string; count?: number; description: string; action: string; onClick?: () => void; href?: string }) { const body = <><div className="mb-5 flex justify-between"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))] [&>svg]:h-5 [&>svg]:w-5">{icon}</span>{count != null && <span className="text-[22px] font-semibold">{count}</span>}</div><div className="text-[14px] font-semibold">{title}</div><p className="mt-1.5 min-h-10 text-[11px] text-[hsl(var(--ax-faint))]">{description}</p><div className="mt-4 text-[11px] font-semibold text-[hsl(var(--ax-accent))]">{action} <ArrowRight className="inline h-3 w-3" /></div></>; return href ? <a href={href} className="ax-card ax-card-hover block p-4">{body}</a> : <Card onClick={onClick} className="p-4">{body}</Card>; }
-function Heading({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) { return <div className="mb-3"><div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[hsl(var(--ax-accent))]">{eyebrow}</div><h2 className="mt-1 text-[17px] font-semibold">{title}</h2><p className="text-[11px] text-[hsl(var(--ax-faint))]">{detail}</p></div>; }
-function Toolbar({ query, onQuery, children }: { query: string; onQuery: (value: string) => void; children: ReactNode }) { return <div className="mb-5 flex flex-wrap items-center gap-2"><label className="relative mr-auto min-w-[220px] max-w-sm flex-1"><Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[hsl(var(--ax-faint))]" /><input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Search creative work…" className="w-full rounded-full border border-[hsl(var(--ax-border))] bg-white/[0.03] py-2 pl-9 pr-3 text-[12px] outline-none" /></label>{children}</div>; }
 function ConceptCard({ concept, owner }: { concept: Concept; owner?: string }) { const stage = stageOf(concept); return <Card className="group p-0"><AssetImage url={concept.imageUrl} bucket={concept.imageBucket} path={concept.imagePath} alt={concept.title} className="aspect-square w-full bg-white/[0.03]" fit="contain" /><div className="p-2.5"><div className="truncate text-[12px] font-medium">{concept.title}</div><div className="mt-0.5 truncate text-[10px] text-[hsl(var(--ax-faint))]">{owner ?? "No owner"}</div><div className="mt-2"><Chip tone={STAGE_TONES[stage]}>{STAGE_LABELS[stage]}</Chip></div></div></Card>; }
 function DesignCard({ design, owner }: { design: Design; owner?: string }) { return <a href={`/admin/designs/${design.id}`} className="ax-card ax-card-hover overflow-hidden"><AssetImage bucket={design.fileBucket} path={design.filePath} alt={design.title} className="aspect-square w-full bg-black/30" fit="contain" /><div className="p-2"><div className="truncate text-[11px] text-[hsl(var(--ax-secondary))]">{cleanDesignTitle(design.title) ?? "Untitled"}</div><div className="truncate text-[9px] text-[hsl(var(--ax-faint))]">{owner ?? "No owner"}</div><div className="mt-1 text-[9px]" style={{ color: design.productionReady ? "hsl(var(--ax-accent))" : "hsl(var(--ax-amber))" }}>{design.productionReady ? "Production asset" : "Concept art"}</div></div></a>; }
 function GridSkeleton() { return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">{Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="aspect-square" />)}</div>; }

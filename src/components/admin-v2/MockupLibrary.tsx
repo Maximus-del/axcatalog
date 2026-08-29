@@ -11,7 +11,6 @@ import {
   MoreHorizontal,
   PackagePlus,
   Pencil,
-  Search,
   Sparkles,
   SquarePen,
   Trash2,
@@ -39,7 +38,7 @@ import {
   type Lifecycle,
 } from "@/lib/v2/mockup-lifecycle";
 import type { Mockup } from "@/lib/v2/types";
-import { AssetImage, Chip, EmptyState, Skeleton } from "./primitives";
+import { AssetImage, Chip, EmptyState, Skeleton, Toolbar } from "./primitives";
 
 // The saved mockup library for one entity.
 //
@@ -298,16 +297,7 @@ export default function MockupLibrary({
 
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <label className="relative min-w-[220px] flex-1 sm:max-w-[320px]">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[hsl(var(--ax-faint))]" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search mockups, blanks, colours…"
-            className="w-full rounded-full border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] py-1.5 pl-8 pr-3 text-[12px] outline-none focus:border-[hsl(var(--ax-accent))]"
-          />
-        </label>
+      <Toolbar query={query} onQuery={setQuery} placeholder="Search mockups, blanks, colours…">
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as Lifecycle | "all")}
@@ -369,7 +359,7 @@ export default function MockupLibrary({
         >
           <FolderPlus className="h-3.5 w-3.5" /> New folder
         </button>
-      </div>
+      </Toolbar>
 
       {selected.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.08)] px-3 py-2">
