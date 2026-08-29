@@ -15,6 +15,7 @@ import { draftToProductRow, type ProductDraft } from "./productize";
 import type {
   Blank,
   BlankColor,
+  ClientVisibility,
   Collection,
   Design,
   Entity,
@@ -38,6 +39,23 @@ const num = (v: unknown): number | null => {
 };
 
 /** Public URL for a bucket/path pair (product-images and blanks are public). */
+/** The `design-previews` bucket. Client-safe renditions only — never production artwork. */
+const PREVIEW_BUCKET = "design-previews";
+
+/**
+ * Client-visibility defaults for the surfaces that do not load it.
+ *
+ * Only the design shelf reads and writes client visibility today. Everywhere
+ * else a Design is constructed, these fields are pinned CLOSED rather than left
+ * undefined, so that a surface which later starts rendering visibility cannot
+ * accidentally inherit an open state it never actually loaded.
+ */
+const CLIENT_HIDDEN = {
+  clientVisibility: "hidden",
+  hasPreview: false,
+  previewPath: null,
+} as const satisfies Pick<Design, "clientVisibility" | "hasPreview" | "previewPath">;
+
 export function publicUrl(bucket: string | null, path: string | null): string | null {
   if (!bucket || !path) return null;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
@@ -276,6 +294,7 @@ async function fetchWorkspace(entityId: string): Promise<EntityWorkspace | null>
         filePath: f ? str(f.storage_path) : null,
         fileType: f ? str(f.file_type) : null,
         productionReady: exportByDesign.has(String(d.id)),
+      ...CLIENT_HIDDEN,
         createdAt: String(d.created_at ?? ""),
       };
     }),
@@ -473,6 +492,7 @@ async function fetchDesigns(entityId?: string): Promise<Design[]> {
       filePath: f ? str(f.storage_path) : null,
       fileType: f ? str(f.file_type) : null,
       productionReady: exportSet.has(String(d.id)),
+      ...CLIENT_HIDDEN,
       createdAt: String(d.created_at ?? ""),
     };
   });
@@ -759,18 +779,22 @@ export interface DesignShelfData {
  */
 async function fetchDesignShelf(entityId: string): Promise<DesignShelfData> {
   const linkRes = await t("design_athletes")
-    .select("design_id, group_id, sort_order")
+    .select("design_id, group_id, sort_order, client_visibility")
     .eq("athlete_id", entityId);
 
   const links = (linkRes.data ?? []) as unknown as Row[];
   const designIds = links.map((r) => String(r.design_id));
 
   const membership = new Map<string, Membership>();
+  const visibilityOf = new Map<string, ClientVisibility>();
   for (const r of links) {
     membership.set(String(r.design_id), {
       groupId: str(r.group_id),
       sortOrder: Number(r.sort_order ?? 0),
     });
+    // Closed unless the database explicitly says open. A null, a typo or a
+    // future enum value must never read as visible.
+    visibilityOf.set(String(r.design_id), r.client_visibility === "preview" ? "preview" : "hidden");
   }
 
   const [designsRes, filesRes, groupsRes] = await Promise.all([
@@ -783,15 +807,23 @@ async function fetchDesignShelf(entityId: string): Promise<DesignShelfData> {
           .in("design_id", designIds)
       : Promise.resolve({ data: [] }),
     t("design_collections")
-      .select("id, name, athlete_id, sort_order, cover_design_id")
+      .select("id, name, athlete_id, sort_order, cover_design_id, client_visibility")
       .eq("athlete_id", entityId),
   ]);
 
   const fileFor = new Map<string, Row>();
   const exportSet = new Set<string>();
+  // Renditions are tracked separately from production artwork and deliberately
+  // never fall back to it. A design with no preview shows the client nothing —
+  // that is the entire point of keeping the two apart.
+  const previewFor = new Map<string, string>();
   for (const f of (filesRes.data ?? []) as unknown as Row[]) {
     const key = String(f.design_id);
     if (f.file_type === "export") exportSet.add(key);
+    if (f.file_type === "preview") {
+      if (f.storage_bucket === PREVIEW_BUCKET) previewFor.set(key, String(f.storage_path));
+      continue; // never a candidate for the operator's primary artwork slot
+    }
     const cur = fileFor.get(key);
     if (!cur || (f.is_primary === true && cur.is_primary !== true)) fileFor.set(key, f);
   }
@@ -807,6 +839,9 @@ async function fetchDesignShelf(entityId: string): Promise<DesignShelfData> {
       filePath: f ? str(f.storage_path) : null,
       fileType: f ? str(f.file_type) : null,
       productionReady: exportSet.has(String(d.id)),
+      clientVisibility: visibilityOf.get(String(d.id)) ?? "hidden",
+      hasPreview: previewFor.has(String(d.id)),
+      previewPath: previewFor.get(String(d.id)) ?? null,
       createdAt: String(d.created_at ?? ""),
     };
   });
@@ -817,6 +852,7 @@ async function fetchDesignShelf(entityId: string): Promise<DesignShelfData> {
     entityId: str(g.athlete_id),
     sortOrder: Number(g.sort_order ?? 0),
     coverDesignId: str(g.cover_design_id),
+    clientVisibility: g.client_visibility === "preview" ? "preview" : "hidden",
   }));
 
   return { designs, groups, membership };
@@ -897,6 +933,45 @@ export function useShelfActions(entityId: string, organizationId: string) {
             .eq("id", job.groupId);
           return;
         }
+        case "set-design-visibility": {
+          await Promise.all(
+            job.designIds.map((id) => setDesignFields(id, { client_visibility: job.visibility })),
+          );
+          return;
+        }
+        case "set-group-visibility": {
+          await t("design_collections")
+            .update({ client_visibility: job.visibility } as never)
+            .eq("id", job.groupId)
+            .eq("athlete_id", entityId);
+          return;
+        }
+        case "unlink": {
+          await t("design_athletes")
+            .delete()
+            .eq("design_id", job.designId)
+            .eq("athlete_id", entityId);
+          return;
+        }
+        case "relink": {
+          await t("design_athletes").insert({
+            design_id: job.link.designId,
+            athlete_id: job.link.athleteId,
+            group_id: job.link.groupId,
+            sort_order: job.link.sortOrder,
+            client_visibility: job.link.clientVisibility,
+          } as never);
+          return;
+        }
+        case "archive": {
+          // Archiving is a property of the artwork, so it is global rather than
+          // per entity. Restoring puts it back to 'concept' rather than guessing
+          // at whatever it was before, since design_status has no history.
+          await t("designs")
+            .update({ status: job.archived ? "archived" : "concept" } as never)
+            .eq("id", job.designId);
+          return;
+        }
         case "ungroup": {
           await Promise.all(
             job.designIds.map((id, i) =>
@@ -968,4 +1043,31 @@ export type ShelfJob =
   | { type: "add-to-group"; groupId: string; designId: string; sortOrder: number }
   | { type: "remove-from-group"; designId: string; sortOrder: number }
   | { type: "rename-group"; groupId: string; name: string }
-  | { type: "ungroup"; groupId: string; designIds: string[]; baseSortOrder: number };
+  | { type: "ungroup"; groupId: string; designIds: string[]; baseSortOrder: number }
+  /** Client visibility for one or many designs, for THIS entity only. */
+  | { type: "set-design-visibility"; designIds: string[]; visibility: ClientVisibility }
+  /** Client visibility for a group. Acts as a ceiling over its members. */
+  | { type: "set-group-visibility"; groupId: string; visibility: ClientVisibility }
+  /** Unlink a design from this entity. The artwork itself is never touched. */
+  | { type: "unlink"; designId: string }
+  /** Put a previously unlinked design back exactly where it was. */
+  | { type: "relink"; link: DesignLinkSnapshot }
+  /** designs.status -> 'archived'. Global to the design, not per entity. */
+  | { type: "archive"; designId: string; archived: boolean };
+
+/**
+ * Everything needed to put an unlinked design back.
+ *
+ * Unlinking deletes the `design_athletes` row, which carries the design's
+ * group, its position and its client visibility — none of which live anywhere
+ * else. Without this snapshot, "Undo" would silently return the design to the
+ * end of the shelf with its visibility reset, which is a worse outcome than
+ * refusing to offer undo at all.
+ */
+export interface DesignLinkSnapshot {
+  designId: string;
+  athleteId: string;
+  groupId: string | null;
+  sortOrder: number;
+  clientVisibility: ClientVisibility;
+}

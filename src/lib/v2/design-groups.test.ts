@@ -21,6 +21,9 @@ const design = (id: string, over: Partial<Design> = {}): Design => ({
   filePath: `${id}.png`,
   fileType: "export",
   productionReady: true,
+  clientVisibility: "hidden",
+  hasPreview: false,
+  previewPath: null,
   createdAt: "",
   ...over,
 });
@@ -31,6 +34,7 @@ const group = (id: string, over: Partial<DesignGroup> = {}): DesignGroup => ({
   entityId: "e1",
   sortOrder: 0,
   coverDesignId: null,
+  clientVisibility: "hidden",
   ...over,
 });
 
@@ -38,7 +42,7 @@ const membership = (entries: [string, string | null, number][]) =>
   new Map(entries.map(([id, groupId, sortOrder]) => [id, { groupId, sortOrder }]));
 
 describe("shelf assembly", () => {
-  it("interleaves loose designs and groups by one shared sort order", () => {
+  it("puts groups above loose designs regardless of sort order", () => {
     const shelf = buildShelf(
       [design("a"), design("b"), design("c")],
       [group("g1", { sortOrder: 1 })],
@@ -48,8 +52,24 @@ describe("shelf assembly", () => {
         ["c", null, 2],
       ]),
     );
-    expect(shelf.map((i) => i.key)).toEqual(["a", "g1", "c"]);
-    expect(shelf[1].kind).toBe("group");
+    // g1 sorts after 'a' on the raw number, but a group is never buried among
+    // loose cards — it leads.
+    expect(shelf.map((i) => i.key)).toEqual(["g1", "a", "c"]);
+    expect(shelf[0].kind).toBe("group");
+  });
+
+  it("keeps operator ordering within each band", () => {
+    const shelf = buildShelf(
+      [design("a"), design("b"), design("c"), design("d")],
+      [group("g1", { sortOrder: 3 }), group("g2", { sortOrder: 1 })],
+      membership([
+        ["a", "g1", 0],
+        ["b", "g2", 0],
+        ["c", null, 5],
+        ["d", null, 2],
+      ]),
+    );
+    expect(shelf.map((i) => i.key)).toEqual(["g2", "g1", "d", "c"]);
   });
 
   it("orders designs inside a group by the same field", () => {

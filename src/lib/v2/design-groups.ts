@@ -9,7 +9,7 @@
 // Everything in this file is pure so the ordering rules can be tested without
 // a database.
 
-import type { Design } from "./types";
+import type { ClientVisibility, Design } from "./types";
 
 export interface DesignGroup {
   id: string;
@@ -18,6 +18,11 @@ export interface DesignGroup {
   sortOrder: number;
   /** Explicit cover. Null means "use the first member" — see coverOf(). */
   coverDesignId: string | null;
+  /**
+   * Ceiling over every member's own visibility. See ./visibility.ts —
+   * hiding a group hides its contents unconditionally.
+   */
+  clientVisibility: ClientVisibility;
 }
 
 /** One row of the shelf: either a loose design or a group of them. */
@@ -82,10 +87,18 @@ export function buildShelf(
       designs: byGroup.get(g.id) ?? [],
     }));
 
-  return [...loose, ...groupItems].sort((a, b) => {
+  // Groups always come first.
+  //
+  // They were previously interleaved with loose designs on one shared
+  // sort_order sequence, which meant a folder could end up buried in the middle
+  // of thirty cards. A group is a deliberate act of organisation and a denser
+  // object than a single design; it earns the top of the shelf. Ordering WITHIN
+  // each band stays fully operator-controlled.
+  const byOrder = (a: ShelfItem, b: ShelfItem) => {
     if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
     return a.key.localeCompare(b.key);
-  });
+  };
+  return [...groupItems.sort(byOrder), ...loose.sort(byOrder)];
 }
 
 /** Move the item at `from` so it sits at index `to`. Pure; returns a new array. */
@@ -110,7 +123,14 @@ export interface OrderWrite {
 
 export function orderWrites(items: ShelfItem[]): OrderWrite[] {
   const writes: OrderWrite[] = [];
-  items.forEach((item, index) => {
+  // Groups and loose designs are numbered independently, because they render as
+  // two separate bands. Numbering them on one sequence would make the first
+  // loose design's sort_order depend on how many groups happen to exist, so
+  // creating a group would silently rewrite the position of everything below it.
+  let groupIndex = 0;
+  let designIndex = 0;
+  items.forEach((item) => {
+    const index = item.kind === "group" ? groupIndex++ : designIndex++;
     if (item.sortOrder === index) return;
     writes.push({
       kind: item.kind === "group" ? "group" : "design",

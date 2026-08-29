@@ -65,16 +65,34 @@ export interface EntityCounts {
  * TO RECONCILE: 107 of 114 live designs are status='concept' with a 'mockup'
  * file. V2 surfaces that split rather than pretending it isn't there.
  */
+/**
+ * Whether a client-facing surface may show this design.
+ *
+ * 'preview' means a rendered, client-safe image — never the production PNG.
+ * See src/lib/v2/visibility.ts for the rules and the reasoning.
+ */
+export type ClientVisibility = "hidden" | "preview";
+
 export interface Design {
   id: string;
   title: string;
   status: string;
   entityId: string | null;
-  /** Signed-URL inputs; design-files is a PRIVATE bucket. */
+  /** Signed-URL inputs; design-files is a PRIVATE bucket. OPERATOR ONLY. */
   fileBucket: string | null;
   filePath: string | null;
   fileType: string | null;
   productionReady: boolean;
+  /**
+   * Per-entity client visibility, from `design_athletes.client_visibility`.
+   * Never read this alone — a design inside a hidden group is hidden whatever
+   * this says. Use effectiveVisibility() from ./visibility.
+   */
+  clientVisibility: ClientVisibility;
+  /** True when a client-safe rendition exists in the `design-previews` bucket. */
+  hasPreview: boolean;
+  /** Path within `design-previews`. Structurally never a `design-files` path. */
+  previewPath: string | null;
   createdAt: string;
 }
 

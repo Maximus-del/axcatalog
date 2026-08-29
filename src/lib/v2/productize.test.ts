@@ -77,6 +77,9 @@ const design = (over: Partial<Design> = {}): Design => ({
   filePath: "d1.png",
   fileType: "export",
   productionReady: true,
+  clientVisibility: "hidden",
+  hasPreview: false,
+  previewPath: null,
   createdAt: "",
   ...over,
 });
