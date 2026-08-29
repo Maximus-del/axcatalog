@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Search, Plus, LogOut, Menu } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Search, Plus, LogOut, Menu, Inbox, ListChecks } from "lucide-react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/admin/orders/NotificationBell";
 import { GlobalSearch } from "@/components/admin/GlobalSearch";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +23,11 @@ const NEW_ACTIONS = [
   { label: "Design", to: "/admin/designs" },
   { label: "Athlete", to: "/admin/athletes" },
   { label: "Order", to: "/admin/orders" },
+];
+
+const SHORTCUTS = [
+  { label: "Inbox", to: "/admin/inbox", icon: Inbox },
+  { label: "Tasks", to: "/admin/tasks", icon: ListChecks },
 ];
 
 export function AdminTopBar({ onOpenMobileNav }: Props) {
@@ -76,6 +82,28 @@ export function AdminTopBar({ onOpenMobileNav }: Props) {
       </button>
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+
+      {/* The two queues you dip into all day, reachable without the sidebar. */}
+      <div className="hidden lg:flex items-center gap-1">
+        {SHORTCUTS.map((s) => (
+          <NavLink
+            key={s.to}
+            to={s.to}
+            title={s.label}
+            aria-label={s.label}
+            className={({ isActive }) =>
+              cn(
+                "h-10 w-10 inline-flex items-center justify-center rounded-[11px] border transition-colors",
+                isActive
+                  ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.12)] text-[hsl(var(--ax-accent))]"
+                  : "border-[hsl(var(--ax-border))] bg-white text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]",
+              )
+            }
+          >
+            <s.icon className="h-4 w-4" />
+          </NavLink>
+        ))}
+      </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
