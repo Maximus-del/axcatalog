@@ -1,19 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Check, ArrowLeft, Upload } from "lucide-react";
+import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useBlanks, useCollections, useCreateConcept, useDesigns } from "@/lib/v2/data";
-import { presetsFor, presetById, type PlacementPreset } from "@/lib/v2/placements";
+import { useBlanks, useCollections, useCreateConcept, useDesignShelf, useDesigns, usePrintZones } from "@/lib/v2/data";
+import { presetById, presetsFor, type PlacementPreset } from "@/lib/v2/placements";
+import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
+import { photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
 import { AssetImage, Chip, Skeleton } from "./primitives";
 import type { Blank, Design, Entity } from "@/lib/v2/types";
 
-// The V2 product-creation proof.
+// CREATE MOCKUP — Design → Blank → Colour → Placement.
 //
-// Two directions, one destination (§15): Design → Blank → Colour → Placement,
-// or Blank → Colour → Design → Placement. The result is a Product Concept that
-// keeps every relationship it was built from — no Shopify, no variants, no
-// pricing required.
+// "Mockup" is what this is called everywhere an operator or a client can see.
+// The object it writes is still a Product Concept (a `mockups` row with
+// kind='concept'), and Product Concept and Product remain separate: this flow
+// deliberately stops short of creating anything sellable. Nothing here touches
+// Shopify, and nothing here consumes inventory.
+//
+// The whole point is repeatability. Artwork made today should be applyable
+// across a dozen blanks and colourways tomorrow in a couple of minutes, so
+// every step is one click and the flow remembers what it can.
+//
+// The reverse direction (Blank → Colour → Design) is kept because it is how the
+// same operator thinks on a day when the garment is the starting point.
 
 type Flow = "design_first" | "blank_first";
 type Step = "flow" | "design" | "blank" | "color" | "placement" | "confirm";
@@ -60,7 +70,25 @@ export default function ConceptBuilder({
   );
 
   const color = blank?.colors.find((c) => c.name === colorName) ?? null;
-  const presets = presetsFor(blank?.garmentType);
+
+  // Placement geometry comes from the live `print_zones` rows — the same seven
+  // rectangles V1's print-zone editor maintains — merged over the built-in
+  // presets. A zone corrected in V1 is corrected here, with no second copy.
+  const zonesQ = usePrintZones();
+  const presets = useMemo(() => {
+    const merged = zonesQ.data;
+    if (!merged) return presetsFor(blank?.garmentType);
+    const category = presetsFor(blank?.garmentType)[0]?.garmentCategory ?? "apparel";
+    return merged.filter((p) => p.garmentCategory === category);
+  }, [zonesQ.data, blank?.garmentType]);
+
+  // Which surface the operator is currently placing on, so the preview can show
+  // the back of the garment when they pick a back placement.
+  const surface: Surface = placement?.surface === "back" ? "back" : "front";
+  const garmentImage = useMemo(
+    () => resolveBlankImage({ blank, colorName, surface }),
+    [blank, colorName, surface],
+  );
 
   // Reset the colour when the blank changes; a colour name only means something
   // inside one blank.
@@ -118,11 +146,13 @@ export default function ConceptBuilder({
         surface: placement?.surface ?? null,
         zoneId: placement?.zoneId ?? null,
         placementLabel: placement?.label ?? null,
-        imageUrl: color?.imageUrl ?? blank?.imageUrl ?? null,
+        imageUrl: garmentImage.url,
         notes: notes.trim() || null,
         flow: flow ?? "design_first",
       });
-      toast.success("Product concept created");
+      toast.success("Mockup created", {
+        description: "Saved as a product concept. No product was created and nothing was sent to Shopify.",
+      });
       onCreated?.(id);
       onClose();
     } catch (err) {
@@ -142,7 +172,7 @@ export default function ConceptBuilder({
             </button>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-semibold">New product concept</div>
+            <div className="truncate text-[15px] font-semibold">Create mockup</div>
             <div className="truncate text-[12px] text-[hsl(var(--ax-faint))]">
               {entity.name} · {audience} catalog
             </div>
@@ -227,46 +257,28 @@ export default function ConceptBuilder({
                   A design is reusable across any blank.
                 </span>
               </div>
-              {designsQ.isLoading ? (
-                <GridSkeleton />
-              ) : (designsQ.data ?? []).length === 0 ? (
-                <p className="py-10 text-center text-[13px] text-[hsl(var(--ax-faint))]">
-                  No designs linked to this entity yet. Switch to “All designs”.
-                </p>
+              {scopeAllDesigns ? (
+                designsQ.isLoading ? (
+                  <GridSkeleton />
+                ) : (
+                  <FlatDesignGrid
+                    designs={designsQ.data ?? []}
+                    selectedId={design?.id ?? null}
+                    onPick={(d) => {
+                      setDesign(d);
+                      goNext();
+                    }}
+                  />
+                )
               ) : (
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-6">
-                  {(designsQ.data ?? []).map((d) => (
-                    <button
-                      key={d.id}
-                      type="button"
-                      onClick={() => {
-                        setDesign(d);
-                        goNext();
-                      }}
-                      className={`ax-card ax-card-hover overflow-hidden p-0 text-left transition-all ${
-                        design?.id === d.id ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
-                      }`}
-                    >
-                      <AssetImage
-                        bucket={d.fileBucket}
-                        path={d.filePath}
-                        alt={d.title}
-                        className="aspect-square w-full bg-black/30"
-                        fit="contain"
-                      />
-                      <div className="p-2">
-                        <div className="truncate text-[11px]">{cleanDesignTitle(d.title) ?? d.title}</div>
-                        <div className="mt-1">
-                          {d.productionReady ? (
-                            <Chip tone="var(--ax-accent)">Production PNG</Chip>
-                          ) : (
-                            <Chip tone="var(--ax-amber)">Concept art</Chip>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                <GroupedDesignPicker
+                  entityId={entity.id}
+                  selectedId={design?.id ?? null}
+                  onPick={(d) => {
+                    setDesign(d);
+                    goNext();
+                  }}
+                />
               )}
             </>
           )}
@@ -291,7 +303,7 @@ export default function ConceptBuilder({
                   Nothing in the {audience} catalog yet. Switch to “Every blank”, or add this blank to an assortment.
                 </p>
               ) : (
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                   {blanks.map((b) => (
                     <button
                       key={b.id}
@@ -304,17 +316,7 @@ export default function ConceptBuilder({
                         blank?.id === b.id ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
                       }`}
                     >
-                      <AssetImage url={b.imageUrl} alt={b.name} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
-                      <div className="p-2">
-                        <div className="truncate text-[11px] font-medium">{b.name}</div>
-                        <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
-                          {[b.brand, b.styleNumber].filter(Boolean).join(" · ")}
-                        </div>
-                        <div className="mt-1 flex items-center justify-between text-[10px]">
-                          <span className="text-[hsl(var(--ax-accent))]">{fmtMoney(priceFor(b, audience))}</span>
-                          <span className="text-[hsl(var(--ax-faint))]">{b.colors.length} colours</span>
-                        </div>
-                      </div>
+                      <BlankCard blank={b} price={fmtMoney(priceFor(b, audience))} />
                     </button>
                   ))}
                 </div>
@@ -324,30 +326,46 @@ export default function ConceptBuilder({
 
           {step === "color" && blank && (
             <>
-              <p className="mb-3 text-[12px] text-[hsl(var(--ax-faint))]">
-                {blank.colors.length} colours on {blank.name}.
-              </p>
+              <ColorStepHeader blank={blank} />
               <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:grid-cols-8">
-                {blank.colors.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => {
-                      setColorName(c.name);
-                      goNext();
-                    }}
-                    className={`ax-card ax-card-hover overflow-hidden p-0 text-left transition-all ${
-                      colorName === c.name ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
-                    }`}
-                  >
-                    {c.imageUrl ? (
-                      <AssetImage url={c.imageUrl} alt={c.name} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
-                    ) : (
-                      <div className="aspect-square w-full" style={{ background: c.hex ?? "#333" }} />
-                    )}
-                    <div className="truncate p-1.5 text-[10px]">{c.name}</div>
-                  </button>
-                ))}
+                {blank.colors
+                  // Only colours the supplier actually has. Building a mockup on
+                  // a discontinued colourway wastes the operator's time and the
+                  // client's, and the availability flag already exists.
+                  .filter((c) => c.available)
+                  .map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setColorName(c.name);
+                        goNext();
+                      }}
+                      title={c.imageUrl ? c.name : `${c.name} — no photography yet`}
+                      className={`ax-card ax-card-hover overflow-hidden p-0 text-left transition-all ${
+                        colorName === c.name ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
+                      }`}
+                    >
+                      <div className="relative">
+                        {c.imageUrl ? (
+                          <AssetImage url={c.imageUrl} alt={c.name} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
+                        ) : (
+                          <div
+                            className="flex aspect-square w-full items-end justify-end p-1"
+                            style={{ background: swatchFor(c) }}
+                          >
+                            <ImageOff className="h-3 w-3 text-black/45" aria-hidden />
+                          </div>
+                        )}
+                        {colorName === c.name && (
+                          <span className="absolute left-1 top-1 rounded-full bg-[hsl(var(--ax-accent))] p-0.5 text-[hsl(var(--ax-on-accent))]">
+                            <Check className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                      </div>
+                      <div className="truncate p-1.5 text-[10px]">{c.name}</div>
+                    </button>
+                  ))}
               </div>
               {blank.colors.length === 0 && (
                 <p className="py-10 text-center text-[13px] text-[hsl(var(--ax-faint))]">
@@ -359,7 +377,7 @@ export default function ConceptBuilder({
 
           {step === "placement" && (
             <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
-              <Preview blank={blank} colorUrl={color?.imageUrl ?? blank?.imageUrl ?? null} design={design} placement={placement} />
+              <Preview blank={blank} image={garmentImage} design={design} placement={placement} />
               <div>
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
                   Front
@@ -391,7 +409,7 @@ export default function ConceptBuilder({
 
           {step === "confirm" && (
             <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
-              <Preview blank={blank} colorUrl={color?.imageUrl ?? blank?.imageUrl ?? null} design={design} placement={placement} />
+              <Preview blank={blank} image={garmentImage} design={design} placement={placement} />
               <div className="space-y-3">
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
@@ -467,7 +485,7 @@ export default function ConceptBuilder({
                 disabled={create.isPending || (!design && !blank)}
                 className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
               >
-                {create.isPending ? "Creating…" : "Create concept"}
+                {create.isPending ? "Creating…" : "Create mockup"}
               </button>
             ) : (
               <button
@@ -494,6 +512,254 @@ function FlowCard({ title, blurb, onClick }: { title: string; blurb: string; onC
       <div className="text-[14px] font-medium">{title}</div>
       <div className="mt-0.5 text-[12px] text-[hsl(var(--ax-faint))]">{blurb}</div>
     </button>
+  );
+}
+
+/**
+ * Step 1, honouring design groups.
+ *
+ * A group on the shelf is a set of variations of one idea — three colourways of
+ * the same wordmark, say. Flattening that into an undifferentiated grid here
+ * would undo the organising the operator just did, and would make picking "the
+ * navy one" a hunt through thirty lookalike thumbnails. Folders lead, open in
+ * place, and a variation is selected individually — the mockup is always built
+ * from one specific underlying design, never from "the group".
+ */
+function GroupedDesignPicker({
+  entityId,
+  selectedId,
+  onPick,
+}: {
+  entityId: string;
+  selectedId: string | null;
+  onPick: (d: Design) => void;
+}) {
+  const { data, isLoading } = useDesignShelf(entityId);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+
+  const items = useMemo(
+    () => (data ? buildShelf(data.designs, data.groups, data.membership) : []),
+    [data],
+  );
+
+  // Auto-open the folder holding the current selection, so stepping back to
+  // this screen shows the operator where they already are.
+  useEffect(() => {
+    if (!selectedId) return;
+    const owner = items.find((i) => i.kind === "group" && i.designs.some((d) => d.id === selectedId));
+    if (owner) setOpenGroup(owner.key);
+  }, [selectedId, items]);
+
+  if (isLoading) return <GridSkeleton />;
+  if (items.length === 0) {
+    return (
+      <p className="py-10 text-center text-[13px] text-[hsl(var(--ax-faint))]">
+        No designs linked to this entity yet. Switch to “All designs”.
+      </p>
+    );
+  }
+
+  const groups = items.filter((i): i is Extract<ShelfItem, { kind: "group" }> => i.kind === "group");
+  const loose = items.filter((i): i is Extract<ShelfItem, { kind: "design" }> => i.kind === "design");
+
+  return (
+    <div className="space-y-5">
+      {groups.length > 0 && (
+        <section>
+          <BandLabel>Folders</BandLabel>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
+            {groups.map((g) => {
+              const cover = coverOf(g.group, g.designs);
+              const holdsSelection = g.designs.some((d) => d.id === selectedId);
+              const isOpen = openGroup === g.key;
+              return (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => setOpenGroup(isOpen ? null : g.key)}
+                  className={`relative rounded-2xl border bg-[hsl(var(--ax-accent)/0.05)] p-2 text-left transition-all ${
+                    isOpen || holdsSelection
+                      ? "border-[hsl(var(--ax-accent))]"
+                      : "border-[hsl(var(--ax-accent)/0.32)] hover:border-[hsl(var(--ax-accent)/0.6)]"
+                  }`}
+                >
+                  <span
+                    className="absolute inset-x-4 -top-1 h-1.5 rounded-t-lg border border-b-0 border-[hsl(var(--ax-accent)/0.28)] bg-[hsl(var(--ax-accent)/0.08)]"
+                    aria-hidden
+                  />
+                  <AssetImage
+                    bucket={cover?.fileBucket}
+                    path={cover?.filePath}
+                    alt={g.group.name}
+                    className="aspect-square w-full rounded-lg bg-black/30"
+                    fit="contain"
+                    fallbackSeed={g.group.id}
+                  />
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <FolderOpen className="h-3 w-3 shrink-0 text-[hsl(var(--ax-accent))]" aria-hidden />
+                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold">{g.group.name}</span>
+                    <span className="text-[10px] tabular-nums text-[hsl(var(--ax-faint))]">{g.designs.length}</span>
+                    <ChevronDown
+                      className={`h-3 w-3 shrink-0 text-[hsl(var(--ax-faint))] transition-transform ${isOpen ? "rotate-180" : ""}`}
+                      aria-hidden
+                    />
+                  </div>
+                  {holdsSelection && !isOpen && (
+                    <span className="mt-1 block text-[10px] font-medium text-[hsl(var(--ax-accent))]">
+                      contains your selection
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {openGroup && (
+            <div className="mt-3 rounded-2xl border border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.04)] p-3">
+              <p className="mb-2.5 text-[11px] text-[hsl(var(--ax-faint))]">
+                Pick the exact variation to build this mockup from.
+              </p>
+              <FlatDesignGrid
+                designs={groups.find((g) => g.key === openGroup)?.designs ?? []}
+                selectedId={selectedId}
+                onPick={onPick}
+              />
+            </div>
+          )}
+        </section>
+      )}
+
+      {loose.length > 0 && (
+        <section>
+          <BandLabel>Designs</BandLabel>
+          <FlatDesignGrid designs={loose.map((i) => i.design)} selectedId={selectedId} onPick={onPick} />
+        </section>
+      )}
+    </div>
+  );
+}
+
+function BandLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-secondary))]">
+      {children}
+    </div>
+  );
+}
+
+function FlatDesignGrid({
+  designs,
+  selectedId,
+  onPick,
+}: {
+  designs: Design[];
+  selectedId: string | null;
+  onPick: (d: Design) => void;
+}) {
+  if (designs.length === 0) {
+    return <p className="py-8 text-center text-[13px] text-[hsl(var(--ax-faint))]">Nothing here.</p>;
+  }
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-6">
+      {designs.map((d) => (
+        <button
+          key={d.id}
+          type="button"
+          onClick={() => onPick(d)}
+          className={`ax-card ax-card-hover relative overflow-hidden p-0 text-left transition-all ${
+            selectedId === d.id ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
+          }`}
+        >
+          <AssetImage
+            bucket={d.fileBucket}
+            path={d.filePath}
+            alt={d.title}
+            className="aspect-square w-full bg-black/30"
+            fit="contain"
+          />
+          {selectedId === d.id && (
+            <span className="absolute left-1.5 top-1.5 rounded-full bg-[hsl(var(--ax-accent))] p-1 text-[hsl(var(--ax-on-accent))]">
+              <Check className="h-3 w-3" />
+            </span>
+          )}
+          <div className="p-2">
+            <div className="truncate text-[11px]">{cleanDesignTitle(d.title) ?? d.title}</div>
+            <div className="mt-1">
+              {d.productionReady ? (
+                <Chip tone="var(--ax-accent)">Production PNG</Chip>
+              ) : (
+                <Chip tone="var(--ax-amber)">Concept art</Chip>
+              )}
+            </div>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Step 2. Blanks are shared AX infrastructure — one canonical record per
+ * garment, never a per-athlete duplicate — so the card leads with photography
+ * and the colour range, which is what an operator is actually choosing between.
+ */
+function BlankCard({ blank, price }: { blank: Blank; price: string }) {
+  const hero = resolveBlankImage({ blank });
+  const coverage = photoCoverage(blank);
+  const strip = blank.colors.filter((c) => c.available).slice(0, 9);
+
+  return (
+    <>
+      <AssetImage url={hero.url} alt={blank.name} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
+      <div className="space-y-1.5 p-2.5">
+        <div className="truncate text-[12px] font-medium">{blank.name}</div>
+        <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
+          {[blank.brand, blank.styleNumber].filter(Boolean).join(" · ") || "—"}
+        </div>
+        <div className="flex items-center gap-0.5">
+          {strip.map((c) => (
+            <span
+              key={c.id}
+              title={c.name}
+              className="h-3 w-3 rounded-full border border-black/25"
+              style={{ background: swatchFor(c) }}
+            />
+          ))}
+          {coverage.total > strip.length && (
+            <span className="ml-1 text-[10px] tabular-nums text-[hsl(var(--ax-faint))]">
+              +{coverage.total - strip.length}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-between text-[10px]">
+          <span className="font-medium text-[hsl(var(--ax-accent))]">{price}</span>
+          <span
+            className="text-[hsl(var(--ax-faint))]"
+            title={`${coverage.withPhoto} of ${coverage.total} available colours have photography`}
+          >
+            {coverage.withPhoto}/{coverage.total} shot
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ColorStepHeader({ blank }: { blank: Blank }) {
+  const coverage = photoCoverage(blank);
+  const unshot = coverage.total - coverage.withPhoto;
+  return (
+    <div className="mb-3 space-y-1">
+      <p className="text-[12px] text-[hsl(var(--ax-faint))]">
+        {coverage.total} available colour{coverage.total === 1 ? "" : "s"} on {blank.name}.
+      </p>
+      {unshot > 0 && (
+        <p className="text-[11px] text-[hsl(var(--ax-amber))]">
+          {unshot} {unshot === 1 ? "has" : "have"} no photography yet and show as a flat swatch — still selectable, but
+          the mockup preview will use the catalogue shot.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -532,24 +798,32 @@ function PlacementRow({
 
 function Preview({
   blank,
-  colorUrl,
+  image,
   design,
   placement,
 }: {
   blank: Blank | null;
-  colorUrl: string | null;
+  image: ReturnType<typeof resolveBlankImage>;
   design: Design | null;
   placement: PlacementPreset | null;
 }) {
   const box = placement ?? presetById("center_chest");
   return (
     <div className="relative mx-auto aspect-square w-full max-w-[420px] overflow-hidden rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.04]">
-      {colorUrl ? (
-        <img src={colorUrl} alt={blank?.name ?? "Blank"} className="h-full w-full object-contain" />
+      {image.url ? (
+        <img src={image.url} alt={blank?.name ?? "Blank"} className="h-full w-full object-contain" />
       ) : (
         <div className="flex h-full items-center justify-center text-[12px] text-[hsl(var(--ax-faint))]">
           {blank ? "No photo for this blank yet" : "Choose a blank"}
         </div>
+      )}
+      {/* Say so when the garment on screen is not the colourway being built.
+          Silently showing the wrong colour is how a mockup gets approved and
+          then turns out to be something else. */}
+      {image.approximate && (
+        <span className="absolute right-2 top-2 rounded-full bg-[hsl(var(--ax-amber)/0.9)] px-2 py-1 text-[10px] font-semibold text-black">
+          {image.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"}
+        </span>
       )}
       {design && box && (
         <div

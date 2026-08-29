@@ -12,6 +12,7 @@ import { displayNameOf } from "./entity";
 import { draftToRow, type ConceptDraft } from "./concepts";
 import type { DesignGroup, OrderWrite } from "./design-groups";
 import { draftToProductRow, type ProductDraft } from "./productize";
+import { mergeZones, type PrintZoneRow } from "./placements";
 import type {
   Blank,
   BlankColor,
@@ -525,6 +526,26 @@ export function useConcepts(entityId?: string) {
     queryKey: ["v2", "concepts", entityId ?? "all"],
     queryFn: () => fetchConcepts(entityId),
     staleTime: 15_000,
+  });
+}
+
+/**
+ * The live `print_zones` rows, merged over the built-in presets.
+ *
+ * Print zones are org-scoped shared infrastructure — the same seven rectangles
+ * V1's print-zone editor maintains. V2 reads them rather than keeping a second
+ * copy, so a zone corrected in V1 is corrected here.
+ */
+export function usePrintZones() {
+  return useQuery({
+    queryKey: ["v2", "print-zones"],
+    queryFn: async () => {
+      const res = await t("print_zones")
+        .select("garment_category, surface, zone_id, label, x, y, w, h")
+        .order("sort_order", { ascending: true });
+      return mergeZones((res.data ?? []) as unknown as PrintZoneRow[]);
+    },
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -45,18 +45,47 @@ export function presetById(zoneId: string | null | undefined): PlacementPreset |
   return PLACEMENT_PRESETS.find((p) => p.zoneId === zoneId) ?? null;
 }
 
+export interface PrintZoneRow {
+  garment_category: string;
+  surface: string;
+  zone_id: string;
+  label: string;
+  x: number | string;
+  y: number | string;
+  w: number | string;
+  h: number | string;
+}
+
+/**
+ * `print_zones` stores geometry as 0–1 fractions; the presets above are 0–100
+ * percentages because that is what the preview overlay renders with.
+ *
+ * These two units met here and nothing converted between them, so every live
+ * zone merged in at roughly x=0.26%, y=0.21% — every placement box collapsed
+ * into the top-left corner of the garment. Normalising on the way in keeps the
+ * percentage contract true for every consumer of a PlacementPreset.
+ */
+export function toPercent(box: { x: number; y: number; w: number; h: number }) {
+  // A real placement never occupies ≤1% of the garment, so "everything ≤ 1"
+  // is an unambiguous signal that these are fractions rather than percentages.
+  const fractional = [box.x, box.y, box.w, box.h].every((n) => Number.isFinite(n) && Math.abs(n) <= 1);
+  const k = fractional ? 100 : 1;
+  return { x: box.x * k, y: box.y * k, w: box.w * k, h: box.h * k };
+}
+
 /**
  * Merge live print_zones rows over the presets. Live rows win on geometry and
  * label; presets supply anything the DB has not defined yet (e.g. oversized
  * front, which does not exist as a print_zones row today).
  */
-export function mergeZones(
-  live: { garment_category: string; surface: string; zone_id: string; label: string; x: number; y: number; w: number; h: number }[],
-): PlacementPreset[] {
+export function mergeZones(live: PrintZoneRow[]): PlacementPreset[] {
+  const geometry = (z: PrintZoneRow) =>
+    toPercent({ x: Number(z.x), y: Number(z.y), w: Number(z.w), h: Number(z.h) });
+
   const out = PLACEMENT_PRESETS.map((p) => {
     const hit = live.find((z) => z.zone_id === p.zoneId);
     if (!hit) return p;
-    return { ...p, label: hit.label || p.label, x: Number(hit.x), y: Number(hit.y), w: Number(hit.w), h: Number(hit.h) };
+    return { ...p, label: hit.label || p.label, ...geometry(hit) };
   });
   for (const z of live) {
     if (out.some((p) => p.zoneId === z.zone_id)) continue;
@@ -64,10 +93,7 @@ export function mergeZones(
       zoneId: z.zone_id,
       surface: (z.surface as PlacementPreset["surface"]) ?? "front",
       label: z.label,
-      x: Number(z.x),
-      y: Number(z.y),
-      w: Number(z.w),
-      h: Number(z.h),
+      ...geometry(z),
       garmentCategory: z.garment_category === "cap" ? "cap" : "apparel",
     });
   }

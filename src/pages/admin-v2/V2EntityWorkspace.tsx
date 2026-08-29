@@ -205,7 +205,7 @@ export default function V2EntityWorkspace() {
                   className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))]"
                 >
                   <Plus className="h-4 w-4" />
-                  New mockup
+                  Create Mockup
                 </button>
                 {isAthlete && (
                   <a
@@ -285,7 +285,7 @@ export default function V2EntityWorkspace() {
         count={concepts.length}
         action={
           <button type="button" onClick={() => setBuilding(true)} className="text-[12px] text-[hsl(var(--ax-accent))]">
-            + New mockup
+            + Create mockup
           </button>
         }
         empty="No mockups yet. A mockup is a design placed on a blank — it can be nothing more than an image and this entity, and it never needs pricing or Shopify to exist."
@@ -463,7 +463,9 @@ export default function V2EntityWorkspace() {
         {orders.length > 0 && <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">{ordersNote}</p>}
       </Section>
 
-      {building && <ConceptBuilder entity={entity} onClose={() => setBuilding(false)} />}
+      {building && (
+        <ConceptBuilder entity={entity} initialFlow="design_first" onClose={() => setBuilding(false)} />
+      )}
 
       {productizing &&
         (() => {
