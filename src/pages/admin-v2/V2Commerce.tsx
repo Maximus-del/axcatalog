@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useBlanks, useCollections, useProducts } from "@/lib/v2/data";
 import { AUDIENCES, fmtMoney, fmtPct, hasAccess, marginFor, priceFor } from "@/lib/v2/pricing";
+import { ISSUE_LABEL, auditColorways, colorwayIssues, imageSourceOf } from "@/lib/v2/blank-image";
 import type { AudienceKey, Blank } from "@/lib/v2/types";
 import { AssetImage, Card, Chip, EmptyState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 
@@ -53,12 +54,18 @@ function BlankCatalog() {
   const { data, isLoading } = useBlanks();
   const [params, setParams] = useSearchParams();
   const [audience, setAudience] = useState<AudienceKey>("athlete");
+  // What the audience switch means for the LIST, not just for the price shown.
+  // "in" is this audience's actual catalog; "out" is everything else AX stocks,
+  // which is the list you shop from when deciding what to give them next.
+  const [access, setAccess] = useState<"in" | "out" | "all">("in");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<Blank | null>(null);
   const dataFilter = params.get("filter");
 
   const rows = useMemo(() => {
     let out = data ?? [];
+    if (access === "in") out = out.filter((b) => hasAccess(b, audience));
+    if (access === "out") out = out.filter((b) => !hasAccess(b, audience));
     if (dataFilter === "missing_cost") out = out.filter((b) => b.missingCost);
     if (dataFilter === "missing_assortment") out = out.filter((b) => b.missingAssortment);
     if (dataFilter === "missing_photo") out = out.filter((b) => b.missingPhoto);
@@ -69,7 +76,7 @@ function BlankCatalog() {
       );
     }
     return [...out].sort((a, b) => a.name.localeCompare(b.name));
-  }, [data, search, dataFilter]);
+  }, [data, search, dataFilter, access, audience]);
 
   const setFilter = (f: string | null) => {
     const next = new URLSearchParams(params);
@@ -78,6 +85,8 @@ function BlankCatalog() {
     setParams(next, { replace: true });
   };
 
+  const inCatalog = (data ?? []).filter((b) => hasAccess(b, audience)).length;
+  const outOfCatalog = (data ?? []).length - inCatalog;
   const missingCost = (data ?? []).filter((b) => b.missingCost).length;
   const missingAssort = (data ?? []).filter((b) => b.missingAssortment).length;
   const missingPhoto = (data ?? []).filter((b) => b.missingPhoto).length;
@@ -102,6 +111,16 @@ function BlankCatalog() {
               {a.label}
             </Chip>
           ))}
+          <span className="mx-1 h-4 w-px bg-[hsl(var(--ax-border))]" />
+          <Chip active={access === "in"} onClick={() => setAccess("in")}>
+            In this catalog {inCatalog}
+          </Chip>
+          <Chip active={access === "out"} onClick={() => setAccess("out")}>
+            Not yet {outOfCatalog}
+          </Chip>
+          <Chip active={access === "all"} onClick={() => setAccess("all")}>
+            Every blank {data?.length ?? 0}
+          </Chip>
           <span className="mx-1 h-4 w-px bg-[hsl(var(--ax-border))]" />
           <Chip active={!dataFilter} onClick={() => setFilter(null)}>
             All {data?.length ?? 0}
@@ -225,6 +244,8 @@ function BlankDrawer({ blank, audience, onClose }: { blank: Blank; audience: Aud
         <Detail label="Assortments" value={blank.assortments.join(", ") || "none — invisible in the builder"} />
         <Detail label="Sizes" value={blank.sizes.join(" · ") || "none recorded"} />
 
+        <ColorwayAudit blank={blank} />
+
         <div className="mt-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
           Colours ({blank.colors.length})
         </div>
@@ -249,6 +270,100 @@ function BlankDrawer({ blank, audience, onClose }: { blank: Blank; audience: Aud
         </a>
       </div>
     </div>
+  );
+}
+
+/**
+ * Front and back, side by side, per colourway.
+ *
+ * Built after a real mismatch shipped: a hoodie whose front and back were
+ * different colours, because the two surfaces were being served by two
+ * different systems. Seeing them adjacent is the only way to catch that class
+ * of error, and the source label under each one says WHY a pair is suspect
+ * rather than leaving it to be noticed by eye.
+ */
+function ColorwayAudit({ blank }: { blank: Blank }) {
+  const [openAudit, setOpenAudit] = useState(false);
+  const issues = auditColorways(blank);
+  const available = blank.colors.filter((c) => c.available);
+
+  return (
+    <section className="mt-5">
+      <button
+        type="button"
+        onClick={() => setOpenAudit((v) => !v)}
+        className="flex w-full items-center gap-2 rounded-lg border border-[hsl(var(--ax-border))] px-3 py-2 text-left"
+      >
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
+          Photography audit
+        </span>
+        <span
+          className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold"
+          style={{
+            background: issues.length ? "hsl(var(--ax-amber) / 0.16)" : "hsl(var(--ax-accent) / 0.16)",
+            color: issues.length ? "hsl(var(--ax-amber))" : "hsl(var(--ax-accent))",
+          }}
+        >
+          {issues.length ? `${issues.length} to check` : "All matched"}
+        </span>
+      </button>
+
+      {openAudit && (
+        <div className="mt-2 space-y-2">
+          {available.map((c) => {
+            const problems = colorwayIssues(c);
+            return (
+              <div
+                key={c.id}
+                className={`rounded-lg border p-2 ${
+                  problems.length
+                    ? "border-[hsl(var(--ax-amber)/0.45)] bg-[hsl(var(--ax-amber)/0.05)]"
+                    : "border-[hsl(var(--ax-border))]"
+                }`}
+              >
+                <div className="mb-1.5 flex items-baseline gap-2">
+                  <span className="text-[12px] font-medium">{c.name}</span>
+                  {problems.length === 0 && (
+                    <span className="text-[10px] text-[hsl(var(--ax-accent))]">matched</span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {(["front", "back"] as const).map((side) => {
+                    const url = side === "front" ? c.imageUrl : c.imageUrlBack;
+                    const source = imageSourceOf(url);
+                    return (
+                      <div key={side}>
+                        {url ? (
+                          <AssetImage
+                            url={url}
+                            alt={`${c.name} ${side}`}
+                            className="aspect-square w-full rounded-md bg-white/[0.03]"
+                            fit="contain"
+                          />
+                        ) : (
+                          <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-[hsl(var(--ax-border))] text-[10px] text-[hsl(var(--ax-faint))]">
+                            none
+                          </div>
+                        )}
+                        <div className="mt-0.5 flex items-baseline justify-between text-[9px] text-[hsl(var(--ax-faint))]">
+                          <span className="capitalize">{side}</span>
+                          <span>{source === "none" ? "—" : source}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {problems.map((p) => (
+                  <p key={p} className="mt-1 text-[10px] text-[hsl(var(--ax-amber))]">
+                    {ISSUE_LABEL[p]}
+                  </p>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { Home, Users, Palette, ShoppingBag, Receipt, ArrowUpRight } from "lucide-react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { Home, Users, Palette, ShoppingBag, Receipt, ArrowLeft, ArrowUpRight } from "lucide-react";
 
 // AX OS V2 shell.
 //
@@ -20,6 +20,19 @@ const NAV = [
 
 export default function V2Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  /**
+   * Back to wherever you actually came from.
+   *
+   * Lives in the shell rather than on one page, because the need is not
+   * specific to a page — following a concept from Creative into a person's
+   * workspace, or a design into its detail, both leave you wanting the same
+   * thing. It is hidden on the Overview because that is the root: there is
+   * nothing above it inside V2, and a back arrow there would either do nothing
+   * or throw you out of the dashboard entirely.
+   */
+  const isRoot = location.pathname === "/admin-v2" || location.pathname === "/admin-v2/";
 
   return (
     <div className="admin-os min-h-screen w-full bg-[hsl(var(--ax-canvas))] text-[hsl(var(--ax-ink))]">
@@ -34,6 +47,18 @@ export default function V2Layout() {
               V2
             </span>
           </NavLink>
+
+          {!isRoot && (
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              aria-label="Back to the previous page"
+              title="Back"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+          )}
 
           <nav className="ml-2 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scroll-touch">
             {NAV.map(({ to, end, label, icon: Icon }) => (

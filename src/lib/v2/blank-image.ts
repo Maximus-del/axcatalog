@@ -66,6 +66,60 @@ export function resolveBlankImage({ blank, colorName, surface = "front" }: Blank
   return { url: null, source: "none", approximate: false };
 }
 
+/* ------------------------------------------------------------ the audit */
+
+export type ImageSource = "drive" | "bucket" | "other" | "none";
+
+/**
+ * Where a photograph actually comes from.
+ *
+ * This exists because of a real failure: fronts were serving from the Supabase
+ * `blanks` bucket while backs came from the Drive, two independent mappings of
+ * the same garment with nothing keeping them in agreement. The result was a
+ * colourway whose front and back were different colours, which is invisible
+ * until a client is looking at it.
+ */
+export function imageSourceOf(url: string | null | undefined): ImageSource {
+  if (!url) return "none";
+  if (url.includes("drive.google")) return "drive";
+  if (url.includes("/storage/v1/object/")) return "bucket";
+  return "other";
+}
+
+export type ColorwayIssue = "missing-front" | "missing-back" | "mixed-sources";
+
+/**
+ * What is wrong with a colourway's photography, if anything.
+ *
+ * `mixed-sources` is the interesting one and the reason this function exists:
+ * two surfaces drawn from two different systems are not verifiably the same
+ * garment. They may look fine. They are still worth flagging, because the only
+ * thing making them agree is luck.
+ */
+export function colorwayIssues(color: BlankColor): ColorwayIssue[] {
+  const front = imageSourceOf(color.imageUrl);
+  const back = imageSourceOf(color.imageUrlBack);
+  const issues: ColorwayIssue[] = [];
+  if (front === "none") issues.push("missing-front");
+  if (back === "none") issues.push("missing-back");
+  if (front !== "none" && back !== "none" && front !== back) issues.push("mixed-sources");
+  return issues;
+}
+
+export const ISSUE_LABEL: Record<ColorwayIssue, string> = {
+  "missing-front": "No front photo",
+  "missing-back": "No back photo",
+  "mixed-sources": "Front and back come from different systems — not verifiably the same garment",
+};
+
+/** Colourways with something worth looking at, for the catalog audit. */
+export function auditColorways(blank: Blank): Array<{ color: BlankColor; issues: ColorwayIssue[] }> {
+  return blank.colors
+    .filter((c) => c.available)
+    .map((color) => ({ color, issues: colorwayIssues(color) }))
+    .filter((r) => r.issues.length > 0);
+}
+
 /** A flat colour chip for a colourway with no photography of its own. */
 export function swatchFor(color: BlankColor | null | undefined): string {
   return color?.hex ?? "hsl(var(--ax-line))";
