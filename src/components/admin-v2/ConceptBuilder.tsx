@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Upload } from "lucide-react";
+import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Move, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBlanks,
@@ -640,14 +640,24 @@ export default function ConceptBuilder({
               <div className="space-y-3">
                 {usedSurfaces(placed).map((sf) => (
                   <div key={sf}>
-                    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-                      {sf}
+                    <div className="mb-1.5 flex items-baseline gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
+                        {sf}
+                      </span>
+                      <span className="text-[11px] text-[hsl(var(--ax-faint))]">
+                        {placed.filter((p) => p.surface === sf).length} placement
+                        {placed.filter((p) => p.surface === sf).length === 1 ? "" : "s"}
+                      </span>
                     </div>
                     <StaticMockup
                       image={sf === "front" ? frontImage : backImage}
                       placed={placed.filter((p) => p.surface === sf)}
                       designsById={designsById}
                       blankName={blank?.name ?? "Blank"}
+                      onEdit={() => {
+                        setSurface(sf);
+                        setStep("placement");
+                      }}
                     />
                   </div>
                 ))}
@@ -730,7 +740,7 @@ export default function ConceptBuilder({
                       placed.length === 0
                         ? "—"
                         : placed
-                            .map((p) => `${p.surface} · ${p.zoneLabel ?? "free"}`)
+                            .map((p) => `${p.surface} · ${p.zoneLabel ?? "free placement"}`)
                             .join(", ")
                     }
                   />
@@ -1406,14 +1416,23 @@ function StaticMockup({
   placed,
   designsById,
   blankName,
+  onEdit,
 }: {
   image: ReturnType<typeof resolveBlankImage>;
   placed: PlacedDesign[];
   designsById: Map<string, Design>;
   blankName: string;
+  /**
+   * Back to the canvas, on this surface.
+   *
+   * Reviewing is when you notice the logo sits 3% low, so the fix has to be
+   * reachable from the thing you noticed it on. Making the preview itself the
+   * way back beats asking the operator to find a step chip in the header.
+   */
+  onEdit?: () => void;
 }) {
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[420px] overflow-hidden rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.04]">
+    <div className="group relative mx-auto aspect-square w-full max-w-[420px] overflow-hidden rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.04]">
       {image.url ? (
         <img src={image.url} alt={blankName} className="h-full w-full object-contain" />
       ) : (
@@ -1449,6 +1468,19 @@ function StaticMockup({
         <span className="absolute right-2 top-2 rounded-full bg-[hsl(var(--ax-amber)/0.92)] px-2 py-1 text-[10px] font-semibold text-black">
           {image.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"}
         </span>
+      )}
+
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          className="absolute inset-0 flex items-end justify-center bg-black/0 pb-4 opacity-0 transition-all hover:bg-black/25 focus:opacity-100 group-hover:opacity-100"
+        >
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-4 py-2 text-[12px] font-semibold text-[hsl(var(--ax-on-accent))] shadow-lg">
+            <Move className="h-3.5 w-3.5" />
+            Adjust placement
+          </span>
+        </button>
       )}
     </div>
   );
