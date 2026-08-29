@@ -23,6 +23,8 @@ import type {
   Design,
   Entity,
   EntityCounts,
+  Mockup,
+  MockupFolder,
   OrderRow,
   Product,
   ProductConcept,
@@ -598,6 +600,325 @@ export function useMockupPlacements(mockupId: string | undefined) {
         .eq("mockup_id", mockupId as string);
       return fromRows((res.data ?? []) as unknown as PlacementRow[]);
     },
+  });
+}
+
+/* ------------------------------------------------------- mockup library */
+
+/**
+ * Everything needed to reopen a saved mockup and reproduce it exactly.
+ *
+ * The acceptance test for this whole phase is: create, leave, come back
+ * tomorrow, open, and the composition is identical. That means the arrangement
+ * has to be read back from the database rather than reconstructed from
+ * defaults, which is why placements and guides are fetched here rather than
+ * re-derived.
+ */
+export function useMockupForEdit(mockupId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "mockup-edit", mockupId],
+    enabled: Boolean(mockupId),
+    queryFn: async () => {
+      const [mockupRes, placeRes] = await Promise.all([
+        t("mockups")
+          .select(
+            "id, title, athlete_id, organization_id, blank_id, color_name, collection_id, description, guides, design_id",
+          )
+          .eq("id", mockupId as string)
+          .single(),
+        t("product_print_placements")
+          .select("design_id, surface, zone_id, zone_label, x_pct, y_pct, w_pct, h_pct, rotation_deg, sort_order")
+          .eq("mockup_id", mockupId as string),
+      ]);
+      if (mockupRes.error) throw mockupRes.error;
+      const row = mockupRes.data as unknown as Row;
+      return {
+        id: String(row.id),
+        title: String(row.title ?? ""),
+        blankId: str(row.blank_id),
+        colorName: str(row.color_name),
+        collectionId: str(row.collection_id),
+        notes: str(row.description),
+        designId: str(row.design_id),
+        guides: (row.guides as Record<string, { x: number; y: number }>) ?? {},
+        placed: fromRows((placeRes.data ?? []) as unknown as PlacementRow[]),
+      };
+    },
+  });
+}
+
+/**
+ * Save an edit to an existing mockup.
+ *
+ * Placements are replaced wholesale rather than diffed: the arrangement is one
+ * thing conceptually, a diff would have to reason about identity for objects
+ * that have none of their own, and the row count is tiny. Delete-then-insert is
+ * the honest representation of "this is the arrangement now".
+ */
+export function useUpdateMockup(entityId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      mockupId,
+      draft,
+      placements,
+    }: {
+      mockupId: string;
+      draft: Partial<ConceptDraft> & { guides?: Record<string, { x: number; y: number }> };
+      placements: PlacementRow[];
+    }) => {
+      const patch: Row = {};
+      if (draft.title !== undefined) patch.title = draft.title;
+      if (draft.blankId !== undefined) patch.blank_id = draft.blankId;
+      if (draft.colorName !== undefined) patch.color_name = draft.colorName;
+      if (draft.collectionId !== undefined) patch.collection_id = draft.collectionId || null;
+      if (draft.notes !== undefined) patch.description = draft.notes;
+      if (draft.imageUrl !== undefined) patch.image_url = draft.imageUrl;
+      if (draft.designId !== undefined) patch.design_id = draft.designId;
+      if (draft.guides !== undefined) patch.guides = draft.guides;
+      patch.updated_at = new Date().toISOString();
+
+      const upd = await t("mockups").update(patch as never).eq("id", mockupId);
+      if (upd.error) throw upd.error;
+
+      const del = await t("product_print_placements").delete().eq("mockup_id", mockupId);
+      if (del.error) throw del.error;
+
+      if (placements.length > 0) {
+        const rows = placements.map((p) => ({
+          ...p,
+          mockup_id: mockupId,
+          blank_id: draft.blankId ?? null,
+          color_name: draft.colorName ?? null,
+        }));
+        const ins = await t("product_print_placements").insert(rows as never);
+        if (ins.error) throw ins.error;
+      }
+      return mockupId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "mockup-library", entityId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "mockup-edit"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace", entityId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "concepts"] });
+    },
+  });
+}
+
+export interface MockupLibrary {
+  mockups: Mockup[];
+  folders: MockupFolder[];
+}
+
+/**
+ * Every saved mockup for one entity, with its folders.
+ *
+ * A mockup is a finished object, so this is a library read rather than a step
+ * in a wizard: it returns everything needed to render, search and organise the
+ * shelf without opening any of them.
+ */
+async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
+  const [mockupRes, folderRes] = await Promise.all([
+    t("mockups")
+      .select(
+        "id, title, athlete_id, organization_id, blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, approval_state, product_id, collection_id, guides, created_at, updated_at",
+      )
+      .eq("athlete_id", entityId)
+      .eq("kind", "concept")
+      .order("sort_order", { ascending: true }),
+    t("asset_folders")
+      .select("id, name, athlete_id, sort_order")
+      .eq("scope", "mockups")
+      .eq("athlete_id", entityId)
+      .order("sort_order", { ascending: true }),
+  ]);
+
+  const rows = (mockupRes.data ?? []) as unknown as Row[];
+  const ids = rows.map((r) => String(r.id));
+  const blankIds = [...new Set(rows.map((r) => str(r.blank_id)).filter(Boolean))] as string[];
+
+  const [placementRes, blankRes] = await Promise.all([
+    ids.length
+      ? t("product_print_placements").select("mockup_id, surface").in("mockup_id", ids)
+      : Promise.resolve({ data: [] }),
+    blankIds.length ? t("blanks").select("id, name").in("id", blankIds) : Promise.resolve({ data: [] }),
+  ]);
+
+  const blankName = new Map(
+    ((blankRes.data ?? []) as unknown as Row[]).map((b) => [String(b.id), String(b.name ?? "")]),
+  );
+
+  // Which surfaces a mockup actually uses is a property of its placements, not
+  // of the mockup row — a front-only mockup should say so.
+  const surfaces = new Map<string, Set<string>>();
+  for (const p of (placementRes.data ?? []) as unknown as Row[]) {
+    const key = String(p.mockup_id);
+    if (!surfaces.has(key)) surfaces.set(key, new Set());
+    surfaces.get(key)!.add(p.surface === "back" ? "back" : "front");
+  }
+
+  const mockups: Mockup[] = rows.map((r) => {
+    const used = surfaces.get(String(r.id)) ?? new Set<string>();
+    const ordered: Array<"front" | "back"> = [];
+    if (used.has("front")) ordered.push("front");
+    if (used.has("back")) ordered.push("back");
+    return {
+      id: String(r.id),
+      title: String(r.title ?? "Untitled mockup"),
+      entityId: str(r.athlete_id),
+      organizationId: String(r.organization_id),
+      blankId: str(r.blank_id),
+      blankName: r.blank_id ? (blankName.get(String(r.blank_id)) ?? null) : null,
+      colorName: str(r.color_name),
+      imageUrl: str(r.image_url),
+      imageBucket: str(r.storage_bucket),
+      imagePath: str(r.storage_path),
+      folderId: str(r.folder_id),
+      sortOrder: Number(r.sort_order ?? 0),
+      status: String(r.status ?? "draft"),
+      approvalState: (str(r.approval_state) ?? "none") as Mockup["approvalState"],
+      productId: str(r.product_id),
+      collectionId: str(r.collection_id),
+      guides: (r.guides as Mockup["guides"]) ?? {},
+      surfaces: ordered,
+      placementCount: used.size,
+      createdAt: String(r.created_at ?? ""),
+      updatedAt: String(r.updated_at ?? ""),
+    };
+  });
+
+  const folders: MockupFolder[] = ((folderRes.data ?? []) as unknown as Row[]).map((f) => ({
+    id: String(f.id),
+    name: String(f.name ?? "Untitled folder"),
+    entityId: str(f.athlete_id),
+    sortOrder: Number(f.sort_order ?? 0),
+    coverMockupId: null,
+  }));
+
+  return { mockups, folders };
+}
+
+export function useMockupLibrary(entityId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "mockup-library", entityId],
+    queryFn: () => fetchMockupLibrary(entityId as string),
+    enabled: Boolean(entityId),
+    staleTime: 15_000,
+  });
+}
+
+export type MockupJob =
+  | { type: "rename"; mockupId: string; title: string }
+  | { type: "delete"; mockupId: string }
+  | { type: "duplicate"; mockupId: string }
+  | { type: "order"; writes: Array<{ kind: "mockup" | "folder"; id: string; sortOrder: number }> }
+  | { type: "create-folder"; name: string; mockupIds: string[]; sortOrder: number }
+  | { type: "rename-folder"; folderId: string; name: string }
+  | { type: "add-to-folder"; folderId: string; mockupId: string; sortOrder: number }
+  | { type: "remove-from-folder"; mockupId: string; sortOrder: number }
+  | { type: "ungroup"; folderId: string; mockupIds: string[]; baseSortOrder: number };
+
+/**
+ * Library actions. Folders are organisational only, so every folder operation
+ * writes `folder_id` and nothing else about the mockup changes.
+ */
+export function useMockupActions(entityId: string, organizationId: string) {
+  const qc = useQueryClient();
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ["v2", "mockup-library", entityId] });
+    void qc.invalidateQueries({ queryKey: ["v2", "workspace", entityId] });
+    void qc.invalidateQueries({ queryKey: ["v2", "concepts"] });
+  };
+
+  return useMutation({
+    mutationFn: async (job: MockupJob) => {
+      switch (job.type) {
+        case "rename":
+          await t("mockups").update({ title: job.title } as never).eq("id", job.mockupId);
+          return;
+        case "delete":
+          // Placements cascade with the mockup; the artwork and blank are untouched.
+          await t("mockups").delete().eq("id", job.mockupId);
+          return;
+        case "duplicate": {
+          const src = await t("mockups").select("*").eq("id", job.mockupId).single();
+          const row = src.data as unknown as Row | null;
+          if (!row) throw new Error("That mockup no longer exists");
+          const { id: _id, created_at: _c, updated_at: _u, ...rest } = row;
+          const copy = await t("mockups")
+            .insert({ ...rest, title: `${String(row.title ?? "Mockup")} copy`, product_id: null } as never)
+            .select("id")
+            .single();
+          if (copy.error) throw copy.error;
+          const newId = String((copy.data as unknown as Row).id);
+
+          const places = await t("product_print_placements")
+            .select("design_id, blank_id, color_name, surface, zone_id, zone_label, x_pct, y_pct, w_pct, h_pct, rotation_deg, sort_order")
+            .eq("mockup_id", job.mockupId);
+          const rows = ((places.data ?? []) as unknown as Row[]).map((p) => ({ ...p, mockup_id: newId }));
+          if (rows.length) {
+            const ins = await t("product_print_placements").insert(rows as never);
+            if (ins.error) {
+              await t("mockups").delete().eq("id", newId);
+              throw ins.error;
+            }
+          }
+          return;
+        }
+        case "order":
+          await Promise.all(
+            job.writes.map((w) =>
+              w.kind === "mockup"
+                ? t("mockups").update({ sort_order: w.sortOrder } as never).eq("id", w.id)
+                : t("asset_folders").update({ sort_order: w.sortOrder } as never).eq("id", w.id),
+            ),
+          );
+          return;
+        case "create-folder": {
+          const created = await t("asset_folders")
+            .insert({
+              organization_id: organizationId,
+              athlete_id: entityId,
+              scope: "mockups",
+              name: job.name,
+              sort_order: job.sortOrder,
+            } as never)
+            .select("id")
+            .single();
+          if (created.error) throw created.error;
+          const folderId = String((created.data as unknown as Row).id);
+          await Promise.all(
+            job.mockupIds.map((id, i) =>
+              t("mockups").update({ folder_id: folderId, sort_order: i } as never).eq("id", id),
+            ),
+          );
+          return;
+        }
+        case "rename-folder":
+          await t("asset_folders").update({ name: job.name } as never).eq("id", job.folderId);
+          return;
+        case "add-to-folder":
+          await t("mockups")
+            .update({ folder_id: job.folderId, sort_order: job.sortOrder } as never)
+            .eq("id", job.mockupId);
+          return;
+        case "remove-from-folder":
+          await t("mockups")
+            .update({ folder_id: null, sort_order: job.sortOrder } as never)
+            .eq("id", job.mockupId);
+          return;
+        case "ungroup": {
+          await Promise.all(
+            job.mockupIds.map((id, i) =>
+              t("mockups").update({ folder_id: null, sort_order: job.baseSortOrder + i } as never).eq("id", id),
+            ),
+          );
+          await t("asset_folders").delete().eq("id", job.folderId).eq("athlete_id", entityId);
+          return;
+        }
+      }
+    },
+    onSuccess: refresh,
   });
 }
 

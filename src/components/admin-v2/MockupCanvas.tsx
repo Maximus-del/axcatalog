@@ -1,32 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Crosshair, Ruler, Trash2 } from "lucide-react";
+import { Info, Ruler, Trash2 } from "lucide-react";
 import {
-  boxAtPoint,
-  clampBox,
-  fitToZone,
   moveBox,
-  nearestZone,
   resizeBox,
   type Box,
   type Handle,
   type PlacedDesign,
-  type ZoneLike,
 } from "@/lib/v2/placement-geometry";
 import type { Design } from "@/lib/v2/types";
 import { AssetImage } from "./primitives";
 
 // The mockup canvas: artwork placed freely on a garment photograph.
 //
-// DIRECT MANIPULATION, WITH GUIDES — NOT SNAPPING. Print zones are drawn as
-// guides and offered as one-click fits, but nothing moves artwork the operator
-// positioned by hand. Auto-snap in a tool like this feels like the software
-// arguing with you, and the whole point of this screen is that the operator's
-// eye is the authority.
+// NO PRINT ZONES. The predefined zone system is gone from this surface. It was
+// a rectangle-shaped answer to a question operators do not ask — they position
+// by eye against the garment, not against a named box, and every zone chip was
+// one more thing to read past. What replaced it is two movable alignment lines,
+// one vertical and one horizontal, which the operator drags where they want a
+// reference and which never touch the artwork. Guides guide; they do not
+// constrain, snap, or clamp.
+//
+// The only production fact on screen is the maximum print size, stated once.
 //
 // Geometry lives in placement-geometry.ts and is unit-tested. This component
 // owns exactly two things the tests cannot: converting pointer pixels into
 // percentages, and measuring each artwork's natural aspect ratio so it can be
 // scaled without distortion.
+
+export interface Guides {
+  /** Percentage across the garment box. */
+  x: number;
+  /** Percentage down the garment box. */
+  y: number;
+}
+
+export const DEFAULT_GUIDES: Guides = { x: 50, y: 34 };
 
 export const DRAG_MIME = "application/x-ax-design-id";
 
@@ -37,8 +45,9 @@ export default function MockupCanvas({
   approximateNote,
   placed,
   designsById,
-  zones,
   surface,
+  guides,
+  onGuidesChange,
   onChange,
   onDropDesign,
 }: {
@@ -48,14 +57,16 @@ export default function MockupCanvas({
   approximateNote: string;
   placed: PlacedDesign[];
   designsById: Map<string, Design>;
-  zones: ZoneLike[];
   surface: "front" | "back";
+  guides: Guides;
+  onGuidesChange: (next: Guides) => void;
   onChange: (next: PlacedDesign[]) => void;
   onDropDesign: (designId: string, xPct: number, yPct: number, aspect: number) => void;
 }) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [showZones, setShowZones] = useState(true);
+  const [showGuides, setShowGuides] = useState(true);
+  const [dragGuide, setDragGuide] = useState<"x" | "y" | null>(null);
   const [dropHint, setDropHint] = useState<{ x: number; y: number } | null>(null);
 
   // Natural aspect per design, measured from the decoded image. Until a design
@@ -128,6 +139,38 @@ export default function MockupCanvas({
     target.addEventListener("pointerup", up);
   };
 
+  /**
+   * Dragging an alignment line.
+   *
+   * Kept separate from artwork dragging so a guide can never be picked up by
+   * accident while positioning a design — the two live at different z-levels
+   * and the guide handle is the only thing that starts this.
+   */
+  const startGuideDrag = (e: React.PointerEvent, axis: "x" | "y") => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragGuide(axis);
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+
+    const move = (ev: PointerEvent) => {
+      const at = pointAt(ev.clientX, ev.clientY);
+      onGuidesChange(
+        axis === "x"
+          ? { ...guides, x: Math.min(100, Math.max(0, at.x)) }
+          : { ...guides, y: Math.min(100, Math.max(0, at.y)) },
+      );
+    };
+    const up = (ev: PointerEvent) => {
+      target.releasePointerCapture(ev.pointerId);
+      target.removeEventListener("pointermove", move);
+      target.removeEventListener("pointerup", up);
+      setDragGuide(null);
+    };
+    target.addEventListener("pointermove", move);
+    target.addEventListener("pointerup", up);
+  };
+
   /* ----------------------------------------------------- keyboard nudging */
 
   useEffect(() => {
@@ -159,8 +202,6 @@ export default function MockupCanvas({
 
   /* ---------------------------------------------------------------- render */
 
-  const near = selectedItem ? nearestZone(selectedItem.box, zones) : null;
-
   return (
     <div className="space-y-2.5">
       <div
@@ -191,19 +232,40 @@ export default function MockupCanvas({
           </div>
         )}
 
-        {/* Print zone guides. Drawn, never enforced. */}
-        {showZones &&
-          zones.map((z) => (
+        {/* Alignment lines. Movable references — they never touch the artwork. */}
+        {showGuides && (
+          <>
             <span
-              key={z.zoneId}
-              className="pointer-events-none absolute rounded-[2px] border border-dashed border-[hsl(var(--ax-accent)/0.45)]"
-              style={{ left: `${z.x}%`, top: `${z.y}%`, width: `${z.w}%`, height: `${z.h}%` }}
-            >
-              <span className="absolute -top-4 left-0 whitespace-nowrap text-[8px] font-medium uppercase tracking-wider text-[hsl(var(--ax-accent)/0.75)]">
-                {z.label}
-              </span>
-            </span>
-          ))}
+              className="pointer-events-none absolute inset-y-0 border-l border-dashed"
+              style={{
+                left: `${guides.x}%`,
+                borderColor: `hsl(var(--ax-accent) / ${dragGuide === "x" ? 0.95 : 0.5})`,
+              }}
+            />
+            <span
+              className="pointer-events-none absolute inset-x-0 border-t border-dashed"
+              style={{
+                top: `${guides.y}%`,
+                borderColor: `hsl(var(--ax-accent) / ${dragGuide === "y" ? 0.95 : 0.5})`,
+              }}
+            />
+            {/* Handles sit on the edges so they never overlap the artwork. */}
+            <span
+              onPointerDown={(e) => startGuideDrag(e, "x")}
+              role="presentation"
+              title="Drag to move the vertical alignment line"
+              className="absolute top-0 z-20 h-4 w-4 -translate-x-1/2 cursor-ew-resize touch-none rounded-b-md border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-canvas))]"
+              style={{ left: `${guides.x}%` }}
+            />
+            <span
+              onPointerDown={(e) => startGuideDrag(e, "y")}
+              role="presentation"
+              title="Drag to move the horizontal alignment line"
+              className="absolute left-0 z-20 h-4 w-4 -translate-y-1/2 cursor-ns-resize touch-none rounded-r-md border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-canvas))]"
+              style={{ top: `${guides.y}%` }}
+            />
+          </>
+        )}
 
         {mine.map((item) => {
           const design = designsById.get(item.designId);
@@ -273,63 +335,48 @@ export default function MockupCanvas({
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
-          onClick={() => setShowZones((v) => !v)}
+          onClick={() => setShowGuides((v) => !v)}
           className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] transition-colors ${
-            showZones
+            showGuides
               ? "bg-[hsl(var(--ax-accent)/0.16)] text-[hsl(var(--ax-accent))]"
               : "text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-secondary))]"
           }`}
         >
-          <Ruler className="h-3 w-3" /> Print zones
+          <Ruler className="h-3 w-3" /> Alignment lines
+        </button>
+        <button
+          type="button"
+          onClick={() => onGuidesChange(DEFAULT_GUIDES)}
+          className="rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+        >
+          Recentre lines
         </button>
 
-        {selectedItem ? (
-          <>
-            {zones.map((z) => (
-              <button
-                key={z.zoneId}
-                type="button"
-                onClick={() =>
-                  update(selectedItem.id, fitToZone(z, aspectOf(selectedItem.designId)), {
-                    zoneId: z.zoneId,
-                    zoneLabel: z.label,
-                  })
-                }
-                className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
-                  selectedItem.zoneId === z.zoneId
-                    ? "border-[hsl(var(--ax-accent))] text-[hsl(var(--ax-accent))]"
-                    : "border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
-                }`}
-              >
-                <Crosshair className="mr-1 inline h-3 w-3" />
-                {z.label}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => remove(selectedItem.id)}
-              className="ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] text-[hsl(var(--ax-red,var(--ax-amber)))] hover:brightness-125"
-            >
-              <Trash2 className="h-3 w-3" /> Remove
-            </button>
-          </>
-        ) : (
-          <span className="text-[11px] text-[hsl(var(--ax-faint))]">
-            Select artwork to resize it, fit it to a print zone, or nudge it with the arrow keys.
-          </span>
+        {selectedItem && (
+          <button
+            type="button"
+            onClick={() => remove(selectedItem.id)}
+            className="ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] text-[hsl(var(--ax-amber))] hover:brightness-125"
+          >
+            <Trash2 className="h-3 w-3" /> Remove
+          </button>
         )}
       </div>
 
-      {selectedItem && (
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-[11px] text-[hsl(var(--ax-faint))]">
-          {selectedItem.zoneLabel
-            ? `Fitted to ${selectedItem.zoneLabel}.`
-            : near
-              ? `Free placement — sitting about where ${near.label} is.`
-              : "Free placement."}{" "}
-          {Math.round(selectedItem.box.w)}% of garment width. Corner handles keep the artwork's proportions.
+          {selectedItem
+            ? `${Math.round(selectedItem.box.w)}% of garment width. Corner handles keep the artwork's proportions; arrow keys nudge.`
+            : "Drag artwork anywhere. The dashed lines are references only — nothing snaps to them."}
         </p>
-      )}
+        <span
+          className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-[hsl(var(--ax-secondary))]"
+          title="Guidance for the operator. Artwork is not automatically restricted to this size."
+        >
+          <Info className="h-3 w-3" aria-hidden />
+          Maximum print size: 16&quot; &times; 20&quot;
+        </span>
+      </div>
     </div>
   );
 }

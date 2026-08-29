@@ -12,7 +12,9 @@ import DesignShelf, { type ShelfFilter } from "@/components/admin-v2/DesignShelf
 import ProductizeDrawer from "@/components/admin-v2/ProductizeDrawer";
 import ConceptBuilder from "@/components/admin-v2/ConceptBuilder";
 import DesignDrawer from "@/components/admin-v2/DesignDrawer";
-import type { Design } from "@/lib/v2/types";
+import MockupLibrary from "@/components/admin-v2/MockupLibrary";
+import AssetsDrawer from "@/components/admin-v2/AssetsDrawer";
+import type { Design, Mockup } from "@/lib/v2/types";
 
 // The AX operator workspace for one entity.
 //
@@ -38,6 +40,9 @@ export default function V2EntityWorkspace() {
   // hands off to the builder).
   const [openDesign, setOpenDesign] = useState<Design | null>(null);
   const [mockupFrom, setMockupFrom] = useState<Design | null>(null);
+  // A saved mockup reopened for editing, and one being turned into assets.
+  const [editMockupId, setEditMockupId] = useState<string | null>(null);
+  const [assetsFor, setAssetsFor] = useState<Mockup | null>(null);
   const [productizing, setProductizing] = useState<string | null>(null);
   const [active, setActive] = useState<StepKey>("designs");
   const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
@@ -287,6 +292,12 @@ export default function V2EntityWorkspace() {
       </Section>
 
       {/* ------------------------------------------------------------ 2 MOCKUPS */}
+      {/*
+        The mockup LIBRARY, not a staging area. A mockup is a finished object
+        that can live here indefinitely — no price, no product, nothing sent to
+        Shopify — and it is organised exactly like the Designs shelf so there is
+        only one filing system to learn.
+      */}
       <Section
         id="mockups"
         title="Mockups"
@@ -296,52 +307,14 @@ export default function V2EntityWorkspace() {
             + Create mockup
           </button>
         }
-        empty="No mockups yet. A mockup is a design placed on a blank — it can be nothing more than an image and this entity, and it never needs pricing or Shopify to exist."
       >
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-          {concepts.map((c) => {
-            const stage = stageOf(c);
-            return (
-              <Card key={c.id} className="p-0">
-                <AssetImage
-                  url={c.imageUrl}
-                  bucket={c.imageBucket}
-                  path={c.imagePath}
-                  alt={c.title}
-                  className="aspect-square w-full bg-white/[0.03]"
-                  fit="contain"
-                />
-                <div className="p-2.5">
-                  <div className="truncate text-[12px] font-medium">{c.title}</div>
-                  <div className="mt-1 truncate text-[10px] text-[hsl(var(--ax-faint))]">
-                    {[c.colorName, c.placementLabel].filter(Boolean).join(" · ") || "Unspecified"}
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <Chip tone={STAGE_TONES[stage]}>{STAGE_LABELS[stage]}</Chip>
-                  </div>
-                  {c.productId ? (
-                    <a
-                      href={`/admin/products/${c.productId}`}
-                      className="mt-2 block rounded-full border border-[hsl(var(--ax-border))] py-1 text-center text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
-                    >
-                      View product
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setProductizing(c.id)}
-                      disabled={!c.blankId}
-                      title={c.blankId ? "Turn this mockup into a product" : "Add a blank to this mockup first"}
-                      className="mt-2 w-full rounded-full bg-[hsl(var(--ax-accent)/0.16)] py-1 text-[11px] font-semibold text-[hsl(var(--ax-accent))] disabled:opacity-40"
-                    >
-                      Create product
-                    </button>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+        <MockupLibrary
+          entityId={entity.id}
+          organizationId={entity.organizationId}
+          onOpen={(m) => setEditMockupId(m.id)}
+          onTurnIntoAssets={(m) => setAssetsFor(m)}
+          onCreateProduct={(m) => setProductizing(m.id)}
+        />
       </Section>
 
       {/* ----------------------------------------------------------- 3 PRODUCTS */}
@@ -494,6 +467,18 @@ export default function V2EntityWorkspace() {
             setMockupFrom(null);
           }}
         />
+      )}
+
+      {editMockupId && (
+        <ConceptBuilder
+          entity={entity}
+          editMockupId={editMockupId}
+          onClose={() => setEditMockupId(null)}
+        />
+      )}
+
+      {assetsFor && (
+        <AssetsDrawer mockup={assetsFor} entityName={entity.name} onClose={() => setAssetsFor(null)} />
       )}
 
       {productizing &&

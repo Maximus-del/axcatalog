@@ -26,6 +26,8 @@ export interface ConceptDraft {
   imageUrl?: string | null;
   notes?: string | null;
   flow: "design_first" | "blank_first" | "upload";
+  /** Per-surface alignment line positions, so a reopened mockup looks identical. */
+  guides?: Record<string, { x: number; y: number }>;
 }
 
 /** Everything a concept is still missing before it could become a Product. */
@@ -126,6 +128,7 @@ export function draftToRow(d: ConceptDraft) {
     image_url: d.imageUrl ?? null,
     description: d.notes ?? null,
     approval_state: "none",
+    guides: d.guides ?? {},
     created_from: { flow: d.flow, source: "admin-v2" },
   };
 }

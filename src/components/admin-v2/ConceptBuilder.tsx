@@ -8,11 +8,13 @@ import {
   useCreateMockupBatch,
   useDesignShelf,
   useDesigns,
+  useMockupForEdit,
   usePrintZones,
+  useUpdateMockup,
   useUploadDesign,
 } from "@/lib/v2/data";
 import { expandVariants, overLimit, unphotographed, variantTitle, MAX_VARIANTS } from "@/lib/v2/variants";
-import MockupCanvas, { DRAG_MIME } from "./MockupCanvas";
+import MockupCanvas, { DEFAULT_GUIDES, DRAG_MIME, type Guides } from "./MockupCanvas";
 import {
   boxAtPoint,
   defaultBox,
@@ -53,6 +55,7 @@ export default function ConceptBuilder({
   onCreated,
   initialFlow,
   initialDesign,
+  editMockupId,
 }: {
   entity: Entity;
   onClose: () => void;
@@ -60,6 +63,8 @@ export default function ConceptBuilder({
   initialFlow?: Flow;
   /** Opened from a design's own page — skip straight to choosing the blank. */
   initialDesign?: Design | null;
+  /** Reopening a saved mockup. Everything is loaded and the flow becomes an edit. */
+  editMockupId?: string | null;
 }) {
   const [flow, setFlow] = useState<Flow | null>(initialFlow ?? (initialDesign ? "design_first" : null));
   const [step, setStep] = useState<Step>(
@@ -73,6 +78,12 @@ export default function ConceptBuilder({
   // already read); this is the full arrangement.
   const [placed, setPlaced] = useState<PlacedDesign[]>([]);
   const [surface, setSurface] = useState<"front" | "back">("front");
+  // Alignment lines are per surface — where you want a reference on the chest
+  // is not where you want one on the back.
+  const [guides, setGuides] = useState<Record<string, Guides>>({
+    front: DEFAULT_GUIDES,
+    back: DEFAULT_GUIDES,
+  });
   const [collectionId, setCollectionId] = useState<string>("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -89,6 +100,9 @@ export default function ConceptBuilder({
   const blanksQ = useBlanks();
   const collectionsQ = useCollections();
   const create = useCreateMockupBatch();
+  const update = useUpdateMockup(entity.id);
+  const editing = useMockupForEdit(editMockupId ?? undefined);
+  const isEdit = Boolean(editMockupId);
   const createCollection = useCreateCollection();
   const upload = useUploadDesign(entity.id, entity.organizationId);
 
@@ -139,13 +153,14 @@ export default function ConceptBuilder({
     return m;
   }, [designsQ.data, design, shelfQ.data]);
 
-  const zonesForSurface = useMemo(
-    () =>
-      presets
-        .filter((p) => p.surface === surface)
-        .map((p) => ({ zoneId: p.zoneId, label: p.label, surface: p.surface, x: p.x, y: p.y, w: p.w, h: p.h })),
-    [presets, surface],
-  );
+  /**
+   * Where a click-to-add design lands: centred on the current alignment lines.
+   *
+   * Print zones used to decide this. The lines are a better answer because they
+   * are wherever the operator just put them, so "drop it in the middle" means
+   * the middle of what they are working to.
+   */
+  const dropCentre = () => guides[surface] ?? DEFAULT_GUIDES;
 
   const variants = useMemo(() => {
     if (!blank) return [];
@@ -198,13 +213,43 @@ export default function ConceptBuilder({
   // design, not the colourway, and re-placing it after every colour change would
   // defeat the point of trying a design across a range.
   useEffect(() => {
+    // Reopening sets the blank and the colour together; clearing here would
+    // undo the restored colourway a tick after it was set.
+    if (isEdit && hydrated) return;
     setColorName(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blank?.id]);
+
+  /**
+   * Reopen: restore the exact composition.
+   *
+   * Runs once per loaded mockup. Everything the operator arranged — blank,
+   * colour, every placement with its geometry, the alignment lines — comes back
+   * from the database rather than from defaults, which is the whole point of
+   * the persistence work.
+   */
+  const [hydrated, setHydrated] = useState<string | null>(null);
+  useEffect(() => {
+    const m = editing.data;
+    if (!m || hydrated === m.id) return;
+    setHydrated(m.id);
+    setTitle(m.title);
+    setNotes(m.notes ?? "");
+    setCollectionId(m.collectionId ?? "");
+    setColorName(m.colorName);
+    setPlaced(m.placed);
+    if (Object.keys(m.guides).length > 0) {
+      setGuides({ front: DEFAULT_GUIDES, back: DEFAULT_GUIDES, ...m.guides });
+    }
+    const b = (blanksQ.data ?? []).find((x) => x.id === m.blankId) ?? null;
+    if (b) setBlank(b);
+    setStep("placement");
+  }, [editing.data, blanksQ.data, hydrated]);
 
   // Choosing the headline design seeds a front placement, so the common case —
   // one design, centred on the chest — needs no canvas work at all.
   useEffect(() => {
-    if (!design) return;
+    if (!design || isEdit) return;
     setPlaced((prev) => (prev.length > 0 ? prev : [{
       id: `${design.id}-front-seed`,
       designId: design.id,
@@ -307,6 +352,28 @@ export default function ConceptBuilder({
   const submit = async () => {
     if (!design && !blank) return;
     try {
+      if (isEdit && editMockupId) {
+        const headlineEdit = placed.find((p) => p.surface === "front") ?? placed[0] ?? null;
+        await update.mutateAsync({
+          mockupId: editMockupId,
+          draft: {
+            title: title.trim() || "Untitled mockup",
+            blankId: blank?.id ?? null,
+            colorName,
+            collectionId: collectionId || null,
+            notes: notes.trim() || null,
+            imageUrl: garmentImage.url,
+            designId: headlineEdit?.designId ?? design?.id ?? null,
+            guides,
+          },
+          placements: toRows(placed),
+        });
+        toast.success("Mockup saved");
+        onCreated?.(editMockupId);
+        onClose();
+        return;
+      }
+
       // The headline placement mirrors onto each mockup row's own columns so V1
       // and every existing V2 read keep working unchanged; the full arrangement
       // lives in product_print_placements.
@@ -332,6 +399,7 @@ export default function ConceptBuilder({
               .url,
           notes: notes.trim() || null,
           flow: flow ?? "design_first",
+          guides,
         },
         placements: rows,
       }));
@@ -371,7 +439,7 @@ export default function ConceptBuilder({
             </button>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-semibold">Create mockup</div>
+            <div className="truncate text-[15px] font-semibold">{isEdit ? "Edit mockup" : "Create mockup"}</div>
             <div className="truncate text-[12px] text-[hsl(var(--ax-faint))]">
               {entity.name} · {audience} catalog
             </div>
@@ -579,8 +647,8 @@ export default function ConceptBuilder({
               <MockupDesignRail
                 entityId={entity.id}
                 onQuickAdd={(d) => {
-                  const zone = zonesForSurface.find((z) => z.zoneId === (surface === "front" ? "center_chest" : "center_back"));
-                  addPlacement(d.id, zone ? fitToZone(zone, 1) : defaultBox(1), zone ? { zoneId: zone.zoneId, zoneLabel: zone.label } : null);
+                  const at = dropCentre();
+                  addPlacement(d.id, boxAtPoint(at.x, at.y, 1), null);
                 }}
               />
 
@@ -640,8 +708,9 @@ export default function ConceptBuilder({
                   }
                   placed={placed}
                   designsById={designsById}
-                  zones={zonesForSurface}
                   surface={surface}
+                  guides={guides[surface] ?? DEFAULT_GUIDES}
+                  onGuidesChange={(next) => setGuides((prev) => ({ ...prev, [surface]: next }))}
                   onChange={setPlaced}
                   onDropDesign={(designId, x, y, aspect) =>
                     addPlacement(designId, boxAtPoint(x, y, aspect), null)
@@ -896,14 +965,18 @@ export default function ConceptBuilder({
               <button
                 type="button"
                 onClick={submit}
-                disabled={create.isPending || (!design && !blank) || overLimit(variants.length)}
+                disabled={create.isPending || update.isPending || (!design && !blank) || (!isEdit && overLimit(variants.length))}
                 className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
               >
-                {create.isPending
-                  ? "Creating…"
-                  : variants.length > 1
-                    ? `Create ${variants.length} mockups`
-                    : "Create mockup"}
+                {isEdit
+                  ? update.isPending
+                    ? "Saving…"
+                    : "Save mockup"
+                  : create.isPending
+                    ? "Creating…"
+                    : variants.length > 1
+                      ? `Create ${variants.length} mockups`
+                      : "Create mockup"}
               </button>
             ) : (
               <button

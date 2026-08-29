@@ -166,6 +166,61 @@ export interface ProductConcept {
   createdAt: string;
 }
 
+/**
+ * MOCKUP — a saved composition of artwork on a blank.
+ *
+ * Source of truth: `mockups` WHERE kind='concept', with its arrangement in
+ * `product_print_placements`. Same row the rest of V2 calls a Product Concept;
+ * "Mockup" is the word every human-facing surface uses.
+ *
+ * A mockup is a finished object in its own right. It never needs a Product, a
+ * Shopify listing, a price, inventory or an approval to be worth keeping, and
+ * it can sit in the library indefinitely.
+ */
+export interface Mockup {
+  id: string;
+  title: string;
+  entityId: string | null;
+  organizationId: string;
+  blankId: string | null;
+  /** Resolved for display and search; the mockup row stores only the id. */
+  blankName: string | null;
+  colorName: string | null;
+  /** Cover image — the garment shot the mockup was built on. */
+  imageUrl: string | null;
+  imageBucket: string | null;
+  imagePath: string | null;
+  /** Organisational only. Null means loose on the shelf. */
+  folderId: string | null;
+  sortOrder: number;
+  status: string;
+  approvalState: ApprovalState;
+  /** Set once this mockup has been configured into a sellable Product. */
+  productId: string | null;
+  collectionId: string | null;
+  /** Per-surface alignment guide positions, percentages of the garment box. */
+  guides: Record<string, { x: number; y: number }>;
+  /** Which surfaces actually carry artwork. Derived from the placements. */
+  surfaces: Array<"front" | "back">;
+  placementCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A mockup folder. Source of truth: `asset_folders` WHERE scope='mockups'.
+ *
+ * Purely organisational — a folder never changes the mockups inside it.
+ */
+export interface MockupFolder {
+  id: string;
+  name: string;
+  entityId: string | null;
+  sortOrder: number;
+  /** Reserved. Null means "use the first member", which is today's behaviour. */
+  coverMockupId: string | null;
+}
+
 /** COLLECTION. Source of truth: `collections`. Never requires Shopify. */
 export interface Collection {
   id: string;
