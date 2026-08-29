@@ -26,6 +26,7 @@ const mockup = (id: string, over: Partial<Mockup> = {}): Mockup => ({
   folderId: null,
   sortOrder: 0,
   status: "draft",
+  lifecycle: "bin",
   approvalState: "none",
   productId: null,
   collectionId: null,

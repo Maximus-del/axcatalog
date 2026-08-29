@@ -194,6 +194,8 @@ export interface Mockup {
   folderId: string | null;
   sortOrder: number;
   status: string;
+  /** Operator lifecycle: bin | in_progress | ready | converted | archived. */
+  lifecycle: string;
   approvalState: ApprovalState;
   /** Set once this mockup has been configured into a sellable Product. */
   productId: string | null;

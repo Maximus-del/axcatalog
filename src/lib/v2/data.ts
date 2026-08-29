@@ -603,6 +603,151 @@ export function useMockupPlacements(mockupId: string | undefined) {
   });
 }
 
+/* --------------------------------------------- lookbooks, bulk, pricing */
+
+/**
+ * Lookbooks are collections, not a new object.
+ *
+ * `collections` was already the grouping object, already Shopify-independent
+ * and already entity-scoped. A lookbook is one more collection_type, so adding
+ * a mockup to one is a write to the mockup's existing collection_id.
+ */
+export function useLookbooks(entityId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "lookbooks", entityId],
+    enabled: Boolean(entityId),
+    queryFn: async () => {
+      const res = await t("collections")
+        .select("id, name, collection_type")
+        .eq("athlete_id", entityId as string)
+        .order("name", { ascending: true });
+      return ((res.data ?? []) as unknown as Row[]).map((c) => ({
+        id: String(c.id),
+        name: String(c.name ?? "Untitled"),
+        type: String(c.collection_type ?? "other"),
+      }));
+    },
+  });
+}
+
+export function useCreateLookbook(entityId: string, organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      const res = await t("collections")
+        .insert({
+          organization_id: organizationId,
+          athlete_id: entityId,
+          name: name.trim(),
+          slug: `${slugify(name)}-${Math.random().toString(36).slice(2, 7)}`,
+          status: "draft",
+          collection_type: "lookbook",
+        } as never)
+        .select("id")
+        .single();
+      if (res.error) throw res.error;
+      return String((res.data as unknown as Row).id);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "lookbooks", entityId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "collections"] });
+    },
+  });
+}
+
+/**
+ * The live volume discount ladder.
+ *
+ * Read from `volume_discount_breaks` rather than hard-coded, so changing the
+ * business terms is a row edit instead of a deploy.
+ */
+export function useDiscountBreaks() {
+  return useQuery({
+    queryKey: ["v2", "discount-breaks"],
+    staleTime: 10 * 60_000,
+    queryFn: async () => {
+      const res = await t("volume_discount_breaks").select("min_qty, discount_pct");
+      return ((res.data ?? []) as unknown as Row[])
+        .map((b) => ({ minQty: Number(b.min_qty), discountPct: Number(b.discount_pct) }))
+        .filter((b) => Number.isFinite(b.minQty) && Number.isFinite(b.discountPct))
+        .sort((a, b) => a.minQty - b.minQty);
+    },
+  });
+}
+
+/**
+ * Raise a bulk order from a mockup.
+ *
+ * Writes to `bulk_order_requests` / `bulk_order_items`, which already exist,
+ * already hold 10 live orders and already carry the wholesale/retail/savings
+ * model — this is a new door into a working system, not a new system. Items
+ * carry mockup_id so an order can always be traced back to what was ordered.
+ */
+export function useCreateBulkOrder(entityId: string, organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      mockupId: string;
+      mockupTitle: string;
+      blankId: string | null;
+      colorName: string | null;
+      lines: Array<{ size: string; quantity: number }>;
+      unitWholesale: number;
+      unitRetail: number;
+      subtotal: number;
+      retailEquivalent: number;
+      savings: number;
+      notes: string | null;
+    }) => {
+      const lines = input.lines.filter((l) => l.quantity > 0);
+      if (lines.length === 0) throw new Error("Add at least one size");
+
+      const req = await t("bulk_order_requests")
+        .insert({
+          organization_id: organizationId,
+          athlete_id: entityId,
+          total_units: lines.reduce((n, l) => n + l.quantity, 0),
+          priority: "normal",
+          payment_method: "invoice",
+          channel: "admin-v2",
+          wholesale_subtotal: input.subtotal,
+          retail_equivalent: input.retailEquivalent,
+          total_savings: input.savings,
+          credit_applied: 0,
+          amount_due: input.subtotal,
+          notes: input.notes,
+        } as never)
+        .select("id")
+        .single();
+      if (req.error) throw req.error;
+      const orderId = String((req.data as unknown as Row).id);
+
+      const items = lines.map((l) => ({
+        order_request_id: orderId,
+        mockup_id: input.mockupId,
+        blank_id: input.blankId,
+        product_name_snapshot: input.mockupTitle,
+        size: l.size,
+        color: input.colorName,
+        quantity: l.quantity,
+        unit_wholesale_price: input.unitWholesale,
+        unit_retail_price: input.unitRetail,
+        line_subtotal: Math.round(input.unitWholesale * l.quantity * 100) / 100,
+      }));
+      const ins = await t("bulk_order_items").insert(items as never);
+      if (ins.error) {
+        // A request with no lines is not a smaller order, it is a broken record.
+        await t("bulk_order_requests").delete().eq("id", orderId);
+        throw ins.error;
+      }
+      return orderId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "orders"] });
+    },
+  });
+}
+
 /* ------------------------------------------------------- mockup library */
 
 /**
@@ -721,7 +866,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
   const [mockupRes, folderRes] = await Promise.all([
     t("mockups")
       .select(
-        "id, title, athlete_id, organization_id, blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, approval_state, product_id, collection_id, guides, created_at, updated_at",
+        "id, title, athlete_id, organization_id, blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, product_id, collection_id, guides, created_at, updated_at",
       )
       .eq("athlete_id", entityId)
       .eq("kind", "concept")
@@ -776,6 +921,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
       folderId: str(r.folder_id),
       sortOrder: Number(r.sort_order ?? 0),
       status: String(r.status ?? "draft"),
+      lifecycle: String(r.lifecycle ?? "bin"),
       approvalState: (str(r.approval_state) ?? "none") as Mockup["approvalState"],
       productId: str(r.product_id),
       collectionId: str(r.collection_id),
@@ -816,7 +962,10 @@ export type MockupJob =
   | { type: "rename-folder"; folderId: string; name: string }
   | { type: "add-to-folder"; folderId: string; mockupId: string; sortOrder: number }
   | { type: "remove-from-folder"; mockupId: string; sortOrder: number }
-  | { type: "ungroup"; folderId: string; mockupIds: string[]; baseSortOrder: number };
+  | { type: "ungroup"; folderId: string; mockupIds: string[]; baseSortOrder: number }
+  | { type: "set-lifecycle"; mockupIds: string[]; lifecycle: string }
+  | { type: "new-folder"; name: string; sortOrder: number }
+  | { type: "set-collection"; mockupIds: string[]; collectionId: string | null };
 
 /**
  * Library actions. Folders are organisational only, so every folder operation
@@ -906,6 +1055,32 @@ export function useMockupActions(entityId: string, organizationId: string) {
           await t("mockups")
             .update({ folder_id: null, sort_order: job.sortOrder } as never)
             .eq("id", job.mockupId);
+          return;
+        case "set-lifecycle":
+          await Promise.all(
+            job.mockupIds.map((id) => t("mockups").update({ lifecycle: job.lifecycle } as never).eq("id", id)),
+          );
+          return;
+        case "new-folder": {
+          const made = await t("asset_folders")
+            .insert({
+              organization_id: organizationId,
+              athlete_id: entityId,
+              scope: "mockups",
+              name: job.name,
+              sort_order: job.sortOrder,
+            } as never)
+            .select("id")
+            .single();
+          if (made.error) throw made.error;
+          return;
+        }
+        case "set-collection":
+          await Promise.all(
+            job.mockupIds.map((id) =>
+              t("mockups").update({ collection_id: job.collectionId } as never).eq("id", id),
+            ),
+          );
           return;
         case "ungroup": {
           await Promise.all(

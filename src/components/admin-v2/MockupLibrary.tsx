@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
+  Check,
   Copy,
   FolderOpen,
+  FolderPlus,
   GripVertical,
+  LayoutGrid,
+  List,
   MoreHorizontal,
   PackagePlus,
   Pencil,
@@ -26,6 +30,14 @@ import {
   suggestFolderName,
   type MockupShelfItem,
 } from "@/lib/v2/mockup-shelf";
+import {
+  LIFECYCLE,
+  LIFECYCLE_ORDER,
+  applyLifecycleFilter,
+  countByLifecycle,
+  toLifecycle,
+  type Lifecycle,
+} from "@/lib/v2/mockup-lifecycle";
 import type { Mockup } from "@/lib/v2/types";
 import { AssetImage, Chip, EmptyState, Skeleton } from "./primitives";
 
@@ -69,11 +81,25 @@ export default function MockupLibrary({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [optimistic, setOptimistic] = useState<MockupShelfItem[] | null>(null);
   const [draggingMember, setDraggingMember] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<Lifecycle | "all">("all");
+  const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [view, setView] = useState<"grid" | "list">("grid");
+  // Multi-select for bulk moves and status changes. Empty means single-item mode.
+  const [selected, setSelected] = useState<string[]>([]);
 
-  const serverItems = useMemo(
-    () => (data ? buildMockupShelf(data.mockups, data.folders) : []),
-    [data],
-  );
+  const serverItems = useMemo(() => {
+    if (!data) return [];
+    // Status is a property of the mockup, so it filters the mockups BEFORE the
+    // shelf is built — otherwise a folder whose members are all archived would
+    // still render as an empty folder.
+    const mockups = applyLifecycleFilter(data.mockups, statusFilter);
+    const folders =
+      folderFilter === "all" ? data.folders : data.folders.filter((f) => f.id === folderFilter);
+    const scoped = folderFilter === "all" ? mockups : mockups.filter((m) => m.folderId === folderFilter);
+    return buildMockupShelf(scoped, folders);
+  }, [data, statusFilter, folderFilter]);
+
+  const counts = useMemo(() => countByLifecycle(data?.mockups ?? []), [data]);
 
   useEffect(() => setOptimistic(null), [data]);
 
@@ -238,6 +264,11 @@ export default function MockupLibrary({
   const card = (m: Mockup) => (
     <MockupCard
       mockup={m}
+      selected={selected.includes(m.id)}
+      onToggleSelect={() =>
+        setSelected((prev) => (prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id]))
+      }
+      dense={view === "list"}
       renaming={renamingMockup === m.id}
       menuOpen={menuFor === m.id}
       onMenu={() => setMenuFor(menuFor === m.id ? null : m.id)}
@@ -277,10 +308,139 @@ export default function MockupLibrary({
             className="w-full rounded-full border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] py-1.5 pl-8 pr-3 text-[12px] outline-none focus:border-[hsl(var(--ax-accent))]"
           />
         </label>
-        <span className="text-[11px] text-[hsl(var(--ax-faint))]">
-          Drag to reorder. Drop one mockup on another to file them together.
-        </span>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as Lifecycle | "all")}
+          className="rounded-full border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-3 py-1.5 text-[12px] outline-none focus:border-[hsl(var(--ax-accent))]"
+        >
+          <option value="all">All status</option>
+          {LIFECYCLE_ORDER.map((stage) => (
+            <option key={stage} value={stage}>
+              {LIFECYCLE[stage].label} ({counts[stage]})
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={folderFilter}
+          onChange={(e) => setFolderFilter(e.target.value)}
+          className="rounded-full border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-3 py-1.5 text-[12px] outline-none focus:border-[hsl(var(--ax-accent))]"
+        >
+          <option value="all">All folders</option>
+          {(data?.folders ?? []).map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+
+        <div className="inline-flex rounded-full border border-[hsl(var(--ax-border))] p-0.5">
+          {(["grid", "list"] as const).map((v) => {
+            const Icon = v === "grid" ? LayoutGrid : List;
+            return (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                aria-label={`${v} view`}
+                className={`rounded-full p-1.5 transition-colors ${
+                  view === v
+                    ? "bg-[hsl(var(--ax-accent)/0.16)] text-[hsl(var(--ax-accent))]"
+                    : "text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-secondary))]"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            const name = window.prompt("Name the folder");
+            if (!name?.trim()) return;
+            actions.mutate(
+              { type: "new-folder", name: name.trim(), sortOrder: (data?.folders.length ?? 0) },
+              { onError: () => fail("Could not create that folder") },
+            );
+          }}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+        >
+          <FolderPlus className="h-3.5 w-3.5" /> New folder
+        </button>
       </div>
+
+      {selected.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.08)] px-3 py-2">
+          <span className="text-[12px] font-medium text-[hsl(var(--ax-accent))]">
+            {selected.length} selected
+          </span>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const v = e.target.value;
+              e.target.value = "";
+              if (!v) return;
+              actions.mutate(
+                { type: "set-lifecycle", mockupIds: selected, lifecycle: v },
+                {
+                  onError: () => fail("Could not change those"),
+                  onSuccess: () => {
+                    toast.success(`${selected.length} moved to ${LIFECYCLE[v as Lifecycle].label}`);
+                    setSelected([]);
+                  },
+                },
+              );
+            }}
+            className="rounded-full border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-2.5 py-1 text-[11px] outline-none"
+          >
+            <option value="">Set status…</option>
+            {LIFECYCLE_ORDER.filter((l) => l !== "converted").map((stage) => (
+              <option key={stage} value={stage}>
+                {LIFECYCLE[stage].label}
+              </option>
+            ))}
+          </select>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const v = e.target.value;
+              e.target.value = "";
+              if (!v) return;
+              const size = data?.mockups.filter((m) => m.folderId === v).length ?? 0;
+              Promise.all(
+                selected.map((id, i) =>
+                  new Promise<void>((resolve) =>
+                    actions.mutate(
+                      { type: "add-to-folder", folderId: v, mockupId: id, sortOrder: size + i },
+                      { onSettled: () => resolve() },
+                    ),
+                  ),
+                ),
+              ).then(() => {
+                toast.success(`${selected.length} moved`);
+                setSelected([]);
+              });
+            }}
+            className="rounded-full border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-2.5 py-1 text-[11px] outline-none"
+          >
+            <option value="">Move to folder…</option>
+            {(data?.folders ?? []).map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => setSelected([])}
+            className="ml-auto text-[11px] text-[hsl(var(--ax-faint))] underline hover:text-[hsl(var(--ax-secondary))]"
+          >
+            Clear
+          </button>
+        </div>
+      )}
 
       {visible.length === 0 && (
         <EmptyState>Nothing matches “{query}”.</EmptyState>
@@ -455,7 +615,11 @@ export default function MockupLibrary({
             </div>
           )}
           <div
-            className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
+            className={
+              view === "list"
+                ? "grid grid-cols-1 gap-2"
+                : "grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5"
+            }
             onDragEnd={() => {
               setDragKey(null);
               setHint(null);
@@ -498,6 +662,9 @@ function DropRail() {
 
 function MockupCard({
   mockup,
+  selected,
+  onToggleSelect,
+  dense,
   renaming,
   menuOpen,
   onMenu,
@@ -511,6 +678,9 @@ function MockupCard({
   onCreateProduct,
 }: {
   mockup: Mockup;
+  selected: boolean;
+  onToggleSelect: () => void;
+  dense: boolean;
   renaming: boolean;
   menuOpen: boolean;
   onMenu: () => void;
@@ -523,9 +693,14 @@ function MockupCard({
   onTurnIntoAssets: () => void;
   onCreateProduct?: () => void;
 }) {
+  const stage = toLifecycle(mockup.lifecycle);
   return (
-    <div className="ax-card ax-card-hover overflow-hidden transition-all">
-      <div className="relative">
+    <div
+      className={`ax-card ax-card-hover overflow-hidden transition-all ${
+        selected ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
+      } ${dense ? "flex items-center gap-2" : ""}`}
+    >
+      <div className={`relative ${dense ? "w-16 shrink-0" : ""}`}>
         <button type="button" onClick={onOpen} className="block w-full" title="Open this mockup">
           <AssetImage
             url={mockup.imageUrl}
@@ -536,7 +711,27 @@ function MockupCard({
             fit="contain"
           />
         </button>
-        <GripVertical className="pointer-events-none absolute left-1 top-1 h-3.5 w-3.5 text-white/35" aria-hidden />
+        {!dense && (
+          <GripVertical className="pointer-events-none absolute left-1 top-1 h-3.5 w-3.5 text-white/35" aria-hidden />
+        )}
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleSelect();
+          }}
+          aria-label={selected ? "Deselect" : "Select"}
+          title={selected ? "Deselect" : "Select for a bulk action"}
+          className={`absolute left-1 bottom-1 h-4 w-4 rounded-md border transition-colors ${
+            selected
+              ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent))]"
+              : "border-white/45 bg-black/40 hover:border-white"
+          }`}
+        >
+          {selected && <Check className="h-3.5 w-3.5 text-[hsl(var(--ax-on-accent))]" />}
+        </button>
 
         <button
           type="button"
@@ -565,7 +760,7 @@ function MockupCard({
         )}
       </div>
 
-      <div className="space-y-1 p-2">
+      <div className={`space-y-1 p-2 ${dense ? "min-w-0 flex-1" : ""}`}>
         {renaming ? (
           <input
             autoFocus
@@ -590,7 +785,8 @@ function MockupCard({
         <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
           {[mockup.blankName, mockup.colorName].filter(Boolean).join(" · ") || "No blank set"}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
+          <Chip tone={LIFECYCLE[stage].tone}>{LIFECYCLE[stage].label}</Chip>
           {mockup.surfaces.length > 0 ? (
             <Chip>{mockup.surfaces.join(" + ")}</Chip>
           ) : (

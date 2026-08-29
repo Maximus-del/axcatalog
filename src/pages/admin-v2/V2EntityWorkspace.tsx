@@ -14,6 +14,7 @@ import ConceptBuilder from "@/components/admin-v2/ConceptBuilder";
 import DesignDrawer from "@/components/admin-v2/DesignDrawer";
 import MockupLibrary from "@/components/admin-v2/MockupLibrary";
 import AssetsDrawer from "@/components/admin-v2/AssetsDrawer";
+import MockupDetail from "@/components/admin-v2/MockupDetail";
 import type { Design, Mockup } from "@/lib/v2/types";
 
 // The AX operator workspace for one entity.
@@ -43,6 +44,8 @@ export default function V2EntityWorkspace() {
   // A saved mockup reopened for editing, and one being turned into assets.
   const [editMockupId, setEditMockupId] = useState<string | null>(null);
   const [assetsFor, setAssetsFor] = useState<Mockup | null>(null);
+  // Clicking a mockup opens its own page; editing is one step further in.
+  const [detailMockup, setDetailMockup] = useState<Mockup | null>(null);
   const [productizing, setProductizing] = useState<string | null>(null);
   const [active, setActive] = useState<StepKey>("designs");
   const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
@@ -311,7 +314,7 @@ export default function V2EntityWorkspace() {
         <MockupLibrary
           entityId={entity.id}
           organizationId={entity.organizationId}
-          onOpen={(m) => setEditMockupId(m.id)}
+          onOpen={(m) => setDetailMockup(m)}
           onTurnIntoAssets={(m) => setAssetsFor(m)}
           onCreateProduct={(m) => setProductizing(m.id)}
         />
@@ -474,6 +477,27 @@ export default function V2EntityWorkspace() {
           entity={entity}
           editMockupId={editMockupId}
           onClose={() => setEditMockupId(null)}
+        />
+      )}
+
+      {detailMockup && (
+        <MockupDetail
+          mockup={detailMockup}
+          entity={entity}
+          onClose={() => setDetailMockup(null)}
+          onEdit={() => {
+            setEditMockupId(detailMockup.id);
+            setDetailMockup(null);
+          }}
+          onCreateAssets={() => {
+            setAssetsFor(detailMockup);
+            setDetailMockup(null);
+          }}
+          onMakeLive={() => {
+            setProductizing(detailMockup.id);
+            setDetailMockup(null);
+          }}
+          onDeleted={() => setDetailMockup(null)}
         />
       )}
 
