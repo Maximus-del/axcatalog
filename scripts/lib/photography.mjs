@@ -68,18 +68,29 @@ export function parseStyleFolder(title) {
 /* ------------------------------------------------------------------- views */
 
 /**
- * Which surface a folder represents, and whether it is the one to show.
+ * Which surface a folder represents, and whether it is the one to place on.
  *
- * Hood-down is the canonical back: hood-up hides the top third of exactly the
- * area artwork gets placed on. Hood-up is kept as a secondary image rather than
- * discarded — it is the better shot for a client-facing gallery.
+ * HOOD UP IS THE CANONICAL BACK. With the hood up it sits off the shoulders and
+ * the back panel is clear, so artwork can be placed against an unobstructed
+ * surface and what the operator positions is what gets printed. Hood down
+ * bunches the hood across the upper back — directly over the top of the print
+ * area — so anything placed there has to be reasoned about as sitting under
+ * fabric, which is guesswork at mockup time.
+ *
+ * (An earlier version of this file had that the other way round and said so in
+ * a comment. It was simply wrong about where the hood sits.)
+ *
+ * Hood down is kept as a secondary image, not discarded: it is the truer
+ * product shot, and rendering the placement onto it — with the part that falls
+ * under the hood masked — is the natural next step once the flat version is
+ * being produced.
  */
 export function classifyView(folderName) {
   const key = keyOf(folderName).replace(/\s+/g, "_");
   if (key === "front") return { viewType: "front", variant: null, isPrimary: true };
   if (key === "back") return { viewType: "back", variant: null, isPrimary: true };
-  if (key === "back_hood_down") return { viewType: "back", variant: "hood_down", isPrimary: true };
-  if (key === "back_hood_up") return { viewType: "back", variant: "hood_up", isPrimary: false };
+  if (key === "back_hood_up") return { viewType: "back", variant: "hood_up", isPrimary: true };
+  if (key === "back_hood_down") return { viewType: "back", variant: "hood_down", isPrimary: false };
   if (key.startsWith("front")) return { viewType: "front", variant: key.slice(6) || null, isPrimary: false };
   if (key.startsWith("back")) return { viewType: "back", variant: key.slice(5) || null, isPrimary: false };
   return { viewType: null, variant: null, isPrimary: false };

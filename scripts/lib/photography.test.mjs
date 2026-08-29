@@ -59,9 +59,16 @@ describe("classifyView", () => {
     expect(classifyView("Back")).toMatchObject({ viewType: "back", isPrimary: true });
   });
 
-  it("makes hood-down the canonical back and keeps hood-up as secondary", () => {
-    expect(classifyView("BACK_HOOD_DOWN")).toMatchObject({ viewType: "back", variant: "hood_down", isPrimary: true });
-    expect(classifyView("BACK_HOOD_UP")).toMatchObject({ viewType: "back", variant: "hood_up", isPrimary: false });
+  it("makes hood-UP the canonical back, because the back panel is clear", () => {
+    // Hood up sits off the shoulders and leaves the print area unobstructed.
+    // Hood down bunches across the top of exactly that area.
+    expect(classifyView("BACK_HOOD_UP")).toMatchObject({ viewType: "back", variant: "hood_up", isPrimary: true });
+  });
+
+  it("keeps hood-down as a secondary back rather than discarding it", () => {
+    // It is the truer product shot, and the target for rendering the placement
+    // with the under-hood portion masked later on.
+    expect(classifyView("BACK_HOOD_DOWN")).toMatchObject({ viewType: "back", variant: "hood_down", isPrimary: false });
   });
 
   it("degrades to the right surface for an unknown variant", () => {
@@ -155,7 +162,8 @@ describe("buildCatalog", () => {
     ]);
     expect(cat.images).toHaveLength(3);
     expect(cat.images.filter((i) => i.view_type === "back")).toHaveLength(2);
-    expect(cat.images.filter((i) => i.is_primary).map((i) => i.drive_file_id).sort()).toEqual(["b1", "f1"]);
+    // b2 is BACK_HOOD_UP — the placeable back. b1 (hood down) is kept, not primary.
+    expect(cat.images.filter((i) => i.is_primary).map((i) => i.drive_file_id).sort()).toEqual(["b2", "f1"]);
   });
 
   it("skips folders that are not views and reports them", () => {
