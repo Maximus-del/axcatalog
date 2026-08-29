@@ -72,6 +72,55 @@ export function swatchFor(color: BlankColor | null | undefined): string {
 }
 
 /**
+ * Garment types where the back is a real surface an operator will print on.
+ *
+ * Chase's rule, and it matches the photography: a top always has a front and a
+ * back. Bottoms and headwear have a back in the geometric sense, but nobody is
+ * placing a chest logo on the back of a pair of sweatpants, so the back surface
+ * is offered without being pushed.
+ */
+const TWO_SIDED = new Set([
+  "tee",
+  "long_sleeve",
+  "hoodie",
+  "zip_hoodie",
+  "crewneck",
+  "tank",
+  "polo",
+  "jersey",
+]);
+
+export function isTwoSided(garmentType: string | null | undefined): boolean {
+  return TWO_SIDED.has((garmentType ?? "").toLowerCase());
+}
+
+/**
+ * Whether this blank can actually show a back for a given colourway.
+ *
+ * Distinct from isTwoSided(): one is about the garment, the other about the
+ * photography. A hoodie is always two-sided; whether AX has shot its back is a
+ * separate fact, and the canvas needs to state which of the two is missing
+ * rather than showing the front and hoping nobody notices.
+ */
+export function hasBackPhoto(blank: Blank | null, colorName?: string | null): boolean {
+  if (!blank) return false;
+  if (colorName) {
+    const c = blank.colors.find((x) => x.name === colorName);
+    if (c) return Boolean(c.imageUrlBack);
+  }
+  return blank.colors.some((c) => Boolean(c.imageUrlBack));
+}
+
+/** Back-photography coverage across a blank's available colourways. */
+export function backCoverage(blank: Blank): { withBack: number; total: number } {
+  const available = blank.colors.filter((c) => c.available);
+  return {
+    withBack: available.filter((c) => Boolean(c.imageUrlBack)).length,
+    total: available.length,
+  };
+}
+
+/**
  * How much of a blank's colour range is actually photographed.
  *
  * Surfaced in the picker because "24 colours" and "24 colours you can show a

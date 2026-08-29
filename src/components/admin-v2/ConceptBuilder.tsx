@@ -23,7 +23,7 @@ import {
 } from "@/lib/v2/placement-geometry";
 import { presetById, presetsFor, type PlacementPreset } from "@/lib/v2/placements";
 import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
-import { photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
+import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
 import { AssetImage, Chip, Skeleton } from "./primitives";
@@ -589,7 +589,12 @@ export default function ConceptBuilder({
                   <div className="inline-flex rounded-full border border-[hsl(var(--ax-border))] p-0.5">
                     {(["front", "back"] as const).map((sf) => {
                       const count = placed.filter((p) => p.surface === sf).length;
-                      const hasPhoto = Boolean((sf === "front" ? frontImage : backImage).url);
+                      // resolveBlankImage falls back to the front when a back
+                      // shot is missing, so asking it whether the back "has an
+                      // image" always said yes and this warning never fired.
+                      // Ask the photography directly instead.
+                      const hasPhoto =
+                        sf === "front" ? Boolean(frontImage.url) : hasBackPhoto(blank, colorName);
                       return (
                         <button
                           key={sf}
@@ -603,7 +608,14 @@ export default function ConceptBuilder({
                         >
                           {sf}
                           {count > 0 && <span className="ml-1 tabular-nums opacity-80">{count}</span>}
-                          {!hasPhoto && <span className="ml-1 text-[hsl(var(--ax-amber))]" title="No photograph for this side">•</span>}
+                          {!hasPhoto && (
+                            <span
+                              className="ml-1 text-[hsl(var(--ax-amber))]"
+                              title={`No ${sf} photograph for ${colorName ?? "this blank"} — placement still saves`}
+                            >
+                              •
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -611,6 +623,11 @@ export default function ConceptBuilder({
                   <span className="text-[11px] text-[hsl(var(--ax-faint))]">
                     Drag artwork onto the garment. Front and back are placed separately — a front-only design saves a
                     front-only mockup.
+                    {blank && isTwoSided(blank.garmentType) && !hasBackPhoto(blank, colorName) && (
+                      <span className="ml-1 text-[hsl(var(--ax-amber))]">
+                        No back photograph for this colourway yet, so the back view shows the front.
+                      </span>
+                    )}
                   </span>
                 </div>
 
