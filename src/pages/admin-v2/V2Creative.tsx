@@ -132,6 +132,43 @@ function CreativeHome({ totals, loading, concepts, designs, entityName, onNaviga
   </div>;
 }
 
-function ConceptCard({ concept, owner }: { concept: Concept; owner?: string }) { const stage = stageOf(concept); return <Card className="group p-0"><AssetImage url={concept.imageUrl} bucket={concept.imageBucket} path={concept.imagePath} alt={concept.title} className="aspect-square w-full bg-white/[0.03]" fit="contain" /><div className="p-2.5"><div className="truncate text-[12px] font-medium">{concept.title}</div><div className="mt-0.5 truncate text-[10px] text-[hsl(var(--ax-faint))]">{owner ?? "No owner"}</div><div className="mt-2"><Chip tone={STAGE_TONES[stage]}>{STAGE_LABELS[stage]}</Chip></div></div></Card>; }
+/**
+ * A concept card, which always goes somewhere.
+ *
+ * A mockup's home is its person's workspace, so the card routes there and asks
+ * that page to open this one — rather than duplicating the detail view here and
+ * giving the same object two places to live. An ownerless concept still has a
+ * destination: the directory, where an owner can be given to it. A card you
+ * cannot click is a dead end, and there is no such thing as a concept with
+ * nothing worth opening.
+ */
+function ConceptCard({ concept, owner }: { concept: Concept; owner?: string }) {
+  const stage = stageOf(concept);
+  const href = concept.entityId
+    ? `/admin-v2/people/${concept.entityId}?mockup=${concept.id}`
+    : "/admin-v2/people";
+  return (
+    <a href={href} className="ax-card ax-card-hover group block overflow-hidden p-0" title={concept.entityId ? `Open ${concept.title}` : "This concept has no owner - choose one"}>
+      <AssetImage
+        url={concept.imageUrl}
+        bucket={concept.imageBucket}
+        path={concept.imagePath}
+        alt={concept.title}
+        className="aspect-square w-full bg-white/[0.03]"
+        fit="contain"
+        fallbackSeed={concept.id}
+      />
+      <div className="p-2.5">
+        <div className="truncate text-[12px] font-medium">{concept.title}</div>
+        <div className="mt-0.5 truncate text-[10px] text-[hsl(var(--ax-faint))]">
+          {owner ?? "No owner - click to assign"}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          <Chip tone={STAGE_TONES[stage]}>{STAGE_LABELS[stage]}</Chip>
+        </div>
+      </div>
+    </a>
+  );
+}
 function DesignCard({ design, owner }: { design: Design; owner?: string }) { return <a href={`/admin/designs/${design.id}`} className="ax-card ax-card-hover overflow-hidden"><AssetImage bucket={design.fileBucket} path={design.filePath} alt={design.title} className="aspect-square w-full bg-black/30" fit="contain" /><div className="p-2"><div className="truncate text-[11px] text-[hsl(var(--ax-secondary))]">{cleanDesignTitle(design.title) ?? "Untitled"}</div><div className="truncate text-[9px] text-[hsl(var(--ax-faint))]">{owner ?? "No owner"}</div><div className="mt-1 text-[9px]" style={{ color: design.productionReady ? "hsl(var(--ax-accent))" : "hsl(var(--ax-amber))" }}>{design.productionReady ? "Production asset" : "Concept art"}</div></div></a>; }
 function GridSkeleton() { return <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">{Array.from({ length: 12 }).map((_, i) => <Skeleton key={i} className="aspect-square" />)}</div>; }

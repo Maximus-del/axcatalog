@@ -8,6 +8,8 @@ import {
   Layers,
   Pencil,
   Sparkles,
+  FileWarning,
+  Ruler,
   Store,
   Trash2,
   Truck,
@@ -23,6 +25,9 @@ import {
   useLookbooks,
   useMockupActions,
   useMockupForEdit,
+  useMockupProduction,
+  useUpdatePlacementSpec,
+  type ProductionPlacement,
 } from "@/lib/v2/data";
 import { LIFECYCLE, LIFECYCLE_ORDER, canSetManually, toLifecycle, type Lifecycle } from "@/lib/v2/mockup-lifecycle";
 import { DEFAULT_SIZES, quoteBulkOrder } from "@/lib/v2/bulk-pricing";
@@ -44,7 +49,7 @@ import { AssetImage } from "./primitives";
 // Nothing here turns a mockup into a Product on its own. "Make live" is a door
 // into the existing productize flow, not a new one.
 
-type Panel = "lookbook" | "bulk" | null;
+type Panel = "lookbook" | "bulk" | "production" | null;
 
 export default function MockupDetail({
   mockup,
@@ -336,6 +341,13 @@ export default function MockupDetail({
                     active={panel === "bulk"}
                   />
                   <ActionRow
+                    icon={Ruler}
+                    title="Production spec"
+                    blurb="Which artwork files print, and at what size."
+                    onClick={() => setPanel(panel === "production" ? null : "production")}
+                    active={panel === "production"}
+                  />
+                  <ActionRow
                     icon={Store}
                     title="Make live on athlete store"
                     blurb={
@@ -356,6 +368,8 @@ export default function MockupDetail({
               )}
 
               {panel === "bulk" && <BulkOrderPanel mockup={mockup} entity={entity} onDone={() => setPanel(null)} />}
+
+              {panel === "production" && <ProductionPanel mockup={mockup} />}
 
               <p className="text-[11px] leading-relaxed text-[hsl(var(--ax-faint))]">
                 A mockup can live here indefinitely. Nothing above is required — it needs no price, no product and
@@ -604,6 +618,135 @@ function BulkOrderPanel({ mockup, entity, onDone }: { mockup: Mockup; entity: En
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * What actually goes to print.
+ *
+ * Two facts sit side by side here and they are not the same thing. The
+ * percentage is where artwork sits on the PREVIEW; the inches are what the
+ * press is told. Nothing derives one from the other, because that conversion
+ * would need a calibrated real-world width for every garment photograph and
+ * there is no such number — a confidently wrong print size is worse than an
+ * empty field.
+ *
+ * A design with no export file is listed with the gap called out rather than
+ * hidden, because that is precisely the mockup that cannot be printed yet.
+ */
+function ProductionPanel({ mockup }: { mockup: Mockup }) {
+  const production = useMockupProduction(mockup.id);
+  const update = useUpdatePlacementSpec(mockup.id);
+  const rows = production.data ?? [];
+  const missing = rows.filter((r) => !r.productionFile).length;
+
+  if (production.isLoading) {
+    return (
+      <section className="rounded-xl border border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.04)] p-3">
+        <SectionLabel>Production spec</SectionLabel>
+        <p className="text-[11px] text-[hsl(var(--ax-faint))]">Loading…</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.04)] p-3">
+      <SectionLabel>Production spec</SectionLabel>
+
+      {rows.length === 0 && (
+        <p className="text-[11px] text-[hsl(var(--ax-faint))]">No artwork placed on this mockup.</p>
+      )}
+
+      <div className="grid gap-2">
+        {rows.map((r) => (
+          <ProductionRow key={r.id} row={r} onSave={(patch) => update.mutate({ placementId: r.id, ...patch })} />
+        ))}
+      </div>
+
+      {missing > 0 && (
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] text-[hsl(var(--ax-amber))]">
+          <FileWarning className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+          {missing} of {rows.length} {missing === 1 ? "design has" : "designs have"} no production file. Concept art
+          cannot be printed — export a production PNG from the design first.
+        </p>
+      )}
+
+      <p className="mt-2 text-[11px] leading-relaxed text-[hsl(var(--ax-faint))]">
+        Print size is entered, never calculated from the preview. Maximum print area is 16&quot; &times; 20&quot;.
+      </p>
+    </section>
+  );
+}
+
+function ProductionRow({
+  row,
+  onSave,
+}: {
+  row: ProductionPlacement;
+  onSave: (patch: { printWidthIn?: number | null; notes?: string | null }) => void;
+}) {
+  const [width, setWidth] = useState(row.printWidthIn == null ? "" : String(row.printWidthIn));
+  const [notes, setNotes] = useState(row.notes ?? "");
+
+  const commitWidth = () => {
+    const trimmed = width.trim();
+    const next = trimmed === "" ? null : Number(trimmed);
+    if (next != null && (!Number.isFinite(next) || next <= 0)) {
+      setWidth(row.printWidthIn == null ? "" : String(row.printWidthIn));
+      return;
+    }
+    if (next !== row.printWidthIn) onSave({ printWidthIn: next });
+  };
+
+  return (
+    <div className="rounded-lg border border-[hsl(var(--ax-border))] bg-black/20 p-2.5">
+      <div className="flex items-baseline gap-2">
+        <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{row.designTitle}</span>
+        <span className="shrink-0 text-[10px] capitalize text-[hsl(var(--ax-faint))]">{row.surface}</span>
+      </div>
+
+      <div className="mt-1 truncate text-[10px]">
+        {row.productionFile ? (
+          <span className="text-[hsl(var(--ax-accent))]" title={row.productionFile.path}>
+            {row.productionFile.name}
+          </span>
+        ) : (
+          <span className="text-[hsl(var(--ax-amber))]">No production file — concept art only</span>
+        )}
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <label className="flex items-center gap-1.5">
+          <span className="text-[10px] text-[hsl(var(--ax-faint))]">Print width</span>
+          <input
+            value={width}
+            onChange={(e) => setWidth(e.target.value)}
+            onBlur={commitWidth}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            inputMode="decimal"
+            placeholder="—"
+            className="w-16 rounded-md border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-1.5 py-1 text-[11px] tabular-nums outline-none focus:border-[hsl(var(--ax-accent))]"
+          />
+          <span className="text-[10px] text-[hsl(var(--ax-faint))]">in</span>
+        </label>
+        <span className="ml-auto text-[10px] text-[hsl(var(--ax-faint))]" title="Where it sits on the preview - not a print size">
+          {Math.round(row.widthPct)}% of garment
+        </span>
+      </div>
+
+      <input
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        onBlur={() => {
+          const next = notes.trim() || null;
+          if (next !== row.notes) onSave({ notes: next });
+        }}
+        placeholder="Press notes - ink, technique, anything specific"
+        className="mt-1.5 w-full rounded-md border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-2 py-1 text-[11px] outline-none focus:border-[hsl(var(--ax-accent))]"
+      />
+    </div>
   );
 }
 

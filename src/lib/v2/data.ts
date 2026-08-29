@@ -603,6 +603,110 @@ export function useMockupPlacements(mockupId: string | undefined) {
   });
 }
 
+/* ------------------------------------------------------------ production */
+
+export interface ProductionPlacement {
+  /** The placement row id — needed to edit its spec. */
+  id: string;
+  designId: string | null;
+  designTitle: string;
+  surface: string;
+  sortOrder: number;
+  /** Percentage of the garment box. Preview geometry, not a print size. */
+  widthPct: number;
+  printWidthIn: number | null;
+  printHeightIn: number | null;
+  notes: string | null;
+  /**
+   * The production artwork for this design: an `export` file in `design-files`.
+   * Null means the design is concept art and has nothing press-ready.
+   */
+  productionFile: { name: string; bucket: string; path: string } | null;
+}
+
+/**
+ * What a printer would need to know about this mockup.
+ *
+ * Answers "which PNGs did we actually select" by walking the placements to
+ * their designs and then to the `export` file that is the production asset.
+ * A design with no export is shown as such rather than omitted — the gap is
+ * the point, because that is the mockup that cannot go to print yet.
+ */
+export function useMockupProduction(mockupId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "mockup-production", mockupId],
+    enabled: Boolean(mockupId),
+    queryFn: async (): Promise<ProductionPlacement[]> => {
+      const placeRes = await t("product_print_placements")
+        .select("id, design_id, surface, sort_order, w_pct, print_width_in, print_height_in, notes")
+        .eq("mockup_id", mockupId as string)
+        .order("sort_order", { ascending: true });
+
+      const rows = (placeRes.data ?? []) as unknown as Row[];
+      const designIds = [...new Set(rows.map((r) => str(r.design_id)).filter(Boolean))] as string[];
+      if (designIds.length === 0) return [];
+
+      const [designRes, fileRes] = await Promise.all([
+        t("designs").select("id, title").in("id", designIds),
+        t("design_files")
+          .select("design_id, file_name, storage_bucket, storage_path, file_type")
+          .in("design_id", designIds),
+      ]);
+
+      const titles = new Map(
+        ((designRes.data ?? []) as unknown as Row[]).map((d) => [String(d.id), String(d.title ?? "Untitled")]),
+      );
+      const exports = new Map<string, { name: string; bucket: string; path: string }>();
+      for (const f of ((fileRes.data ?? []) as unknown as Row[])) {
+        if (f.file_type !== "export") continue;
+        const key = String(f.design_id);
+        if (exports.has(key)) continue;
+        exports.set(key, {
+          name: String(f.file_name ?? "artwork"),
+          bucket: String(f.storage_bucket),
+          path: String(f.storage_path),
+        });
+      }
+
+      return rows.map((r) => ({
+        id: String(r.id),
+        designId: str(r.design_id),
+        designTitle: r.design_id ? (titles.get(String(r.design_id)) ?? "Untitled") : "No design",
+        surface: String(r.surface ?? "front"),
+        sortOrder: Number(r.sort_order ?? 0),
+        widthPct: Number(r.w_pct ?? 0),
+        printWidthIn: r.print_width_in == null ? null : Number(r.print_width_in),
+        printHeightIn: r.print_height_in == null ? null : Number(r.print_height_in),
+        notes: str(r.notes),
+        productionFile: r.design_id ? (exports.get(String(r.design_id)) ?? null) : null,
+      }));
+    },
+  });
+}
+
+/** Edit one placement's production spec. Geometry is untouched. */
+export function useUpdatePlacementSpec(mockupId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      placementId: string;
+      printWidthIn?: number | null;
+      printHeightIn?: number | null;
+      notes?: string | null;
+    }) => {
+      const patch: Row = {};
+      if (input.printWidthIn !== undefined) patch.print_width_in = input.printWidthIn;
+      if (input.printHeightIn !== undefined) patch.print_height_in = input.printHeightIn;
+      if (input.notes !== undefined) patch.notes = input.notes;
+      const res = await t("product_print_placements").update(patch as never).eq("id", input.placementId);
+      if (res.error) throw res.error;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "mockup-production", mockupId] });
+    },
+  });
+}
+
 /* --------------------------------------------- lookbooks, bulk, pricing */
 
 /**
@@ -826,16 +930,40 @@ export function useUpdateMockup(entityId: string) {
       const upd = await t("mockups").update(patch as never).eq("id", mockupId);
       if (upd.error) throw upd.error;
 
+      // Production specs survive an arrangement edit.
+      //
+      // Placements are replaced wholesale (see above), which would otherwise
+      // discard the print sizes and press notes an operator typed against them.
+      // Those are a different kind of fact from geometry — someone decided them,
+      // and moving a logo two percent left should not erase "11 inches wide, one
+      // colour". They are matched back by design + surface + position; a
+      // placement that genuinely changed identity loses its spec, which is the
+      // honest outcome.
+      const existing = await t("product_print_placements")
+        .select("design_id, surface, sort_order, print_width_in, print_height_in, notes")
+        .eq("mockup_id", mockupId);
+      const specs = new Map<string, Row>();
+      for (const r of ((existing.data ?? []) as unknown as Row[])) {
+        if (r.print_width_in == null && r.print_height_in == null && !r.notes) continue;
+        specs.set(`${String(r.design_id)}::${String(r.surface)}::${String(r.sort_order)}`, r);
+      }
+
       const del = await t("product_print_placements").delete().eq("mockup_id", mockupId);
       if (del.error) throw del.error;
 
       if (placements.length > 0) {
-        const rows = placements.map((p) => ({
-          ...p,
-          mockup_id: mockupId,
-          blank_id: draft.blankId ?? null,
-          color_name: draft.colorName ?? null,
-        }));
+        const rows = placements.map((p) => {
+          const carried = specs.get(`${p.design_id}::${p.surface}::${p.sort_order}`);
+          return {
+            ...p,
+            mockup_id: mockupId,
+            blank_id: draft.blankId ?? null,
+            color_name: draft.colorName ?? null,
+            print_width_in: carried?.print_width_in ?? null,
+            print_height_in: carried?.print_height_in ?? null,
+            notes: carried?.notes ?? null,
+          };
+        });
         const ins = await t("product_print_placements").insert(rows as never);
         if (ins.error) throw ins.error;
       }

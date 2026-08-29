@@ -26,6 +26,7 @@ import {
 import { presetById, presetsFor, type PlacementPreset } from "@/lib/v2/placements";
 import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
 import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
+import { storeMockupComposite } from "@/lib/v2/mockup-export";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
 import { AssetImage, Chip, Skeleton } from "./primitives";
@@ -368,6 +369,15 @@ export default function ConceptBuilder({
           },
           placements: toRows(placed),
         });
+
+        // Re-flatten the preview so the card reflects what was just changed.
+        await storeMockupComposite({
+          mockupId: editMockupId,
+          garmentUrl: frontImage.url,
+          placed: placed.filter((p) => p.surface === "front"),
+          designsById,
+        });
+
         toast.success("Mockup saved");
         onCreated?.(editMockupId);
         onClose();
@@ -405,6 +415,32 @@ export default function ConceptBuilder({
       }));
 
       const { created, failed } = await create.mutateAsync(jobs);
+
+      // Flatten artwork onto the garment for each one that saved.
+      //
+      // After the insert, because the mockups bucket authorises an object by
+      // resolving its first path folder back to a mockup row. `created` comes
+      // back in the same order as `jobs`, which is the order of `variants`, so
+      // each composite gets its own colourway's garment shot rather than the
+      // one that happened to be on screen.
+      const frontPlacements = placed.filter((p) => p.surface === "front");
+      await Promise.all(
+        created.map((id, i) => {
+          const v = variants[i];
+          if (!v) return Promise.resolve(null);
+          const image = resolveBlankImage({
+            blank: blanksById.get(v.blankId) ?? null,
+            colorName: v.colorName,
+            surface: "front",
+          });
+          return storeMockupComposite({
+            mockupId: id,
+            garmentUrl: image.url,
+            placed: frontPlacements,
+            designsById,
+          });
+        }),
+      );
 
       if (created.length > 0) {
         toast.success(

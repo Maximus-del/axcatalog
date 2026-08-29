@@ -9,6 +9,7 @@
 // production artwork stays where it is — see blank-image.ts and the client
 // visibility work for why that separation is load-bearing.
 
+import { supabase } from "@/integrations/supabase/client";
 import { getSignedUrl } from "@/lib/storage";
 import type { PlacedDesign } from "./placement-geometry";
 import type { Design } from "./types";
@@ -118,6 +119,65 @@ export async function renderMockupJpeg(req: ExportRequest): Promise<{ blob: Blob
 export function exportFilename(title: string, surface: string): string {
   const base = title.trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-").toLowerCase() || "mockup";
   return `${base}-${surface}.jpg`;
+}
+
+/**
+ * Render the composite and store it as the mockup's own image.
+ *
+ * WHY THIS EXISTS: a mockup card was showing the bare garment photograph,
+ * because `image_url` held the blank's shot and nothing had ever flattened the
+ * artwork onto it. So every card in the library looked like an empty hoodie and
+ * you could not tell one mockup from another. The composite IS what the mockup
+ * is; it should be what you see.
+ *
+ * Ordering is forced by the storage policy: the `mockups` bucket resolves the
+ * first folder of the object path back to a mockup row, so the row must exist
+ * before its image can be written. Hence mockupId is required, and this runs
+ * after the insert rather than as part of it.
+ *
+ * Failure is deliberately soft. A mockup whose preview did not render is still
+ * a saved mockup with a correct arrangement — it just falls back to the garment
+ * shot until the next save. Losing the record over a canvas error would be a
+ * much worse trade.
+ */
+export async function storeMockupComposite(args: {
+  mockupId: string;
+  garmentUrl: string | null;
+  placed: PlacedDesign[];
+  designsById: Map<string, Design>;
+}): Promise<{ bucket: string; path: string } | null> {
+  try {
+    const { blob } = await renderMockupJpeg({
+      garmentUrl: args.garmentUrl,
+      placed: args.placed,
+      designsById: args.designsById,
+      filename: "composite.jpg",
+    });
+
+    const path = `${args.mockupId}/composite-${Date.now()}.jpg`;
+    const up = await supabase.storage
+      .from("mockups")
+      .upload(path, blob, { contentType: "image/jpeg", upsert: true });
+    if (up.error) throw up.error;
+
+    const patch = await supabase
+      .from("mockups" as never)
+      .update({
+        storage_bucket: "mockups",
+        storage_path: path,
+        file_name: path.split("/").pop() ?? "composite.jpg",
+        file_type: "image/jpeg",
+        file_size: blob.size,
+        preview_generated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", args.mockupId);
+    if (patch.error) throw patch.error;
+
+    return { bucket: "mockups", path };
+  } catch (err) {
+    console.error("mockup composite failed", err);
+    return null;
+  }
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

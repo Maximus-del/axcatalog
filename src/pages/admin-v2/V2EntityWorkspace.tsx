@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Plus } from "lucide-react";
-import { useEntityWorkspace } from "@/lib/v2/data";
+import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
 import { cleanDesignTitle, isConfigurable, stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { fmtMoney } from "@/lib/v2/pricing";
@@ -34,6 +34,7 @@ const STEP_ORDER: StepKey[] = ["designs", "mockups", "products", "collections", 
 
 export default function V2EntityWorkspace() {
   const { id } = useParams();
+  const [params, setParams] = useSearchParams();
   const { data, isLoading } = useEntityWorkspace(id);
   const [building, setBuilding] = useState(false);
   // The design currently opened for its creative options, and the design the
@@ -47,6 +48,10 @@ export default function V2EntityWorkspace() {
   // Clicking a mockup opens its own page; editing is one step further in.
   const [detailMockup, setDetailMockup] = useState<Mockup | null>(null);
   const [productizing, setProductizing] = useState<string | null>(null);
+  // A deep link from Creative: /admin-v2/people/:id?mockup=<id>. Consumed once
+  // and stripped from the URL, so a refresh does not keep reopening it and the
+  // back button behaves.
+  const requestedMockup = params.get("mockup");
   const [active, setActive] = useState<StepKey>("designs");
   const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
   const scrollingTo = useRef<StepKey | null>(null);
@@ -496,6 +501,19 @@ export default function V2EntityWorkspace() {
         />
       )}
 
+      {requestedMockup && !detailMockup && (
+        <MockupDeepLink
+          mockupId={requestedMockup}
+          entityId={id}
+          onResolved={(m) => {
+            setDetailMockup(m);
+            const next = new URLSearchParams(params);
+            next.delete("mockup");
+            setParams(next, { replace: true });
+          }}
+        />
+      )}
+
       {detailMockup && (
         <MockupDetail
           mockup={detailMockup}
@@ -537,4 +555,32 @@ export default function V2EntityWorkspace() {
         })()}
     </>
   );
+}
+
+/**
+ * Resolves a ?mockup=<id> deep link into the full Mockup the detail page needs.
+ *
+ * Creative only knows the concept's id; the detail page wants the library row
+ * with its folder, lifecycle and surfaces. Rather than thread a second loading
+ * state through the workspace, this renders nothing and simply calls back once
+ * the library has the row. If the id belongs to someone else — a stale link, or
+ * a mockup that moved — nothing opens, which is the right outcome for a link
+ * that no longer points anywhere.
+ */
+function MockupDeepLink({
+  mockupId,
+  entityId,
+  onResolved,
+}: {
+  mockupId: string;
+  entityId: string | undefined;
+  onResolved: (mockup: Mockup) => void;
+}) {
+  const { data } = useMockupLibrary(entityId);
+  useEffect(() => {
+    const found = data?.mockups.find((m) => m.id === mockupId);
+    if (found) onResolved(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, mockupId]);
+  return null;
 }
