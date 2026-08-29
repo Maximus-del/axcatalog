@@ -9,6 +9,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { displayNameOf } from "./entity";
+import { slugify } from "@/lib/slug";
 import { draftToRow, type ConceptDraft } from "./concepts";
 import type { DesignGroup, OrderWrite } from "./design-groups";
 import { draftToProductRow, type ProductDraft } from "./productize";
@@ -596,6 +597,163 @@ export function useMockupPlacements(mockupId: string | undefined) {
         .select("design_id, surface, zone_id, zone_label, x_pct, y_pct, w_pct, h_pct, rotation_deg, sort_order")
         .eq("mockup_id", mockupId as string);
       return fromRows((res.data ?? []) as unknown as PlacementRow[]);
+    },
+  });
+}
+
+/**
+ * Create a run of mockups that share one arrangement.
+ *
+ * Written one at a time rather than as a single bulk insert because each mockup
+ * needs its own id before its placements can be attached. Failures are
+ * collected instead of thrown: if the eleventh of twelve fails, the ten that
+ * worked are real work the operator should keep, and the caller reports what
+ * did not land rather than pretending the whole batch vanished.
+ */
+export function useCreateMockupBatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (jobs: Array<{ draft: ConceptDraft; placements: PlacementRow[] }>) => {
+      const created: string[] = [];
+      const failed: string[] = [];
+
+      for (const job of jobs) {
+        try {
+          const { data, error } = await t("mockups").insert(draftToRow(job.draft) as never).select("id").single();
+          if (error) throw error;
+          const mockupId = String((data as unknown as Row).id);
+
+          if (job.placements.length > 0) {
+            const rows = job.placements.map((p) => ({
+              ...p,
+              mockup_id: mockupId,
+              blank_id: job.draft.blankId ?? null,
+              color_name: job.draft.colorName ?? null,
+            }));
+            const placed = await t("product_print_placements").insert(rows as never);
+            if (placed.error) {
+              // A mockup whose artwork has no position is not a lesser version
+              // of what was asked for — it is a broken record. Roll this one back.
+              await t("mockups").delete().eq("id", mockupId);
+              throw placed.error;
+            }
+          }
+          created.push(mockupId);
+        } catch {
+          failed.push(job.draft.title);
+        }
+      }
+
+      return { created, failed };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "concepts"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "overview"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "collections"] });
+    },
+  });
+}
+
+/** Create a collection without leaving whatever screen you are on. */
+export function useCreateCollection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ name, entityId, organizationId }: { name: string; entityId: string; organizationId: string }) => {
+      const { data, error } = await t("collections")
+        .insert({
+          organization_id: organizationId,
+          athlete_id: entityId,
+          name: name.trim(),
+          slug: `${slugify(name)}-${Math.random().toString(36).slice(2, 7)}`,
+          status: "draft",
+          collection_type: "athlete",
+        } as never)
+        .select("id")
+        .single();
+      if (error) throw error;
+      return String((data as unknown as Row).id);
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "collections"] });
+    },
+  });
+}
+
+/**
+ * Upload artwork and make it a real Design.
+ *
+ * Order matters and is not arbitrary: the storage policy on `design-files`
+ * authorises an object by resolving the FIRST folder of its path back to a
+ * design row. So the design must exist before its file can be written, and the
+ * path must be `<designId>/<filename>`. Uploading first would be rejected.
+ *
+ * `productionReady` elsewhere in V2 is true only when an `export` file exists,
+ * so the file type is the operator's call rather than a guess from the
+ * extension — claiming a dropped image is production artwork when it is a
+ * screenshot is exactly the conflation V2 exists to undo.
+ */
+export function useUploadDesign(entityId: string, organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, title, productionReady }: { file: File; title: string; productionReady: boolean }) => {
+      const name = title.trim() || file.name.replace(/\.[^.]+$/, "") || "Untitled design";
+
+      const { data, error } = await t("designs")
+        .insert({
+          organization_id: organizationId,
+          title: name,
+          slug: `${slugify(name)}-${Math.random().toString(36).slice(2, 7)}`,
+          status: productionReady ? "production_ready" : "concept",
+          primary_athlete_id: entityId,
+        } as never)
+        .select("id")
+        .single();
+      if (error) throw error;
+      const designId = String((data as unknown as Row).id);
+
+      const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
+      const path = `${designId}/${Date.now()}.${ext}`;
+
+      const up = await supabase.storage.from("design-files").upload(path, file, {
+        contentType: file.type || "image/png",
+        upsert: false,
+      });
+      if (up.error) {
+        await t("designs").delete().eq("id", designId);
+        throw up.error;
+      }
+
+      const fileRow = await t("design_files").insert({
+        design_id: designId,
+        file_type: productionReady ? "export" : "source",
+        storage_bucket: "design-files",
+        storage_path: path,
+        file_name: file.name,
+        file_extension: ext,
+        file_size_bytes: file.size,
+        mime_type: file.type || "image/png",
+        is_primary: true,
+        sort_order: 0,
+        metadata: { uploaded_by: "admin-v2" },
+      } as never);
+      if (fileRow.error) {
+        await t("designs").delete().eq("id", designId);
+        throw fileRow.error;
+      }
+
+      // Link it to the entity so it appears on their shelf. Client visibility
+      // stays at its 'hidden' default — a freshly uploaded file has had no
+      // decision made about it.
+      await t("design_athletes").insert({ design_id: designId, athlete_id: entityId, sort_order: 0 } as never);
+
+      return { designId, path };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "shelf", entityId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "designs"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace", entityId] });
     },
   });
 }

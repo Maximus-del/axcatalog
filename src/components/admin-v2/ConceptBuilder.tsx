@@ -1,7 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { useBlanks, useCollections, useCreateMockup, useDesignShelf, useDesigns, usePrintZones } from "@/lib/v2/data";
+import {
+  useBlanks,
+  useCollections,
+  useCreateCollection,
+  useCreateMockupBatch,
+  useDesignShelf,
+  useDesigns,
+  usePrintZones,
+  useUploadDesign,
+} from "@/lib/v2/data";
+import { expandVariants, overLimit, unphotographed, variantTitle, MAX_VARIANTS } from "@/lib/v2/variants";
 import MockupCanvas, { DRAG_MIME } from "./MockupCanvas";
 import {
   boxAtPoint,
@@ -67,13 +77,20 @@ export default function ConceptBuilder({
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [scopeAllDesigns, setScopeAllDesigns] = useState(false);
+  // The run this mockup will be saved as: extra colourways of the same blank,
+  // and other blanks entirely. Empty means "just the one I built".
+  const [extraColors, setExtraColors] = useState<string[]>([]);
+  const [extraBlanks, setExtraBlanks] = useState<Record<string, string[]>>({});
+  const [newCollection, setNewCollection] = useState("");
   const [onlyEligible, setOnlyEligible] = useState(true);
 
   const designsQ = useDesigns(scopeAllDesigns ? undefined : entity.id);
   const shelfQ = useDesignShelf(entity.id);
   const blanksQ = useBlanks();
   const collectionsQ = useCollections();
-  const create = useCreateMockup();
+  const create = useCreateMockupBatch();
+  const createCollection = useCreateCollection();
+  const upload = useUploadDesign(entity.id, entity.organizationId);
 
   const audience = audienceForRoles(entity.roles);
 
@@ -129,6 +146,36 @@ export default function ConceptBuilder({
         .map((p) => ({ zoneId: p.zoneId, label: p.label, surface: p.surface, x: p.x, y: p.y, w: p.w, h: p.h })),
     [presets, surface],
   );
+
+  const variants = useMemo(() => {
+    if (!blank) return [];
+    const all = blanksQ.data ?? [];
+    return expandVariants({
+      baseBlank: blank,
+      baseColorName: colorName,
+      extraColorNames: extraColors,
+      extraBlanks: Object.entries(extraBlanks)
+        .map(([id, colors]) => ({ blank: all.find((b) => b.id === id), colorNames: colors }))
+        .filter((x): x is { blank: Blank; colorNames: string[] } => Boolean(x.blank)),
+    });
+  }, [blank, colorName, extraColors, extraBlanks, blanksQ.data]);
+
+  const toggleExtraColor = (name: string) =>
+    setExtraColors((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+
+  const toggleExtraBlank = (id: string) =>
+    setExtraBlanks((prev) => {
+      const next = { ...prev };
+      if (id in next) delete next[id];
+      else next[id] = [];
+      return next;
+    });
+
+  const toggleExtraBlankColor = (id: string, name: string) =>
+    setExtraBlanks((prev) => {
+      const cur = prev[id] ?? [];
+      return { ...prev, [id]: cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name] };
+    });
 
   /** Put a design on the garment. Fits the default chest/back zone when dropped blind. */
   const addPlacement = (designId: string, box: PlacedDesign["box"], zone: { zoneId: string; zoneLabel: string } | null) => {
@@ -205,35 +252,107 @@ export default function ConceptBuilder({
     if (i > 0) setStep(order[i - 1]);
   };
 
+  const addCollection = async () => {
+    const name = newCollection.trim();
+    if (!name) return;
+    try {
+      const id = await createCollection.mutateAsync({
+        name,
+        entityId: entity.id,
+        organizationId: entity.organizationId,
+      });
+      setCollectionId(id);
+      setNewCollection("");
+      toast.success(`Collection “${name}” created`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not create that collection");
+    }
+  };
+
+  /** Upload artwork and drop it straight onto the back of the garment. */
+  const uploadBack = async (file: File) => {
+    try {
+      const { designId } = await upload.mutateAsync({
+        file,
+        title: file.name.replace(/\.[^.]+$/, ""),
+        // Conservative: an uploaded file is concept art until someone says
+        // otherwise. Marking it production-ready would make productionReady lie.
+        productionReady: false,
+      });
+      const backZone = presets.find((p) => p.zoneId === "center_back");
+      setPlaced((prev) => [
+        ...prev,
+        {
+          id: `${designId}-back-${Date.now()}`,
+          designId,
+          surface: "back",
+          box: backZone
+            ? fitToZone({ zoneId: backZone.zoneId, label: backZone.label, surface: backZone.surface, x: backZone.x, y: backZone.y, w: backZone.w, h: backZone.h }, 1)
+            : defaultBox(1),
+          rotation: 0,
+          zoneId: backZone?.zoneId ?? null,
+          zoneLabel: backZone?.label ?? null,
+        },
+      ]);
+      setSurface("back");
+      setStep("placement");
+      toast.success("Artwork uploaded and placed on the back", {
+        description: "Filed as concept art on this entity — mark it production-ready in the design's own page.",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not upload that artwork");
+    }
+  };
+
   const submit = async () => {
     if (!design && !blank) return;
     try {
-      // The headline placement mirrors onto the mockup row's own columns so V1
+      // The headline placement mirrors onto each mockup row's own columns so V1
       // and every existing V2 read keep working unchanged; the full arrangement
       // lives in product_print_placements.
       const headline = placed.find((p) => p.surface === "front") ?? placed[0] ?? null;
-      const id = await create.mutateAsync({
+      const rows = toRows(placed);
+      const blanksById = new Map((blanksQ.data ?? []).map((b) => [b.id, b]));
+      const multipleBlanks = new Set(variants.map((v) => v.blankId)).size > 1;
+
+      const jobs = variants.map((v) => ({
         draft: {
-          title: title.trim() || "Untitled mockup",
+          title: variantTitle(title, v, { multipleBlanks, total: variants.length }),
           entityId: entity.id,
           organizationId: entity.organizationId,
           designId: headline?.designId ?? design?.id ?? null,
-          blankId: blank?.id ?? null,
+          blankId: v.blankId,
           collectionId: collectionId || null,
-          colorName,
+          colorName: v.colorName,
           surface: headline?.surface ?? null,
           zoneId: headline?.zoneId ?? null,
           placementLabel: headline?.zoneLabel ?? null,
-          imageUrl: garmentImage.url,
+          imageUrl:
+            resolveBlankImage({ blank: blanksById.get(v.blankId) ?? null, colorName: v.colorName, surface: "front" })
+              .url,
           notes: notes.trim() || null,
           flow: flow ?? "design_first",
         },
-        placements: toRows(placed),
-      });
-      toast.success("Mockup created", {
-        description: "Saved as a product concept. No product was created and nothing was sent to Shopify.",
-      });
-      onCreated?.(id);
+        placements: rows,
+      }));
+
+      const { created, failed } = await create.mutateAsync(jobs);
+
+      if (created.length > 0) {
+        toast.success(
+          created.length === 1 ? "Mockup created" : `${created.length} mockups created`,
+          {
+            description:
+              failed.length > 0
+                ? `${failed.length} could not be saved: ${failed.slice(0, 3).join(", ")}`
+                : "Saved as product concepts. No products were created and nothing was sent to Shopify.",
+          },
+        );
+      } else {
+        toast.error("Nothing could be saved");
+        return;
+      }
+      onCreated?.(created[0]);
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the concept");
@@ -516,6 +635,7 @@ export default function ConceptBuilder({
           )}
 
           {step === "confirm" && (
+            <div className="space-y-5">
             <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
               <div className="space-y-3">
                 {usedSurfaces(placed).map((sf) => (
@@ -564,6 +684,28 @@ export default function ConceptBuilder({
                       </option>
                     ))}
                   </select>
+                  <div className="mt-1.5 flex gap-1.5">
+                    <input
+                      value={newCollection}
+                      onChange={(e) => setNewCollection(e.target.value)}
+                      placeholder="…or type a new collection name"
+                      className="min-w-0 flex-1 rounded-lg border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-2.5 py-1.5 text-[12px] outline-none focus:border-[hsl(var(--ax-accent))]"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void addCollection();
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void addCollection()}
+                      disabled={!newCollection.trim() || createCollection.isPending}
+                      className="shrink-0 rounded-lg border border-[hsl(var(--ax-border))] px-2.5 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))] disabled:opacity-40"
+                    >
+                      {createCollection.isPending ? "Adding…" : "Add"}
+                    </button>
+                  </div>
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
@@ -603,6 +745,110 @@ export default function ConceptBuilder({
                 </p>
               </div>
             </div>
+
+            {/* ---------------------------------------------- add a back */}
+            {!placed.some((p) => p.surface === "back") && (
+              <section className="rounded-2xl border border-[hsl(var(--ax-border))] p-4">
+                <h3 className="text-[13px] font-semibold">Add a back</h3>
+                <p className="mt-0.5 max-w-[62ch] text-[12px] text-[hsl(var(--ax-faint))]">
+                  This mockup is front-only, which is a perfectly good place to stop. If it needs a back hit, put
+                  artwork on the back and this becomes a two-sided mockup.
+                </p>
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSurface("back");
+                      setStep("placement");
+                    }}
+                    className="rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+                  >
+                    Pick from existing designs
+                  </button>
+                  <label className="cursor-pointer rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]">
+                    {upload.isPending ? "Uploading…" : "Upload artwork"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={upload.isPending}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        e.target.value = "";
+                        if (file) void uploadBack(file);
+                      }}
+                    />
+                  </label>
+                  {!backImage.url && (
+                    <span className="text-[11px] text-[hsl(var(--ax-amber))]">
+                      This colourway has no back photograph — the placement still saves.
+                    </span>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* ------------------------------------------- make it a run */}
+            {blank && (
+              <section className="rounded-2xl border border-[hsl(var(--ax-border))] p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-[13px] font-semibold">Make it in more colours, or on more blanks</h3>
+                  <span className="text-[12px] tabular-nums text-[hsl(var(--ax-secondary))]">
+                    {variants.length} mockup{variants.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <p className="mt-0.5 max-w-[70ch] text-[12px] text-[hsl(var(--ax-faint))]">
+                  Every one is saved with this exact arrangement. Placement is stored as a percentage of the garment, so
+                  a chest hit lands on the chest whether it is a tee or a hoodie.
+                </p>
+
+                <div className="mt-3">
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
+                    More colourways of {blank.name}
+                  </div>
+                  <ColorChips
+                    blank={blank}
+                    selected={extraColors}
+                    baseColorName={colorName}
+                    onToggle={toggleExtraColor}
+                  />
+                </div>
+
+                <div className="mt-4">
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
+                    Other blanks
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {blanks
+                      .filter((b) => b.id !== blank.id)
+                      .slice(0, 12)
+                      .map((b) => (
+                        <OtherBlankRow
+                          key={b.id}
+                          blank={b}
+                          selected={b.id in extraBlanks}
+                          colors={extraBlanks[b.id] ?? []}
+                          onToggle={() => toggleExtraBlank(b.id)}
+                          onToggleColor={(name) => toggleExtraBlankColor(b.id, name)}
+                        />
+                      ))}
+                  </div>
+                </div>
+
+                {unphotographed(variants).length > 0 && (
+                  <p className="mt-3 text-[11px] text-[hsl(var(--ax-amber))]">
+                    {unphotographed(variants).length} of these have no photograph — those mockups save their placement
+                    but will not have a garment image to show.
+                  </p>
+                )}
+                {overLimit(variants.length) && (
+                  <p className="mt-3 text-[11px] font-medium text-[hsl(var(--ax-amber))]">
+                    That is {variants.length} mockups. The cap is {MAX_VARIANTS} in one go — trim the selection.
+                  </p>
+                )}
+              </section>
+            )}
+            </div>
           )}
         </div>
 
@@ -623,10 +869,14 @@ export default function ConceptBuilder({
               <button
                 type="button"
                 onClick={submit}
-                disabled={create.isPending || (!design && !blank)}
+                disabled={create.isPending || (!design && !blank) || overLimit(variants.length)}
                 className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
               >
-                {create.isPending ? "Creating…" : "Create mockup"}
+                {create.isPending
+                  ? "Creating…"
+                  : variants.length > 1
+                    ? `Create ${variants.length} mockups`
+                    : "Create mockup"}
               </button>
             ) : (
               <button
@@ -912,6 +1162,133 @@ function ColorStepHeader({ blank }: { blank: Blank }) {
  * another. Tiles are HTML5 drag sources — drag onto the garment to place at a
  * point, or click to drop into the centre zone for the surface being edited.
  */
+/**
+ * Colourway multi-select for building a run.
+ *
+ * The base colour is shown but locked — it is already in the batch, and letting
+ * it be "deselected" would imply the mockup on screen could be excluded from
+ * its own save.
+ */
+function ColorChips({
+  blank,
+  selected,
+  baseColorName,
+  onToggle,
+}: {
+  blank: Blank;
+  selected: string[];
+  baseColorName: string | null;
+  onToggle: (name: string) => void;
+}) {
+  const available = blank.colors.filter((c) => c.available);
+  if (available.length === 0) {
+    return <p className="text-[12px] text-[hsl(var(--ax-faint))]">This blank has no colour records.</p>;
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {available.map((c) => {
+        const isBase = c.name === baseColorName;
+        const on = isBase || selected.includes(c.name);
+        return (
+          <button
+            key={c.id}
+            type="button"
+            disabled={isBase}
+            onClick={() => onToggle(c.name)}
+            title={isBase ? `${c.name} — the colourway you built` : c.name}
+            className={`inline-flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-[11px] transition-colors ${
+              on
+                ? "border-[hsl(var(--ax-accent))] text-[hsl(var(--ax-accent))]"
+                : "border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+            } ${isBase ? "opacity-70" : ""}`}
+          >
+            <span
+              className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/25"
+              style={{ background: swatchFor(c) }}
+            />
+            {c.name}
+            {isBase && <span className="text-[9px] uppercase tracking-wider opacity-70">base</span>}
+            {!c.imageUrl && <ImageOff className="h-2.5 w-2.5 opacity-60" aria-hidden />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** One other blank in the run, with its own colour selection once ticked. */
+function OtherBlankRow({
+  blank,
+  selected,
+  colors,
+  onToggle,
+  onToggleColor,
+}: {
+  blank: Blank;
+  selected: boolean;
+  colors: string[];
+  onToggle: () => void;
+  onToggleColor: (name: string) => void;
+}) {
+  const hero = resolveBlankImage({ blank });
+  return (
+    <div
+      className={`rounded-xl border p-2 transition-colors ${
+        selected ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.05)]" : "border-[hsl(var(--ax-border))]"
+      }`}
+    >
+      <button type="button" onClick={onToggle} className="flex w-full items-center gap-2 text-left">
+        <AssetImage
+          url={hero.url}
+          alt={blank.name}
+          className="h-9 w-9 shrink-0 rounded-lg bg-white/[0.04]"
+          fit="contain"
+        />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-medium">{blank.name}</span>
+          <span className="block truncate text-[10px] text-[hsl(var(--ax-faint))]">
+            {[blank.brand, blank.styleNumber].filter(Boolean).join(" · ") || "—"}
+          </span>
+        </span>
+        <span
+          className={`h-4 w-4 shrink-0 rounded-md border ${
+            selected ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent))]" : "border-[hsl(var(--ax-border))]"
+          }`}
+        >
+          {selected && <Check className="h-3.5 w-3.5 text-[hsl(var(--ax-on-accent))]" />}
+        </span>
+      </button>
+
+      {selected && (
+        <div className="mt-2 border-t border-[hsl(var(--ax-accent)/0.2)] pt-2">
+          <div className="mb-1 text-[10px] text-[hsl(var(--ax-faint))]">
+            {colors.length === 0 ? "No colour chosen — saves one mockup" : `${colors.length} colourway${colors.length === 1 ? "" : "s"}`}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {blank.colors
+              .filter((c) => c.available)
+              .slice(0, 10)
+              .map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onToggleColor(c.name)}
+                  title={c.name}
+                  className={`h-4 w-4 rounded-full border transition-transform ${
+                    colors.includes(c.name)
+                      ? "border-[hsl(var(--ax-accent))] scale-110 ring-1 ring-[hsl(var(--ax-accent))]"
+                      : "border-black/25 hover:scale-110"
+                  }`}
+                  style={{ background: swatchFor(c) }}
+                />
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MockupDesignRail({ entityId, onQuickAdd }: { entityId: string; onQuickAdd: (d: Design) => void }) {
   const { data, isLoading } = useDesignShelf(entityId);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
