@@ -8,7 +8,10 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // scripts/ holds the Drive photography sync. Its matching rules decide
+    // which garment a photograph is attached to, so they are tested like any
+    // other logic rather than trusted because they are "just a script".
+    include: ["src/**/*.{test,spec}.{ts,tsx}", "scripts/**/*.{test,spec}.mjs"],
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },

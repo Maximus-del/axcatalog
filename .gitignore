@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 tsconfig.*.tsbuildinfo
+
+# Local credentials for scripts/sync-blank-photography.mjs. Never commit.
+.env.local
