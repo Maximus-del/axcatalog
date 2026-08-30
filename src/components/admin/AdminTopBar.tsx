@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, Plus, LogOut, Menu, Inbox, ListChecks } from "lucide-react";
+import { Search, Plus, LogOut, Menu, Inbox, ListChecks, ArrowUpRight } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -82,6 +82,30 @@ export function AdminTopBar({ onOpenMobileNav }: Props) {
       </button>
 
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+
+      {/*
+        The way across to V2.
+        V2's header has carried a "V1 dashboard" link since it was built, but
+        nothing pointed the other way, so the only route into V2 was typing the
+        URL. A door that opens from one side only is not a door.
+
+        Deliberately a plain link rather than a NavLink: V2 is a separate shell,
+        not another tab of this one, and styling it as an active-state nav item
+        would suggest it lives inside V1.
+      */}
+      <a
+        href="/admin-v2"
+        title="AX OS V2 - the refined operator dashboard"
+        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-[11px] border border-[hsl(var(--ax-accent)/0.45)] bg-[hsl(var(--ax-accent)/0.08)] px-2.5 text-sm font-semibold text-[hsl(var(--ax-accent))] transition-colors hover:bg-[hsl(var(--ax-accent)/0.14)] lg:px-3"
+      >
+        {/* The wordmark is the first thing to go on a narrow screen; the badge
+            and arrow still read as "go to V2". */}
+        <span className="hidden lg:inline">AX OS</span>
+        <span className="rounded-full bg-[hsl(var(--ax-accent)/0.18)] px-1.5 py-0.5 text-[10px] font-bold tracking-widest">
+          V2
+        </span>
+        <ArrowUpRight className="h-3.5 w-3.5" />
+      </a>
 
       {/* The two queues you dip into all day, reachable without the sidebar. */}
       <div className="hidden lg:flex items-center gap-1">
