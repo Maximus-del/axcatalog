@@ -98,14 +98,16 @@ export interface Design {
 
 /**
  * BLANK. Source of truth: `blanks` (+ blank_colors, blank_sizes,
- * blank_assortment_items). One canonical record; photography, pricing,
+ * the Drive's 03_APPROVED stage). One canonical record; photography, pricing,
  * availability and eligibility are ATTRIBUTES of it, never separate catalogs.
  */
 export interface BlankColor {
   id: string;
+  /** Human-readable colour name. This is what a mockup stores as color_name. */
   name: string;
   hex: string | null;
   imageUrl: string | null;
+  /** The canonical back. For hoodies that is the hood-UP shot. */
   imageUrlBack: string | null;
   available: boolean;
 }
@@ -126,8 +128,24 @@ export interface Blank {
   availability: string;
   colors: BlankColor[];
   sizes: string[];
-  /** blank_assortments.key values this blank belongs to. */
+  /**
+   * Audiences that may see this blank.
+   *
+   * In V2 curation happens in the Drive — 03_APPROVED holds exactly the blanks
+   * AX sells — so every synced blank is available to every audience. This stays
+   * an array so a real per-audience split can land later without a type change.
+   */
   assortments: string[];
+  /**
+   * Client-facing name, set by hand and never written by the Drive sync.
+   * `name` is the MANUFACTURER's name and may not be shown to a client.
+   * A client surface renders displayName or nothing — never a fallback to name.
+   */
+  displayName?: string | null;
+  /** Deep link back to the Drive folder this blank was built from. */
+  driveFolderUrl?: string | null;
+  /** Set once this blank is matched to Shopify, which owns price/cost/quantity. */
+  shopifyProductId?: string | null;
   /** Data-completeness flags that feed Overview > Action Required. */
   missingCost: boolean;
   missingPhoto: boolean;

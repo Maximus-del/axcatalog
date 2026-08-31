@@ -16,6 +16,7 @@ import { draftToProductRow, type ProductDraft } from "./productize";
 import { mergeZones, type PrintZoneRow } from "./placements";
 import { fromRows, type PlacementRow } from "./placement-geometry";
 import type {
+  AudienceKey,
   Blank,
   BlankColor,
   ClientVisibility,
@@ -375,26 +376,50 @@ export function useEntityWorkspace(entityId: string | undefined) {
 
 /* ------------------------------------------------------------------ blanks */
 
+/**
+ * V2 BLANKS COME FROM THE DRIVE. THIS READS NO V1 TABLE.
+ *
+ * v2_blanks / v2_blank_colors / v2_blank_images only. V1's `blanks`,
+ * `blank_colors`, `blank_sizes`, `blank_assortment_items` and the `blanks`
+ * storage bucket can all be dropped without this function changing — which is
+ * the whole point of the split.
+ *
+ * Three things V1 supplied that V2 deliberately does not, yet:
+ *
+ *   PRICING     V1 carried blank_cost plus three tier prices. In V2 Shopify owns
+ *               price, cost and quantity, and it is not connected yet, so these
+ *               read null and the UI shows an em dash. Serving V1's numbers here
+ *               would quietly make V1 the source of truth again for the exact
+ *               field we least want it to be. A missing price is honest; a stale
+ *               one is not.
+ *   SIZES       No V2 size table. Sizes are a Shopify variant concern.
+ *   ASSORTMENTS Curation happens in the Drive — 03_APPROVED holds exactly the
+ *               blanks AX sells — so every blank is available to every audience.
+ *               Inventing a per-audience split would be fabricating data.
+ */
+const V2_AUDIENCES: AudienceKey[] = ["athlete", "client", "subscriber", "standard"];
+
 async function fetchBlanks(): Promise<Blank[]> {
-  const [blanksRes, colorsRes, sizesRes, itemsRes, assortRes] = await Promise.all([
-    t("blanks").select(
-      "id, name, brand, supplier, vendor, style_number, sku, garment_type, image_url, blank_cost, cost, price_athlete, price_corporate, price_standard, availability_status",
+  const [blanksRes, colorsRes, imagesRes] = await Promise.all([
+    t("v2_blanks").select(
+      "id, supplier, name, display_name, style_code, garment_type, drive_folder_url, shopify_product_id, cost, price",
     ),
-    t("blank_colors").select("id, blank_id, color_name, hex_code, image_url, image_url_back, available, sort_order"),
-    t("blank_sizes").select("blank_id, size, available, sort_order"),
-    t("blank_assortment_items").select("blank_id, assortment_id"),
-    t("blank_assortments").select("id, key, name, default_price_tier, is_active"),
+    t("v2_blank_colors").select("id, blank_id, name, display_name, hex, available, sort_order"),
+    t("v2_blank_images").select("blank_id, color_id, view_type, variant, is_primary, drive_url"),
   ]);
 
-  const keyById = new Map<string, string>();
-  for (const a of (assortRes.data ?? []) as unknown as Row[]) keyById.set(String(a.id), String(a.key));
-
-  const assortByBlank = new Map<string, string[]>();
-  for (const i of (itemsRes.data ?? []) as unknown as Row[]) {
-    const bid = String(i.blank_id);
-    const key = keyById.get(String(i.assortment_id));
-    if (!key) continue;
-    assortByBlank.set(bid, [...(assortByBlank.get(bid) ?? []), key]);
+  // The canonical image per colour and surface. For hoodies the canonical back
+  // is the hood-UP shot, which the sync already flags is_primary — so nothing
+  // here needs to know what a hood is. A primary always wins; without one, the
+  // first image seen stands in.
+  const frontByColor = new Map<string, string>();
+  const backByColor = new Map<string, string>();
+  for (const im of (imagesRes.data ?? []) as unknown as Row[]) {
+    const cid = str(im.color_id);
+    const url = str(im.drive_url);
+    if (!cid || !url) continue;
+    const target = im.view_type === "back" ? backByColor : frontByColor;
+    if (im.is_primary === true || !target.has(cid)) target.set(cid, url);
   }
 
   const colorsByBlank = new Map<string, BlankColor[]>();
@@ -402,52 +427,52 @@ async function fetchBlanks(): Promise<Blank[]> {
     (a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0),
   )) {
     const bid = String(c.blank_id);
+    const cid = String(c.id);
     colorsByBlank.set(bid, [
       ...(colorsByBlank.get(bid) ?? []),
       {
-        id: String(c.id),
-        name: String(c.color_name ?? ""),
-        hex: str(c.hex_code),
-        imageUrl: str(c.image_url),
-        imageUrlBack: str(c.image_url_back),
+        id: cid,
+        // display_name is the readable form of the Drive folder ("Cool_Blue" ->
+        // "Cool Blue") and is what a mockup should store as its colour.
+        name: String(c.display_name ?? c.name ?? ""),
+        hex: str(c.hex),
+        imageUrl: frontByColor.get(cid) ?? null,
+        imageUrlBack: backByColor.get(cid) ?? null,
         available: c.available !== false,
       },
     ]);
   }
 
-  const sizesByBlank = new Map<string, string[]>();
-  for (const s of ((sizesRes.data ?? []) as unknown as Row[]).sort(
-    (a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0),
-  )) {
-    const bid = String(s.blank_id);
-    sizesByBlank.set(bid, [...(sizesByBlank.get(bid) ?? []), String(s.size)]);
-  }
-
   return ((blanksRes.data ?? []) as unknown as Row[]).map((b) => {
     const id = String(b.id);
     const colors = colorsByBlank.get(id) ?? [];
-    const cost = num(b.blank_cost) ?? num(b.cost);
-    const image = str(b.image_url) ?? colors.find((c) => c.imageUrl)?.imageUrl ?? null;
-    const assortments = assortByBlank.get(id) ?? [];
+    const image = colors.find((c) => c.imageUrl)?.imageUrl ?? null;
+    const cost = num(b.cost);
     return {
       id,
+      // The MANUFACTURER's name. Not for client display — see displayName.
       name: String(b.name ?? ""),
-      brand: str(b.brand) ?? str(b.supplier) ?? str(b.vendor),
-      styleNumber: str(b.style_number),
-      sku: str(b.sku),
+      displayName: str(b.display_name),
+      brand: str(b.supplier),
+      styleNumber: str(b.style_code),
+      sku: null,
       garmentType: String(b.garment_type ?? "other"),
       imageUrl: image,
       cost,
-      priceAthlete: num(b.price_athlete),
-      priceCorporate: num(b.price_corporate),
-      priceStandard: num(b.price_standard),
-      availability: String(b.availability_status ?? "unknown"),
+      // Shopify owns pricing and is not connected. Null renders as an em dash.
+      priceAthlete: null,
+      priceCorporate: null,
+      priceStandard: null,
+      availability: "available",
       colors,
-      sizes: sizesByBlank.get(id) ?? [],
-      assortments,
+      sizes: [],
+      assortments: [...V2_AUDIENCES],
+      driveFolderUrl: str(b.drive_folder_url),
+      shopifyProductId: str(b.shopify_product_id),
       missingCost: cost == null,
       missingPhoto: image == null,
-      missingAssortment: assortments.length === 0,
+      // Never "missing" in V2 — the Drive is the curation.
+      missingAssortment: false,
     };
   });
 }
@@ -1014,12 +1039,26 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
     ids.length
       ? t("product_print_placements").select("mockup_id, surface").in("mockup_id", ids)
       : Promise.resolve({ data: [] }),
-    blankIds.length ? t("blanks").select("id, name").in("id", blankIds) : Promise.resolve({ data: [] }),
+    // LEGACY COMPATIBILITY, NOT A SOURCE OF TRUTH.
+    // Mockups made before the V2 catalog reference V1 blank ids, and a card with
+    // no garment name is worse than one naming a retired blank. v2_blanks answers
+    // first; V1 only fills ids it does not know. Delete the second query — and
+    // this comment — once no mockup references a V1 blank.
+    blankIds.length
+      ? Promise.all([
+          t("v2_blanks").select("id, name").in("id", blankIds),
+          t("blanks").select("id, name").in("id", blankIds),
+        ])
+      : Promise.resolve([{ data: [] }, { data: [] }]),
   ]);
 
+  const [v2BlankRes, v1BlankRes] = blankRes as unknown as Array<{ data: unknown }>;
   const blankName = new Map(
-    ((blankRes.data ?? []) as unknown as Row[]).map((b) => [String(b.id), String(b.name ?? "")]),
+    ((v1BlankRes?.data ?? []) as unknown as Row[]).map((b) => [String(b.id), String(b.name ?? "")]),
   );
+  for (const b of (v2BlankRes?.data ?? []) as unknown as Row[]) {
+    blankName.set(String(b.id), String(b.name ?? ""));
+  }
 
   // Which surfaces a mockup actually uses is a property of its placements, not
   // of the mockup row — a front-only mockup should say so.

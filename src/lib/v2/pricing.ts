@@ -1,6 +1,7 @@
 // AX OS V2 — access and price are different questions about the same Blank.
 //
-//   ACCESS: is this Blank in the audience's assortment?  (blank_assortment_items)
+//   ACCESS: is this Blank in the audience's assortment?  (V2: the Drive is the
+//           curation, so every synced blank is in every audience)
 //   PRICE:  what does that audience pay?                 (blanks.price_* columns)
 //
 // A Blank is never duplicated to give a different audience a different number.

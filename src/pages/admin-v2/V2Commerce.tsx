@@ -141,9 +141,18 @@ function BlankCatalog() {
             </Chip>
           )}
         </div>
+        {/*
+          Say what is actually true right now rather than describing a feature
+          that is not wired. In V2 the Drive is the curation — 03_APPROVED holds
+          exactly what AX sells — so every blank is in every audience and the
+          access filter has nothing to separate. Pricing comes from Shopify,
+          which is not connected. Leaving the old copy would have described
+          dimming that never happens and prices that never render.
+        */}
         <p className="text-[11px] text-[hsl(var(--ax-faint))]">
-          Access and price are separate questions. Dimming shows what this audience cannot see; the price shown is what
-          this audience pays.
+          Access and price are separate questions. Every blank in the V2 catalog is available to every audience —
+          curation happens in the Drive, so nothing is dimmed yet. Pricing comes from Shopify, which is not connected,
+          so prices read “—”.
         </p>
       </div>
 
