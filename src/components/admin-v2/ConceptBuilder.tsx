@@ -179,6 +179,70 @@ export default function ConceptBuilder({
   const toggleExtraColor = (name: string) =>
     setExtraColors((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
 
+  /**
+   * THE COLOURWAY SELECTION, MASTER FIRST.
+   *
+   * `colorName` is the master — the colourway you actually place artwork on —
+   * and `extraColors` is everything else that inherits that arrangement. They
+   * are two fields rather than one array because the master is the only colour
+   * the canvas can show, and the save path already keys off it.
+   *
+   * Placing once and inheriting is the whole point: a centre-chest logo on the
+   * heavyweight hoodie is centre-chest on all thirteen colours, and asking the
+   * operator to repeat the same drag thirteen times would be asking them to do
+   * a computer's job.
+   */
+  const selectedColors = useMemo(
+    () => (colorName ? [colorName, ...extraColors.filter((n) => n !== colorName)] : []),
+    [colorName, extraColors],
+  );
+
+  const availableColors = useMemo(
+    // Only colours the supplier actually has. Building a mockup on a
+    // discontinued colourway wastes everyone's time and the flag already exists.
+    () => (blank?.colors ?? []).filter((c) => c.available),
+    [blank],
+  );
+
+  const toggleColor = (name: string) => {
+    if (name === colorName) {
+      // Deselecting the master promotes the next colour rather than wiping the
+      // selection — the operator meant "not this one", not "start over".
+      const [next, ...rest] = extraColors;
+      setColorName(next ?? null);
+      setExtraColors(rest);
+      return;
+    }
+    if (extraColors.includes(name)) {
+      setExtraColors((prev) => prev.filter((n) => n !== name));
+      return;
+    }
+    if (!colorName) setColorName(name);
+    else setExtraColors((prev) => [...prev, name]);
+  };
+
+  /** Make this colour the one the canvas shows, without changing the selection. */
+  const makeMaster = (name: string) => {
+    if (name === colorName || !colorName) {
+      setColorName(name);
+      return;
+    }
+    setExtraColors((prev) => [...prev.filter((n) => n !== name), colorName]);
+    setColorName(name);
+  };
+
+  const selectAllColors = () => {
+    const names = availableColors.map((c) => c.name);
+    if (names.length === 0) return;
+    setColorName((cur) => cur ?? names[0]);
+    setExtraColors(names.slice(colorName ? 0 : 1).filter((n) => n !== (colorName ?? names[0])));
+  };
+
+  const clearColors = () => {
+    setColorName(null);
+    setExtraColors([]);
+  };
+
   const toggleExtraBlank = (id: string) =>
     setExtraBlanks((prev) => {
       const next = { ...prev };
@@ -630,23 +694,68 @@ export default function ConceptBuilder({
           {step === "color" && blank && (
             <>
               <ColorStepHeader blank={blank} />
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[12px] text-[hsl(var(--ax-secondary))]">
+                  {selectedColors.length === 0 ? (
+                    "Pick every colourway you want. You place the artwork once — the rest inherit it."
+                  ) : (
+                    <>
+                      <span className="font-semibold text-[hsl(var(--ax-ink))]">
+                        {selectedColors.length} colourway{selectedColors.length === 1 ? "" : "s"}
+                      </span>{" "}
+                      selected · you will place on{" "}
+                      <span className="font-semibold text-[hsl(var(--ax-accent))]">{colorName}</span>
+                    </>
+                  )}
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={selectAllColors}
+                    className="rounded-full border border-[hsl(var(--ax-border))] px-3 py-1 text-[11px] font-medium text-[hsl(var(--ax-secondary))] transition-colors hover:border-[hsl(var(--ax-accent))] hover:text-[hsl(var(--ax-accent))]"
+                  >
+                    Select all {availableColors.length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearColors}
+                    disabled={selectedColors.length === 0}
+                    className="rounded-full border border-[hsl(var(--ax-border))] px-3 py-1 text-[11px] font-medium text-[hsl(var(--ax-faint))] transition-colors hover:text-[hsl(var(--ax-ink))] disabled:opacity-40"
+                  >
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/*
+                MULTI-SELECT. The first colour picked becomes the master purely
+                because the canvas needs one definite garment to place on; a
+                small badge says which, and any selected colour can take over.
+              */}
               <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:grid-cols-8">
-                {blank.colors
-                  // Only colours the supplier actually has. Building a mockup on
-                  // a discontinued colourway wastes the operator's time and the
-                  // client's, and the availability flag already exists.
-                  .filter((c) => c.available)
-                  .map((c) => (
+                {availableColors.map((c) => {
+                  const isMaster = colorName === c.name;
+                  const isPicked = isMaster || extraColors.includes(c.name);
+                  return (
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => {
-                        setColorName(c.name);
-                        goNext();
-                      }}
-                      title={c.imageUrl ? c.name : `${c.name} — no photography yet`}
+                      onClick={() => toggleColor(c.name)}
+                      onDoubleClick={() => makeMaster(c.name)}
+                      title={
+                        isPicked
+                          ? `${c.name} — click to remove${isMaster ? "" : ", double-click to place on this one"}`
+                          : c.imageUrl
+                            ? c.name
+                            : `${c.name} — no photography yet`
+                      }
                       className={`ax-card ax-card-hover overflow-hidden p-0 text-left transition-all ${
-                        colorName === c.name ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
+                        isMaster
+                          ? "ring-2 ring-[hsl(var(--ax-accent))]"
+                          : isPicked
+                            ? "ring-1 ring-[hsl(var(--ax-accent)/0.55)]"
+                            : ""
                       }`}
                     >
                       <div className="relative">
@@ -660,16 +769,23 @@ export default function ConceptBuilder({
                             <ImageOff className="h-3 w-3 text-black/45" aria-hidden />
                           </div>
                         )}
-                        {colorName === c.name && (
+                        {isPicked && (
                           <span className="absolute left-1 top-1 rounded-full bg-[hsl(var(--ax-accent))] p-0.5 text-[hsl(var(--ax-on-accent))]">
                             <Check className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                        {isMaster && selectedColors.length > 1 && (
+                          <span className="absolute right-1 top-1 rounded-full bg-[hsl(var(--ax-accent))] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[hsl(var(--ax-on-accent))]">
+                            Place
                           </span>
                         )}
                       </div>
                       <div className="truncate p-1.5 text-[10px]">{c.name}</div>
                     </button>
-                  ))}
+                  );
+                })}
               </div>
+
               {blank.colors.length === 0 && (
                 <p className="py-10 text-center text-[13px] text-[hsl(var(--ax-faint))]">
                   This blank has no colour records yet. You can still create the concept without one.
@@ -679,78 +795,97 @@ export default function ConceptBuilder({
           )}
 
           {step === "placement" && (
-            <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-              <MockupDesignRail
-                entityId={entity.id}
-                onQuickAdd={(d) => {
-                  const at = dropCentre();
-                  addPlacement(d.id, boxAtPoint(at.x, at.y, 1), null);
-                }}
+            /*
+              THE GARMENT GETS THE ROOM.
+              The design rail used to sit in a 240px column beside the canvas,
+              which cost the preview a quarter of its width on every screen for
+              a list that is only touched between placements. Rail and
+              colourways moved to a tray underneath; the canvas now spans the
+              full width, which is the one thing here that benefits from size.
+            */
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-full border border-[hsl(var(--ax-border))] p-0.5">
+                  {(["front", "back"] as const).map((sf) => {
+                    const count = placed.filter((p) => p.surface === sf).length;
+                    // resolveBlankImage falls back to the front when a back shot
+                    // is missing, so asking it whether the back "has an image"
+                    // always said yes and this warning never fired. Ask the
+                    // photography directly instead.
+                    const hasPhoto =
+                      sf === "front" ? Boolean(frontImage.url) : hasBackPhoto(blank, colorName);
+                    return (
+                      <button
+                        key={sf}
+                        type="button"
+                        onClick={() => setSurface(sf)}
+                        className={`rounded-full px-3.5 py-1 text-[12px] font-medium capitalize transition-colors ${
+                          surface === sf
+                            ? "bg-[hsl(var(--ax-accent)/0.16)] text-[hsl(var(--ax-accent))]"
+                            : "text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-secondary))]"
+                        }`}
+                      >
+                        {sf}
+                        {count > 0 && <span className="ml-1 tabular-nums opacity-80">{count}</span>}
+                        {!hasPhoto && (
+                          <span
+                            className="ml-1 text-[hsl(var(--ax-amber))]"
+                            title={`No ${sf} photograph for ${colorName ?? "this blank"} — placement still saves`}
+                          >
+                            •
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="text-[11px] text-[hsl(var(--ax-faint))]">
+                  Drag artwork onto the garment. Front and back are placed separately — a front-only design saves a
+                  front-only mockup.
+                  {blank && isTwoSided(blank.garmentType) && !hasBackPhoto(blank, colorName) && (
+                    <span className="ml-1 text-[hsl(var(--ax-amber))]">
+                      No back photograph for this colourway yet, so the back view shows the front.
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              <MockupCanvas
+                garmentUrl={garmentImage.url}
+                garmentLabel={`${blank?.name ?? "Blank"} ${surface}`}
+                approximate={garmentImage.approximate}
+                approximateNote={
+                  garmentImage.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"
+                }
+                placed={placed}
+                designsById={designsById}
+                surface={surface}
+                guides={guides[surface] ?? DEFAULT_GUIDES}
+                onGuidesChange={(next) => setGuides((prev) => ({ ...prev, [surface]: next }))}
+                onChange={setPlaced}
+                onDropDesign={(designId, x, y, aspect) =>
+                  addPlacement(designId, boxAtPoint(x, y, aspect), null)
+                }
               />
 
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex rounded-full border border-[hsl(var(--ax-border))] p-0.5">
-                    {(["front", "back"] as const).map((sf) => {
-                      const count = placed.filter((p) => p.surface === sf).length;
-                      // resolveBlankImage falls back to the front when a back
-                      // shot is missing, so asking it whether the back "has an
-                      // image" always said yes and this warning never fired.
-                      // Ask the photography directly instead.
-                      const hasPhoto =
-                        sf === "front" ? Boolean(frontImage.url) : hasBackPhoto(blank, colorName);
-                      return (
-                        <button
-                          key={sf}
-                          type="button"
-                          onClick={() => setSurface(sf)}
-                          className={`rounded-full px-3.5 py-1 text-[12px] font-medium capitalize transition-colors ${
-                            surface === sf
-                              ? "bg-[hsl(var(--ax-accent)/0.16)] text-[hsl(var(--ax-accent))]"
-                              : "text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-secondary))]"
-                          }`}
-                        >
-                          {sf}
-                          {count > 0 && <span className="ml-1 tabular-nums opacity-80">{count}</span>}
-                          {!hasPhoto && (
-                            <span
-                              className="ml-1 text-[hsl(var(--ax-amber))]"
-                              title={`No ${sf} photograph for ${colorName ?? "this blank"} — placement still saves`}
-                            >
-                              •
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span className="text-[11px] text-[hsl(var(--ax-faint))]">
-                    Drag artwork onto the garment. Front and back are placed separately — a front-only design saves a
-                    front-only mockup.
-                    {blank && isTwoSided(blank.garmentType) && !hasBackPhoto(blank, colorName) && (
-                      <span className="ml-1 text-[hsl(var(--ax-amber))]">
-                        No back photograph for this colourway yet, so the back view shows the front.
-                      </span>
-                    )}
-                  </span>
-                </div>
-
-                <MockupCanvas
-                  garmentUrl={garmentImage.url}
-                  garmentLabel={`${blank?.name ?? "Blank"} ${surface}`}
-                  approximate={garmentImage.approximate}
-                  approximateNote={
-                    garmentImage.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"
-                  }
-                  placed={placed}
-                  designsById={designsById}
-                  surface={surface}
-                  guides={guides[surface] ?? DEFAULT_GUIDES}
-                  onGuidesChange={(next) => setGuides((prev) => ({ ...prev, [surface]: next }))}
-                  onChange={setPlaced}
-                  onDropDesign={(designId, x, y, aspect) =>
-                    addPlacement(designId, boxAtPoint(x, y, aspect), null)
-                  }
+              <div className="grid gap-3 lg:grid-cols-[1fr_minmax(240px,300px)]">
+                {blank && selectedColors.length > 0 && (
+                  <ColorwayStrip
+                    blank={blank}
+                    selected={selectedColors}
+                    master={colorName}
+                    placed={placed}
+                    designsById={designsById}
+                    surface={surface}
+                    onMakeMaster={makeMaster}
+                  />
+                )}
+                <MockupDesignRail
+                  entityId={entity.id}
+                  onQuickAdd={(d) => {
+                    const at = dropCentre();
+                    addPlacement(d.id, boxAtPoint(at.x, at.y, 1), null);
+                  }}
                 />
               </div>
             </div>
@@ -1537,6 +1672,115 @@ function RailTile({ design, onQuickAdd }: { design: Design; onQuickAdd: (d: Desi
  * Shares the percentage geometry with the live canvas rather than
  * re-deriving it, so what the operator approves is what they arranged.
  */
+/**
+ * EVERY SELECTED COLOURWAY, WITH THE ARRANGEMENT ALREADY ON IT.
+ *
+ * There is no "apply to all" button here, and its absence is the design rather
+ * than an omission. Placement geometry is stored as percentages of the garment
+ * box and is shared by the whole variant set, so a colour added after the
+ * artwork was positioned is already positioned — there is nothing for a button
+ * to do. Rather than ship a control that fires and changes nothing, the strip
+ * shows the propagation happening: drag the logo on the canvas and all thirteen
+ * thumbnails move with it.
+ *
+ * Clicking a colourway makes it the one the canvas shows, so a nudge can be
+ * judged against the colour that looked wrong instead of the first one picked.
+ */
+function ColorwayStrip({
+  blank,
+  selected,
+  master,
+  placed,
+  designsById,
+  surface,
+  onMakeMaster,
+}: {
+  blank: Blank;
+  selected: string[];
+  master: string | null;
+  placed: PlacedDesign[];
+  designsById: Map<string, Design>;
+  surface: "front" | "back";
+  onMakeMaster: (name: string) => void;
+}) {
+  const onThisSurface = placed.filter((p) => p.surface === surface);
+
+  return (
+    <section className="rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.02] p-3">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <h4 className="text-[12px] font-semibold text-[hsl(var(--ax-ink))]">
+          {selected.length} colourway{selected.length === 1 ? "" : "s"} · {surface}
+        </h4>
+        <p className="text-[10.5px] text-[hsl(var(--ax-faint))]">
+          One arrangement, every colour. Worth a look before saving — a placement that sits right on one garment can
+          read slightly differently on another.
+        </p>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {selected.map((name) => {
+          const img = resolveBlankImage({ blank, colorName: name, surface });
+          const isMaster = name === master;
+          return (
+            <button
+              key={name}
+              type="button"
+              onClick={() => onMakeMaster(name)}
+              title={isMaster ? `${name} — the canvas is showing this one` : `${name} — click to adjust on this colour`}
+              className={`relative w-[104px] shrink-0 overflow-hidden rounded-xl border text-left transition-all ${
+                isMaster
+                  ? "border-[hsl(var(--ax-accent))] ring-1 ring-[hsl(var(--ax-accent))]"
+                  : "border-[hsl(var(--ax-border))] hover:border-[hsl(var(--ax-accent)/0.6)]"
+              }`}
+            >
+              <div className="relative aspect-square w-full bg-white/[0.04]">
+                {img.url ? (
+                  <img src={img.url} alt={name} className="h-full w-full object-contain" />
+                ) : (
+                  <div className="flex h-full items-center justify-center px-2 text-center text-[9px] text-[hsl(var(--ax-faint))]">
+                    No {surface} photo
+                  </div>
+                )}
+                {onThisSurface.map((pl) => {
+                  const d = designsById.get(pl.designId);
+                  return (
+                    <div
+                      key={pl.id}
+                      className="pointer-events-none absolute"
+                      style={{
+                        left: `${pl.box.x}%`,
+                        top: `${pl.box.y}%`,
+                        width: `${pl.box.w}%`,
+                        height: `${pl.box.h}%`,
+                        transform: pl.rotation ? `rotate(${pl.rotation}deg)` : undefined,
+                      }}
+                    >
+                      <AssetImage
+                        bucket={d?.fileBucket}
+                        path={d?.filePath}
+                        alt={d?.title ?? "Artwork"}
+                        className="h-full w-full"
+                        fit="contain"
+                      />
+                    </div>
+                  );
+                })}
+                {img.approximate && img.url && (
+                  <span
+                    className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-amber))]"
+                    title="Not this colourway's own photograph"
+                  />
+                )}
+              </div>
+              <div className="truncate px-1.5 py-1 text-[9.5px] text-[hsl(var(--ax-secondary))]">{name}</div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function StaticMockup({
   image,
   placed,

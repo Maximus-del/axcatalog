@@ -177,7 +177,7 @@ async function fetchWorkspace(entityId: string): Promise<EntityWorkspace | null>
       .eq("athlete_id", entityId),
     t("mockups")
       .select(
-        "id, title, athlete_id, collection_id, design_id, blank_id, product_id, color_name, surface, zone_id, placement_label, approval_state, image_url, storage_bucket, storage_path, description, created_at, kind",
+        "id, title, athlete_id, collection_id, design_id, blank_id, v2_blank_id, product_id, color_name, surface, zone_id, placement_label, approval_state, image_url, storage_bucket, storage_path, description, created_at, kind",
       )
       .eq("athlete_id", entityId)
       .eq("kind", "concept")
@@ -350,7 +350,7 @@ function mapConcept(m: Row): ProductConcept {
     entityId: str(m.athlete_id),
     collectionId: str(m.collection_id),
     designId: str(m.design_id),
-    blankId: str(m.blank_id),
+    blankId: str(m.v2_blank_id) ?? str(m.blank_id),
     productId: str(m.product_id),
     colorName: str(m.color_name),
     surface: str(m.surface),
@@ -541,7 +541,7 @@ export function useDesigns(entityId?: string) {
 async function fetchConcepts(entityId?: string): Promise<ProductConcept[]> {
   let q = t("mockups")
     .select(
-      "id, title, athlete_id, collection_id, design_id, blank_id, product_id, color_name, surface, zone_id, placement_label, approval_state, image_url, storage_bucket, storage_path, description, created_at, kind",
+      "id, title, athlete_id, collection_id, design_id, blank_id, v2_blank_id, product_id, color_name, surface, zone_id, placement_label, approval_state, image_url, storage_bucket, storage_path, description, created_at, kind",
     )
     .eq("kind", "concept")
     .order("created_at", { ascending: false });
@@ -595,7 +595,7 @@ export function useCreateMockup() {
       const mockupId = String((data as unknown as Row).id);
 
       if (placements.length > 0) {
-        const rows = placements.map((p) => ({ ...p, mockup_id: mockupId, blank_id: draft.blankId ?? null, color_name: draft.colorName ?? null }));
+        const rows = placements.map((p) => ({ ...p, mockup_id: mockupId, v2_blank_id: draft.blankId ?? null, color_name: draft.colorName ?? null }));
         const placed = await t("product_print_placements").insert(rows as never);
         if (placed.error) {
           await t("mockups").delete().eq("id", mockupId);
@@ -854,7 +854,9 @@ export function useCreateBulkOrder(entityId: string, organizationId: string) {
       const items = lines.map((l) => ({
         order_request_id: orderId,
         mockup_id: input.mockupId,
-        blank_id: input.blankId,
+        // V2 blanks live in v2_blanks; mockups.blank_id's foreign key points at
+        // the legacy `blanks` table and would reject every one of these.
+        v2_blank_id: input.blankId,
         product_name_snapshot: input.mockupTitle,
         size: l.size,
         color: input.colorName,
@@ -896,7 +898,7 @@ export function useMockupForEdit(mockupId: string | undefined) {
       const [mockupRes, placeRes] = await Promise.all([
         t("mockups")
           .select(
-            "id, title, athlete_id, organization_id, blank_id, color_name, collection_id, description, guides, design_id",
+            "id, title, athlete_id, organization_id, blank_id, v2_blank_id, color_name, collection_id, description, guides, design_id",
           )
           .eq("id", mockupId as string)
           .single(),
@@ -909,7 +911,7 @@ export function useMockupForEdit(mockupId: string | undefined) {
       return {
         id: String(row.id),
         title: String(row.title ?? ""),
-        blankId: str(row.blank_id),
+        blankId: str(row.v2_blank_id) ?? str(row.blank_id),
         colorName: str(row.color_name),
         collectionId: str(row.collection_id),
         notes: str(row.description),
@@ -943,7 +945,7 @@ export function useUpdateMockup(entityId: string) {
     }) => {
       const patch: Row = {};
       if (draft.title !== undefined) patch.title = draft.title;
-      if (draft.blankId !== undefined) patch.blank_id = draft.blankId;
+      if (draft.blankId !== undefined) patch.v2_blank_id = draft.blankId;
       if (draft.colorName !== undefined) patch.color_name = draft.colorName;
       if (draft.collectionId !== undefined) patch.collection_id = draft.collectionId || null;
       if (draft.notes !== undefined) patch.description = draft.notes;
@@ -982,7 +984,7 @@ export function useUpdateMockup(entityId: string) {
           return {
             ...p,
             mockup_id: mockupId,
-            blank_id: draft.blankId ?? null,
+            v2_blank_id: draft.blankId ?? null,
             color_name: draft.colorName ?? null,
             print_width_in: carried?.print_width_in ?? null,
             print_height_in: carried?.print_height_in ?? null,
@@ -1019,7 +1021,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
   const [mockupRes, folderRes] = await Promise.all([
     t("mockups")
       .select(
-        "id, title, athlete_id, organization_id, blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, product_id, collection_id, guides, created_at, updated_at",
+        "id, title, athlete_id, organization_id, blank_id, v2_blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, product_id, collection_id, guides, created_at, updated_at",
       )
       .eq("athlete_id", entityId)
       .eq("kind", "concept")
@@ -1033,7 +1035,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
 
   const rows = (mockupRes.data ?? []) as unknown as Row[];
   const ids = rows.map((r) => String(r.id));
-  const blankIds = [...new Set(rows.map((r) => str(r.blank_id)).filter(Boolean))] as string[];
+  const blankIds = [...new Set(rows.map((r) => str(r.v2_blank_id) ?? str(r.blank_id)).filter(Boolean))] as string[];
 
   const [placementRes, blankRes] = await Promise.all([
     ids.length
@@ -1079,8 +1081,11 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
       title: String(r.title ?? "Untitled mockup"),
       entityId: str(r.athlete_id),
       organizationId: String(r.organization_id),
-      blankId: str(r.blank_id),
-      blankName: r.blank_id ? (blankName.get(String(r.blank_id)) ?? null) : null,
+      blankId: str(r.v2_blank_id) ?? str(r.blank_id),
+      blankName: (() => {
+        const bid = str(r.v2_blank_id) ?? str(r.blank_id);
+        return bid ? (blankName.get(bid) ?? null) : null;
+      })(),
       colorName: str(r.color_name),
       imageUrl: str(r.image_url),
       imageBucket: str(r.storage_bucket),
@@ -1169,7 +1174,7 @@ export function useMockupActions(entityId: string, organizationId: string) {
           const newId = String((copy.data as unknown as Row).id);
 
           const places = await t("product_print_placements")
-            .select("design_id, blank_id, color_name, surface, zone_id, zone_label, x_pct, y_pct, w_pct, h_pct, rotation_deg, sort_order")
+            .select("design_id, blank_id, v2_blank_id, color_name, surface, zone_id, zone_label, x_pct, y_pct, w_pct, h_pct, rotation_deg, sort_order")
             .eq("mockup_id", job.mockupId);
           const rows = ((places.data ?? []) as unknown as Row[]).map((p) => ({ ...p, mockup_id: newId }));
           if (rows.length) {
@@ -1290,7 +1295,7 @@ export function useCreateMockupBatch() {
             const rows = job.placements.map((p) => ({
               ...p,
               mockup_id: mockupId,
-              blank_id: job.draft.blankId ?? null,
+              v2_blank_id: job.draft.blankId ?? null,
               color_name: job.draft.colorName ?? null,
             }));
             const placed = await t("product_print_placements").insert(rows as never);
