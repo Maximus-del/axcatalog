@@ -88,6 +88,7 @@ const AdminInbox = lazy(() => import("./pages/admin/AdminInbox"));
 const V2Layout = lazy(() => import("@/components/admin-v2/V2Layout"));
 const V2Overview = lazy(() => import("./pages/admin-v2/V2Overview"));
 const V2People = lazy(() => import("./pages/admin-v2/V2People"));
+const V2EntityOverview = lazy(() => import("./pages/admin-v2/V2EntityOverview"));
 const V2EntityWorkspace = lazy(() => import("./pages/admin-v2/V2EntityWorkspace"));
 const V2Creative = lazy(() => import("./pages/admin-v2/V2Creative"));
 const V2Commerce = lazy(() => import("./pages/admin-v2/V2Commerce"));
@@ -231,7 +232,15 @@ const App = () => (
               <Route path="/admin-v2" element={<RequireAdmin><V2Layout /></RequireAdmin>}>
                 <Route index element={<V2Overview />} />
                 <Route path="people" element={<V2People />} />
-                <Route path="people/:id" element={<V2EntityWorkspace />} />
+                {/*
+                  An athlete has two addresses. The bare route is the OVERVIEW —
+                  what is happening right now. /library is the full pipeline,
+                  which this page used to be: it had grown into a vertical feed
+                  of every design, mockup, product and collection, which answers
+                  "show me everything" rather than "what needs me".
+                */}
+                <Route path="people/:id" element={<V2EntityOverview />} />
+                <Route path="people/:id/library" element={<V2EntityWorkspace />} />
                 {/* The operator's draft order for this entity. */}
                 <Route path="people/:id/cart" element={<V2Cart />} />
                 <Route path="creative" element={<V2Creative />} />

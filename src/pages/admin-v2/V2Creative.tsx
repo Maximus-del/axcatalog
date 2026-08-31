@@ -22,6 +22,7 @@ import {
   type AssetBrief,
 } from "@/lib/v2/data";
 import { cleanDesignTitle, stageOf, STAGE_LABELS, STAGE_TONES, type ConceptStage } from "@/lib/v2/concepts";
+import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import type { Design, ProductConcept } from "@/lib/v2/types";
 import AssetsDrawer, { ASSET_TYPES, type AssetSource } from "@/components/admin-v2/AssetsDrawer";
 import {
@@ -766,7 +767,7 @@ function MockupCard({ concept, owner }: { concept: ProductConcept; owner?: strin
   const stage = stageOf(concept);
   return (
     <Link
-      to={concept.entityId ? `/admin-v2/people/${concept.entityId}?mockup=${concept.id}` : "/admin-v2/people"}
+      to={concept.entityId ? entityLibraryHref(concept.entityId, { mockup: concept.id }) : "/admin-v2/people"}
       title={concept.entityId ? `Open ${concept.title}` : "This mockup has no owner — pick one"}
       className="ax-card ax-card-hover block overflow-hidden p-0 transition-all"
     >

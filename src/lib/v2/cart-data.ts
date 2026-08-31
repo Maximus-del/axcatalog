@@ -347,3 +347,76 @@ export function useSubmitCart(entityId: string, userId: string | undefined) {
     },
   });
 }
+
+/* ------------------------------------------------ an entity's order history */
+
+export interface EntityOrder {
+  id: string;
+  orderNumber: string | null;
+  status: string;
+  units: number;
+  /** Null when the order was raised before the cart started freezing prices. */
+  total: number | null;
+  createdAt: string;
+}
+
+export interface EntityOrderHistory {
+  orders: EntityOrder[];
+  /** Value of this calendar year's orders, and how many carried no price. */
+  ytdTotal: number;
+  ytdCount: number;
+  ytdUnpriced: number;
+}
+
+/**
+ * The orders on an athlete's overview.
+ *
+ * These are bulk_order_requests, NOT the Shopify `orders` table. Shopify orders
+ * cannot be attributed to most entities — line items are not linked to product
+ * records, and every entity without its own organisation shares Athlete
+ * Xclusive's (see EntityWorkspace.ordersNote). A bulk order carries
+ * `athlete_id`, so it is the only order stream this page can honestly claim
+ * belongs to this person.
+ *
+ * Drafts are excluded here for the same reason they are excluded everywhere
+ * else: a draft is an operator's cart, not an order. See
+ * order-draft-isolation.test.ts.
+ */
+export function useEntityOrders(entityId: string | undefined, limit = 6) {
+  return useQuery({
+    queryKey: ["v2", "entity-orders", entityId, limit],
+    enabled: Boolean(entityId),
+    staleTime: 30_000,
+    queryFn: async (): Promise<EntityOrderHistory> => {
+      const res = await t("bulk_order_requests")
+        .select("id, order_number, status, total_units, wholesale_subtotal, created_at")
+        .eq("athlete_id", entityId as string)
+        .neq("status", "draft")
+        .order("created_at", { ascending: false })
+        .limit(60);
+      if (res.error) throw new Error(res.error.message);
+
+      const rows = ((res.data ?? []) as unknown as Row[]).map((r) => ({
+        id: String(r.id),
+        orderNumber: str(r.order_number),
+        status: String(r.status ?? ""),
+        units: Number(r.total_units ?? 0),
+        // 0 and "not priced" are different facts. Every order raised before the
+        // cart existed has a zero subtotal because nothing ever wrote one, and
+        // showing that as $0.00 would be a confident wrong number.
+        total: Number(r.wholesale_subtotal ?? 0) > 0 ? Number(r.wholesale_subtotal) : null,
+        createdAt: String(r.created_at ?? ""),
+      }));
+
+      const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
+      const ytd = rows.filter((r) => new Date(r.createdAt).getTime() >= startOfYear);
+
+      return {
+        orders: rows.slice(0, limit),
+        ytdTotal: Math.round(ytd.reduce((n, r) => n + (r.total ?? 0), 0) * 100) / 100,
+        ytdCount: ytd.length,
+        ytdUnpriced: ytd.filter((r) => r.total == null).length,
+      };
+    },
+  });
+}

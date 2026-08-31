@@ -42,6 +42,12 @@ export interface Entity {
   avatarUrl: string | null;
   website: string | null;
   category: string | null;
+  /** The club/organisation they currently play for, resolved from `teams`. */
+  teamName: string | null;
+  /** Who at AX owns this relationship. Null on almost every row today. */
+  primaryContact: string | null;
+  /** When AX started working with them — `athletes.created_at`. */
+  createdAt: string | null;
   /** True when this entity owns its own Supabase organization (Darnell, Steven). */
   hasOwnOrg: boolean;
   orgName: string | null;

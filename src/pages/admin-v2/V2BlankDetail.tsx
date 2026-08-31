@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, FolderOpen, ImageOff } from "lucide-react";
 import { useBlanks, useConcepts } from "@/lib/v2/data";
+import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import { AUDIENCES, fmtMoney, fmtPct, marginFor, priceFor } from "@/lib/v2/pricing";
 import {
   ISSUE_LABEL,
@@ -467,7 +468,7 @@ function BuiltOnThis({ blank, selected }: { blank: Blank; selected: BlankColor |
           const matched = selected != null && c.colorName === selected.name;
           const className = `ax-card overflow-hidden ${matched ? "ring-1 ring-[hsl(var(--ax-accent)/0.5)]" : ""}`;
           return c.entityId ? (
-            <Link key={c.id} to={`/admin-v2/people/${c.entityId}?mockup=${c.id}`} className={`${className} ax-card-hover transition-all`}>
+            <Link key={c.id} to={entityLibraryHref(c.entityId ?? "", { mockup: c.id })} className={`${className} ax-card-hover transition-all`}>
               {body}
             </Link>
           ) : (

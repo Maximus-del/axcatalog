@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { must, num, publicUrl, str, t, type Row } from "./db";
 import { displayNameOf } from "./entity";
+import { entityLibraryHref } from "./entity-nav";
 import { slugify } from "@/lib/slug";
 import { draftToRow, isConfigurable, type ConceptDraft } from "./concepts";
 import type { DesignGroup, OrderWrite } from "./design-groups";
@@ -57,10 +58,11 @@ const CLIENT_HIDDEN = {
 /* ------------------------------------------------------------------ people */
 
 async function fetchEntities(): Promise<(Entity & { counts: EntityCounts })[]> {
-  const [athletesRes, orgsRes, collRes, prodLinkRes, prodRes, designLinkRes, conceptRes] = await Promise.all([
+  const [athletesRes, teamsRes, orgsRes, collRes, prodLinkRes, prodRes, designLinkRes, conceptRes] = await Promise.all([
     t("athletes").select(
-      "id, organization_id, first_name, last_name, display_name, slug, entity_type, roles, status, position, league, website, category, metadata",
+      "id, organization_id, first_name, last_name, display_name, slug, entity_type, roles, status, position, league, website, category, metadata, created_at, current_team_id, primary_contact",
     ),
+    t("teams").select("id, name"),
     t("organizations").select("id, name, org_type"),
     t("collections").select("id, athlete_id"),
     t("product_athletes").select("athlete_id, product_id"),
@@ -68,6 +70,13 @@ async function fetchEntities(): Promise<(Entity & { counts: EntityCounts })[]> {
     t("design_athletes").select("athlete_id, design_id"),
     t("mockups").select("id, athlete_id, kind"),
   ]);
+
+  // The club shown in the athlete header. A join rather than a denormalised
+  // column: `athletes.current_team_id` is the fact, the name is `teams`'.
+  const teamName = new Map<string, string>();
+  for (const t0 of (teamsRes.data ?? []) as unknown as Row[]) {
+    teamName.set(String(t0.id), String(t0.name ?? ""));
+  }
 
   const orgs = new Map<string, { name: string }>();
   for (const o of (orgsRes.data ?? []) as unknown as Row[]) {
@@ -119,6 +128,9 @@ async function fetchEntities(): Promise<(Entity & { counts: EntityCounts })[]> {
       position: str(a.position),
       league: str(a.league),
       avatarUrl: str(meta.avatar_url) ?? str(meta.headshot_url),
+      teamName: teamName.get(str(a.current_team_id) ?? "") ?? null,
+      primaryContact: str(a.primary_contact),
+      createdAt: str(a.created_at),
       website: str(a.website),
       category: str(a.category),
       // An entity with a dedicated org owns its own commerce + order stream.
@@ -1935,7 +1947,7 @@ async function fetchSearch(term: string): Promise<SearchHit[]> {
       id: String(r.id),
       label: String(r.title ?? "Untitled mockup"),
       detail: str(r.color_name),
-      to: owner ? `/admin-v2/people/${owner}?mockup=${String(r.id)}` : "/admin-v2/creative?tab=mockups",
+      to: owner ? entityLibraryHref(owner, { mockup: String(r.id) }) : "/admin-v2/creative?tab=mockups",
     });
   }
 

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Layers3, Package, Receipt, ShoppingBag, Users } from "lucide-react";
 import { useOverview } from "@/lib/v2/data";
+import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { catalogHref } from "@/lib/v2/catalog-nav";
@@ -92,7 +93,7 @@ export default function V2Overview() {
               */
               <Link
                 key={c.id}
-                to={c.entityId ? `/admin-v2/people/${c.entityId}?mockup=${c.id}` : "/admin-v2/people"}
+                to={c.entityId ? entityLibraryHref(c.entityId, { mockup: c.id }) : "/admin-v2/people"}
                 title={c.entityId ? `Open ${c.title}` : "This mockup has no owner — pick one"}
                 className="ax-card ax-card-hover overflow-hidden p-0 transition-all"
               >

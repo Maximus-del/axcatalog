@@ -9,6 +9,7 @@ import { roleLabel, typeLabel } from "@/lib/v2/entity";
 import { cleanDesignTitle, isConfigurable, stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { catalogHref } from "@/lib/v2/catalog-nav";
+import { entityCartHref, entityHref, entityLibraryHref, isEntitySection } from "@/lib/v2/entity-nav";
 import { shopLink } from "@/lib/ecosystem/image";
 import { AssetImage, Card, Chip, ErrorState, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
 import WorkflowNav, { type WorkflowStep } from "@/components/admin-v2/WorkflowNav";
@@ -122,7 +123,17 @@ export default function V2EntityWorkspace() {
     else next.delete("mockup");
     setParams(next);
   };
-  const [active, setActive] = useState<StepKey>("designs");
+  /*
+    ARRIVE WHERE THE LINK POINTED.
+
+    The overview's "View all" links carry `?focus=<section>`. Read once, as the
+    initial state, so the rail is already highlighting the right step on the
+    first paint rather than snapping to it after an effect — and so a later
+    hand-scroll is never fought by a re-run.
+  */
+  const focusParam = params.get("focus");
+  const [active, setActive] = useState<StepKey>(isEntitySection(focusParam) ? focusParam : "designs");
+  const [focused, setFocused] = useState(false);
   const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
   const scrollingTo = useRef<StepKey | null>(null);
 
@@ -137,6 +148,19 @@ export default function V2EntityWorkspace() {
       scrollingTo.current = null;
     }, 700);
   }, []);
+
+  /*
+    Scroll there once the sections exist.
+
+    Guarded by a flag rather than by the parameter, so that clearing `?focus=`
+    is not required and a hand-scroll immediately afterwards is not yanked
+    back. `data` is the signal that the sections have rendered at all.
+  */
+  useEffect(() => {
+    if (focused || !data || !isEntitySection(focusParam)) return;
+    setFocused(true);
+    goTo(focusParam);
+  }, [focused, data, focusParam, goTo]);
 
   // Keep the rail in sync while the operator scrolls by hand.
   useEffect(() => {
@@ -194,7 +218,7 @@ export default function V2EntityWorkspace() {
         <Link to="/admin-v2/people" className="mb-3 inline-block text-[11px] text-[hsl(var(--ax-faint))]">
           ← People
         </Link>
-        <ErrorState error={error} what="this workspace" onRetry={() => void refetch()} />
+        <ErrorState error={error} what="this library" onRetry={() => void refetch()} />
       </>
     );
   }
@@ -277,12 +301,17 @@ export default function V2EntityWorkspace() {
         Where you are. The shell's back arrow goes to wherever you came from,
         which is not the same as saying which directory this record lives in.
       */}
-      <Link
-        to="/admin-v2/people"
-        className="mb-3 inline-block text-[11px] text-[hsl(var(--ax-faint))] transition-colors hover:text-[hsl(var(--ax-ink))]"
-      >
-        ← People
-      </Link>
+      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] text-[hsl(var(--ax-faint))]">
+        <Link to="/admin-v2/people" className="transition-colors hover:text-[hsl(var(--ax-ink))]">
+          People
+        </Link>
+        <span>/</span>
+        <Link to={entityHref(entity.id)} className="transition-colors hover:text-[hsl(var(--ax-ink))]">
+          {entity.name}
+        </Link>
+        <span>/</span>
+        <span className="text-[hsl(var(--ax-secondary))]">Library</span>
+      </div>
 
       {/* ---------------------------------------------------------- identity */}
       <div className="mb-6 flex flex-wrap items-start gap-4">

@@ -66,6 +66,9 @@ const entity = {
   position: "WR",
   league: "NFL",
   avatarUrl: null,
+  teamName: "Atlanta Falcons",
+  primaryContact: null,
+  createdAt: "2026-04-16T00:00:00Z",
   website: null,
   category: null,
   hasOwnOrg: true,
@@ -339,6 +342,31 @@ vi.mock("@/lib/v2/cart-data", () => ({
       ],
       units: 12,
     }),
+  useEntityOrders: () =>
+    query({
+      orders: [
+        {
+          id: "o9",
+          orderNumber: "BR-2026-721",
+          status: "shipped",
+          units: 11,
+          total: 4250,
+          createdAt: "2026-04-17T10:59:55Z",
+        },
+        {
+          id: "o8",
+          orderNumber: "BR-2026-001",
+          status: "submitted",
+          units: 10,
+          // Raised before the cart froze prices — must render as an em dash.
+          total: null,
+          createdAt: "2026-04-17T04:53:40Z",
+        },
+      ],
+      ytdTotal: 4250,
+      ytdCount: 2,
+      ytdUnpriced: 1,
+    }),
   useCartActions: () => mutation(),
   useAddToCart: () => mutation(),
   useSubmitCart: () => mutation(),
@@ -355,6 +383,7 @@ import V2Creative from "../V2Creative";
 import V2NotFound from "../V2NotFound";
 import V2EntityWorkspace from "../V2EntityWorkspace";
 import V2Cart from "../V2Cart";
+import V2EntityOverview from "../V2EntityOverview";
 import CommandSearch from "@/components/admin-v2/CommandSearch";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -372,6 +401,7 @@ function mount(ui: ReactElement, route = "/admin-v2"): HTMLElement {
         <MemoryRouter initialEntries={[route]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/admin-v2/people/:id" element={ui} />
+            <Route path="/admin-v2/people/:id/library" element={ui} />
             <Route path="/admin-v2/people/:id/cart" element={ui} />
             <Route path="/admin-v2/commerce/blanks/:id" element={ui} />
             <Route path="*" element={ui} />
@@ -420,9 +450,15 @@ const PAGES: Array<{ name: string; render: () => ReactElement; route?: string; e
     expects: /colourways/i,
   },
   {
-    name: "Entity workspace",
-    render: () => <V2EntityWorkspace />,
+    name: "Athlete overview",
+    render: () => <V2EntityOverview />,
     route: "/admin-v2/people/e1",
+    expects: /darnell mooney/i,
+  },
+  {
+    name: "Entity library",
+    render: () => <V2EntityWorkspace />,
+    route: "/admin-v2/people/e1/library",
     expects: /darnell mooney/i,
   },
   {
@@ -469,6 +505,55 @@ describe("a failed read says so instead of showing an empty shelf", () => {
       expect(textOf(mount(page.render(), page.route))).toMatch(/could not load|does not exist|not found/i);
     });
   }
+});
+
+describe("the athlete overview tells the truth about what it knows", () => {
+  const text = () => textOf(mount(<V2EntityOverview />, "/admin-v2/people/e1"));
+
+  it("shows the six counts from the entity record, not from the previews", () => {
+    // Three designs exist in the counts; only one is in the preview fixture.
+    // The strip must report the library, not the tiles it happened to render.
+    const el = text();
+    expect(el).toMatch(/Designs/);
+    expect(el).toMatch(/Collections/);
+    expect(el).toMatch(/Live/);
+  });
+
+  it("names the club and when AX started working with them", () => {
+    expect(text()).toMatch(/Atlanta Falcons/);
+    expect(text()).toMatch(/AX since/);
+  });
+
+  it("invents no primary contact when the record has none", () => {
+    expect(text()).not.toMatch(/Primary contact/i);
+  });
+
+  it("lists the athlete's bulk orders, which are the only ones attributable", () => {
+    const el = text();
+    expect(el).toMatch(/BR-2026-721/);
+    expect(el).toMatch(/Shipped/);
+  });
+
+  it("renders an em dash rather than $0.00 for an order that was never priced", () => {
+    expect(text()).toMatch(/—/);
+  });
+
+  it("says these are bulk orders rather than implying they are every sale", () => {
+    expect(text()).toMatch(/Bulk orders raised for/i);
+  });
+
+  it("sends View all into the library rather than showing the whole shelf here", () => {
+    const el = mount(<V2EntityOverview />, "/admin-v2/people/e1");
+    const hrefs = [...el.querySelectorAll("a")].map((a) => a.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.includes("/library?focus=mockups"))).toBe(true);
+    expect(hrefs.some((h) => h.includes("/library?focus=products"))).toBe(true);
+  });
+
+  it("offers Create Order as the cart, because an order is assembled not typed", () => {
+    const el = mount(<V2EntityOverview />, "/admin-v2/people/e1");
+    const hrefs = [...el.querySelectorAll("a")].map((a) => a.getAttribute("href") ?? "");
+    expect(hrefs.some((h) => h.endsWith("/admin-v2/people/e1/cart"))).toBe(true);
+  });
 });
 
 describe("global search", () => {
