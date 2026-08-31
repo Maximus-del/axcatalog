@@ -181,3 +181,33 @@ describe("row shape", () => {
     expect(row.metadata.created_from).toMatchObject({ source: "admin-v2", concept_id: "abcdef123456" });
   });
 });
+
+describe("which blank table the product points at", () => {
+  it("writes a resolved V2 blank to v2_blank_id and leaves blank_id null", () => {
+    const draft = buildProductDraft(base);
+    expect(draft.blankIsV2).toBe(true);
+    const row = draftToProductRow(draft, "org1") as { blank_id: string | null; v2_blank_id: string | null };
+    expect(row.v2_blank_id).toBe("b1");
+    expect(row.blank_id).toBeNull();
+  });
+
+  it("treats an unresolved blank id as legacy rather than guessing", () => {
+    // The concept names a blank the V2 catalog does not know — an older mockup
+    // built before the V2 tables existed.
+    const draft = buildProductDraft({ ...base, blank: null });
+    expect(draft.blankIsV2).toBe(false);
+    const row = draftToProductRow(draft, "org1") as { blank_id: string | null; v2_blank_id: string | null };
+    expect(row.blank_id).toBe("b1");
+    expect(row.v2_blank_id).toBeNull();
+  });
+
+  it("never sets both", () => {
+    for (const blank of [base.blank, null]) {
+      const row = draftToProductRow(buildProductDraft({ ...base, blank }), "org1") as {
+        blank_id: string | null;
+        v2_blank_id: string | null;
+      };
+      expect(Boolean(row.blank_id) && Boolean(row.v2_blank_id)).toBe(false);
+    }
+  });
+});

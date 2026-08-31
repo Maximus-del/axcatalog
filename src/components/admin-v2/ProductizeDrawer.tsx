@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { useBlanks, useCreateProductFromConcept } from "@/lib/v2/data";
+import { useBlanks, useCreateProductFromConcept, useMockupPlacements } from "@/lib/v2/data";
 import { buildProductDraft, draftGaps, draftSlug, type ProductDraft } from "@/lib/v2/productize";
 import { audienceForRoles, fmtMoney, fmtPct, marginFor, priceFor } from "@/lib/v2/pricing";
 import type { Collection, Design, Entity, ProductConcept } from "@/lib/v2/types";
@@ -41,6 +41,17 @@ export default function ProductizeDrawer({
   const [draft, setDraft] = useState<ProductDraft | null>(null);
   const [allColors, setAllColors] = useState(false);
 
+  // Read the real arrangement rather than the concept row's single headline
+  // placement: a two-sided mockup carries two, and saying "1 placement" about
+  // it would undersell exactly the work being preserved.
+  const placementsQ = useMockupPlacements(concept.id);
+  const placementSummary = useMemo(() => {
+    const rows = placementsQ.data ?? [];
+    if (rows.length === 0) return "The placement comes across as saved";
+    const surfaces = [...new Set(rows.map((r) => r.surface))];
+    return `${rows.length} placement${rows.length === 1 ? "" : "s"} (${surfaces.join(" and ")}) copied exactly`;
+  }, [placementsQ.data]);
+
   // Rebuild when the blank finally loads, or when the colour scope changes.
   useEffect(() => {
     setDraft((prev) => {
@@ -60,7 +71,9 @@ export default function ProductizeDrawer({
   const submit = async () => {
     try {
       const id = await create.mutateAsync(draft);
-      toast.success("Product created — it starts as a draft");
+      toast.success("Product created — it starts as a draft", {
+        description: "Artwork, placement and the mockup's image came with it. Nothing has gone to Shopify.",
+      });
       onCreated?.(id);
       onClose();
     } catch (err) {
@@ -78,7 +91,7 @@ export default function ProductizeDrawer({
       <div className="admin-os relative flex h-full w-full max-w-lg flex-col border-l border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-canvas))] text-[hsl(var(--ax-ink))]">
         <div className="flex items-center gap-3 border-b border-[hsl(var(--ax-line))] px-4 py-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[15px] font-semibold">Create product</div>
+            <div className="text-[15px] font-semibold">Graduate to a product</div>
             <div className="truncate text-[12px] text-[hsl(var(--ax-faint))]">
               {entity.name} · from “{concept.title}”
             </div>
@@ -89,6 +102,15 @@ export default function ProductizeDrawer({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto scroll-touch p-4">
+          {/*
+            WHAT COMES WITH IT, SAID BEFORE ANYTHING IS ASKED FOR.
+
+            The creative work is done — artwork, garment, colour and the exact
+            placement are all decided and all carried over. An operator who is
+            not told that reasonably assumes a product means starting again,
+            and the fields below stop reading as "confirm this" and start
+            reading as "re-enter this".
+          */}
           <div className="mb-4 flex gap-3">
             <AssetImage
               url={concept.imageUrl}
@@ -102,11 +124,21 @@ export default function ProductizeDrawer({
               <Line label="Design" value={design?.title ?? "—"} />
               <Line label="Blank" value={blank?.name ?? "not set on this mockup"} />
               <Line label="Colour" value={concept.colorName ?? "—"} />
-              <Line
-                label="Placement"
-                value={concept.placementLabel ? `${concept.surface ?? ""} ${concept.placementLabel}`.trim() : "—"}
-              />
+              <Line label="Owner" value={entity.name} />
             </div>
+          </div>
+
+          <div className="mb-5 rounded-xl border border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.06)] px-3 py-2.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-accent))]">
+              Carried over, not rebuilt
+            </div>
+            <p className="mt-1 text-[11px] leading-relaxed text-[hsl(var(--ax-secondary))]">
+              {placementSummary}. The artwork, the garment and the colourway come with it, the mockup's image becomes
+              the product's, and the product keeps a link back to the mockup it came from.
+            </p>
+            <p className="mt-1.5 text-[11px] text-[hsl(var(--ax-faint))]">
+              What is left is the commerce side — everything below.
+            </p>
           </div>
 
           <Field label="Name">

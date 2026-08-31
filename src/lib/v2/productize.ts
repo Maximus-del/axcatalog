@@ -21,6 +21,12 @@ export interface ProductDraft {
   colors: string[];
   sizes: string[];
   blankId: string | null;
+  /**
+   * True when blankId names a row in `v2_blanks` rather than the legacy
+   * `blanks` table. The two columns mean different things and products has no
+   * foreign key on either, so getting this wrong is silent.
+   */
+  blankIsV2: boolean;
   collectionId: string | null;
   conceptId: string;
   /** The audience whose tier price was used, recorded so the number is explainable. */
@@ -60,6 +66,10 @@ export function buildProductDraft(input: ProductDraftInput): ProductDraft {
     colors,
     sizes: blank?.sizes ?? [],
     blankId: concept.blankId,
+    // The V2 catalog is the only place a Blank object comes from now, so a
+    // resolved blank is a V2 blank. An unresolved id is left as legacy, which
+    // is what it will be.
+    blankIsV2: Boolean(blank && concept.blankId === blank.id),
     collectionId: concept.collectionId,
     conceptId: concept.id,
     audience,
@@ -141,7 +151,10 @@ export function draftToProductRow(draft: ProductDraft, organizationId: string) {
     product_type: "athlete_merch",
     status: "draft",
     approval_state: "none",
-    blank_id: draft.blankId,
+    // Exactly one of these. blank_id means the legacy `blanks` table; a V2
+    // catalog id goes in v2_blank_id, which has a real foreign key.
+    blank_id: draft.blankIsV2 ? null : draft.blankId,
+    v2_blank_id: draft.blankIsV2 ? draft.blankId : null,
     // product_variants.shopify_variant_id is NOT NULL, so an AX-native product
     // cannot use that table yet. Colours and sizes ride in metadata, matching
     // what the existing V1 product creator already does.

@@ -221,7 +221,7 @@ async function fetchWorkspace(entityId: string): Promise<EntityWorkspace | null>
     productIds.length
       ? t("products")
           .select(
-            "id, title, sku, price, status, approval_state, shopify_sync_status, shopify_product_id, shopify_handle, blank_id, created_at",
+            "id, title, sku, price, status, approval_state, shopify_sync_status, shopify_product_id, shopify_handle, blank_id, v2_blank_id, created_at",
           )
           .in("id", productIds)
       : Promise.resolve({ data: [] }),
@@ -339,7 +339,7 @@ async function fetchWorkspace(entityId: string): Promise<EntityWorkspace | null>
         shopifySyncStatus: String(p.shopify_sync_status ?? "not_synced"),
         shopifyProductId: str(p.shopify_product_id),
         shopifyHandle: str(p.shopify_handle),
-        blankId: str(p.blank_id),
+        blankId: str(p.v2_blank_id) ?? str(p.blank_id),
         imageUrl: im ? publicUrl(str(im.storage_bucket), str(im.storage_path)) : (fromConcept?.imageUrl ?? null),
         imageBucket: im ? null : (fromConcept?.imageBucket ?? null),
         imagePath: im ? null : (fromConcept?.imagePath ?? null),
@@ -2423,19 +2423,83 @@ export function useCreateProductFromConcept(entityId: string, organizationId: st
       if (error) throw error;
       const productId = String((data as unknown as Row).id);
 
-      await t("product_athletes").insert({ product_id: productId, athlete_id: entityId } as never);
+      await must(t("product_athletes").insert({ product_id: productId, athlete_id: entityId } as never));
 
       if (draft.collectionId) {
-        await t("collection_products").insert({
-          collection_id: draft.collectionId,
-          product_id: productId,
-        } as never);
+        await must(
+          t("collection_products").insert({
+            collection_id: draft.collectionId,
+            product_id: productId,
+          } as never),
+        );
       }
 
-      // Lineage: the concept now knows what it became.
-      await t("mockups")
-        .update({ product_id: productId } as never)
-        .eq("id", draft.conceptId);
+      /*
+        CARRY THE PLACEMENT FORWARD.
+
+        The arrangement — which artwork, on which surface, at what geometry and
+        what print size — was decided on the mockup and must not be decided
+        again. These are COPIES rather than shared rows: a product is allowed to
+        diverge from the mockup it graduated from (a print scaled down for a
+        youth size, say), and a shared row would silently rewrite the mockup
+        when it did.
+      */
+      const placements = await t("product_print_placements")
+        .select(
+          "design_id, blank_id, v2_blank_id, color_name, surface, zone_id, zone_label, x_pct, y_pct, w_pct, h_pct, rotation_deg, sort_order, print_width_in, print_height_in, notes",
+        )
+        .eq("mockup_id", draft.conceptId);
+      const rows = ((placements.data ?? []) as unknown as Row[]).map((r) => ({
+        ...r,
+        product_id: productId,
+        mockup_id: null,
+      }));
+      if (rows.length > 0) await must(t("product_print_placements").insert(rows as never));
+
+      /*
+        CARRY THE PICTURE FORWARD.
+
+        The mockup's flattened composite lives in the PRIVATE `mockups` bucket;
+        product images are served from a public one, so the path cannot simply
+        be pointed at — it has to be copied across. Soft-failing on purpose: a
+        product without its picture is a product you can fix in a click, and
+        losing the whole creation over an image copy would be the wrong trade.
+      */
+      const conceptRow = await t("mockups")
+        .select("storage_bucket, storage_path")
+        .eq("id", draft.conceptId)
+        .maybeSingle();
+      const src = conceptRow.data as unknown as Row | null;
+      const srcBucket = str(src?.storage_bucket);
+      const srcPath = str(src?.storage_path);
+      if (srcBucket && srcPath) {
+        try {
+          const file = await supabase.storage.from(srcBucket).download(srcPath);
+          if (file.data) {
+            const name = srcPath.split("/").pop() ?? "mockup.jpg";
+            const destPath = `${productId}/${Date.now()}-${name}`;
+            const up = await supabase.storage
+              .from("product-images")
+              .upload(destPath, file.data, { contentType: file.data.type || "image/jpeg", upsert: true });
+            if (!up.error) {
+              await t("product_images").insert({
+                product_id: productId,
+                storage_bucket: "product-images",
+                storage_path: destPath,
+                file_name: name,
+                is_primary: true,
+                sort_order: 0,
+                metadata: { copied_from_mockup: draft.conceptId },
+              } as never);
+            }
+          }
+        } catch {
+          // See above: the product is still real without its cover.
+        }
+      }
+
+      // Lineage: the mockup now knows what it became.
+      await must(t("mockups").update({ product_id: productId } as never).eq("id", draft.conceptId));
 
       return productId;
     },
