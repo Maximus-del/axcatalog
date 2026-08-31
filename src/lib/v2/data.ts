@@ -1339,6 +1339,15 @@ export function useCreateMockupBatch() {
   return useMutation({
     mutationFn: async (jobs: Array<{ draft: ConceptDraft; placements: PlacementRow[] }>) => {
       const created: string[] = [];
+      /*
+        WHY IT FAILED, NOT JUST THAT IT DID.
+
+        This used to collect titles and discard the error, so a foreign-key
+        violation and a network blip both surfaced as "Nothing could be saved"
+        with no way to tell them apart. The save has now broken three times on
+        a column mismatch that the database named precisely each time — the
+        message just never reached anyone.
+      */
       const failed: string[] = [];
 
       for (const job of jobs) {
@@ -1363,8 +1372,10 @@ export function useCreateMockupBatch() {
             }
           }
           created.push(mockupId);
-        } catch {
-          failed.push(job.draft.title);
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err);
+          console.error("[v2] mockup save failed", { title: job.draft.title, err });
+          failed.push(`${job.draft.title}: ${reason}`);
         }
       }
 

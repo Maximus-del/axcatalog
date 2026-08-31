@@ -133,7 +133,24 @@ export function draftToRow(d: ConceptDraft) {
     status: "draft",
     storage_bucket: "mockups",
     design_id: d.designId ?? null,
-    blank_id: d.blankId ?? null,
+    /*
+      THE GARMENT GOES IN v2_blank_id. NOT blank_id.
+
+      `mockups.blank_id` is FK'd to the LEGACY `blanks` table:
+        mockups_blank_id_fkey FOREIGN KEY (blank_id) REFERENCES blanks(id)
+
+      Every V2 caller passes an id from `v2_blanks`, so writing it here raised
+      23503 — "Key is not present in table blanks" — on every single save. The
+      fix in 6360180 added v2_blank_id and repaired the PLACEMENT rows, but this
+      function, which builds the mockup row itself, kept writing the old column.
+      Both create paths go through it, so nothing could be saved on a V2 blank.
+
+      Reproduced against the live database before changing this, and the same
+      row with v2_blank_id inserts cleanly. Covered by a test below so it cannot
+      come back a third time.
+    */
+    v2_blank_id: d.blankId ?? null,
+    blank_id: null,
     collection_id: d.collectionId ?? null,
     color_name: d.colorName ?? null,
     surface: d.surface ?? null,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { displayNameOf, initialsOf, matchesFilter, modulesFor, rankEntities } from "./entity";
-import { cleanDesignTitle, isConfigurable, missingForProduct, stageOf, suggestTitle } from "./concepts";
+import { cleanDesignTitle, isConfigurable, missingForProduct, stageOf, suggestTitle, draftToRow } from "./concepts";
 import { audienceForRoles, hasAccess, marginFor, priceFor } from "./pricing";
 import { categoryForGarment, mergeZones, presetsFor } from "./placements";
 import type { Blank, Entity, ProductConcept } from "./types";
@@ -223,5 +223,45 @@ describe("print placements", () => {
     const lc = merged.find((p) => p.zoneId === "left_chest");
     expect(lc?.x).toBe(60);
     expect(merged.some((p) => p.zoneId === "front_oversized")).toBe(true);
+  });
+});
+
+describe("draftToRow — the column the garment goes in", () => {
+  const draft = {
+    title: "T",
+    entityId: "e1",
+    organizationId: "o1",
+    blankId: "cec81b15-e1ed-4a31-84eb-aaefd32bd184",
+    colorName: "Black White",
+    surface: "front",
+    flow: "design_first" as const,
+  };
+
+  it("writes the V2 catalog id to v2_blank_id", () => {
+    const row = draftToRow(draft) as Record<string, unknown>;
+    expect(row.v2_blank_id).toBe("cec81b15-e1ed-4a31-84eb-aaefd32bd184");
+  });
+
+  it("NEVER writes blank_id — it is FK'd to the legacy `blanks` table", () => {
+    // mockups_blank_id_fkey FOREIGN KEY (blank_id) REFERENCES blanks(id).
+    // A v2_blanks id here raises 23503 and every save fails. This has now
+    // happened three times; the test is the thing that stops a fourth.
+    const row = draftToRow(draft) as Record<string, unknown>;
+    expect(row.blank_id).toBeNull();
+  });
+
+  it("still writes a null garment when no blank was chosen", () => {
+    const row = draftToRow({ ...draft, blankId: null }) as Record<string, unknown>;
+    expect(row.v2_blank_id).toBeNull();
+    expect(row.blank_id).toBeNull();
+  });
+
+  it("carries the rest of the composition", () => {
+    const row = draftToRow(draft) as Record<string, unknown>;
+    expect(row.kind).toBe("concept");
+    expect(row.athlete_id).toBe("e1");
+    expect(row.organization_id).toBe("o1");
+    expect(row.color_name).toBe("Black White");
+    expect(row.surface).toBe("front");
   });
 });
