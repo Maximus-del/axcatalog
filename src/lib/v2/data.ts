@@ -1648,17 +1648,17 @@ async function fetchOverview() {
     {
       id: "concept-approval",
       count: awaitingApproval.length,
-      label: "Concepts awaiting approval",
+      label: "Mockups awaiting approval",
       detail: "Sent to the entity, no decision yet",
-      to: "/admin-v2/creative?tab=concepts&stage=awaiting_approval",
+      to: "/admin-v2/creative?tab=mockups&stage=awaiting_approval",
       tone: "var(--ax-amber)",
     },
     {
       id: "concept-configure",
       count: readyToConfigure.length,
-      label: "Concepts ready to configure",
+      label: "Mockups ready to become products",
       detail: "Design, blank, colour and placement all chosen",
-      to: "/admin-v2/creative?tab=concepts&stage=specified",
+      to: "/admin-v2/creative?tab=mockups&stage=specified",
       tone: "var(--ax-blue)",
     },
     {
@@ -1714,6 +1714,74 @@ async function fetchOverview() {
 
 export function useOverview() {
   return useQuery({ queryKey: ["v2", "overview"], queryFn: fetchOverview, staleTime: 30_000 });
+}
+
+/* ------------------------------------------------------- design templates */
+
+/**
+ * The Style DNA library, read-only in V2.
+ *
+ * Design Templates are explicitly on the "do not rebuild" list — the master
+ * prompts, reference sets and best-fit matching in V1 are strong and V2 links
+ * out to them. What V2 owes the operator is an INDEX: which directions exist,
+ * which are in use, and one click to the one you want. Nothing here writes.
+ */
+export interface DesignTemplateSummary {
+  id: string;
+  name: string;
+  style: string | null;
+  description: string | null;
+  tags: string[];
+  sports: string[];
+  isActive: boolean;
+  previewImage: string | null;
+  /** How many athlete instances exist — the honest measure of "is this used". */
+  applications: number;
+}
+
+async function fetchDesignTemplates(): Promise<DesignTemplateSummary[]> {
+  const [tplRes, appRes] = await Promise.all([
+    t("design_templates").select(
+      "id, name, style, description, tags, sport_compatibility, preview_images, is_active",
+    ),
+    t("design_template_applications").select("template_id"),
+  ]);
+
+  const used = new Map<string, number>();
+  for (const a of (appRes.data ?? []) as unknown as Row[]) {
+    const key = String(a.template_id);
+    used.set(key, (used.get(key) ?? 0) + 1);
+  }
+
+  const firstImage = (value: unknown): string | null => {
+    if (!Array.isArray(value)) return null;
+    for (const entry of value) {
+      if (typeof entry === "string" && entry) return entry;
+      if (entry && typeof entry === "object") {
+        const url = (entry as { url?: unknown }).url;
+        if (typeof url === "string" && url) return url;
+      }
+    }
+    return null;
+  };
+
+  return ((tplRes.data ?? []) as unknown as Row[])
+    .map((r) => ({
+      id: String(r.id),
+      name: String(r.name ?? "Untitled direction"),
+      style: str(r.style),
+      description: str(r.description),
+      tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
+      sports: Array.isArray(r.sport_compatibility) ? (r.sport_compatibility as string[]) : [],
+      isActive: r.is_active !== false,
+      previewImage: firstImage(r.preview_images),
+      applications: used.get(String(r.id)) ?? 0,
+    }))
+    .sort((a, b) => b.applications - a.applications || a.name.localeCompare(b.name));
+}
+
+export function useDesignTemplates() {
+  return useQuery({ queryKey: ["v2", "design-templates"], queryFn: fetchDesignTemplates, staleTime: 5 * 60_000 });
 }
 
 /* ----------------------------------------------------- design shelf (groups) */

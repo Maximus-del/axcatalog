@@ -1,7 +1,24 @@
 import { useState } from "react";
 import { ImagePlus, Sparkles, X } from "lucide-react";
-import type { Mockup } from "@/lib/v2/types";
 import { AssetImage } from "./primitives";
+
+/**
+ * What an asset can be made FROM.
+ *
+ * Deliberately narrower than `Mockup`: this screen needs a picture, a name and
+ * enough context to caption it, and nothing else. Typing it that way lets the
+ * Creative asset studio pass a mockup it read from the global list without
+ * first loading one entity's whole library.
+ */
+export interface AssetSource {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  imageBucket: string | null;
+  imagePath: string | null;
+  blankName?: string | null;
+  colorName?: string | null;
+}
 
 // TURN INTO ASSETS — the entry point, deliberately not the engine.
 //
@@ -19,11 +36,14 @@ import { AssetImage } from "./primitives";
 // in V1: references + prompt + source object.
 
 const ASSET_TYPES = [
-  { key: "story", label: "IG story", ratio: "9:16" },
-  { key: "feed", label: "IG in-feed", ratio: "4:5" },
-  { key: "giveaway", label: "Giveaway graphic", ratio: "1:1" },
-  { key: "launch", label: "Launch / drop graphic", ratio: "4:5" },
-  { key: "lookbook", label: "Lookbook page", ratio: "4:5" },
+  { key: "feed", label: "Instagram post", ratio: "4:5" },
+  { key: "story", label: "Instagram story", ratio: "9:16" },
+  { key: "promo", label: "Promotional graphic", ratio: "1:1" },
+  { key: "launch", label: "Product launch graphic", ratio: "4:5" },
+  { key: "banner", label: "Website banner", ratio: "16:9" },
+  { key: "email", label: "Email graphic", ratio: "3:2" },
+  { key: "lookbook", label: "Lookbook image", ratio: "4:5" },
+  { key: "feature", label: "Product feature graphic", ratio: "1:1" },
   { key: "other", label: "Something else", ratio: "—" },
 ] as const;
 
@@ -32,7 +52,7 @@ export default function AssetsDrawer({
   entityName,
   onClose,
 }: {
-  mockup: Mockup;
+  mockup: AssetSource;
   entityName: string;
   onClose: () => void;
 }) {

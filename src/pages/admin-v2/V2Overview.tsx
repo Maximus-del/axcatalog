@@ -26,7 +26,7 @@ export default function V2Overview() {
 
       <div className="mb-9 grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Metric label="Active people" value={data?.stats.activeEntities ?? 0} loading={loading} icon={<Users />} href="/admin-v2/people" />
-        <Metric label="Mockups" value={data?.stats.concepts ?? 0} loading={loading} icon={<Layers3 />} href="/admin-v2/creative?tab=concepts" />
+        <Metric label="Mockups" value={data?.stats.concepts ?? 0} loading={loading} icon={<Layers3 />} href="/admin-v2/creative?tab=mockups" />
         <Metric label="Live products" value={data?.stats.liveProducts ?? 0} loading={loading} icon={<ShoppingBag />} href={catalogHref({ tab: "products" })} />
         <Metric label="Blanks" value={data?.stats.blanks ?? 0} loading={loading} icon={<Package />} href={catalogHref({ tab: "blanks" })} />
         <Metric label="Open orders" value={data?.openOrders ?? 0} loading={loading} icon={<Receipt />} href="/admin-v2/orders?open=1" />
@@ -70,7 +70,7 @@ export default function V2Overview() {
         count={data?.recentConcepts.length}
         empty="No mockups yet. Open someone in People and build one from a design or a blank."
         action={
-          <Link to="/admin-v2/creative?tab=concepts" className="text-[12px] text-[hsl(var(--ax-accent))]">
+          <Link to="/admin-v2/creative?tab=mockups" className="text-[12px] text-[hsl(var(--ax-accent))]">
             All creative
           </Link>
         }
