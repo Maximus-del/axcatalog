@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Move, RotateCcw, Upload } from "lucide-react";
+import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Move, Repeat, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBlanks,
@@ -49,6 +49,8 @@ import { BlankCard, ColorChips, ColorStepHeader, OtherBlankRow } from "./builder
 import { MockupDesignRail } from "./builder/PlacementAside";
 import { ColorwayStrip, Line, StaticMockup } from "./builder/ReviewStep";
 import { OrderQuantities } from "./builder/OrderQuantities";
+import DesignSwitcher from "./builder/DesignSwitcher";
+import { swapDesign } from "@/lib/v2/design-swap";
 import { gridUnits, rowUnits, sizesForRun, type QuantityGrid } from "@/lib/v2/cart";
 import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 import type { Blank, Design, Entity } from "@/lib/v2/types";
@@ -78,6 +80,7 @@ export default function ConceptBuilder({
   initialFlow,
   initialDesign,
   editMockupId,
+  varyFromId,
 }: {
   entity: Entity;
   onClose: () => void;
@@ -87,8 +90,24 @@ export default function ConceptBuilder({
   initialDesign?: Design | null;
   /** Reopening a saved mockup. Everything is loaded and the flow becomes an edit. */
   editMockupId?: string | null;
+  /**
+   * VARIATIONS. Load a saved mockup exactly as editing would — blank, colour,
+   * every placement, the guides — but save as NEW mockups rather than over the
+   * original.
+   *
+   * This is the whole variation workflow, and it is a mode rather than a
+   * separate screen on purpose: a variation is a mockup, made the same way,
+   * from a starting point that is already right. Every tool it needs — the
+   * colourway grid, other blanks, the design switcher, the quantity grid, the
+   * three save actions — is already on this screen. A second builder that did
+   * "the same but for variations" would drift from this one within a month.
+   */
+  varyFromId?: string | null;
 }) {
   const isEdit = Boolean(editMockupId);
+  const isVariation = Boolean(varyFromId) && !isEdit;
+  /** The saved mockup this session started from, whichever mode we are in. */
+  const sourceMockupId = editMockupId ?? (isVariation ? varyFromId : null);
 
   /*
     UNSAVED WORK SURVIVES A REFRESH.
@@ -98,7 +117,9 @@ export default function ConceptBuilder({
     empty one. Editing a saved mockup never restores: that row is the truth.
     See mockup-draft.ts for why this is local storage and not a table.
   */
-  const [restored] = useState<MockupDraft | null>(() => (editMockupId ? null : loadDraft(entity.id)));
+  const [restored] = useState<MockupDraft | null>(() =>
+    editMockupId || varyFromId ? null : loadDraft(entity.id),
+  );
   const [showRestored, setShowRestored] = useState(Boolean(restored));
 
   /*
@@ -164,6 +185,7 @@ export default function ConceptBuilder({
    * restoring a week later.
    */
   const [qtyGrid, setQtyGrid] = useState<QuantityGrid>({});
+  const [switching, setSwitching] = useState(false);
   const [onlyEligible, setOnlyEligible] = useState(true);
 
   const designsQ = useDesigns(scopeAllDesigns ? undefined : entity.id);
@@ -172,7 +194,7 @@ export default function ConceptBuilder({
   const collectionsQ = useCollections();
   const create = useCreateMockupBatch();
   const update = useUpdateMockup(entity.id);
-  const editing = useMockupForEdit(editMockupId ?? undefined);
+  const editing = useMockupForEdit(sourceMockupId ?? undefined);
   const createCollection = useCreateCollection();
   const upload = useUploadDesign(entity.id, entity.organizationId);
   const { user } = useAuth();
@@ -290,6 +312,21 @@ export default function ConceptBuilder({
 
   /** Any of the three actions in flight disables all three. */
   const busy = create.isPending || update.isPending || addToCart.isPending;
+
+  /**
+   * Swap the artwork and leave everything else alone.
+   *
+   * The headline `design` follows the swap when the whole garment was swapped,
+   * because that is the design the mockup row records; a partial swap leaves it
+   * be, since the garment still carries the original.
+   */
+  const applySwap = (toDesignId: string, fromDesignId: string | null) => {
+    setPlaced((prev) => swapDesign(prev, toDesignId, { fromDesignId }));
+    if (fromDesignId == null || fromDesignId === design?.id) {
+      const next = (designsQ.data ?? []).find((d) => d.id === toDesignId);
+      if (next) setDesign(next);
+    }
+  };
 
   const setQty = (variantIndex: number, size: string, quantity: number) =>
     setQtyGrid((prev) => ({
@@ -428,7 +465,10 @@ export default function ConceptBuilder({
     const m = editing.data;
     if (!m || hydrated === m.id) return;
     setHydrated(m.id);
-    setTitle(m.title);
+    // A variation is a new mockup and needs its own name. Inheriting the
+    // original's would leave two rows with the same title, which is the
+    // library problem the naming rules exist to avoid.
+    setTitle(isVariation ? `${m.title} — variation` : m.title);
     setNotes(m.notes ?? "");
     setCollectionId(m.collectionId ?? "");
     setColorName(m.colorName);
@@ -449,7 +489,7 @@ export default function ConceptBuilder({
   // work at all. The blank may not be chosen yet, in which case the plain-top
   // baseline applies and the operator adjusts once they pick one.
   useEffect(() => {
-    if (!design || isEdit) return;
+    if (!design || isEdit || isVariation) return;
     setPlaced((prev) =>
       prev.length > 0
         ? prev
@@ -882,7 +922,9 @@ export default function ConceptBuilder({
             </button>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[15px] font-semibold">{isEdit ? "Edit mockup" : "Create mockup"}</div>
+            <div className="truncate text-[15px] font-semibold">
+              {isEdit ? "Edit mockup" : isVariation ? "New variation" : "Create mockup"}
+            </div>
             <div className="truncate text-[12px] text-[hsl(var(--ax-faint))]">
               {entity.name} · {audience} catalog
             </div>
@@ -1272,19 +1314,39 @@ export default function ConceptBuilder({
                     onMakeMaster={makeMaster}
                   />
                 )}
-                <MockupDesignRail
-                  entityId={entity.id}
-                  onQuickAdd={(d) => {
-                    const at = dropCentre();
-                    addPlacement(d.id, boxCentredAt(at, garment.width, 1), null);
-                  }}
-                />
+                <div className="space-y-2">
+                  {placed.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSwitching(true)}
+                      title="Put different artwork in exactly these boxes"
+                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-[hsl(var(--ax-accent)/0.4)] px-3 py-2 text-[12px] font-semibold text-[hsl(var(--ax-accent))] transition-colors hover:bg-[hsl(var(--ax-accent)/0.1)]"
+                    >
+                      <Repeat className="h-3.5 w-3.5" />
+                      Swap the design
+                    </button>
+                  )}
+                  <MockupDesignRail
+                    entityId={entity.id}
+                    onQuickAdd={(d) => {
+                      const at = dropCentre();
+                      addPlacement(d.id, boxCentredAt(at, garment.width, 1), null);
+                    }}
+                  />
+                </div>
               </div>
             </div>
           )}
 
           {step === "confirm" && (
             <div className="space-y-5">
+            {isVariation && (
+              <p className="rounded-xl border border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.06)] px-3.5 py-2.5 text-[12px] text-[hsl(var(--ax-secondary))]">
+                These save as <strong className="font-semibold text-[hsl(var(--ax-ink))]">new mockups</strong>. The one
+                you started from is not changed — add colourways or other blanks below, or swap the artwork, and this
+                becomes a run of its own.
+              </p>
+            )}
             <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
               <div className="space-y-3">
                 {usedSurfaces(placed).map((sf) => (
@@ -1598,6 +1660,16 @@ export default function ConceptBuilder({
           </div>
         )}
       </div>
+
+      {switching && (
+        <DesignSwitcher
+          entityId={entity.id}
+          placed={placed}
+          designsById={designsById}
+          onSwap={applySwap}
+          onClose={() => setSwitching(false)}
+        />
+      )}
     </div>
   );
 }

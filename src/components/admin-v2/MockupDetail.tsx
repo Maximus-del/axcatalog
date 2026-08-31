@@ -63,6 +63,7 @@ export default function MockupDetail({
   entity,
   onClose,
   onEdit,
+  onVary,
   onCreateAssets,
   onMakeLive,
   onDeleted,
@@ -71,6 +72,8 @@ export default function MockupDetail({
   entity: Entity;
   onClose: () => void;
   onEdit: () => void;
+  /** Start a new run from this one: same placement, new colourways, blanks or artwork. */
+  onVary: () => void;
   onCreateAssets: () => void;
   onMakeLive: () => void;
   onDeleted: () => void;
@@ -351,6 +354,12 @@ export default function MockupDetail({
                     active={panel === "lookbook"}
                   />
                   <ActionRow
+                    icon={Copy}
+                    title="Make variations"
+                    blurb="Same placement, other colourways, blanks or artwork — saved as new mockups."
+                    onClick={onVary}
+                  />
+                  <ActionRow
                     icon={Sparkles}
                     title="Create social assets"
                     blurb="Stories, promos and graphics from this mockup."
@@ -358,8 +367,8 @@ export default function MockupDetail({
                   />
                   <ActionRow
                     icon={Truck}
-                    title="Bulk order"
-                    blurb="Quantity pricing with volume discounts."
+                    title="Add to order"
+                    blurb="Quantities and pricing. Goes into this entity’s cart."
                     onClick={() => setPanel(panel === "bulk" ? null : "bulk")}
                     active={panel === "bulk"}
                   />

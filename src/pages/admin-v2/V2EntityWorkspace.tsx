@@ -103,6 +103,15 @@ export default function V2EntityWorkspace() {
   const libraryQ = useMockupLibrary(id);
   const building = params.get("build") === "1";
   const editMockupId = params.get("edit");
+  /*
+    VARIATIONS ARE ADDRESSABLE TOO.
+
+    `?vary=<id>` opens the builder loaded from a saved mockup but saving as new
+    rows. Same reasoning as `?edit=` — a refresh mid-variation should not throw
+    the work away, and a variation in progress is a link an operator can send
+    to themselves.
+  */
+  const varyMockupId = params.get("vary");
   const openMockupId = params.get("mockup");
   const detailMockup = openMockupId
     ? (libraryQ.data?.mockups.find((m) => m.id === openMockupId) ?? null)
@@ -651,6 +660,19 @@ export default function V2EntityWorkspace() {
         <ConceptBuilder entity={entity} editMockupId={editMockupId} onClose={() => openEditor(null)} />
       )}
 
+      {varyMockupId && !editMockupId && (
+        <ConceptBuilder
+          entity={entity}
+          varyFromId={varyMockupId}
+          onClose={() => {
+            const next = new URLSearchParams(params);
+            next.delete("vary");
+            next.delete("step");
+            setParams(next, { replace: true });
+          }}
+        />
+      )}
+
       {/*
         A link to a mockup that no longer exists — deleted, or moved to another
         entity — resolves to nothing and simply shows the workspace. That is the
@@ -665,6 +687,12 @@ export default function V2EntityWorkspace() {
             const next = new URLSearchParams(params);
             next.delete("mockup");
             next.set("edit", detailMockup.id);
+            setParams(next, { replace: true });
+          }}
+          onVary={() => {
+            const next = new URLSearchParams(params);
+            next.delete("mockup");
+            next.set("vary", detailMockup.id);
             setParams(next, { replace: true });
           }}
           onCreateAssets={() => {
