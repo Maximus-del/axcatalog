@@ -1,0 +1,37 @@
+diff --git a/src/hooks/useClientMockups.ts b/src/hooks/useClientMockups.ts
+index d5b12b6..7153cda 100644
+--- a/src/hooks/useClientMockups.ts
++++ b/src/hooks/useClientMockups.ts
+@@ -38,6 +38,15 @@ interface State {
+ /** Postgres says 42P01 for "relation does not exist". */
+ const MISSING_RELATION = "42P01";
+ 
++/**
++ * How long a composite link stays valid.
++ *
++ * Signed URLs are not revocable: they are HMAC tokens the storage API accepts
++ * without re-consulting RLS. This is the window in which an un-shared mockup
++ * remains reachable through a link someone already has.
++ */
++const SIGNED_URL_TTL_SECONDS = 300;
++
+ export function useClientMockups(athleteId: string | null | undefined): State {
+   const [mockups, setMockups] = useState<ClientMockup[]>([]);
+   const [loading, setLoading] = useState(true);
+@@ -92,7 +101,15 @@ export function useClientMockups(athleteId: string | null | undefined): State {
+ 
+       const signed = new Map<string, string>();
+       if (paths.length > 0) {
+-        const { data } = await supabase.storage.from("mockups").createSignedUrls(paths, 3600);
++        // FIVE MINUTES, NOT AN HOUR.
++        //
++        // A Supabase signed URL is an HMAC token that the storage API validates
++        // WITHOUT re-checking RLS. Un-sharing a mockup takes effect on the next
++        // query, but any link already handed to a browser keeps working until
++        // it expires. At 3600s a mockup un-shared at 10:00 stays fetchable
++        // until 11:00. Five minutes is long enough to load a gallery and short
++        // enough that un-sharing means something.
++        const { data } = await supabase.storage.from("mockups").createSignedUrls(paths, SIGNED_URL_TTL_SECONDS);
+         for (const entry of data ?? []) {
+           if (entry.path && entry.signedUrl) signed.set(entry.path, entry.signedUrl);
+         }
