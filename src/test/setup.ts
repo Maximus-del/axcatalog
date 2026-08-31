@@ -10,6 +10,32 @@ if (typeof window !== "undefined") {
 
   // jsdom implements no media queries. Any component that asks gets "no match"
   // rather than a crash.
+  // jsdom implements no IntersectionObserver, and the entity workspace uses one
+  // to keep its pipeline rail in sync with the scroll position. A no-op is the
+  // honest stub: nothing scrolls in a test, so nothing should ever intersect.
+  if (typeof globalThis.IntersectionObserver === "undefined") {
+    class NoopIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = "";
+      readonly thresholds: ReadonlyArray<number> = [];
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    }
+    Object.defineProperty(globalThis, "IntersectionObserver", {
+      value: NoopIntersectionObserver,
+      writable: true,
+    });
+  }
+
+  // jsdom does not implement scrollIntoView either.
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
+
   Object.defineProperty(window, "matchMedia", {
     writable: true,
     value: (query: string) => ({

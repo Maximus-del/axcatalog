@@ -84,6 +84,7 @@ function CommerceOverview() {
   const productsQ = useProducts();
   const conceptsQ = useConcepts();
   const loading = blanksQ.isLoading || productsQ.isLoading;
+  const failed = blanksQ.isError || productsQ.isError;
 
   // Memoised so the `?? []` does not hand every dependent useMemo a new array
   // on each render.
@@ -136,6 +137,23 @@ function CommerceOverview() {
   }, [conceptsQ.data, blanks]);
 
   const recentProducts = products.slice(0, 6);
+
+  // Without this the page renders "0 blanks · nothing waiting here" when the
+  // read failed, which is the exact lie the ErrorState exists to stop — and
+  // the most damaging place to tell it, because this page's whole job is to
+  // say what still needs doing.
+  if (failed) {
+    return (
+      <ErrorState
+        error={blanksQ.error ?? productsQ.error}
+        what="the commerce overview"
+        onRetry={() => {
+          void blanksQ.refetch();
+          void productsQ.refetch();
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">

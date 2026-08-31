@@ -33,7 +33,7 @@ import {
   promotableMembers,
 } from "@/lib/v2/visibility";
 import { generatePreview } from "@/lib/v2/preview";
-import { AssetImage, EmptyState, Skeleton } from "./primitives";
+import { AssetImage, EmptyState, ErrorState, Skeleton } from "./primitives";
 import { VisibilityNote, VisibilityPill, VisibilitySegmented } from "./ClientVisibility";
 
 // A lightweight visual asset manager for one entity's designs.
@@ -69,7 +69,7 @@ export default function DesignShelf({
   /** Open the design's own page — its creative options live there, not here. */
   onOpenDesign?: (design: Design) => void;
 }) {
-  const { data, isLoading } = useDesignShelf(entityId);
+  const { data, isLoading, isError, error, refetch } = useDesignShelf(entityId);
   const actions = useShelfActions(entityId, organizationId);
   const qc = useQueryClient();
 
@@ -285,6 +285,10 @@ export default function DesignShelf({
   };
 
   /* ------------------------------------------------------------ early exit */
+
+  if (isError) {
+    return <ErrorState error={error} what="this shelf" onRetry={() => void refetch()} />;
+  }
 
   if (isLoading) {
     return (
