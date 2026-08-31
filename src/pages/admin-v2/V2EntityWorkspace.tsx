@@ -38,14 +38,39 @@ export default function V2EntityWorkspace() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const { data, isLoading, isError, error, refetch } = useEntityWorkspace(id);
-  const [building, setBuilding] = useState(false);
+  /*
+    THE BUILDER IS PART OF THE ADDRESS TOO.
+
+    It was a boolean, so a refresh mid-mockup closed it even after the draft
+    started surviving — the work was safe and the door had shut. `?build=1` and
+    `?edit=<id>` reopen it, and ConceptBuilder's own `?step=` puts you back on
+    the screen you were on. Written with replace so the wizard does not fill the
+    history stack: Back closes the builder, which is what Back means here.
+  */
+  const openBuilder = (on: boolean) => {
+    const next = new URLSearchParams(params);
+    if (on) next.set("build", "1");
+    else {
+      next.delete("build");
+      next.delete("step");
+    }
+    setParams(next, { replace: true });
+  };
+
+  const openEditor = (mockupId: string | null) => {
+    const next = new URLSearchParams(params);
+    if (mockupId) next.set("edit", mockupId);
+    else {
+      next.delete("edit");
+      next.delete("step");
+    }
+    setParams(next, { replace: true });
+  };
   // The design currently opened for its creative options, and the design the
   // mockup builder was launched from (they differ for a moment while the drawer
   // hands off to the builder).
   const [openDesign, setOpenDesign] = useState<Design | null>(null);
   const [mockupFrom, setMockupFrom] = useState<Design | null>(null);
-  // A saved mockup reopened for editing, and one being turned into assets.
-  const [editMockupId, setEditMockupId] = useState<string | null>(null);
   const [assetsFor, setAssetsFor] = useState<Mockup | null>(null);
   const [productizing, setProductizing] = useState<string | null>(null);
   const [newCollection, setNewCollection] = useState(false);
@@ -65,6 +90,8 @@ export default function V2EntityWorkspace() {
     costs nothing.
   */
   const libraryQ = useMockupLibrary(id);
+  const building = params.get("build") === "1";
+  const editMockupId = params.get("edit");
   const openMockupId = params.get("mockup");
   const detailMockup = openMockupId
     ? (libraryQ.data?.mockups.find((m) => m.id === openMockupId) ?? null)
@@ -269,7 +296,7 @@ export default function V2EntityWorkspace() {
               <>
                 <button
                   type="button"
-                  onClick={() => setBuilding(true)}
+                  onClick={() => openBuilder(true)}
                   className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))]"
                 >
                   <Plus className="h-4 w-4" />
@@ -377,7 +404,7 @@ export default function V2EntityWorkspace() {
         detail="Artwork placed on a blank. A mockup is finished work in its own right."
         count={concepts.length}
         action={
-          <button type="button" onClick={() => setBuilding(true)} className="text-[12px] text-[hsl(var(--ax-accent))]">
+          <button type="button" onClick={() => openBuilder(true)} className="text-[12px] text-[hsl(var(--ax-accent))]">
             + Create mockup
           </button>
         }
@@ -582,7 +609,7 @@ export default function V2EntityWorkspace() {
           onPlaceOnBlank={() => {
             setMockupFrom(openDesign);
             setOpenDesign(null);
-            setBuilding(true);
+            openBuilder(true);
           }}
         />
       )}
@@ -593,18 +620,14 @@ export default function V2EntityWorkspace() {
           initialFlow="design_first"
           initialDesign={mockupFrom}
           onClose={() => {
-            setBuilding(false);
+            openBuilder(false);
             setMockupFrom(null);
           }}
         />
       )}
 
       {editMockupId && (
-        <ConceptBuilder
-          entity={entity}
-          editMockupId={editMockupId}
-          onClose={() => setEditMockupId(null)}
-        />
+        <ConceptBuilder entity={entity} editMockupId={editMockupId} onClose={() => openEditor(null)} />
       )}
 
       {/*
@@ -618,8 +641,10 @@ export default function V2EntityWorkspace() {
           entity={entity}
           onClose={() => openMockup(null)}
           onEdit={() => {
-            setEditMockupId(detailMockup.id);
-            openMockup(null);
+            const next = new URLSearchParams(params);
+            next.delete("mockup");
+            next.set("edit", detailMockup.id);
+            setParams(next, { replace: true });
           }}
           onCreateAssets={() => {
             setAssetsFor(detailMockup);

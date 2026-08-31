@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Move, Upload } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Move, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
   useBlanks,
@@ -29,7 +30,22 @@ import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, 
 import { storeMockupComposite } from "@/lib/v2/mockup-export";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
+import {
+  BUILDER_STEPS,
+  DRAFT_VERSION,
+  clearDraft,
+  describeAge,
+  loadDraft,
+  saveDraft,
+  type BuilderFlow,
+  type BuilderStep,
+  type MockupDraft,
+} from "@/lib/v2/mockup-draft";
 import { AssetImage, Chip, Skeleton } from "./primitives";
+import { FlatDesignGrid, FlowCard, GridSkeleton, GroupedDesignPicker } from "./builder/DesignStep";
+import { BlankCard, ColorChips, ColorStepHeader, OtherBlankRow } from "./builder/BlankStep";
+import { MockupDesignRail } from "./builder/PlacementAside";
+import { ColorwayStrip, Line, StaticMockup } from "./builder/ReviewStep";
 import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 import type { Blank, Design, Entity } from "@/lib/v2/types";
 
@@ -48,8 +64,8 @@ import type { Blank, Design, Entity } from "@/lib/v2/types";
 // The reverse direction (Blank → Colour → Design) is kept because it is how the
 // same operator thinks on a day when the garment is the starting point.
 
-type Flow = "design_first" | "blank_first";
-type Step = "flow" | "design" | "blank" | "color" | "placement" | "confirm";
+type Flow = BuilderFlow;
+type Step = BuilderStep;
 
 export default function ConceptBuilder({
   entity,
@@ -68,33 +84,74 @@ export default function ConceptBuilder({
   /** Reopening a saved mockup. Everything is loaded and the flow becomes an edit. */
   editMockupId?: string | null;
 }) {
-  const [flow, setFlow] = useState<Flow | null>(initialFlow ?? (initialDesign ? "design_first" : null));
-  const [step, setStep] = useState<Step>(
-    initialDesign ? "blank" : initialFlow ? (initialFlow === "design_first" ? "design" : "blank") : "flow",
+  const isEdit = Boolean(editMockupId);
+
+  /*
+    UNSAVED WORK SURVIVES A REFRESH.
+
+    Read once, synchronously, before any state is initialised — so the wizard
+    comes up already holding what was there rather than flickering through an
+    empty one. Editing a saved mockup never restores: that row is the truth.
+    See mockup-draft.ts for why this is local storage and not a table.
+  */
+  const [restored] = useState<MockupDraft | null>(() => (editMockupId ? null : loadDraft(entity.id)));
+  const [showRestored, setShowRestored] = useState(Boolean(restored));
+
+  /*
+    WHICH STEP, IN THE ADDRESS BAR.
+
+    A refresh mid-placement used to reopen on step one even with the work
+    intact. `?step=` is written with replace, so the wizard does not fill the
+    history stack — Back still closes the builder, which is what Back means
+    here.
+  */
+  const [params, setParams] = useSearchParams();
+  const stepParam = params.get("step");
+  const initialStep: Step = restored
+    ? restored.step
+    : initialDesign
+      ? "blank"
+      : initialFlow
+        ? initialFlow === "design_first"
+          ? "design"
+          : "blank"
+        : "flow";
+  const step: Step = (BUILDER_STEPS as readonly string[]).includes(stepParam ?? "")
+    ? (stepParam as Step)
+    : initialStep;
+  const setStep = (next: Step) => {
+    const p = new URLSearchParams(params);
+    p.set("step", next);
+    setParams(p, { replace: true });
+  };
+
+  const [flow, setFlow] = useState<Flow | null>(
+    restored?.flow ?? initialFlow ?? (initialDesign ? "design_first" : null),
   );
   const [design, setDesign] = useState<Design | null>(initialDesign ?? null);
   const [blank, setBlank] = useState<Blank | null>(null);
-  const [colorName, setColorName] = useState<string | null>(null);
+  const [colorName, setColorName] = useState<string | null>(restored?.colorName ?? null);
   // Artwork actually placed on the garment, front and back. `design` above stays
   // the concept's headline design (the `design_id` column V1 and the rest of V2
   // already read); this is the full arrangement.
-  const [placed, setPlaced] = useState<PlacedDesign[]>([]);
-  const [surface, setSurface] = useState<"front" | "back">("front");
+  const [placed, setPlaced] = useState<PlacedDesign[]>(restored?.placed ?? []);
+  const [surface, setSurface] = useState<"front" | "back">(restored?.surface ?? "front");
   // Alignment lines are per surface — where you want a reference on the chest
   // is not where you want one on the back.
-  const [guides, setGuides] = useState<Record<string, Guides>>({
-    front: DEFAULT_GUIDES,
-    back: DEFAULT_GUIDES,
-  });
-  const [collectionId, setCollectionId] = useState<string>("");
+  const [guides, setGuides] = useState<Record<string, Guides>>(
+    restored?.guides && Object.keys(restored.guides).length > 0
+      ? { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES, ...restored.guides }
+      : { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES },
+  );
+  const [collectionId, setCollectionId] = useState<string>(restored?.collectionId ?? "");
   const [uploading, setUploading] = useState(false);
-  const [title, setTitle] = useState("");
-  const [notes, setNotes] = useState("");
+  const [title, setTitle] = useState(restored?.title ?? "");
+  const [notes, setNotes] = useState(restored?.notes ?? "");
   const [scopeAllDesigns, setScopeAllDesigns] = useState(false);
   // The run this mockup will be saved as: extra colourways of the same blank,
   // and other blanks entirely. Empty means "just the one I built".
-  const [extraColors, setExtraColors] = useState<string[]>([]);
-  const [extraBlanks, setExtraBlanks] = useState<Record<string, string[]>>({});
+  const [extraColors, setExtraColors] = useState<string[]>(restored?.extraColors ?? []);
+  const [extraBlanks, setExtraBlanks] = useState<Record<string, string[]>>(restored?.extraBlanks ?? {});
   const [newCollection, setNewCollection] = useState("");
   const [onlyEligible, setOnlyEligible] = useState(true);
 
@@ -105,7 +162,6 @@ export default function ConceptBuilder({
   const create = useCreateMockupBatch();
   const update = useUpdateMockup(entity.id);
   const editing = useMockupForEdit(editMockupId ?? undefined);
-  const isEdit = Boolean(editMockupId);
   const createCollection = useCreateCollection();
   const upload = useUploadDesign(entity.id, entity.organizationId);
 
@@ -121,6 +177,30 @@ export default function ConceptBuilder({
     () => (collectionsQ.data ?? []).filter((c) => c.entityId === entity.id),
     [collectionsQ.data, entity.id],
   );
+
+  /*
+    A restored draft holds IDS, because objects go stale. These re-attach the
+    real Design and Blank as soon as their queries land, once each. A draft can
+    outlive what it points at — a design unlinked, a blank retired — and the
+    honest outcome then is an empty slot the operator re-picks, not a crash and
+    not a phantom.
+  */
+  const reattached = useRef({ design: !restored?.designId, blank: !restored?.blankId });
+  useEffect(() => {
+    if (reattached.current.design || !restored?.designId) return;
+    const found = (designsQ.data ?? []).find((d) => d.id === restored.designId);
+    if (!found) return;
+    reattached.current.design = true;
+    setDesign(found);
+  }, [designsQ.data, restored?.designId]);
+
+  useEffect(() => {
+    if (reattached.current.blank || !restored?.blankId) return;
+    const found = (blanksQ.data ?? []).find((b) => b.id === restored.blankId);
+    if (!found) return;
+    reattached.current.blank = true;
+    setBlank(found);
+  }, [blanksQ.data, restored?.blankId]);
 
   const color = blank?.colors.find((c) => c.name === colorName) ?? null;
 
@@ -277,10 +357,16 @@ export default function ConceptBuilder({
   // inside one blank. Placements survive — the artwork arrangement is about the
   // design, not the colourway, and re-placing it after every colour change would
   // defeat the point of trying a design across a range.
+  const restoredBlankId = useRef(restored?.blankId ?? null);
   useEffect(() => {
     // Reopening sets the blank and the colour together; clearing here would
-    // undo the restored colourway a tick after it was set.
+    // undo the restored colourway a tick after it was set. Same for a draft:
+    // re-attaching its blank must not throw away the colour it was built on.
     if (isEdit && hydrated) return;
+    if (blank && restoredBlankId.current === blank.id) {
+      restoredBlankId.current = null;
+      return;
+    }
     setColorName(null);
     // The alignment lines start where this garment's print starts, so "centre
     // on lines" is a no-op on a fresh placement rather than a surprise.
@@ -312,6 +398,9 @@ export default function ConceptBuilder({
     const b = (blanksQ.data ?? []).find((x) => x.id === m.blankId) ?? null;
     if (b) setBlank(b);
     setStep("placement");
+    // setStep writes a search param and is re-created every render; depending
+    // on it would re-run this hydration on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing.data, blanksQ.data, hydrated]);
 
   // Choosing the headline design seeds a front placement, so the common case —
@@ -464,6 +553,67 @@ export default function ConceptBuilder({
     }
   };
 
+  /*
+    Persist on every change.
+    Cheap — one small JSON write to local storage — and the alternative is
+    choosing a moment to save, which is always the moment before the one where
+    the tab closed.
+  */
+  useEffect(() => {
+    if (isEdit) return;
+    saveDraft({
+      version: DRAFT_VERSION,
+      entityId: entity.id,
+      savedAt: new Date().toISOString(),
+      flow,
+      step,
+      designId: design?.id ?? null,
+      blankId: blank?.id ?? null,
+      colorName,
+      extraColors,
+      extraBlanks,
+      placed,
+      guides,
+      surface,
+      title,
+      notes,
+      collectionId,
+    });
+  }, [
+    isEdit,
+    entity.id,
+    flow,
+    step,
+    design?.id,
+    blank?.id,
+    colorName,
+    extraColors,
+    extraBlanks,
+    placed,
+    guides,
+    surface,
+    title,
+    notes,
+    collectionId,
+  ]);
+
+  /** Throw the restored work away and start from an empty wizard. */
+  const startFresh = () => {
+    clearDraft(entity.id);
+    setShowRestored(false);
+    setDesign(null);
+    setBlank(null);
+    setColorName(null);
+    setPlaced([]);
+    setExtraColors([]);
+    setExtraBlanks({});
+    setTitle("");
+    setNotes("");
+    setCollectionId("");
+    setFlow(null);
+    setStep("flow");
+  };
+
   const submit = async () => {
     if (!design && !blank) return;
     try {
@@ -556,20 +706,36 @@ export default function ConceptBuilder({
         }),
       );
 
-      if (created.length > 0) {
-        toast.success(
-          created.length === 1 ? "Mockup created" : `${created.length} mockups created`,
-          {
-            description:
-              failed.length > 0
-                ? `${failed.length} could not be saved: ${failed.slice(0, 3).join(", ")}`
-                : "Saved as product concepts. No products were created and nothing was sent to Shopify.",
-          },
-        );
-      } else {
-        toast.error("Nothing could be saved");
+      if (created.length === 0) {
+        // The draft is deliberately NOT cleared here. Nothing was saved, so the
+        // work only exists in the wizard, and throwing it away on the one
+        // outcome where it is the only copy would be the worst possible moment.
+        toast.error("Nothing could be saved", {
+          description: failed.length > 0 ? failed.slice(0, 3).join(" · ") : "No mockup was written.",
+        });
         return;
       }
+
+      /*
+        SAY WHAT HAPPENED, AND WHERE IT WENT.
+        A run of twelve colourways that saves ten is not a success and not a
+        failure, and "12 mockups created" would have been a lie either way.
+      */
+      const where = `In ${entity.name}'s Mockups.`;
+      if (failed.length > 0) {
+        toast.warning(`${created.length} of ${jobs.length} mockups saved`, {
+          description: `${failed.length} could not be saved: ${failed.slice(0, 3).join(" · ")}${
+            failed.length > 3 ? "…" : ""
+          }`,
+        });
+      } else {
+        toast.success(created.length === 1 ? "Mockup created" : `${created.length} mockups created`, {
+          description: `${where} No products were created and nothing was sent to Shopify.`,
+        });
+      }
+
+      // Saved: the wizard's copy is no longer the only one.
+      clearDraft(entity.id);
       onCreated?.(created[0]);
       onClose();
     } catch (err) {
@@ -626,6 +792,36 @@ export default function ConceptBuilder({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/*
+          Restored work says so, and says from when.
+          "We put your unsaved mockup back" is unsettling without a timestamp —
+          from this morning, or from three weeks ago? The answer decides whether
+          you carry on or start over, so both choices are right here.
+        */}
+        {showRestored && restored && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.07)] px-4 py-2 text-[11px]">
+            <RotateCcw className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--ax-accent))]" aria-hidden />
+            <span className="min-w-0 flex-1">
+              Picked up where you left off — unsaved work from {describeAge(restored.savedAt)}.
+            </span>
+            <button
+              type="button"
+              onClick={startFresh}
+              className="rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-0.5 text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+            >
+              Start fresh
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowRestored(false)}
+              aria-label="Dismiss"
+              className="rounded-lg p-1 text-[hsl(var(--ax-faint))] hover:bg-white/10"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
 
@@ -1236,664 +1432,3 @@ export default function ConceptBuilder({
 }
 
 /* ------------------------------------------------------------------- parts */
-
-function FlowCard({ title, blurb, onClick }: { title: string; blurb: string; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick} className="ax-card ax-card-hover px-4 py-4 text-left transition-all">
-      <div className="text-[14px] font-medium">{title}</div>
-      <div className="mt-0.5 text-[12px] text-[hsl(var(--ax-faint))]">{blurb}</div>
-    </button>
-  );
-}
-
-/**
- * Step 1, honouring design groups.
- *
- * A group on the shelf is a set of variations of one idea — three colourways of
- * the same wordmark, say. Flattening that into an undifferentiated grid here
- * would undo the organising the operator just did, and would make picking "the
- * navy one" a hunt through thirty lookalike thumbnails. Folders lead, open in
- * place, and a variation is selected individually — the mockup is always built
- * from one specific underlying design, never from "the group".
- */
-function GroupedDesignPicker({
-  entityId,
-  selectedId,
-  onPick,
-}: {
-  entityId: string;
-  selectedId: string | null;
-  onPick: (d: Design) => void;
-}) {
-  const { data, isLoading } = useDesignShelf(entityId);
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
-
-  const items = useMemo(
-    () => (data ? buildShelf(data.designs, data.groups, data.membership) : []),
-    [data],
-  );
-
-  // Auto-open the folder holding the current selection, so stepping back to
-  // this screen shows the operator where they already are.
-  useEffect(() => {
-    if (!selectedId) return;
-    const owner = items.find((i) => i.kind === "group" && i.designs.some((d) => d.id === selectedId));
-    if (owner) setOpenGroup(owner.key);
-  }, [selectedId, items]);
-
-  if (isLoading) return <GridSkeleton />;
-  if (items.length === 0) {
-    return (
-      <p className="py-10 text-center text-[13px] text-[hsl(var(--ax-faint))]">
-        No designs linked to this entity yet. Switch to “All designs”.
-      </p>
-    );
-  }
-
-  const groups = items.filter((i): i is Extract<ShelfItem, { kind: "group" }> => i.kind === "group");
-  const loose = items.filter((i): i is Extract<ShelfItem, { kind: "design" }> => i.kind === "design");
-
-  return (
-    <div className="space-y-5">
-      {groups.length > 0 && (
-        <section>
-          <BandLabel>Folders</BandLabel>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-5">
-            {groups.map((g) => {
-              const cover = coverOf(g.group, g.designs);
-              const holdsSelection = g.designs.some((d) => d.id === selectedId);
-              const isOpen = openGroup === g.key;
-              return (
-                <button
-                  key={g.key}
-                  type="button"
-                  onClick={() => setOpenGroup(isOpen ? null : g.key)}
-                  className={`relative rounded-2xl border bg-[hsl(var(--ax-accent)/0.05)] p-2 text-left transition-all ${
-                    isOpen || holdsSelection
-                      ? "border-[hsl(var(--ax-accent))]"
-                      : "border-[hsl(var(--ax-accent)/0.32)] hover:border-[hsl(var(--ax-accent)/0.6)]"
-                  }`}
-                >
-                  <span
-                    className="absolute inset-x-4 -top-1 h-1.5 rounded-t-lg border border-b-0 border-[hsl(var(--ax-accent)/0.28)] bg-[hsl(var(--ax-accent)/0.08)]"
-                    aria-hidden
-                  />
-                  <AssetImage
-                    bucket={cover?.fileBucket}
-                    path={cover?.filePath}
-                    alt={g.group.name}
-                    className="aspect-square w-full rounded-lg bg-black/30"
-                    fit="contain"
-                    fallbackSeed={g.group.id}
-                  />
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <FolderOpen className="h-3 w-3 shrink-0 text-[hsl(var(--ax-accent))]" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate text-[11px] font-semibold">{g.group.name}</span>
-                    <span className="text-[10px] tabular-nums text-[hsl(var(--ax-faint))]">{g.designs.length}</span>
-                    <ChevronDown
-                      className={`h-3 w-3 shrink-0 text-[hsl(var(--ax-faint))] transition-transform ${isOpen ? "rotate-180" : ""}`}
-                      aria-hidden
-                    />
-                  </div>
-                  {holdsSelection && !isOpen && (
-                    <span className="mt-1 block text-[10px] font-medium text-[hsl(var(--ax-accent))]">
-                      contains your selection
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {openGroup && (
-            <div className="mt-3 rounded-2xl border border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.04)] p-3">
-              <p className="mb-2.5 text-[11px] text-[hsl(var(--ax-faint))]">
-                Pick the exact variation to build this mockup from.
-              </p>
-              <FlatDesignGrid
-                designs={groups.find((g) => g.key === openGroup)?.designs ?? []}
-                selectedId={selectedId}
-                onPick={onPick}
-              />
-            </div>
-          )}
-        </section>
-      )}
-
-      {loose.length > 0 && (
-        <section>
-          <BandLabel>Designs</BandLabel>
-          <FlatDesignGrid designs={loose.map((i) => i.design)} selectedId={selectedId} onPick={onPick} />
-        </section>
-      )}
-    </div>
-  );
-}
-
-function BandLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-secondary))]">
-      {children}
-    </div>
-  );
-}
-
-function FlatDesignGrid({
-  designs,
-  selectedId,
-  onPick,
-}: {
-  designs: Design[];
-  selectedId: string | null;
-  onPick: (d: Design) => void;
-}) {
-  if (designs.length === 0) {
-    return <p className="py-8 text-center text-[13px] text-[hsl(var(--ax-faint))]">Nothing here.</p>;
-  }
-  return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-6">
-      {designs.map((d) => (
-        <button
-          key={d.id}
-          type="button"
-          onClick={() => onPick(d)}
-          className={`ax-card ax-card-hover relative overflow-hidden p-0 text-left transition-all ${
-            selectedId === d.id ? "ring-2 ring-[hsl(var(--ax-accent))]" : ""
-          }`}
-        >
-          <AssetImage
-            bucket={d.fileBucket}
-            path={d.filePath}
-            alt={d.title}
-            className="aspect-square w-full bg-black/30"
-            fit="contain"
-          />
-          {selectedId === d.id && (
-            <span className="absolute left-1.5 top-1.5 rounded-full bg-[hsl(var(--ax-accent))] p-1 text-[hsl(var(--ax-on-accent))]">
-              <Check className="h-3 w-3" />
-            </span>
-          )}
-          <div className="p-2">
-            <div className="truncate text-[11px]">{cleanDesignTitle(d.title) ?? d.title}</div>
-            <div className="mt-1">
-              {d.productionReady ? (
-                <Chip tone="var(--ax-accent)">Production PNG</Chip>
-              ) : (
-                <Chip tone="var(--ax-amber)">Concept art</Chip>
-              )}
-            </div>
-          </div>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Step 2. Blanks are shared AX infrastructure — one canonical record per
- * garment, never a per-athlete duplicate — so the card leads with photography
- * and the colour range, which is what an operator is actually choosing between.
- */
-function BlankCard({ blank, price }: { blank: Blank; price: string }) {
-  const hero = resolveBlankImage({ blank });
-  const coverage = photoCoverage(blank);
-  const strip = blank.colors.filter((c) => c.available).slice(0, 9);
-
-  return (
-    <>
-      <AssetImage url={hero.url} alt={blank.name} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
-      <div className="space-y-1.5 p-2.5">
-        <div className="truncate text-[12px] font-medium">{blank.name}</div>
-        <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
-          {[blank.brand, blank.styleNumber].filter(Boolean).join(" · ") || "—"}
-        </div>
-        <div className="flex items-center gap-0.5">
-          {strip.map((c) => (
-            <span
-              key={c.id}
-              title={c.name}
-              className="h-3 w-3 rounded-full border border-black/25"
-              style={{ background: swatchFor(c) }}
-            />
-          ))}
-          {coverage.total > strip.length && (
-            <span className="ml-1 text-[10px] tabular-nums text-[hsl(var(--ax-faint))]">
-              +{coverage.total - strip.length}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center justify-between text-[10px]">
-          <span className="font-medium text-[hsl(var(--ax-accent))]">{price}</span>
-          <span
-            className="text-[hsl(var(--ax-faint))]"
-            title={`${coverage.withPhoto} of ${coverage.total} available colours have photography`}
-          >
-            {coverage.withPhoto}/{coverage.total} shot
-          </span>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function ColorStepHeader({ blank }: { blank: Blank }) {
-  const coverage = photoCoverage(blank);
-  const unshot = coverage.total - coverage.withPhoto;
-  return (
-    <div className="mb-3 space-y-1">
-      <p className="text-[12px] text-[hsl(var(--ax-faint))]">
-        {coverage.total} available colour{coverage.total === 1 ? "" : "s"} on {blank.name}.
-      </p>
-      {unshot > 0 && (
-        <p className="text-[11px] text-[hsl(var(--ax-amber))]">
-          {unshot} {unshot === 1 ? "has" : "have"} no photography yet and show as a flat swatch — still selectable, but
-          the mockup preview will use the catalogue shot.
-        </p>
-      )}
-    </div>
-  );
-}
-
-/**
- * The artwork rail beside the canvas.
- *
- * Folders are the organising unit here exactly as they are on the shelf, so a
- * set of variations stays together while the operator tries them one after
- * another. Tiles are HTML5 drag sources — drag onto the garment to place at a
- * point, or click to drop into the centre zone for the surface being edited.
- */
-/**
- * Colourway multi-select for building a run.
- *
- * The base colour is shown but locked — it is already in the batch, and letting
- * it be "deselected" would imply the mockup on screen could be excluded from
- * its own save.
- */
-function ColorChips({
-  blank,
-  selected,
-  baseColorName,
-  onToggle,
-}: {
-  blank: Blank;
-  selected: string[];
-  baseColorName: string | null;
-  onToggle: (name: string) => void;
-}) {
-  const available = blank.colors.filter((c) => c.available);
-  if (available.length === 0) {
-    return <p className="text-[12px] text-[hsl(var(--ax-faint))]">This blank has no colour records.</p>;
-  }
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {available.map((c) => {
-        const isBase = c.name === baseColorName;
-        const on = isBase || selected.includes(c.name);
-        return (
-          <button
-            key={c.id}
-            type="button"
-            disabled={isBase}
-            onClick={() => onToggle(c.name)}
-            title={isBase ? `${c.name} — the colourway you built` : c.name}
-            className={`inline-flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-[11px] transition-colors ${
-              on
-                ? "border-[hsl(var(--ax-accent))] text-[hsl(var(--ax-accent))]"
-                : "border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
-            } ${isBase ? "opacity-70" : ""}`}
-          >
-            <span
-              className="h-3.5 w-3.5 shrink-0 rounded-full border border-black/25"
-              style={{ background: swatchFor(c) }}
-            />
-            {c.name}
-            {isBase && <span className="text-[9px] uppercase tracking-wider opacity-70">base</span>}
-            {!c.imageUrl && <ImageOff className="h-2.5 w-2.5 opacity-60" aria-hidden />}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/** One other blank in the run, with its own colour selection once ticked. */
-function OtherBlankRow({
-  blank,
-  selected,
-  colors,
-  onToggle,
-  onToggleColor,
-}: {
-  blank: Blank;
-  selected: boolean;
-  colors: string[];
-  onToggle: () => void;
-  onToggleColor: (name: string) => void;
-}) {
-  const hero = resolveBlankImage({ blank });
-  return (
-    <div
-      className={`rounded-xl border p-2 transition-colors ${
-        selected ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.05)]" : "border-[hsl(var(--ax-border))]"
-      }`}
-    >
-      <button type="button" onClick={onToggle} className="flex w-full items-center gap-2 text-left">
-        <AssetImage
-          url={hero.url}
-          alt={blank.name}
-          className="h-9 w-9 shrink-0 rounded-lg bg-white/[0.04]"
-          fit="contain"
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12px] font-medium">{blank.name}</span>
-          <span className="block truncate text-[10px] text-[hsl(var(--ax-faint))]">
-            {[blank.brand, blank.styleNumber].filter(Boolean).join(" · ") || "—"}
-          </span>
-        </span>
-        <span
-          className={`h-4 w-4 shrink-0 rounded-md border ${
-            selected ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent))]" : "border-[hsl(var(--ax-border))]"
-          }`}
-        >
-          {selected && <Check className="h-3.5 w-3.5 text-[hsl(var(--ax-on-accent))]" />}
-        </span>
-      </button>
-
-      {selected && (
-        <div className="mt-2 border-t border-[hsl(var(--ax-accent)/0.2)] pt-2">
-          <div className="mb-1 text-[10px] text-[hsl(var(--ax-faint))]">
-            {colors.length === 0 ? "No colour chosen — saves one mockup" : `${colors.length} colourway${colors.length === 1 ? "" : "s"}`}
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {blank.colors
-              .filter((c) => c.available)
-              .slice(0, 10)
-              .map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onToggleColor(c.name)}
-                  title={c.name}
-                  className={`h-4 w-4 rounded-full border transition-transform ${
-                    colors.includes(c.name)
-                      ? "border-[hsl(var(--ax-accent))] scale-110 ring-1 ring-[hsl(var(--ax-accent))]"
-                      : "border-black/25 hover:scale-110"
-                  }`}
-                  style={{ background: swatchFor(c) }}
-                />
-              ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function MockupDesignRail({ entityId, onQuickAdd }: { entityId: string; onQuickAdd: (d: Design) => void }) {
-  const { data, isLoading } = useDesignShelf(entityId);
-  const [openGroup, setOpenGroup] = useState<string | null>(null);
-
-  const items = useMemo(
-    () => (data ? buildShelf(data.designs, data.groups, data.membership) : []),
-    [data],
-  );
-
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-3 gap-2 lg:grid-cols-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="aspect-square" />
-        ))}
-      </div>
-    );
-  }
-
-  const groups = items.filter((i): i is Extract<ShelfItem, { kind: "group" }> => i.kind === "group");
-  const loose = items.filter((i): i is Extract<ShelfItem, { kind: "design" }> => i.kind === "design");
-  const open = groups.find((g) => g.key === openGroup) ?? null;
-
-  return (
-    <div className="lg:max-h-[62vh] lg:overflow-y-auto lg:pr-1">
-      <p className="mb-2 text-[11px] text-[hsl(var(--ax-faint))]">
-        Drag onto the garment, or click to drop it in the centre.
-      </p>
-
-      {groups.length > 0 && (
-        <div className="mb-3 space-y-1.5">
-          {groups.map((g) => {
-            const isOpen = openGroup === g.key;
-            return (
-              <div key={g.key}>
-                <button
-                  type="button"
-                  onClick={() => setOpenGroup(isOpen ? null : g.key)}
-                  className={`flex w-full items-center gap-1.5 rounded-lg border px-2 py-1.5 text-left text-[11px] transition-colors ${
-                    isOpen
-                      ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.08)]"
-                      : "border-[hsl(var(--ax-accent)/0.3)] hover:border-[hsl(var(--ax-accent)/0.6)]"
-                  }`}
-                >
-                  <FolderOpen className="h-3 w-3 shrink-0 text-[hsl(var(--ax-accent))]" aria-hidden />
-                  <span className="min-w-0 flex-1 truncate font-medium">{g.group.name}</span>
-                  <span className="tabular-nums text-[hsl(var(--ax-faint))]">{g.designs.length}</span>
-                  <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden />
-                </button>
-                {isOpen && (
-                  <div className="mt-1.5 grid grid-cols-3 gap-1.5 lg:grid-cols-2">
-                    {open?.designs.map((d) => (
-                      <RailTile key={d.id} design={d} onQuickAdd={onQuickAdd} />
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {loose.length > 0 && (
-        <div className="grid grid-cols-3 gap-1.5 lg:grid-cols-2">
-          {loose.map((i) => (
-            <RailTile key={i.design.id} design={i.design} onQuickAdd={onQuickAdd} />
-          ))}
-        </div>
-      )}
-
-      {items.length === 0 && (
-        <p className="py-6 text-center text-[12px] text-[hsl(var(--ax-faint))]">
-          No designs linked to this entity.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function RailTile({ design, onQuickAdd }: { design: Design; onQuickAdd: (d: Design) => void }) {
-  return (
-    <button
-      type="button"
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(DRAG_MIME, design.id);
-        e.dataTransfer.effectAllowed = "copy";
-      }}
-      onClick={() => onQuickAdd(design)}
-      title={`${cleanDesignTitle(design.title) ?? design.title} — drag onto the garment, or click to centre it`}
-      className="ax-card ax-card-hover overflow-hidden p-0 text-left"
-    >
-      <AssetImage
-        bucket={design.fileBucket}
-        path={design.filePath}
-        alt={design.title}
-        className="aspect-square w-full bg-black/30"
-        fit="contain"
-      />
-      <div className="truncate p-1 text-[9px] text-[hsl(var(--ax-secondary))]">
-        {cleanDesignTitle(design.title) ?? "Untitled"}
-      </div>
-    </button>
-  );
-}
-
-/**
- * A non-interactive render of one surface, for the confirm step.
- *
- * Shares the percentage geometry with the live canvas rather than
- * re-deriving it, so what the operator approves is what they arranged.
- */
-/**
- * EVERY SELECTED COLOURWAY, WITH THE ARRANGEMENT ALREADY ON IT.
- *
- * There is no "apply to all" button here, and its absence is the design rather
- * than an omission. Placement geometry is stored as percentages of the garment
- * box and is shared by the whole variant set, so a colour added after the
- * artwork was positioned is already positioned — there is nothing for a button
- * to do. Rather than ship a control that fires and changes nothing, the strip
- * shows the propagation happening: drag the logo on the canvas and all thirteen
- * thumbnails move with it.
- *
- * Clicking a colourway makes it the one the canvas shows, so a nudge can be
- * judged against the colour that looked wrong instead of the first one picked.
- */
-function ColorwayStrip({
-  blank,
-  selected,
-  master,
-  placed,
-  designsById,
-  surface,
-  onMakeMaster,
-}: {
-  blank: Blank;
-  selected: string[];
-  master: string | null;
-  placed: PlacedDesign[];
-  designsById: Map<string, Design>;
-  surface: "front" | "back";
-  onMakeMaster: (name: string) => void;
-}) {
-  const onThisSurface = placed.filter((p) => p.surface === surface);
-
-  return (
-    <section className="rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.02] p-3">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <h4 className="text-[12px] font-semibold text-[hsl(var(--ax-ink))]">
-          {selected.length} colourway{selected.length === 1 ? "" : "s"} · {surface}
-        </h4>
-        <p className="text-[10.5px] text-[hsl(var(--ax-faint))]">
-          One arrangement, every colour. Worth a look before saving — a placement that sits right on one garment can
-          read slightly differently on another.
-        </p>
-      </div>
-
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {selected.map((name) => {
-          const img = resolveBlankImage({ blank, colorName: name, surface });
-          const isMaster = name === master;
-          return (
-            <button
-              key={name}
-              type="button"
-              onClick={() => onMakeMaster(name)}
-              title={isMaster ? `${name} — the canvas is showing this one` : `${name} — click to adjust on this colour`}
-              className={`relative w-[104px] shrink-0 overflow-hidden rounded-xl border text-left transition-all ${
-                isMaster
-                  ? "border-[hsl(var(--ax-accent))] ring-1 ring-[hsl(var(--ax-accent))]"
-                  : "border-[hsl(var(--ax-border))] hover:border-[hsl(var(--ax-accent)/0.6)]"
-              }`}
-            >
-              <GarmentFrame
-                url={img.url}
-                alt={name}
-                className="aspect-square w-full"
-                empty={<span className="text-[9px]">No {surface} photo</span>}
-                badge={
-                  img.approximate ? (
-                    <span
-                      className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-amber))]"
-                      title="Not this colourway's own photograph"
-                    />
-                  ) : undefined
-                }
-              >
-                <PlacedOverlay placed={onThisSurface} designsById={designsById} />
-              </GarmentFrame>
-              <div className="truncate px-1.5 py-1 text-[9.5px] text-[hsl(var(--ax-secondary))]">{name}</div>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function StaticMockup({
-  image,
-  placed,
-  designsById,
-  blankName,
-  onEdit,
-}: {
-  image: ReturnType<typeof resolveBlankImage>;
-  placed: PlacedDesign[];
-  designsById: Map<string, Design>;
-  blankName: string;
-  /**
-   * Back to the canvas, on this surface.
-   *
-   * Reviewing is when you notice the logo sits 3% low, so the fix has to be
-   * reachable from the thing you noticed it on. Making the preview itself the
-   * way back beats asking the operator to find a step chip in the header.
-   */
-  onEdit?: () => void;
-}) {
-  return (
-    <GarmentFrame
-      url={image.url}
-      alt={blankName}
-      className="group mx-auto aspect-square w-full max-w-[420px] rounded-2xl border border-[hsl(var(--ax-border))]"
-      empty="No photograph for this side yet — the placement is saved regardless."
-      badge={
-        image.approximate ? (
-          <ApproximateBadge>
-            {image.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"}
-          </ApproximateBadge>
-        ) : undefined
-      }
-    >
-      <PlacedOverlay placed={placed} designsById={designsById} />
-
-      {onEdit && (
-        <button
-          type="button"
-          onClick={onEdit}
-          className="absolute inset-0 flex items-end justify-center bg-black/0 pb-4 opacity-0 transition-all hover:bg-black/25 focus:opacity-100 group-hover:opacity-100"
-        >
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-4 py-2 text-[12px] font-semibold text-[hsl(var(--ax-on-accent))] shadow-lg">
-            <Move className="h-3.5 w-3.5" />
-            Adjust placement
-          </span>
-        </button>
-      )}
-    </GarmentFrame>
-  );
-}
-
-function Line({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex gap-3">
-      <span className="w-24 shrink-0 text-[hsl(var(--ax-faint))]">{label}</span>
-      <span className="min-w-0 flex-1 truncate">{value}</span>
-    </div>
-  );
-}
-
-function GridSkeleton() {
-  return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-6">
-      {Array.from({ length: 12 }).map((_, i) => (
-        <Skeleton key={i} className="aspect-square" />
-      ))}
-    </div>
-  );
-}
