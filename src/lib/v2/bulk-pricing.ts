@@ -91,3 +91,76 @@ export function quoteBulkOrder(lines: BulkLine[], unitPrice: number, breaks: Dis
 
 /** Standard apparel run. Editable per order; this is only the starting grid. */
 export const DEFAULT_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
+
+/* --------------------------------------------------------------------- cart */
+
+export interface CartQuoteLine {
+  quantity: number;
+  /** Audience price per unit, before the volume discount. */
+  unitPrice: number;
+}
+
+export interface QuotedCartLine extends CartQuoteLine {
+  discountedUnitPrice: number;
+  lineRetail: number;
+  lineSubtotal: number;
+}
+
+export interface CartQuote {
+  units: number;
+  appliedBreak: DiscountBreak | null;
+  discountPct: number;
+  retailEquivalent: number;
+  subtotal: number;
+  savings: number;
+  nextBreak: { minQty: number; discountPct: number; unitsAway: number } | null;
+  lines: QuotedCartLine[];
+}
+
+/**
+ * Quote a cart of mixed garments.
+ *
+ * The volume break is a property of the WHOLE cart, not of one mockup: twenty
+ * tees and thirty hoodies is a fifty-unit order and gets the fifty-unit rate.
+ * That is also why nothing here is stored — add one more hoodie and every
+ * line's discounted price changes. The cart derives these numbers on every
+ * render and writes them exactly once, at submit.
+ *
+ * Per-line rounding matches quoteBulkOrder: discount the unit price, round to
+ * the cent, then multiply. The per-unit number is the one that gets quoted, so
+ * it has to be the one the total is built from.
+ */
+export function quoteCart(lines: CartQuoteLine[], breaks: DiscountBreak[]): CartQuote {
+  const clean = lines.map((l) => ({
+    quantity: Number.isFinite(l.quantity) ? Math.max(0, Math.trunc(l.quantity)) : 0,
+    unitPrice: Number.isFinite(l.unitPrice) && l.unitPrice > 0 ? l.unitPrice : 0,
+  }));
+
+  const units = clean.reduce((n, l) => n + l.quantity, 0);
+  const applied = breakFor(units, breaks);
+  const discountPct = applied?.discountPct ?? 0;
+
+  const quoted: QuotedCartLine[] = clean.map((l) => {
+    const discountedUnitPrice = round2(l.unitPrice * (1 - discountPct / 100));
+    return {
+      ...l,
+      discountedUnitPrice,
+      lineRetail: round2(l.unitPrice * l.quantity),
+      lineSubtotal: round2(discountedUnitPrice * l.quantity),
+    };
+  });
+
+  const retailEquivalent = round2(quoted.reduce((n, l) => n + l.lineRetail, 0));
+  const subtotal = round2(quoted.reduce((n, l) => n + l.lineSubtotal, 0));
+
+  return {
+    units,
+    appliedBreak: applied,
+    discountPct,
+    retailEquivalent,
+    subtotal,
+    savings: round2(retailEquivalent - subtotal),
+    nextBreak: nextBreakFor(units, breaks),
+    lines: quoted,
+  };
+}

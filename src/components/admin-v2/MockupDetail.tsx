@@ -21,7 +21,6 @@ import {
 import { toast } from "sonner";
 import {
   useBlanks,
-  useCreateBulkOrder,
   useCreateLookbook,
   useDesigns,
   useDiscountBreaks,
@@ -35,6 +34,9 @@ import {
 } from "@/lib/v2/data";
 import { LIFECYCLE, LIFECYCLE_ORDER, canSetManually, toLifecycle, type Lifecycle } from "@/lib/v2/mockup-lifecycle";
 import { DEFAULT_SIZES, quoteBulkOrder } from "@/lib/v2/bulk-pricing";
+import { useAddToCart, useCart } from "@/lib/v2/cart-data";
+import { useAuth } from "@/auth/AuthProvider";
+import { Link } from "react-router-dom";
 import { downloadBlob, exportFilename, renderMockupJpeg } from "@/lib/v2/mockup-export";
 import { resolveBlankImage } from "@/lib/v2/blank-image";
 import { audienceForRoles, fmtMoney, priceFor } from "@/lib/v2/pricing";
@@ -598,10 +600,24 @@ function LookbookPanel({ mockup, entity, onDone }: { mockup: Mockup; entity: Ent
   );
 }
 
+/**
+ * ORDERING FROM A MOCKUP GOES THROUGH THE CART.
+ *
+ * This panel used to raise a whole bulk order on its own, which meant a run of
+ * six colourways became six separate orders — and, because the volume break is
+ * a property of an order, six orders that each missed the discount the run had
+ * actually earned. It now adds to the entity's draft order, and the cart is the
+ * one place an order is submitted.
+ *
+ * The quote shown here is therefore indicative: the real rate depends on what
+ * else is in the cart, which is exactly why the total is settled there.
+ */
 function BulkOrderPanel({ mockup, entity, onDone }: { mockup: Mockup; entity: Entity; onDone: () => void }) {
   const blanks = useBlanks();
   const breaks = useDiscountBreaks();
-  const create = useCreateBulkOrder(entity.id, entity.organizationId);
+  const { user } = useAuth();
+  const cart = useCart(entity.id, user?.id);
+  const addToCart = useAddToCart(entity.id, entity.organizationId, user?.id);
 
   const blank = (blanks.data ?? []).find((b) => b.id === mockup.blankId) ?? null;
   const audience = audienceForRoles(entity.roles);
@@ -609,14 +625,13 @@ function BulkOrderPanel({ mockup, entity, onDone }: { mockup: Mockup; entity: En
 
   const sizes = blank && blank.sizes.length > 0 ? blank.sizes : DEFAULT_SIZES;
   const [qty, setQty] = useState<Record<string, number>>({});
-  const [notes, setNotes] = useState("");
 
   const lines = sizes.map((size) => ({ size, quantity: qty[size] ?? 0 }));
   const quote = quoteBulkOrder(lines, unitRetail, breaks.data ?? []);
 
   return (
     <section className="rounded-xl border border-[hsl(var(--ax-accent)/0.35)] bg-[hsl(var(--ax-accent)/0.04)] p-3">
-      <SectionLabel>Bulk order</SectionLabel>
+      <SectionLabel>Add to order</SectionLabel>
 
       <div className="grid grid-cols-4 gap-1.5">
         {sizes.map((size) => (
@@ -661,44 +676,42 @@ function BulkOrderPanel({ mockup, entity, onDone }: { mockup: Mockup; entity: En
         )}
       </div>
 
-      <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        rows={2}
-        placeholder="Anything the fulfilment team should know"
-        className="mt-2 w-full resize-none rounded-lg border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-2.5 py-2 text-[12px] outline-none focus:border-[hsl(var(--ax-accent))]"
-      />
-
       <button
         type="button"
-        disabled={quote.units === 0 || create.isPending || !blank}
+        disabled={quote.units === 0 || addToCart.isPending || !blank}
         onClick={async () => {
           try {
-            await create.mutateAsync({
-              mockupId: mockup.id,
-              mockupTitle: mockup.title,
-              blankId: mockup.blankId,
-              colorName: mockup.colorName,
-              lines,
-              unitWholesale: quote.discountedUnitPrice,
-              unitRetail: quote.unitPrice,
-              subtotal: quote.subtotal,
-              retailEquivalent: quote.retailEquivalent,
-              savings: quote.savings,
-              notes: notes.trim() || null,
+            await addToCart.mutateAsync([
+              {
+                mockupId: mockup.id,
+                title: mockup.title,
+                blankId: mockup.blankId,
+                colorName: mockup.colorName,
+                unitRetail: quote.unitPrice,
+                lines,
+              },
+            ]);
+            toast.success(`${quote.units} unit${quote.units === 1 ? "" : "s"} added to the cart`, {
+              description: `${entity.name}'s cart is a draft order — review and submit it there.`,
             });
-            toast.success(`Bulk order raised — ${quote.units} units`, {
-              description: "It appears under Orders as a pending request. Nothing has been charged.",
-            });
+            setQty({});
             onDone();
           } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Could not raise that order");
+            toast.error(err instanceof Error ? err.message : "Could not add that to the cart");
           }
         }}
         className="mt-2 w-full rounded-full bg-[hsl(var(--ax-accent))] py-2 text-[12px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-40"
       >
-        {create.isPending ? "Raising…" : `Raise bulk order${quote.units ? ` — ${quote.units} units` : ""}`}
+        {addToCart.isPending ? "Adding…" : `Add to cart${quote.units ? ` — ${quote.units} units` : ""}`}
       </button>
+      {(cart.data?.units ?? 0) > 0 && (
+        <Link
+          to={`/admin-v2/people/${entity.id}/cart`}
+          className="mt-1.5 block text-center text-[11px] text-[hsl(var(--ax-accent))] hover:underline"
+        >
+          {cart.data?.units} unit{cart.data?.units === 1 ? "" : "s"} already in the cart — review and submit
+        </Link>
+      )}
       {!blank && (
         <p className="mt-1.5 text-[11px] text-[hsl(var(--ax-amber))]">
           This mockup has no blank, so there is nothing to price.

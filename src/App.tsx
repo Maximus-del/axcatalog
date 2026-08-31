@@ -94,6 +94,7 @@ const V2Commerce = lazy(() => import("./pages/admin-v2/V2Commerce"));
 const V2BlankDetail = lazy(() => import("./pages/admin-v2/V2BlankDetail"));
 const V2NotFound = lazy(() => import("./pages/admin-v2/V2NotFound"));
 const V2Orders = lazy(() => import("./pages/admin-v2/V2Orders"));
+const V2Cart = lazy(() => import("./pages/admin-v2/V2Cart"));
 
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
@@ -231,6 +232,8 @@ const App = () => (
                 <Route index element={<V2Overview />} />
                 <Route path="people" element={<V2People />} />
                 <Route path="people/:id" element={<V2EntityWorkspace />} />
+                {/* The operator's draft order for this entity. */}
+                <Route path="people/:id/cart" element={<V2Cart />} />
                 <Route path="creative" element={<V2Creative />} />
                 <Route path="commerce" element={<V2Commerce />} />
                 <Route path="commerce/blanks" element={<V2Commerce />} />

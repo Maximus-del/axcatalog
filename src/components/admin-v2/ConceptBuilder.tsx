@@ -29,6 +29,8 @@ import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
 import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
 import { storeMockupComposite } from "@/lib/v2/mockup-export";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
+import { useAddToCart } from "@/lib/v2/cart-data";
+import { useAuth } from "@/auth/AuthProvider";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
 import {
   BUILDER_STEPS,
@@ -46,6 +48,8 @@ import { FlatDesignGrid, FlowCard, GridSkeleton, GroupedDesignPicker } from "./b
 import { BlankCard, ColorChips, ColorStepHeader, OtherBlankRow } from "./builder/BlankStep";
 import { MockupDesignRail } from "./builder/PlacementAside";
 import { ColorwayStrip, Line, StaticMockup } from "./builder/ReviewStep";
+import { OrderQuantities } from "./builder/OrderQuantities";
+import { gridUnits, rowUnits, sizesForRun, type QuantityGrid } from "@/lib/v2/cart";
 import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 import type { Blank, Design, Entity } from "@/lib/v2/types";
 
@@ -153,6 +157,13 @@ export default function ConceptBuilder({
   const [extraColors, setExtraColors] = useState<string[]>(restored?.extraColors ?? []);
   const [extraBlanks, setExtraBlanks] = useState<Record<string, string[]>>(restored?.extraBlanks ?? {});
   const [newCollection, setNewCollection] = useState("");
+  /**
+   * How many of each, per colourway. Empty is the ordinary case: most
+   * mockups are made to look at. Nothing here is persisted in the draft —
+   * quantities are an ordering decision made once, not creative work worth
+   * restoring a week later.
+   */
+  const [qtyGrid, setQtyGrid] = useState<QuantityGrid>({});
   const [onlyEligible, setOnlyEligible] = useState(true);
 
   const designsQ = useDesigns(scopeAllDesigns ? undefined : entity.id);
@@ -164,6 +175,8 @@ export default function ConceptBuilder({
   const editing = useMockupForEdit(editMockupId ?? undefined);
   const createCollection = useCreateCollection();
   const upload = useUploadDesign(entity.id, entity.organizationId);
+  const { user } = useAuth();
+  const addToCart = useAddToCart(entity.id, entity.organizationId, user?.id);
 
   const audience = audienceForRoles(entity.roles);
 
@@ -255,6 +268,34 @@ export default function ConceptBuilder({
         .filter((x): x is { blank: Blank; colorNames: string[] } => Boolean(x.blank)),
     });
   }, [blank, colorName, extraColors, extraBlanks, blanksQ.data]);
+
+  /* ------------------------------------------------------------- ordering */
+
+  const blanksById = useMemo(() => new Map((blanksQ.data ?? []).map((b) => [b.id, b])), [blanksQ.data]);
+
+  /** Every size any garment in this run offers, in apparel order. */
+  const orderSizes = useMemo(
+    () => sizesForRun(variants, (id) => blanksById.get(id)?.sizes ?? []),
+    [variants, blanksById],
+  );
+
+  /** Audience price for a variant's garment. Null means AX has never priced it. */
+  const priceOfVariant = (index: number): number | null => {
+    const v = variants[index];
+    const b = v ? blanksById.get(v.blankId) : undefined;
+    return b ? (priceFor(b, audience) ?? null) : null;
+  };
+
+  const orderUnits = useMemo(() => gridUnits(qtyGrid), [qtyGrid]);
+
+  /** Any of the three actions in flight disables all three. */
+  const busy = create.isPending || update.isPending || addToCart.isPending;
+
+  const setQty = (variantIndex: number, size: string, quantity: number) =>
+    setQtyGrid((prev) => ({
+      ...prev,
+      [variantIndex]: { ...(prev[variantIndex] ?? {}), [size]: quantity },
+    }));
 
   const toggleExtraColor = (name: string) =>
     setExtraColors((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
@@ -600,6 +641,7 @@ export default function ConceptBuilder({
   /** Throw the restored work away and start from an empty wizard. */
   const startFresh = () => {
     clearDraft(entity.id);
+    setQtyGrid({});
     setShowRestored(false);
     setDesign(null);
     setBlank(null);
@@ -614,7 +656,52 @@ export default function ConceptBuilder({
     setStep("flow");
   };
 
-  const submit = async () => {
+  /**
+   * THE THREE WAYS OUT OF THE BUILDER.
+   *
+   *   save           — the mockups exist. Nothing is ordered. The default,
+   *                    because most mockups are made to be looked at.
+   *   cart           — the mockups exist AND the quantities go into this
+   *                    entity's draft order. The builder closes.
+   *   cart-continue  — the same, but the wizard empties itself and stays open,
+   *                    because "one more colourway" is the actual rhythm of
+   *                    building a run and closing the sheet to reopen it is
+   *                    four clicks of nothing.
+   *
+   * Ordering never happens without saving: a cart line points at a mockup, so
+   * the mockup has to be real first. If the save half fails, nothing is added.
+   */
+  type SubmitMode = "save" | "cart" | "cart-continue";
+
+  /**
+   * Put what was just created into the cart.
+   *
+   * `ids` lines up with `variants`, which is what the quantity grid is keyed
+   * on, so each colourway's numbers land on its own mockup rather than on
+   * whichever one happened to be on screen. Colourways with no quantities are
+   * skipped rather than added at zero — the table rejects a zero line.
+   */
+  const sendToCart = async (ids: Array<string | null>, titleAt: (i: number) => string) => {
+    const inputs = ids.flatMap((id, i) => {
+      const v = variants[i];
+      if (!id || !v || rowUnits(qtyGrid, i) === 0) return [];
+      return [
+        {
+          mockupId: id,
+          title: titleAt(i),
+          blankId: v.blankId,
+          colorName: v.colorName,
+          unitRetail: priceOfVariant(i) ?? 0,
+          lines: Object.entries(qtyGrid[i] ?? {}).map(([size, quantity]) => ({ size, quantity })),
+        },
+      ];
+    });
+    if (inputs.length === 0) return 0;
+    await addToCart.mutateAsync(inputs);
+    return inputs.reduce((n, i) => n + i.lines.reduce((m, l) => m + Math.max(0, l.quantity), 0), 0);
+  };
+
+  const submit = async (mode: SubmitMode = "save") => {
     if (!design && !blank) return;
     try {
       if (isEdit && editMockupId) {
@@ -642,8 +729,17 @@ export default function ConceptBuilder({
           designsById,
         });
 
-        toast.success("Mockup saved");
+        const editedTitle = title.trim() || "Untitled mockup";
+        const ordered = mode === "save" ? 0 : await sendToCart([editMockupId], () => editedTitle);
+
+        toast.success(ordered > 0 ? `Mockup saved · ${ordered} units in the cart` : "Mockup saved", {
+          description: ordered > 0 ? "The cart is a draft order. Nothing has been submitted." : undefined,
+        });
         onCreated?.(editMockupId);
+        if (mode === "cart-continue") {
+          startFresh();
+          return;
+        }
         onClose();
         return;
       }
@@ -734,9 +830,40 @@ export default function ConceptBuilder({
         });
       }
 
+      /*
+        THE CART HALF.
+
+        `created` comes back in the order of `jobs`, which is the order of
+        `variants` — the same order the quantity grid is keyed on. Anything
+        that failed to save is a null in that position and is skipped, so a
+        partial run puts exactly the mockups that exist into the cart and
+        silently orders nothing that does not.
+      */
+      let ordered = 0;
+      if (mode !== "save") {
+        const alignedIds = jobs.map((_, i) => created[i] ?? null);
+        try {
+          ordered = await sendToCart(alignedIds, (i) => jobs[i]?.draft.title ?? "Untitled mockup");
+        } catch (err) {
+          // The mockups are real and saying otherwise would be a lie. The
+          // quantities are still on screen, so the add can simply be retried.
+          toast.error(err instanceof Error ? err.message : "Saved, but could not add to the cart");
+        }
+      }
+
+      if (ordered > 0) {
+        toast.success(`${ordered} unit${ordered === 1 ? "" : "s"} added to the cart`, {
+          description: `${entity.name}'s cart is a draft order — review and submit it from Orders.`,
+        });
+      }
+
       // Saved: the wizard's copy is no longer the only one.
       clearDraft(entity.id);
       onCreated?.(created[0]);
+      if (mode === "cart-continue") {
+        startFresh();
+        return;
+      }
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the concept");
@@ -1278,6 +1405,18 @@ export default function ConceptBuilder({
               </div>
             </div>
 
+            {/* ------------------------------------------ order quantities */}
+            {blank && variants.length > 0 && (
+              <OrderQuantities
+                variants={variants}
+                sizes={orderSizes}
+                grid={qtyGrid}
+                priceOf={priceOfVariant}
+                onChange={setQty}
+                onClear={() => setQtyGrid({})}
+              />
+            )}
+
             {/* ---------------------------------------------- add a back */}
             {!placed.some((p) => p.surface === "back") && (
               <section className="rounded-2xl border border-[hsl(var(--ax-border))] p-4">
@@ -1398,22 +1537,54 @@ export default function ConceptBuilder({
                 .join("  ·  ") || "Nothing chosen yet"}
             </div>
             {step === "confirm" ? (
-              <button
-                type="button"
-                onClick={submit}
-                disabled={create.isPending || update.isPending || (!design && !blank) || (!isEdit && overLimit(variants.length))}
-                className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
-              >
-                {isEdit
-                  ? update.isPending
-                    ? "Saving…"
-                    : "Save mockup"
-                  : create.isPending
-                    ? "Creating…"
-                    : variants.length > 1
-                      ? `Create ${variants.length} mockups`
-                      : "Create mockup"}
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {/*
+                  THREE ACTIONS, ONE OF THEM PRIMARY.
+
+                  Saving is the common case and keeps the filled button. The two
+                  cart actions are quieter and stay disabled until a quantity has
+                  actually been typed — a button called "Add to cart" that adds
+                  nothing teaches an operator to distrust the whole screen.
+                */}
+                <button
+                  type="button"
+                  onClick={() => void submit("cart-continue")}
+                  disabled={busy || orderUnits === 0}
+                  title={
+                    orderUnits === 0
+                      ? "Enter some quantities above first"
+                      : "Save, add these units, and start the next mockup"
+                  }
+                  className="rounded-full border border-[hsl(var(--ax-border))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-secondary))] hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))] disabled:opacity-40 disabled:hover:border-[hsl(var(--ax-border))]"
+                >
+                  Add to cart &amp; continue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submit("cart")}
+                  disabled={busy || orderUnits === 0}
+                  title={orderUnits === 0 ? "Enter some quantities above first" : undefined}
+                  className="rounded-full border border-[hsl(var(--ax-accent)/0.5)] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-accent))] hover:bg-[hsl(var(--ax-accent)/0.1)] disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  {orderUnits > 0 ? `Add ${orderUnits} to cart` : "Add to cart"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submit("save")}
+                  disabled={busy || (!design && !blank) || (!isEdit && overLimit(variants.length))}
+                  className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
+                >
+                  {isEdit
+                    ? update.isPending
+                      ? "Saving…"
+                      : "Save mockup"
+                    : create.isPending
+                      ? "Creating…"
+                      : variants.length > 1
+                        ? `Create ${variants.length} mockups`
+                        : "Create mockup"}
+                </button>
+              </div>
             ) : (
               <button
                 type="button"

@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowUpRight, ImagePlus, Plus } from "lucide-react";
+import { ArrowUpRight, ImagePlus, Plus, ShoppingCart } from "lucide-react";
 import { useCreateCollection, useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
+import { useCart } from "@/lib/v2/cart-data";
+import { useAuth } from "@/auth/AuthProvider";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
 import { cleanDesignTitle, isConfigurable, stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { fmtMoney } from "@/lib/v2/pricing";
@@ -38,6 +40,15 @@ export default function V2EntityWorkspace() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
   const { data, isLoading, isError, error, refetch } = useEntityWorkspace(id);
+  const { user } = useAuth();
+  /*
+    THE CART IS ONLY VISIBLE WHEN THERE IS ONE.
+
+    An always-present "Cart (0)" on every entity would read as a feature this
+    page has rather than as work in progress on this person. It appears the
+    moment something is in it and disappears when the order is submitted.
+  */
+  const cart = useCart(id, user?.id);
   /*
     THE BUILDER IS PART OF THE ADDRESS TOO.
 
@@ -294,6 +305,16 @@ export default function V2EntityWorkspace() {
             }
             actions={
               <>
+                {(cart.data?.units ?? 0) > 0 && (
+                  <Link
+                    to={`/admin-v2/people/${entity.id}/cart`}
+                    title="A draft order. Nothing has been submitted."
+                    className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-accent)/0.5)] px-3.5 py-2 text-[12px] font-semibold text-[hsl(var(--ax-accent))] hover:bg-[hsl(var(--ax-accent)/0.1)]"
+                  >
+                    <ShoppingCart className="h-3.5 w-3.5" />
+                    Cart · {cart.data?.units}
+                  </Link>
+                )}
                 <button
                   type="button"
                   onClick={() => openBuilder(true)}

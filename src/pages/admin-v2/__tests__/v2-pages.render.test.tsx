@@ -254,7 +254,6 @@ vi.mock("@/lib/v2/data", () => ({
   useShelfActions: () => mutation(),
   useCreateCollection: () => mutation(),
   useCreateLookbook: () => mutation(),
-  useCreateBulkOrder: () => mutation(),
   useCreateMockup: () => mutation(),
   useCreateMockupBatch: () => mutation(),
   useCreateConcept: () => mutation(),
@@ -304,6 +303,47 @@ vi.mock("@/lib/v2/data", () => ({
 
 vi.mock("@/lib/storage", () => ({ useSignedUrl: () => ({ url: null, loading: false }) }));
 
+vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
+
+const cartLine = {
+  id: "cl1",
+  mockupId: "m1",
+  blankId: "b1",
+  title: "Mooney World Hoodie",
+  colorName: "Cool Blue",
+  size: "L",
+  quantity: 12,
+  unitRetail: 48,
+  imageUrl: null,
+};
+
+vi.mock("@/lib/v2/cart-data", () => ({
+  useCart: () =>
+    query({
+      orderId: "ord1",
+      notes: "",
+      lines: [cartLine],
+      groups: [
+        {
+          key: "m1||Cool Blue",
+          mockupId: "m1",
+          blankId: "b1",
+          title: "Mooney World Hoodie",
+          colorName: "Cool Blue",
+          imageUrl: null,
+          unitRetail: 48,
+          units: 12,
+          retail: 576,
+          lines: [cartLine],
+        },
+      ],
+      units: 12,
+    }),
+  useCartActions: () => mutation(),
+  useAddToCart: () => mutation(),
+  useSubmitCart: () => mutation(),
+}));
+
 /* ------------------------------------------------------------------ setup */
 
 import V2Overview from "../V2Overview";
@@ -314,6 +354,7 @@ import V2BlankDetail from "../V2BlankDetail";
 import V2Creative from "../V2Creative";
 import V2NotFound from "../V2NotFound";
 import V2EntityWorkspace from "../V2EntityWorkspace";
+import V2Cart from "../V2Cart";
 import CommandSearch from "@/components/admin-v2/CommandSearch";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -331,6 +372,7 @@ function mount(ui: ReactElement, route = "/admin-v2"): HTMLElement {
         <MemoryRouter initialEntries={[route]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/admin-v2/people/:id" element={ui} />
+            <Route path="/admin-v2/people/:id/cart" element={ui} />
             <Route path="/admin-v2/commerce/blanks/:id" element={ui} />
             <Route path="*" element={ui} />
           </Routes>
@@ -382,6 +424,12 @@ const PAGES: Array<{ name: string; render: () => ReactElement; route?: string; e
     render: () => <V2EntityWorkspace />,
     route: "/admin-v2/people/e1",
     expects: /darnell mooney/i,
+  },
+  {
+    name: "Cart",
+    render: () => <V2Cart />,
+    route: "/admin-v2/people/e1/cart",
+    expects: /Mooney World Hoodie/i,
   },
 ];
 

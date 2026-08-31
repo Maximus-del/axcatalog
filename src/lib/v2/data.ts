@@ -8,6 +8,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { must, num, publicUrl, str, t, type Row } from "./db";
 import { displayNameOf } from "./entity";
 import { slugify } from "@/lib/slug";
 import { draftToRow, isConfigurable, type ConceptDraft } from "./concepts";
@@ -33,18 +34,9 @@ import type {
 
 /* ------------------------------------------------------------------ helpers */
 
-type Row = Record<string, unknown>;
+// t / must / str / num / publicUrl live in ./db so the cart layer shares them.
+export { publicUrl };
 
-const t = (table: string) => supabase.from(table as never);
-
-const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 ? v : null);
-const num = (v: unknown): number | null => {
-  if (v == null || v === "") return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-};
-
-/** Public URL for a bucket/path pair (product-images and blanks are public). */
 /** The `design-previews` bucket. Client-safe renditions only — never production artwork. */
 const PREVIEW_BUCKET = "design-previews";
 
@@ -61,31 +53,6 @@ const CLIENT_HIDDEN = {
   hasPreview: false,
   previewPath: null,
 } as const satisfies Pick<Design, "clientVisibility" | "hasPreview" | "previewPath">;
-
-/**
- * SUPABASE RETURNS ERRORS. IT DOES NOT THROW THEM.
- *
- * `await t("mockups").update(...)` resolves happily when the row was rejected
- * — wrong org, RLS, a constraint — and every write in this file that did not
- * read `.error` reported success, fired its toast, refetched, and quietly put
- * the old value back on screen. Which is worse than an error, because the
- * operator believes the change stuck.
- *
- * Every write goes through here.
- */
-async function must<T extends { error: unknown }>(op: PromiseLike<T>): Promise<T> {
-  const res = await op;
-  if (res.error) {
-    const message = (res.error as { message?: string })?.message;
-    throw new Error(message || "The database rejected that change");
-  }
-  return res;
-}
-
-export function publicUrl(bucket: string | null, path: string | null): string | null {
-  if (!bucket || !path) return null;
-  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
-}
 
 /* ------------------------------------------------------------------ people */
 
@@ -828,80 +795,12 @@ export function useDiscountBreaks() {
   });
 }
 
-/**
- * Raise a bulk order from a mockup.
- *
- * Writes to `bulk_order_requests` / `bulk_order_items`, which already exist,
- * already hold 10 live orders and already carry the wholesale/retail/savings
- * model — this is a new door into a working system, not a new system. Items
- * carry mockup_id so an order can always be traced back to what was ordered.
+/*
+ * useCreateBulkOrder lived here and raised a whole bulk order from a single
+ * mockup. Ordering now goes through the cart (see cart-data.ts): a run of six
+ * colourways is one order that earns the volume break its size deserves,
+ * instead of six orders that each miss it.
  */
-export function useCreateBulkOrder(entityId: string, organizationId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
-      mockupId: string;
-      mockupTitle: string;
-      blankId: string | null;
-      colorName: string | null;
-      lines: Array<{ size: string; quantity: number }>;
-      unitWholesale: number;
-      unitRetail: number;
-      subtotal: number;
-      retailEquivalent: number;
-      savings: number;
-      notes: string | null;
-    }) => {
-      const lines = input.lines.filter((l) => l.quantity > 0);
-      if (lines.length === 0) throw new Error("Add at least one size");
-
-      const req = await t("bulk_order_requests")
-        .insert({
-          organization_id: organizationId,
-          athlete_id: entityId,
-          total_units: lines.reduce((n, l) => n + l.quantity, 0),
-          priority: "normal",
-          payment_method: "invoice",
-          channel: "admin-v2",
-          wholesale_subtotal: input.subtotal,
-          retail_equivalent: input.retailEquivalent,
-          total_savings: input.savings,
-          credit_applied: 0,
-          amount_due: input.subtotal,
-          notes: input.notes,
-        } as never)
-        .select("id")
-        .single();
-      if (req.error) throw req.error;
-      const orderId = String((req.data as unknown as Row).id);
-
-      const items = lines.map((l) => ({
-        order_request_id: orderId,
-        mockup_id: input.mockupId,
-        // V2 blanks live in v2_blanks; mockups.blank_id's foreign key points at
-        // the legacy `blanks` table and would reject every one of these.
-        v2_blank_id: input.blankId,
-        product_name_snapshot: input.mockupTitle,
-        size: l.size,
-        color: input.colorName,
-        quantity: l.quantity,
-        unit_wholesale_price: input.unitWholesale,
-        unit_retail_price: input.unitRetail,
-        line_subtotal: Math.round(input.unitWholesale * l.quantity * 100) / 100,
-      }));
-      const ins = await t("bulk_order_items").insert(items as never);
-      if (ins.error) {
-        // A request with no lines is not a smaller order, it is a broken record.
-        await t("bulk_order_requests").delete().eq("id", orderId);
-        throw ins.error;
-      }
-      return orderId;
-    },
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["v2", "orders"] });
-    },
-  });
-}
 
 /* ------------------------------------------------------- mockup library */
 
