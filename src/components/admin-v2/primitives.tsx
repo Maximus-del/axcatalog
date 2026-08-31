@@ -283,14 +283,17 @@ export function ActionCard({
   title,
   detail,
   onClick,
+  href,
 }: {
   count: number;
   title: string;
   detail: string;
-  onClick: () => void;
+  onClick?: () => void;
+  /** Where the queue lives, when it is a route rather than a filter on this page. */
+  href?: string;
 }) {
-  return (
-    <Card onClick={onClick} className="p-4">
+  const body = (
+    <>
       <div className="flex items-start gap-3">
         <div className="flex h-8 min-w-8 items-center justify-center rounded-full bg-white/[0.06] text-[14px] font-semibold tabular-nums">
           {count}
@@ -305,6 +308,15 @@ export function ActionCard({
           <CheckCircle2 className="h-4 w-4 shrink-0 text-[hsl(var(--ax-accent))]" />
         )}
       </div>
+    </>
+  );
+  return href ? (
+    <Link to={href} className="ax-card ax-card-hover block p-4 text-left transition-all">
+      {body}
+    </Link>
+  ) : (
+    <Card onClick={onClick} className="p-4">
+      {body}
     </Card>
   );
 }

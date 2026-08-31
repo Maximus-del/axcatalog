@@ -16,7 +16,7 @@ import type { Blank, BlankColor } from "./types";
 export const CATALOG_PATH = "/admin-v2/commerce";
 export const BLANKS_PATH = `${CATALOG_PATH}/blanks`;
 
-export type CatalogTab = "blanks" | "products" | "collections";
+export type CatalogTab = "overview" | "blanks" | "products" | "collections";
 /** Which slice of the catalog the audience switch is showing. */
 export type AccessFilter = "in" | "out" | "all";
 
