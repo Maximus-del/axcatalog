@@ -220,6 +220,15 @@ export interface Mockup {
   collectionId: string | null;
   /** Per-surface alignment guide positions, percentages of the garment box. */
   guides: Record<string, { x: number; y: number }>;
+  /**
+   * Has this mockup been shared with the athlete/client?
+   *
+   * A boolean rather than the design_client_visibility enum: that enum answers
+   * "which rendition may the client see" — production PNG or safe preview — and
+   * a mockup has exactly one rendition, the flattened composite, which is
+   * already client-safe. The only real question is shared or not.
+   */
+  clientVisible: boolean;
   /** Which surfaces actually carry artwork. Derived from the placements. */
   surfaces: Array<"front" | "back">;
   placementCount: number;
@@ -237,7 +246,7 @@ export interface MockupFolder {
   name: string;
   entityId: string | null;
   sortOrder: number;
-  /** Reserved. Null means "use the first member", which is today's behaviour. */
+  /** Explicitly pinned cover. Null means "use the first member". */
   coverMockupId: string | null;
 }
 

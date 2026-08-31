@@ -5,6 +5,9 @@ import {
   Check,
   Copy,
   Download,
+  Eye,
+  EyeOff,
+  FolderInput,
   Layers,
   Pencil,
   Sparkles,
@@ -25,6 +28,7 @@ import {
   useLookbooks,
   useMockupActions,
   useMockupForEdit,
+  useMockupLibrary,
   useMockupProduction,
   useUpdatePlacementSpec,
   type ProductionPlacement,
@@ -50,7 +54,7 @@ import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview"
 // Nothing here turns a mockup into a Product on its own. "Make live" is a door
 // into the existing productize flow, not a new one.
 
-type Panel = "lookbook" | "bulk" | "production" | null;
+type Panel = "lookbook" | "bulk" | "production" | "folder" | null;
 
 export default function MockupDetail({
   mockup,
@@ -81,6 +85,8 @@ export default function MockupDetail({
 
   const lifecycle = toLifecycle(mockup.lifecycle);
   const blank = (blanksQ.data ?? []).find((b) => b.id === mockup.blankId) ?? null;
+  const library = useMockupLibrary(entity.id);
+  const folderName = library.data?.folders.find((f) => f.id === mockup.folderId)?.name ?? null;
 
   const designsById = useMemo(() => {
     const m = new Map((designsQ.data ?? []).map((d) => [d.id, d]));
@@ -302,6 +308,39 @@ export default function MockupDetail({
               <section>
                 <SectionLabel>Do something with it</SectionLabel>
                 <div className="grid gap-1.5">
+                  {/*
+                    SHARE is first because it is the only action here that
+                    changes who can see the mockup, and "can the client see
+                    this?" is the question an operator asks most often.
+                  */}
+                  <ActionRow
+                    icon={mockup.clientVisible ? EyeOff : Eye}
+                    title={mockup.clientVisible ? `Hide from ${entity.name}` : `Share with ${entity.name}`}
+                    blurb={
+                      mockup.clientVisible
+                        ? "Marked as theirs. Hiding takes it back to internal."
+                        : "Marks it for them. The athlete-facing view is not built yet."
+                    }
+                    onClick={() =>
+                      actions.mutate(
+                        { type: "set-client-visible", mockupIds: [mockup.id], visible: !mockup.clientVisible },
+                        {
+                          onError: (e) =>
+                            toast.error(e instanceof Error ? e.message : "Could not change that"),
+                          onSuccess: () =>
+                            toast.success(mockup.clientVisible ? "Hidden from the client" : "Shared with the client"),
+                        },
+                      )
+                    }
+                    active={mockup.clientVisible}
+                  />
+                  <ActionRow
+                    icon={FolderInput}
+                    title="Move to a folder"
+                    blurb={folderName ? `Currently in “${folderName}”.` : "Loose on the shelf."}
+                    onClick={() => setPanel(panel === "folder" ? null : "folder")}
+                    active={panel === "folder"}
+                  />
                   <ActionRow
                     icon={BookImage}
                     title="Add to a lookbook"
@@ -344,6 +383,8 @@ export default function MockupDetail({
                   />
                 </div>
               </section>
+
+              {panel === "folder" && <FolderPanel mockup={mockup} entity={entity} onDone={() => setPanel(null)} />}
 
               {panel === "lookbook" && (
                 <LookbookPanel mockup={mockup} entity={entity} onDone={() => setPanel(null)} />
@@ -408,6 +449,70 @@ function ActionRow({
       </span>
       <ArrowUpRight className="ml-auto mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--ax-faint))]" aria-hidden />
     </button>
+  );
+}
+
+/**
+ * Filing a mockup from its own page.
+ *
+ * Moving between folders was only possible in the library — by dragging, or by
+ * a bulk-select of one. Which meant closing the thing you were looking at to
+ * file the thing you were looking at.
+ */
+function FolderPanel({ mockup, entity, onDone }: { mockup: Mockup; entity: Entity; onDone: () => void }) {
+  const library = useMockupLibrary(entity.id);
+  const actions = useMockupActions(entity.id, entity.organizationId);
+  const folders = library.data?.folders ?? [];
+
+  const move = (folderId: string | null) => {
+    const size = folderId ? (library.data?.mockups.filter((m) => m.folderId === folderId).length ?? 0) : 0;
+    actions.mutate(
+      folderId
+        ? { type: "add-to-folder", folderId, mockupId: mockup.id, sortOrder: size }
+        : { type: "remove-from-folder", mockupId: mockup.id, sortOrder: size },
+      {
+        onError: (e) => toast.error(e instanceof Error ? e.message : "Could not move it"),
+        onSuccess: () => {
+          toast.success(folderId ? "Moved" : "Back on the shelf");
+          onDone();
+        },
+      },
+    );
+  };
+
+  return (
+    <section className="rounded-xl border border-[hsl(var(--ax-accent)/0.4)] bg-[hsl(var(--ax-accent)/0.05)] p-3">
+      <SectionLabel>Move to a folder</SectionLabel>
+      {folders.length === 0 ? (
+        <p className="text-[11px] text-[hsl(var(--ax-faint))]">
+          No folders yet. Drag one mockup onto another in the library to make one.
+        </p>
+      ) : (
+        <div className="grid gap-1">
+          {folders.map((f) => (
+            <button
+              key={f.id}
+              type="button"
+              disabled={f.id === mockup.folderId}
+              onClick={() => move(f.id)}
+              className="flex items-center gap-2 rounded-lg border border-[hsl(var(--ax-border))] px-3 py-1.5 text-left text-[12px] transition-colors hover:border-[hsl(var(--ax-accent)/0.6)] disabled:opacity-45"
+            >
+              <span className="min-w-0 flex-1 truncate">{f.name}</span>
+              {f.id === mockup.folderId && <Check className="h-3.5 w-3.5 text-[hsl(var(--ax-accent))]" />}
+            </button>
+          ))}
+        </div>
+      )}
+      {mockup.folderId && (
+        <button
+          type="button"
+          onClick={() => move(null)}
+          className="mt-2 text-[11px] text-[hsl(var(--ax-secondary))] underline hover:text-[hsl(var(--ax-ink))]"
+        >
+          Take it out of the folder
+        </button>
+      )}
+    </section>
   );
 }
 
@@ -660,6 +765,9 @@ function ProductionPanel({ mockup }: { mockup: Mockup }) {
   );
 }
 
+/** Maximum printable width, in inches. Stated on the canvas; checked here. */
+const MAX_PRINT_WIDTH_IN = 16;
+
 function ProductionRow({
   row,
   onSave,
@@ -679,6 +787,13 @@ function ProductionRow({
     }
     if (next !== row.printWidthIn) onSave({ printWidthIn: next });
   };
+
+  // The 16x20 maximum was stated on the canvas and nowhere enforced or even
+  // checked, so a 40" print width saved without comment and turned up at the
+  // printer. Still saved — the operator may know something the app does not —
+  // but no longer silently.
+  const entered = Number(width.trim());
+  const overMax = Number.isFinite(entered) && entered > MAX_PRINT_WIDTH_IN;
 
   return (
     <div className="rounded-lg border border-[hsl(var(--ax-border))] bg-black/20 p-2.5">
@@ -717,6 +832,12 @@ function ProductionRow({
           {Math.round(row.widthPct)}% of garment
         </span>
       </div>
+
+      {overMax && (
+        <p className="mt-1.5 text-[10px] text-[hsl(var(--ax-amber))]">
+          Wider than the {MAX_PRINT_WIDTH_IN}&quot; maximum print area. Saved anyway — but check it with the printer.
+        </p>
+      )}
 
       <input
         value={notes}

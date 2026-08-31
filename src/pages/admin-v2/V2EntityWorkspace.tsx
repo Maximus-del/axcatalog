@@ -46,13 +46,32 @@ export default function V2EntityWorkspace() {
   // A saved mockup reopened for editing, and one being turned into assets.
   const [editMockupId, setEditMockupId] = useState<string | null>(null);
   const [assetsFor, setAssetsFor] = useState<Mockup | null>(null);
-  // Clicking a mockup opens its own page; editing is one step further in.
-  const [detailMockup, setDetailMockup] = useState<Mockup | null>(null);
   const [productizing, setProductizing] = useState<string | null>(null);
-  // A deep link from Creative: /admin-v2/people/:id?mockup=<id>. Consumed once
-  // and stripped from the URL, so a refresh does not keep reopening it and the
-  // back button behaves.
-  const requestedMockup = params.get("mockup");
+
+  /*
+    WHICH MOCKUP IS OPEN IS PART OF THE ADDRESS.
+
+    It used to be state, and the `?mockup=` deep link that Creative and Overview
+    send people here with was consumed and then deleted from the URL — so the
+    thing on screen had no address, a refresh closed it, and there was no way to
+    send someone the mockup you were looking at. Now the parameter IS the open
+    state: opening pushes a history entry, so browser Back closes the mockup
+    rather than leaving the page.
+
+    The library query is shared with MockupLibrary by key, so reading it here
+    costs nothing.
+  */
+  const libraryQ = useMockupLibrary(id);
+  const openMockupId = params.get("mockup");
+  const detailMockup = openMockupId
+    ? (libraryQ.data?.mockups.find((m) => m.id === openMockupId) ?? null)
+    : null;
+  const openMockup = (mockup: Mockup | null) => {
+    const next = new URLSearchParams(params);
+    if (mockup) next.set("mockup", mockup.id);
+    else next.delete("mockup");
+    setParams(next);
+  };
   const [active, setActive] = useState<StepKey>("designs");
   const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
   const scrollingTo = useRef<StepKey | null>(null);
@@ -327,7 +346,8 @@ export default function V2EntityWorkspace() {
         <MockupLibrary
           entityId={entity.id}
           organizationId={entity.organizationId}
-          onOpen={(m) => setDetailMockup(m)}
+          entityName={entity.name}
+          onOpen={(m) => openMockup(m)}
           onTurnIntoAssets={(m) => setAssetsFor(m)}
           onCreateProduct={(m) => setProductizing(m.id)}
         />
@@ -510,37 +530,29 @@ export default function V2EntityWorkspace() {
         />
       )}
 
-      {requestedMockup && !detailMockup && (
-        <MockupDeepLink
-          mockupId={requestedMockup}
-          entityId={id}
-          onResolved={(m) => {
-            setDetailMockup(m);
-            const next = new URLSearchParams(params);
-            next.delete("mockup");
-            setParams(next, { replace: true });
-          }}
-        />
-      )}
-
+      {/*
+        A link to a mockup that no longer exists — deleted, or moved to another
+        entity — resolves to nothing and simply shows the workspace. That is the
+        right outcome for a link that no longer points anywhere.
+      */}
       {detailMockup && (
         <MockupDetail
           mockup={detailMockup}
           entity={entity}
-          onClose={() => setDetailMockup(null)}
+          onClose={() => openMockup(null)}
           onEdit={() => {
             setEditMockupId(detailMockup.id);
-            setDetailMockup(null);
+            openMockup(null);
           }}
           onCreateAssets={() => {
             setAssetsFor(detailMockup);
-            setDetailMockup(null);
+            openMockup(null);
           }}
           onMakeLive={() => {
             setProductizing(detailMockup.id);
-            setDetailMockup(null);
+            openMockup(null);
           }}
-          onDeleted={() => setDetailMockup(null)}
+          onDeleted={() => openMockup(null)}
         />
       )}
 
@@ -564,32 +576,4 @@ export default function V2EntityWorkspace() {
         })()}
     </>
   );
-}
-
-/**
- * Resolves a ?mockup=<id> deep link into the full Mockup the detail page needs.
- *
- * Creative only knows the concept's id; the detail page wants the library row
- * with its folder, lifecycle and surfaces. Rather than thread a second loading
- * state through the workspace, this renders nothing and simply calls back once
- * the library has the row. If the id belongs to someone else — a stale link, or
- * a mockup that moved — nothing opens, which is the right outcome for a link
- * that no longer points anywhere.
- */
-function MockupDeepLink({
-  mockupId,
-  entityId,
-  onResolved,
-}: {
-  mockupId: string;
-  entityId: string | undefined;
-  onResolved: (mockup: Mockup) => void;
-}) {
-  const { data } = useMockupLibrary(entityId);
-  useEffect(() => {
-    const found = data?.mockups.find((m) => m.id === mockupId);
-    if (found) onResolved(found);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, mockupId]);
-  return null;
 }

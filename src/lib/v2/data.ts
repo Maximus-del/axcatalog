@@ -62,6 +62,26 @@ const CLIENT_HIDDEN = {
   previewPath: null,
 } as const satisfies Pick<Design, "clientVisibility" | "hasPreview" | "previewPath">;
 
+/**
+ * SUPABASE RETURNS ERRORS. IT DOES NOT THROW THEM.
+ *
+ * `await t("mockups").update(...)` resolves happily when the row was rejected
+ * — wrong org, RLS, a constraint — and every write in this file that did not
+ * read `.error` reported success, fired its toast, refetched, and quietly put
+ * the old value back on screen. Which is worse than an error, because the
+ * operator believes the change stuck.
+ *
+ * Every write goes through here.
+ */
+async function must<T extends { error: unknown }>(op: PromiseLike<T>): Promise<T> {
+  const res = await op;
+  if (res.error) {
+    const message = (res.error as { message?: string })?.message;
+    throw new Error(message || "The database rejected that change");
+  }
+  return res;
+}
+
 export function publicUrl(bucket: string | null, path: string | null): string | null {
   if (!bucket || !path) return null;
   return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
@@ -1021,13 +1041,13 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
   const [mockupRes, folderRes] = await Promise.all([
     t("mockups")
       .select(
-        "id, title, athlete_id, organization_id, blank_id, v2_blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, product_id, collection_id, guides, created_at, updated_at",
+        "id, title, athlete_id, organization_id, blank_id, v2_blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, client_visible, product_id, collection_id, guides, created_at, updated_at",
       )
       .eq("athlete_id", entityId)
       .eq("kind", "concept")
       .order("sort_order", { ascending: true }),
     t("asset_folders")
-      .select("id, name, athlete_id, sort_order")
+      .select("id, name, athlete_id, sort_order, cover_mockup_id")
       .eq("scope", "mockups")
       .eq("athlete_id", entityId)
       .order("sort_order", { ascending: true }),
@@ -1095,6 +1115,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
       status: String(r.status ?? "draft"),
       lifecycle: String(r.lifecycle ?? "bin"),
       approvalState: (str(r.approval_state) ?? "none") as Mockup["approvalState"],
+      clientVisible: r.client_visible === true,
       productId: str(r.product_id),
       collectionId: str(r.collection_id),
       guides: (r.guides as Mockup["guides"]) ?? {},
@@ -1110,7 +1131,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
     name: String(f.name ?? "Untitled folder"),
     entityId: str(f.athlete_id),
     sortOrder: Number(f.sort_order ?? 0),
-    coverMockupId: null,
+    coverMockupId: str(f.cover_mockup_id),
   }));
 
   return { mockups, folders };
@@ -1137,7 +1158,9 @@ export type MockupJob =
   | { type: "ungroup"; folderId: string; mockupIds: string[]; baseSortOrder: number }
   | { type: "set-lifecycle"; mockupIds: string[]; lifecycle: string }
   | { type: "new-folder"; name: string; sortOrder: number }
-  | { type: "set-collection"; mockupIds: string[]; collectionId: string | null };
+  | { type: "set-collection"; mockupIds: string[]; collectionId: string | null }
+  | { type: "set-client-visible"; mockupIds: string[]; visible: boolean }
+  | { type: "set-folder-cover"; folderId: string; mockupId: string | null };
 
 /**
  * Library actions. Folders are organisational only, so every folder operation
@@ -1155,11 +1178,11 @@ export function useMockupActions(entityId: string, organizationId: string) {
     mutationFn: async (job: MockupJob) => {
       switch (job.type) {
         case "rename":
-          await t("mockups").update({ title: job.title } as never).eq("id", job.mockupId);
+          await must(t("mockups").update({ title: job.title } as never).eq("id", job.mockupId));
           return;
         case "delete":
           // Placements cascade with the mockup; the artwork and blank are untouched.
-          await t("mockups").delete().eq("id", job.mockupId);
+          await must(t("mockups").delete().eq("id", job.mockupId));
           return;
         case "duplicate": {
           const src = await t("mockups").select("*").eq("id", job.mockupId).single();
@@ -1189,9 +1212,11 @@ export function useMockupActions(entityId: string, organizationId: string) {
         case "order":
           await Promise.all(
             job.writes.map((w) =>
-              w.kind === "mockup"
-                ? t("mockups").update({ sort_order: w.sortOrder } as never).eq("id", w.id)
-                : t("asset_folders").update({ sort_order: w.sortOrder } as never).eq("id", w.id),
+              must(
+                w.kind === "mockup"
+                  ? t("mockups").update({ sort_order: w.sortOrder } as never).eq("id", w.id)
+                  : t("asset_folders").update({ sort_order: w.sortOrder } as never).eq("id", w.id),
+              ),
             ),
           );
           return;
@@ -1210,27 +1235,29 @@ export function useMockupActions(entityId: string, organizationId: string) {
           const folderId = String((created.data as unknown as Row).id);
           await Promise.all(
             job.mockupIds.map((id, i) =>
-              t("mockups").update({ folder_id: folderId, sort_order: i } as never).eq("id", id),
+              must(t("mockups").update({ folder_id: folderId, sort_order: i } as never).eq("id", id)),
             ),
           );
           return;
         }
         case "rename-folder":
-          await t("asset_folders").update({ name: job.name } as never).eq("id", job.folderId);
+          await must(t("asset_folders").update({ name: job.name } as never).eq("id", job.folderId));
           return;
         case "add-to-folder":
-          await t("mockups")
-            .update({ folder_id: job.folderId, sort_order: job.sortOrder } as never)
-            .eq("id", job.mockupId);
+          await must(
+            t("mockups")
+              .update({ folder_id: job.folderId, sort_order: job.sortOrder } as never)
+              .eq("id", job.mockupId),
+          );
           return;
         case "remove-from-folder":
-          await t("mockups")
-            .update({ folder_id: null, sort_order: job.sortOrder } as never)
-            .eq("id", job.mockupId);
+          await must(
+            t("mockups").update({ folder_id: null, sort_order: job.sortOrder } as never).eq("id", job.mockupId),
+          );
           return;
         case "set-lifecycle":
           await Promise.all(
-            job.mockupIds.map((id) => t("mockups").update({ lifecycle: job.lifecycle } as never).eq("id", id)),
+            job.mockupIds.map((id) => must(t("mockups").update({ lifecycle: job.lifecycle } as never).eq("id", id))),
           );
           return;
         case "new-folder": {
@@ -1250,17 +1277,47 @@ export function useMockupActions(entityId: string, organizationId: string) {
         case "set-collection":
           await Promise.all(
             job.mockupIds.map((id) =>
-              t("mockups").update({ collection_id: job.collectionId } as never).eq("id", id),
+              must(t("mockups").update({ collection_id: job.collectionId } as never).eq("id", id)),
             ),
+          );
+          return;
+
+        /*
+          SHARE / HIDE. The only thing that decides whether an athlete or client
+          can see a mockup. Default is hidden — a mockup is internal creative
+          work until someone deliberately shares it — and this is the switch.
+        */
+        case "set-client-visible":
+          await Promise.all(
+            job.mockupIds.map((id) =>
+              must(t("mockups").update({ client_visible: job.visible } as never).eq("id", id)),
+            ),
+          );
+          return;
+
+        /*
+          Pin a folder's cover. Null hands it back to "whatever is first",
+          which is the default and stays the default.
+        */
+        case "set-folder-cover":
+          await must(
+            t("asset_folders")
+              .update({ cover_mockup_id: job.mockupId } as never)
+              .eq("id", job.folderId)
+              .eq("athlete_id", entityId),
           );
           return;
         case "ungroup": {
           await Promise.all(
             job.mockupIds.map((id, i) =>
-              t("mockups").update({ folder_id: null, sort_order: job.baseSortOrder + i } as never).eq("id", id),
+              must(
+                t("mockups")
+                  .update({ folder_id: null, sort_order: job.baseSortOrder + i } as never)
+                  .eq("id", id),
+              ),
             ),
           );
-          await t("asset_folders").delete().eq("id", job.folderId).eq("athlete_id", entityId);
+          await must(t("asset_folders").delete().eq("id", job.folderId).eq("athlete_id", entityId));
           return;
         }
       }

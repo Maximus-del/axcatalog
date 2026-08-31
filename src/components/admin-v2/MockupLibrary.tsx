@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ChevronDown,
   Check,
   Copy,
+  Eye,
+  EyeOff,
   FolderOpen,
   FolderPlus,
   GripVertical,
+  Image as ImageIcon,
   LayoutGrid,
   List,
   MoreHorizontal,
@@ -13,6 +17,7 @@ import {
   Pencil,
   Sparkles,
   SquarePen,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -54,12 +59,15 @@ import { AssetImage, Chip, EmptyState, Skeleton, Toolbar } from "./primitives";
 export default function MockupLibrary({
   entityId,
   organizationId,
+  entityName,
   onOpen,
   onTurnIntoAssets,
   onCreateProduct,
 }: {
   entityId: string;
   organizationId: string;
+  /** Whose library this is — used when telling the operator who a mockup was shared with. */
+  entityName: string;
   onOpen: (mockup: Mockup) => void;
   onTurnIntoAssets: (mockup: Mockup) => void;
   /**
@@ -71,18 +79,47 @@ export default function MockupLibrary({
   const { data, isLoading } = useMockupLibrary(entityId);
   const actions = useMockupActions(entityId, organizationId);
 
-  const [query, setQuery] = useState("");
+  /*
+    WHAT YOU ARE LOOKING AT LIVES IN THE URL.
+
+    Which folder is open, which status you have filtered to and what you
+    searched for are navigation, not decoration: they should survive a refresh
+    and be sendable to someone else. Parameters are prefixed `m` because this
+    component shares an address bar with the workspace's own `?mockup=`.
+  */
+  const [params, setParams] = useSearchParams();
+  const query = params.get("mq") ?? "";
+  const statusParam = params.get("mstatus");
+  const statusFilter: Lifecycle | "all" = LIFECYCLE_ORDER.includes(statusParam as Lifecycle)
+    ? (statusParam as Lifecycle)
+    : "all";
+  const folderFilter = params.get("mfolder") ?? "all";
+  const view = params.get("mview") === "list" ? "list" : "grid";
+  const openFolder = params.get("mopen");
+
+  const patch = (changes: Record<string, string | null>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  };
+  const setQuery = (v: string) => patch({ mq: v.trim() ? v : null });
+  const setStatusFilter = (v: Lifecycle | "all") => patch({ mstatus: v === "all" ? null : v });
+  const setFolderFilter = (v: string) => patch({ mfolder: v === "all" ? null : v });
+  const setView = (v: "grid" | "list") => patch({ mview: v === "grid" ? null : v });
+  const setOpenFolder = (v: string | null) => patch({ mopen: v });
+
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [hint, setHint] = useState<{ key: string; zone: "before" | "onto" } | null>(null);
-  const [openFolder, setOpenFolder] = useState<string | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
   const [renamingMockup, setRenamingMockup] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [newFolder, setNewFolder] = useState(false);
   const [optimistic, setOptimistic] = useState<MockupShelfItem[] | null>(null);
   const [draggingMember, setDraggingMember] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<Lifecycle | "all">("all");
-  const [folderFilter, setFolderFilter] = useState<string>("all");
-  const [view, setView] = useState<"grid" | "list">("grid");
   // Multi-select for bulk moves and status changes. Empty means single-item mode.
   const [selected, setSelected] = useState<string[]>([]);
 
@@ -102,9 +139,17 @@ export default function MockupLibrary({
 
   useEffect(() => setOptimistic(null), [data]);
 
+  // Selection is about what is on screen. Leaving it intact across a filter
+  // change left the bulk bar offering to act on mockups the operator could no
+  // longer see, which is how you archive the wrong five.
+  useEffect(() => setSelected([]), [statusFilter, folderFilter, query]);
+
   useEffect(() => {
     if (!menuFor) return;
-    const close = () => setMenuFor(null);
+    const close = () => {
+      setMenuFor(null);
+      setConfirmDelete(null);
+    };
     window.addEventListener("click", close);
     return () => window.removeEventListener("click", close);
   }, [menuFor]);
@@ -138,7 +183,19 @@ export default function MockupLibrary({
     actions.mutate({ type: "rename", mockupId: mockup.id, title: trimmed }, { onError: () => fail("Could not rename") });
   };
 
+  /**
+   * Delete, on the second click.
+   *
+   * A mockup is real work and deleting one was a single mis-aimed click in a
+   * menu, with no confirmation and no undo. The menu item now arms itself and
+   * says what it is about to destroy.
+   */
   const remove = (mockup: Mockup) => {
+    if (confirmDelete !== mockup.id) {
+      setConfirmDelete(mockup.id);
+      return;
+    }
+    setConfirmDelete(null);
     setMenuFor(null);
     actions.mutate(
       { type: "delete", mockupId: mockup.id },
@@ -159,6 +216,53 @@ export default function MockupLibrary({
       {
         onError: () => fail("Could not duplicate that mockup"),
         onSuccess: () => toast.success("Duplicated — the copy keeps the same arrangement"),
+      },
+    );
+  };
+
+  /**
+   * Share with, or hide from, the athlete or client.
+   *
+   * The default is hidden and stays hidden: a mockup is internal creative work
+   * until an operator decides otherwise.
+   *
+   * HONEST ABOUT WHAT THIS DOES TODAY. The flag is recorded and shown to the
+   * operator; no athlete-facing surface reads it yet. Designs have the
+   * equivalent switch enforced in Postgres by design_client_visible() plus
+   * storage policies, and mockups will need the same — a policy that widens
+   * what a client session can read is not a change to make unsupervised, so it
+   * is written up rather than guessed at. Until then the copy says so instead
+   * of implying the client can already see it.
+   */
+  const setShared = (ids: string[], visible: boolean) => {
+    setMenuFor(null);
+    if (ids.length === 0) return;
+    actions.mutate(
+      { type: "set-client-visible", mockupIds: ids, visible },
+      {
+        onError: () => fail(visible ? "Could not share that" : "Could not hide that"),
+        onSuccess: () => {
+          toast.success(
+            visible
+              ? `${ids.length === 1 ? "Shared" : `${ids.length} shared`} with ${entityName}`
+              : `${ids.length === 1 ? "Hidden" : `${ids.length} hidden`} from ${entityName}`,
+            visible
+              ? { description: "Marked for the client. The athlete-facing view that reads this is not built yet." }
+              : undefined,
+          );
+          setSelected([]);
+        },
+      },
+    );
+  };
+
+  const setCover = (folderId: string, mockupId: string | null) => {
+    actions.mutate(
+      { type: "set-folder-cover", folderId, mockupId },
+      {
+        onError: () => fail("Could not set that cover"),
+        onSuccess: () =>
+          toast.success(mockupId ? "Folder cover pinned" : "Folder cover back to whatever is first"),
       },
     );
   };
@@ -280,6 +384,8 @@ export default function MockupLibrary({
       onOpen={() => onOpen(m)}
       onDuplicate={() => duplicate(m)}
       onDelete={() => remove(m)}
+      confirmingDelete={confirmDelete === m.id}
+      onSetShared={(visible) => setShared([m.id], visible)}
       onTurnIntoAssets={() => {
         setMenuFor(null);
         onTurnIntoAssets(m);
@@ -345,20 +451,41 @@ export default function MockupLibrary({
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            const name = window.prompt("Name the folder");
-            if (!name?.trim()) return;
-            actions.mutate(
-              { type: "new-folder", name: name.trim(), sortOrder: (data?.folders.length ?? 0) },
-              { onError: () => fail("Could not create that folder") },
-            );
-          }}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
-        >
-          <FolderPlus className="h-3.5 w-3.5" /> New folder
-        </button>
+        {/*
+          Naming a folder inline rather than in window.prompt(). A native
+          browser dialog in a dark operator tool reads as a bug, cannot be
+          styled, cannot be dismissed by clicking away, and blocks the tab.
+        */}
+        {newFolder ? (
+          <input
+            autoFocus
+            placeholder="Folder name, then Enter"
+            onBlur={() => setNewFolder(false)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setNewFolder(false);
+              if (e.key !== "Enter") return;
+              const name = (e.target as HTMLInputElement).value.trim();
+              setNewFolder(false);
+              if (!name) return;
+              actions.mutate(
+                { type: "new-folder", name, sortOrder: data?.folders.length ?? 0 },
+                {
+                  onError: () => fail("Could not create that folder"),
+                  onSuccess: () => toast.success(`Folder “${name}” created`),
+                },
+              );
+            }}
+            className="rounded-full border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-card))] px-3 py-1.5 text-[12px] outline-none"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setNewFolder(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+          >
+            <FolderPlus className="h-3.5 w-3.5" /> New folder
+          </button>
+        )}
       </Toolbar>
 
       {selected.length > 0 && (
@@ -399,17 +526,25 @@ export default function MockupLibrary({
               e.target.value = "";
               if (!v) return;
               const size = data?.mockups.filter((m) => m.folderId === v).length ?? 0;
+              // Each move is reported on its own. The previous version resolved
+              // on onSettled and then claimed every one had moved, so a
+              // rejected write looked exactly like a successful one.
               Promise.all(
-                selected.map((id, i) =>
-                  new Promise<void>((resolve) =>
-                    actions.mutate(
-                      { type: "add-to-folder", folderId: v, mockupId: id, sortOrder: size + i },
-                      { onSettled: () => resolve() },
+                selected.map(
+                  (id, i) =>
+                    new Promise<boolean>((resolve) =>
+                      actions.mutate(
+                        { type: "add-to-folder", folderId: v, mockupId: id, sortOrder: size + i },
+                        { onSuccess: () => resolve(true), onError: () => resolve(false) },
+                      ),
                     ),
-                  ),
                 ),
-              ).then(() => {
-                toast.success(`${selected.length} moved`);
+              ).then((results) => {
+                const moved = results.filter(Boolean).length;
+                const failed = results.length - moved;
+                if (failed === 0) toast.success(`${moved} moved`);
+                else if (moved === 0) toast.error("None of those could be moved");
+                else toast.warning(`${moved} moved, ${failed} could not be`);
                 setSelected([]);
               });
             }}
@@ -422,6 +557,20 @@ export default function MockupLibrary({
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setShared(selected, true)}
+            className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+          >
+            <Eye className="h-3 w-3" /> Share
+          </button>
+          <button
+            type="button"
+            onClick={() => setShared(selected, false)}
+            className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+          >
+            <EyeOff className="h-3 w-3" /> Hide
+          </button>
           <button
             type="button"
             onClick={() => setSelected([])}
@@ -502,12 +651,18 @@ export default function MockupLibrary({
               type="button"
               onClick={() => {
                 setOpenFolder(null);
-                actions.mutate({
-                  type: "ungroup",
-                  folderId: open.key,
-                  mockupIds: open.mockups.map((m) => m.id),
-                  baseSortOrder: items.length,
-                });
+                actions.mutate(
+                  {
+                    type: "ungroup",
+                    folderId: open.key,
+                    mockupIds: open.mockups.map((m) => m.id),
+                    baseSortOrder: items.length,
+                  },
+                  {
+                    onError: () => fail("Could not ungroup that folder"),
+                    onSuccess: () => toast.success(`“${open.folder.name}” ungrouped`),
+                  },
+                );
               }}
               className="rounded-full border border-[hsl(var(--ax-border))] px-3 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
             >
@@ -524,15 +679,15 @@ export default function MockupLibrary({
           </div>
 
           <p className="mb-3 text-[11px] text-[hsl(var(--ax-faint))]">
-            Drag to reorder — the first mockup is the folder cover. Drag one out, or use its menu, to return it to the
-            shelf.
+            Drag to reorder. The first mockup is the cover unless you pin one. Drag one out, or use the ×, to return
+            it to the shelf.
           </p>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
             {open.mockups.map((m, i) => (
               <div
                 key={m.id}
-                className="relative"
+                className="group relative"
                 draggable
                 onDragStart={() => setDraggingMember(m.id)}
                 onDragEnd={() => setDraggingMember(null)}
@@ -557,11 +712,35 @@ export default function MockupLibrary({
                 }}
               >
                 {card(m)}
-                {i === 0 && (
-                  <span className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--ax-on-accent))]">
-                    cover
-                  </span>
-                )}
+                {/*
+                  A pinned cover beats position. The folder used to show
+                  whichever mockup happened to be first, so choosing a cover
+                  meant dragging the whole shelf around; the pin was in the
+                  data model but nothing could ever set it.
+                */}
+                {(() => {
+                  const pinned = open.folder.coverMockupId === m.id;
+                  const isCover = pinned || (!open.folder.coverMockupId && i === 0);
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setCover(open.key, pinned ? null : m.id)}
+                      title={
+                        pinned
+                          ? "Pinned as the folder cover — click to go back to whatever is first"
+                          : "Pin this as the folder cover"
+                      }
+                      className={`absolute left-1.5 top-1.5 z-20 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider transition-colors ${
+                        isCover
+                          ? "bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))]"
+                          : "bg-black/65 text-white/70 opacity-0 hover:text-white group-hover:opacity-100"
+                      }`}
+                    >
+                      {pinned ? <Star className="h-2.5 w-2.5" /> : <ImageIcon className="h-2.5 w-2.5" />}
+                      {isCover ? "cover" : "make cover"}
+                    </button>
+                  );
+                })()}
                 <button
                   type="button"
                   onClick={() =>
@@ -664,6 +843,8 @@ function MockupCard({
   onOpen,
   onDuplicate,
   onDelete,
+  confirmingDelete,
+  onSetShared,
   onTurnIntoAssets,
   onCreateProduct,
 }: {
@@ -680,6 +861,9 @@ function MockupCard({
   onOpen: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  /** Delete is armed and waiting for a second click. */
+  confirmingDelete: boolean;
+  onSetShared: (visible: boolean) => void;
   onTurnIntoAssets: () => void;
   onCreateProduct?: () => void;
 }) {
@@ -741,11 +925,19 @@ function MockupCard({
             <MenuItem icon={SquarePen} onClick={onOpen}>Open / edit</MenuItem>
             <MenuItem icon={Pencil} onClick={onStartRename}>Rename</MenuItem>
             <MenuItem icon={Copy} onClick={onDuplicate}>Duplicate</MenuItem>
+            <MenuItem
+              icon={mockup.clientVisible ? EyeOff : Eye}
+              onClick={() => onSetShared(!mockup.clientVisible)}
+            >
+              {mockup.clientVisible ? "Hide from client" : "Share with client"}
+            </MenuItem>
             <MenuItem icon={Sparkles} onClick={onTurnIntoAssets}>Turn into Assets</MenuItem>
             {onCreateProduct && (
               <MenuItem icon={PackagePlus} onClick={onCreateProduct}>Configure as Product</MenuItem>
             )}
-            <MenuItem icon={Trash2} onClick={onDelete} tone="var(--ax-amber)">Delete</MenuItem>
+            <MenuItem icon={Trash2} onClick={onDelete} tone="var(--ax-amber)">
+              {confirmingDelete ? "Click again to delete" : "Delete"}
+            </MenuItem>
           </div>
         )}
       </div>
@@ -783,6 +975,11 @@ function MockupCard({
             <Chip tone="var(--ax-amber)">No artwork</Chip>
           )}
           {mockup.productId && <Chip tone="var(--ax-violet)">Product</Chip>}
+          {mockup.clientVisible && (
+            <Chip tone="var(--ax-blue)" title="Visible to the athlete or client">
+              Shared
+            </Chip>
+          )}
         </div>
       </div>
     </div>
