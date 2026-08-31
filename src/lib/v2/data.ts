@@ -1471,7 +1471,9 @@ export function useUploadDesign(entityId: string, organizationId: string) {
       // Link it to the entity so it appears on their shelf. Client visibility
       // stays at its 'hidden' default — a freshly uploaded file has had no
       // decision made about it.
-      await t("design_athletes").insert({ design_id: designId, athlete_id: entityId, sort_order: 0 } as never);
+      await must(
+        t("design_athletes").insert({ design_id: designId, athlete_id: entityId, sort_order: 0 } as never),
+      );
 
       return { designId, path };
     },
@@ -2047,11 +2049,14 @@ export function useShelfActions(entityId: string, organizationId: string) {
     void qc.invalidateQueries({ queryKey: ["v2", "workspace", entityId] });
   };
 
+  /** Every per-entity design write. Goes through must() for the reason in its docstring. */
   const setDesignFields = (designId: string, fields: Record<string, unknown>) =>
-    t("design_athletes")
-      .update(fields as never)
-      .eq("design_id", designId)
-      .eq("athlete_id", entityId);
+    must(
+      t("design_athletes")
+        .update(fields as never)
+        .eq("design_id", designId)
+        .eq("athlete_id", entityId),
+    );
 
   const mutation = useMutation({
     mutationFn: async (job: ShelfJob) => {
@@ -2061,9 +2066,11 @@ export function useShelfActions(entityId: string, organizationId: string) {
             job.writes.map((w) =>
               w.kind === "design"
                 ? setDesignFields(w.id, { sort_order: w.sortOrder })
-                : t("design_collections")
-                    .update({ sort_order: w.sortOrder } as never)
-                    .eq("id", w.id),
+                : must(
+                    t("design_collections")
+                      .update({ sort_order: w.sortOrder } as never)
+                      .eq("id", w.id),
+                  ),
             ),
           );
           return;
@@ -2115,36 +2122,39 @@ export function useShelfActions(entityId: string, organizationId: string) {
           return;
         }
         case "set-group-visibility": {
-          await t("design_collections")
-            .update({ client_visibility: job.visibility } as never)
-            .eq("id", job.groupId)
-            .eq("athlete_id", entityId);
+          await must(
+            t("design_collections")
+              .update({ client_visibility: job.visibility } as never)
+              .eq("id", job.groupId)
+              .eq("athlete_id", entityId),
+          );
           return;
         }
         case "unlink": {
-          await t("design_athletes")
-            .delete()
-            .eq("design_id", job.designId)
-            .eq("athlete_id", entityId);
+          await must(t("design_athletes").delete().eq("design_id", job.designId).eq("athlete_id", entityId));
           return;
         }
         case "relink": {
-          await t("design_athletes").insert({
-            design_id: job.link.designId,
-            athlete_id: job.link.athleteId,
-            group_id: job.link.groupId,
-            sort_order: job.link.sortOrder,
-            client_visibility: job.link.clientVisibility,
-          } as never);
+          await must(
+            t("design_athletes").insert({
+              design_id: job.link.designId,
+              athlete_id: job.link.athleteId,
+              group_id: job.link.groupId,
+              sort_order: job.link.sortOrder,
+              client_visibility: job.link.clientVisibility,
+            } as never),
+          );
           return;
         }
         case "archive": {
           // Archiving is a property of the artwork, so it is global rather than
           // per entity. Restoring puts it back to 'concept' rather than guessing
           // at whatever it was before, since design_status has no history.
-          await t("designs")
-            .update({ status: job.archived ? "archived" : "concept" } as never)
-            .eq("id", job.designId);
+          await must(
+            t("designs")
+              .update({ status: job.archived ? "archived" : "concept" } as never)
+              .eq("id", job.designId),
+          );
           return;
         }
         case "ungroup": {
@@ -2156,7 +2166,7 @@ export function useShelfActions(entityId: string, organizationId: string) {
           // Only remove the container if V1 is not using it as a design folder.
           const stillUsed = await t("designs").select("id").eq("design_collection_id", job.groupId).limit(1);
           if (((stillUsed.data ?? []) as unknown as Row[]).length === 0) {
-            await t("design_collections").delete().eq("id", job.groupId).eq("athlete_id", entityId);
+            await must(t("design_collections").delete().eq("id", job.groupId).eq("athlete_id", entityId));
           }
           return;
         }

@@ -1,7 +1,7 @@
 # AX OS V2 — Source of Truth
 
 Living architectural record for AthleteXclusive OS V2.
-Last updated: 2026-08-26 · Audit base: `main` @ `c9c34a5` · Supabase `cuidofxidstqpgypxcop`
+Last updated: 2026-08-31 · Audit base: `main` @ `c9c34a5` · Supabase `cuidofxidstqpgypxcop`
 
 **Rules for this document**
 
@@ -266,3 +266,52 @@ Ordered by how much downstream work they unblock.
 6. **Brand column** — `brand` / `supplier` / `vendor` collapse to one.
 7. **Design linking** — `design_athletes` vs `design_associations`.
 8. **Inventory** — whether `blank_inventory_levels` is ever populated or the tables are dropped.
+
+---
+
+## 15. DECISIONS — 31 August 2026
+
+Recorded because they were decided, not because code was written.
+
+**Placement is `surface`, not `zone_id`.** `isConfigurable()` tested `zone_id`
+for "has a placement". V2 placement is freeform and the canvas clears the zone
+the instant artwork is dragged — which is every real mockup — so a finished,
+hand-positioned mockup reported as an unspecified "Idea" and both
+ready-to-configure queues could never fire. Placement is now `surface`, which
+is written whenever anything is actually placed.
+
+**Print zones are out of the V2 interface.** The last path that forced one
+(uploading artwork onto the back) no longer does. `print_zones` and
+`src/lib/v2/placements.ts` stay: the table is still maintained by V1's editor,
+older `product_print_placements` rows still carry `zone_id`, and
+zones-as-suggestions is the likely next use. Nothing in `/admin-v2` reads them.
+
+**`mockups.client_visible` (boolean, default false).** Additive, applied live.
+Deliberately not the `design_client_visibility` enum: that enum answers "which
+rendition may the client see" — production PNG or safe preview — and a mockup
+has one rendition, the flattened composite, which is already client-safe.
+
+  **TO RECONCILE / BLOCKED.** Nothing client-facing reads it yet. Designs have
+  the equivalent switch enforced in Postgres by `design_client_visible()` plus
+  storage policies; mockups need the same before a client session can see one.
+  That policy widens what a client may read and is Chase's decision, not an
+  autonomous one. Until it exists the operator interface says "marked for the
+  client — the athlete-facing view is not built yet".
+
+**`asset_folders.cover_mockup_id` and `design_collections.cover_design_id` are
+both writable.** Both were read by `coverOf()` and neither could ever be set,
+so choosing a folder cover meant reordering the shelf until the right item was
+first.
+
+**Naming is settled and written down.** See `AX_V2_NAMING.md`. The interface
+word for a `mockups` row with `kind='concept'` is **Mockup**, everywhere.
+"Product concept" is a storage discriminator and does not appear on screen.
+
+**Every V2 write checks its error.** Supabase returns errors rather than
+throwing them, and most writes in `src/lib/v2/data.ts` ignored the result — a
+rejected change resolved happily, toasted success, refetched and put the old
+value back. All of them now go through `must()`.
+
+**V1 decommissioning has its own document.** `AX_V1_DECOMMISSIONING.md`: what
+V2 has taken over, what V1 still owns on purpose, and the four steps that must
+happen before any table is dropped. It authorises no deletion.
