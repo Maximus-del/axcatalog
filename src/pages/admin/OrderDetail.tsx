@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { useAdminOrderDetail } from "@/hooks/useAdminOrderDetail";
 import {
   CARRIERS,
+  DRAFT_STATUS,
   nextStatuses,
   STATUS_LABEL,
   trackingUrl,
@@ -112,6 +113,7 @@ export default function OrderDetail() {
       const { data } = await supabase
         .from("bulk_order_requests")
         .select("id, total_units")
+        .neq("status", DRAFT_STATUS)
         .eq(filterCol, filterVal);
       if (cancelled) return;
       setClientStats({

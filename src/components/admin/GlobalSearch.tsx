@@ -10,6 +10,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import { supabase } from "@/integrations/supabase/client";
+import { DRAFT_STATUS } from "@/lib/order-status";
 import { displayNameOf, entityTypeOf, rolesOf, AX_ROLES, ENTITY_TYPES } from "@/lib/ecosystem/entity";
 import {
   Package,
@@ -105,6 +106,7 @@ export function GlobalSearch({ open, onOpenChange }: Props) {
         supabase
           .from("bulk_order_requests")
           .select("id, customer_name, status, created_at")
+          .neq("status", DRAFT_STATUS)
           .ilike("customer_name", like)
           .order("created_at", { ascending: false })
           .limit(5),

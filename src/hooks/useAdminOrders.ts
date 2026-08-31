@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { BulkOrderStatus } from "@/lib/order-status";
+import { DRAFT_STATUS, type BulkOrderStatus } from "@/lib/order-status";
 
 export interface AdminOrderRow {
   id: string;
@@ -44,6 +44,8 @@ export function useAdminOrders() {
          athlete:athletes!bulk_order_requests_athlete_id_fkey(id, full_name, first_name, last_name),
          team:teams!bulk_order_requests_team_id_fkey(id, name)`,
       )
+      // A V2 draft is an operator's working cart, not an order.
+      .neq("status", DRAFT_STATUS)
       .order("created_at", { ascending: false })
       .limit(500);
 

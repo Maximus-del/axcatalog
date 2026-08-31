@@ -8438,6 +8438,7 @@ export type Database = {
         | "typography"
         | "other"
       bulk_order_status:
+        | "draft"
         | "submitted"
         | "acknowledged"
         | "in_production"
@@ -8803,6 +8804,7 @@ export const Constants = {
         "other",
       ],
       bulk_order_status: [
+        "draft",
         "submitted",
         "acknowledged",
         "in_production",

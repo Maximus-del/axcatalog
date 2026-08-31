@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { DRAFT_STATUS } from "@/lib/order-status";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { Package, Palette, ShoppingCart, Download } from "lucide-react";
@@ -48,6 +49,7 @@ export function RecentActivity() {
         supabase
           .from("bulk_order_requests")
           .select("id, created_at, athlete_id, athletes:athlete_id(full_name, first_name, last_name)")
+          .neq("status", DRAFT_STATUS)
           .order("created_at", { ascending: false })
           .limit(10),
         supabase

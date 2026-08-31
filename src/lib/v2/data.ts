@@ -815,9 +815,13 @@ export function useDiscountBreaks() {
     queryKey: ["v2", "discount-breaks"],
     staleTime: 10 * 60_000,
     queryFn: async () => {
-      const res = await t("volume_discount_breaks").select("min_qty, discount_pct");
+      // Columns are min_units / discount_percent. The earlier min_qty /
+      // discount_pct do not exist, so every read errored and every quote
+      // silently fell back to a 0% discount.
+      const res = await t("volume_discount_breaks").select("min_units, discount_percent");
+      if (res.error) throw res.error;
       return ((res.data ?? []) as unknown as Row[])
-        .map((b) => ({ minQty: Number(b.min_qty), discountPct: Number(b.discount_pct) }))
+        .map((b) => ({ minQty: Number(b.min_units), discountPct: Number(b.discount_percent) }))
         .filter((b) => Number.isFinite(b.minQty) && Number.isFinite(b.discountPct))
         .sort((a, b) => a.minQty - b.minQty);
     },

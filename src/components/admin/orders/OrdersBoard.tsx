@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { clientName, type AdminOrderRow } from "@/hooks/useAdminOrders";
-import type { BulkOrderStatus } from "@/lib/order-status";
+import { DRAFT_STATUS, type BulkOrderStatus } from "@/lib/order-status";
 
 type ColumnKey =
   | "awaiting"
@@ -110,6 +110,7 @@ export function OrdersBoard({ baseOrders, onRefetch }: Props) {
         supabase
           .from("bulk_order_requests")
           .select("id, fulfillment_stage")
+          .neq("status", DRAFT_STATUS)
           .in("id", ids),
         supabase
           .from("bulk_order_items")

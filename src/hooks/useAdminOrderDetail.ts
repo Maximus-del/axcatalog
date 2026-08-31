@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { BulkOrderStatus } from "@/lib/order-status";
+import { DRAFT_STATUS, type BulkOrderStatus } from "@/lib/order-status";
 import { parseOrderItemNotes } from "@/lib/order-item-notes";
 
 export interface OrderItem {
@@ -82,6 +82,9 @@ export function useAdminOrderDetail(id: string | undefined) {
          team:teams!bulk_order_requests_team_id_fkey(id, name)`,
       )
       .eq("id", id)
+      // A V2 draft cart must not open in V1's order detail, which moves
+      // statuses and money.
+      .neq("status", DRAFT_STATUS)
       .maybeSingle();
 
     if (orderErr || !data) {

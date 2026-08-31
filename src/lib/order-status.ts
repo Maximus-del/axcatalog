@@ -2,6 +2,14 @@ import type { Database } from "@/integrations/supabase/types";
 
 export type BulkOrderStatus = Database["public"]["Enums"]["bulk_order_status"];
 
+/**
+ * `draft` is an OPERATOR'S WORKING CART, not an order. It exists in the enum so
+ * V2 can park a cart on the same table, but it is deliberately absent from every
+ * V1 list below: V1's order surfaces are the order lifecycle, which a draft has
+ * not entered. Reads that could surface one filter with `.neq("status", DRAFT)`.
+ */
+export const DRAFT_STATUS = "draft" satisfies BulkOrderStatus;
+
 export const ORDER_STATUSES: BulkOrderStatus[] = [
   "submitted",
   "acknowledged",
@@ -19,6 +27,7 @@ export const OPEN_STATUSES: BulkOrderStatus[] = [
 ];
 
 export const STATUS_LABEL: Record<BulkOrderStatus, string> = {
+  draft: "Draft cart",
   submitted: "Submitted",
   acknowledged: "Acknowledged",
   in_production: "In Production",
@@ -30,6 +39,7 @@ export const STATUS_LABEL: Record<BulkOrderStatus, string> = {
 
 /** Tailwind classes for colored status pills. */
 export const STATUS_BADGE_CLASS: Record<BulkOrderStatus, string> = {
+  draft: "bg-muted/50 text-muted-foreground border-dashed border-border",
   submitted: "bg-accent/15 text-accent border-accent/30",
   acknowledged: "bg-blue-500/15 text-blue-400 border-blue-500/30",
   in_production: "bg-orange-500/15 text-orange-400 border-orange-500/30",
@@ -42,6 +52,9 @@ export const STATUS_BADGE_CLASS: Record<BulkOrderStatus, string> = {
 /** Possible next statuses an admin can move an order into. */
 export function nextStatuses(current: BulkOrderStatus): BulkOrderStatus[] {
   switch (current) {
+    // A draft leaves the cart only by being deliberately submitted.
+    case "draft":
+      return ["submitted"];
     case "submitted":
       return ["acknowledged", "cancelled"];
     case "acknowledged":
