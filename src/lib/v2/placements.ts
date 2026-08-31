@@ -1,5 +1,19 @@
 // AX OS V2 — print placement presets.
 //
+// CURRENTLY UNREFERENCED BY THE V2 INTERFACE, DELIBERATELY KEPT.
+//
+// V2 placement is freeform: the canvas offers two movable alignment lines and
+// no zone chips, and the last path that forced a zone (uploading artwork
+// straight onto the back) stopped doing so. Nothing in /admin-v2 reads these
+// presets today.
+//
+// They stay because the contract they describe is still live: product_print_
+// placements.zone_id/zone_label still exist and still hold values on older
+// rows, V1's print-zone editor still maintains the `print_zones` table, and
+// the unit-conversion bug fixed in toPercent() is the kind that comes back if
+// the knowledge is deleted with the code. Reintroducing zones as SUGGESTIONS
+// ("that's basically left chest", via nearestZone) is the likely next use.
+//
 // Speed + consistency, not Illustrator. The seven live `print_zones` rows are
 // the source of truth; these presets are the fallback and the ordering/grouping
 // the operator sees. A placement is a preset choice, never a freehand transform.

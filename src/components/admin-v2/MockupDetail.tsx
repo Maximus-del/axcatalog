@@ -36,6 +36,7 @@ import { resolveBlankImage } from "@/lib/v2/blank-image";
 import { audienceForRoles, fmtMoney, priceFor } from "@/lib/v2/pricing";
 import type { Entity, Mockup } from "@/lib/v2/types";
 import { AssetImage } from "./primitives";
+import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 
 // A mockup's own page: everything you can do with one, in one place.
 //
@@ -186,44 +187,25 @@ export default function MockupDetail({
                 </div>
               )}
 
-              <div className="relative mx-auto aspect-square w-full max-w-[460px] overflow-hidden rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.04]">
-                {garment.url ? (
-                  <img src={garment.url} alt={mockup.title} className="h-full w-full object-contain" />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-[12px] text-[hsl(var(--ax-faint))]">
-                    No garment photograph
-                  </div>
-                )}
+              <GarmentFrame
+                url={garment.url}
+                alt={mockup.title}
+                empty="No garment photograph"
+                badge={
+                  garment.approximate ? (
+                    <ApproximateBadge>
+                      {garment.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"}
+                    </ApproximateBadge>
+                  ) : undefined
+                }
+              >
+                <PlacedOverlay placed={placed} designsById={designsById} />
                 {composition.isLoading && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 text-[12px] text-white/80">
                     Loading composition…
                   </div>
                 )}
-                {placed.map((p) => {
-                  const d = designsById.get(p.designId);
-                  return (
-                    <div
-                      key={p.id}
-                      className="pointer-events-none absolute"
-                      style={{
-                        left: `${p.box.x}%`,
-                        top: `${p.box.y}%`,
-                        width: `${p.box.w}%`,
-                        height: `${p.box.h}%`,
-                        transform: p.rotation ? `rotate(${p.rotation}deg)` : undefined,
-                      }}
-                    >
-                      <AssetImage
-                        bucket={d?.fileBucket}
-                        path={d?.filePath}
-                        alt={d?.title ?? "Artwork"}
-                        className="h-full w-full"
-                        fit="contain"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+              </GarmentFrame>
 
               <div className="mx-auto mt-2 flex max-w-[460px] items-center gap-2">
                 <button

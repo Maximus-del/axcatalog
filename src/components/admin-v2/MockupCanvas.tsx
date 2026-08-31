@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Info, Ruler, Trash2 } from "lucide-react";
+import { AlignCenterHorizontal, Crosshair, Info, Ruler, Trash2 } from "lucide-react";
 import {
+  DEFAULT_GUIDES,
+  DRAG_MIME,
+  applyAspect,
+  centreOn,
+  matchesAspect,
   moveBox,
+  placementStyle,
   resizeBox,
   type Box,
+  type Guides,
   type Handle,
   type PlacedDesign,
 } from "@/lib/v2/placement-geometry";
@@ -26,17 +33,6 @@ import { AssetImage } from "./primitives";
 // owns exactly two things the tests cannot: converting pointer pixels into
 // percentages, and measuring each artwork's natural aspect ratio so it can be
 // scaled without distortion.
-
-export interface Guides {
-  /** Percentage across the garment box. */
-  x: number;
-  /** Percentage down the garment box. */
-  y: number;
-}
-
-export const DEFAULT_GUIDES: Guides = { x: 50, y: 34 };
-
-export const DRAG_MIME = "application/x-ax-design-id";
 
 export default function MockupCanvas({
   garmentUrl,
@@ -78,8 +74,42 @@ export default function MockupCanvas({
     setAspects((prev) => (prev[designId] === aspect ? prev : { ...prev, [designId]: aspect }));
   }, []);
 
+  /**
+   * ARTWORK THAT WAS PLACED BEFORE IT WAS MEASURED.
+   *
+   * A design can be placed from the shelf or dropped before its image has ever
+   * decoded, and those paths have no aspect to work from — they assume square.
+   * The preview hid the error (object-contain letterboxes inside the box) but
+   * the SAVED w_pct/h_pct described a box the artwork does not fill, and the
+   * production spec is derived from exactly those numbers.
+   *
+   * Every resize path is aspect-preserving, so a box whose proportions do not
+   * match the measured artwork was built on a stale assumption and never on
+   * operator intent — correcting it is always right. One pass settles it: after
+   * the fix the proportions match and this stops firing.
+   */
+  useEffect(() => {
+    let changed = false;
+    const next = placed.map((p) => {
+      const aspect = aspects[p.designId];
+      if (!aspect || matchesAspect(p.box, aspect)) return p;
+      changed = true;
+      return { ...p, box: applyAspect(p.box, aspect) };
+    });
+    if (changed) onChange(next);
+    // onChange is re-created every render by the host; depending on it would
+    // loop. The inputs that matter are the measurements and the placements.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aspects, placed]);
+
   const mine = placed.filter((p) => p.surface === surface);
   const selectedItem = mine.find((p) => p.id === selected) ?? null;
+
+  /** Put the selected artwork exactly on the alignment lines. */
+  const centreSelected = (axes: { x?: number; y?: number }) => {
+    if (!selectedItem) return;
+    update(selectedItem.id, centreOn(selectedItem.box, axes));
+  };
 
   /** Pointer pixels → percentage of the garment frame. */
   const pctDelta = (dxPx: number, dyPx: number) => {
@@ -94,14 +124,15 @@ export default function MockupCanvas({
     return { x: ((clientX - r.left) / r.width) * 100, y: ((clientY - r.top) / r.height) * 100 };
   };
 
-  const update = (id: string, box: Box, zone: { zoneId: string | null; zoneLabel: string | null } | null) => {
-    onChange(
-      placed.map((p) =>
-        p.id === id
-          ? { ...p, box, ...(zone ? { zoneId: zone.zoneId, zoneLabel: zone.zoneLabel } : {}) }
-          : p,
-      ),
-    );
+  /**
+   * Move or resize one placement.
+   *
+   * Always clears the zone label. Artwork that has been touched by hand is
+   * wherever the operator put it, and a record still claiming "left chest"
+   * would be a lie that survives into the production spec.
+   */
+  const update = (id: string, box: Box) => {
+    onChange(placed.map((p) => (p.id === id ? { ...p, box, zoneId: null, zoneLabel: null } : p)));
   };
 
   const remove = (id: string) => {
@@ -126,9 +157,7 @@ export default function MockupCanvas({
       const next = handle
         ? resizeBox(startBox, handle, dx, dy, aspectOf(item.designId))
         : moveBox(startBox, dx, dy);
-      // Moving by hand releases the zone label — the artwork is wherever the
-      // operator put it, and claiming otherwise would be a lie on the record.
-      update(item.id, next, { zoneId: null, zoneLabel: null });
+      update(item.id, next);
     };
     const up = (ev: PointerEvent) => {
       target.releasePointerCapture(ev.pointerId);
@@ -194,11 +223,15 @@ export default function MockupCanvas({
       const d = nudges[e.key];
       if (!d) return;
       e.preventDefault();
-      update(selectedItem.id, moveBox(selectedItem.box, d[0], d[1]), { zoneId: null, zoneLabel: null });
+      update(selectedItem.id, moveBox(selectedItem.box, d[0], d[1]));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+    // `update` and `remove` are re-created every render and close over `placed`,
+    // which is exactly what this listener needs to read; depending on the
+    // placement it acts on is enough to keep it current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedItem, placed]);
 
   /* ---------------------------------------------------------------- render */
 
@@ -275,13 +308,10 @@ export default function MockupCanvas({
               key={item.id}
               onPointerDown={(e) => startDrag(e, item, null)}
               className={`absolute cursor-move touch-none ${isSelected ? "ring-1 ring-[hsl(var(--ax-accent))]" : ""}`}
-              style={{
-                left: `${item.box.x}%`,
-                top: `${item.box.y}%`,
-                width: `${item.box.w}%`,
-                height: `${item.box.h}%`,
-                transform: item.rotation ? `rotate(${item.rotation}deg)` : undefined,
-              }}
+              // Same conversion every other preview uses. This component keeps
+              // its own frame element because it owns a ref, drop handlers and
+              // the alignment lines — but not its own copy of the maths.
+              style={placementStyle(item)}
             >
               <AssetImage
                 bucket={design?.fileBucket}
@@ -347,10 +377,37 @@ export default function MockupCanvas({
         <button
           type="button"
           onClick={() => onGuidesChange(DEFAULT_GUIDES)}
+          title="Back to centred horizontally, chest height vertically"
           className="rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
         >
-          Recentre lines
+          Reset lines
         </button>
+
+        {/*
+          The lines were references and nothing else, which left "centre this"
+          as an eyeball job that comes out a percent off. These put the artwork
+          exactly on them — still on demand, still never automatic.
+        */}
+        {selectedItem && (
+          <>
+            <button
+              type="button"
+              onClick={() => centreSelected({ x: guides.x })}
+              title="Centre the selected artwork on the vertical line"
+              className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+            >
+              <AlignCenterHorizontal className="h-3 w-3" /> Centre across
+            </button>
+            <button
+              type="button"
+              onClick={() => centreSelected({ x: guides.x, y: guides.y })}
+              title="Centre the selected artwork on both lines"
+              className="inline-flex items-center gap-1 rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+            >
+              <Crosshair className="h-3 w-3" /> Centre on lines
+            </button>
+          </>
+        )}
 
         {selectedItem && (
           <button
@@ -367,7 +424,7 @@ export default function MockupCanvas({
         <p className="text-[11px] text-[hsl(var(--ax-faint))]">
           {selectedItem
             ? `${Math.round(selectedItem.box.w)}% of garment width. Corner handles keep the artwork's proportions; arrow keys nudge.`
-            : "Drag artwork anywhere. The dashed lines are references only — nothing snaps to them."}
+            : "Drag artwork anywhere. The dashed lines are references — nothing snaps to them unless you ask."}
         </p>
         <span
           className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-[hsl(var(--ax-secondary))]"

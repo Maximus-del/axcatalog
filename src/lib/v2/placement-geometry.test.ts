@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   MIN_VISIBLE,
   MIN_W,
+  applyAspect,
   boxAtPoint,
+  centreOn,
+  matchesAspect,
   clampBox,
   defaultBox,
   fitToZone,
@@ -290,5 +293,56 @@ describe("usedSurfaces", () => {
 
   it("reports nothing for an empty mockup", () => {
     expect(usedSurfaces([])).toEqual([]);
+  });
+});
+
+describe("applyAspect — correcting a box built on an assumed square", () => {
+  it("keeps width and centre, and fixes height", () => {
+    const box = { x: 33, y: 20, w: 34, h: 34 };
+    const out = applyAspect(box, 2);
+    expect(out.w).toBe(34);
+    expect(out.h).toBe(17);
+    // centre stays where the operator put it
+    expect(out.y + out.h / 2).toBeCloseTo(box.y + box.h / 2, 5);
+    expect(out.x).toBe(33);
+  });
+
+  it("is idempotent — a corrected box does not drift on a second pass", () => {
+    const once = applyAspect({ x: 10, y: 10, w: 40, h: 40 }, 1.5);
+    expect(applyAspect(once, 1.5)).toEqual(once);
+  });
+
+  it("leaves a box alone when it already matches", () => {
+    const box = applyAspect({ x: 10, y: 10, w: 30, h: 30 }, 0.75);
+    expect(matchesAspect(box, 0.75)).toBe(true);
+  });
+});
+
+describe("matchesAspect", () => {
+  it("spots the square-by-default bug", () => {
+    expect(matchesAspect({ x: 0, y: 0, w: 34, h: 34 }, 1.78)).toBe(false);
+  });
+
+  it("tolerates rounding", () => {
+    expect(matchesAspect({ x: 0, y: 0, w: 34, h: 22.67 }, 1.5)).toBe(true);
+  });
+
+  it("says yes to nonsense rather than corrupting a box", () => {
+    expect(matchesAspect({ x: 0, y: 0, w: 34, h: 34 }, 0)).toBe(true);
+    expect(matchesAspect({ x: 0, y: 0, w: 34, h: 0 }, 1.5)).toBe(true);
+  });
+});
+
+describe("centreOn — what the alignment lines are for", () => {
+  it("centres on both axes", () => {
+    const out = centreOn({ x: 0, y: 0, w: 20, h: 10 }, { x: 50, y: 34 });
+    expect(out.x + out.w / 2).toBeCloseTo(50, 5);
+    expect(out.y + out.h / 2).toBeCloseTo(34, 5);
+  });
+
+  it("touches only the axis it is given", () => {
+    const out = centreOn({ x: 7, y: 9, w: 20, h: 10 }, { x: 50 });
+    expect(out.x + out.w / 2).toBeCloseTo(50, 5);
+    expect(out.y).toBe(9);
   });
 });

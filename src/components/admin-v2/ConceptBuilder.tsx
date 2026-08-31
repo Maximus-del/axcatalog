@@ -9,27 +9,28 @@ import {
   useDesignShelf,
   useDesigns,
   useMockupForEdit,
-  usePrintZones,
   useUpdateMockup,
   useUploadDesign,
 } from "@/lib/v2/data";
 import { expandVariants, overLimit, unphotographed, variantTitle, MAX_VARIANTS } from "@/lib/v2/variants";
-import MockupCanvas, { DEFAULT_GUIDES, DRAG_MIME, type Guides } from "./MockupCanvas";
+import MockupCanvas from "./MockupCanvas";
 import {
+  DEFAULT_GUIDES,
+  DRAG_MIME,
   boxAtPoint,
   defaultBox,
-  fitToZone,
   toRows,
   usedSurfaces,
+  type Guides,
   type PlacedDesign,
 } from "@/lib/v2/placement-geometry";
-import { presetById, presetsFor, type PlacementPreset } from "@/lib/v2/placements";
 import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
 import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
 import { storeMockupComposite } from "@/lib/v2/mockup-export";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
 import { AssetImage, Chip, Skeleton } from "./primitives";
+import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 import type { Blank, Design, Entity } from "@/lib/v2/types";
 
 // CREATE MOCKUP — Design → Blank → Colour → Placement.
@@ -121,17 +122,6 @@ export default function ConceptBuilder({
   );
 
   const color = blank?.colors.find((c) => c.name === colorName) ?? null;
-
-  // Placement geometry comes from the live `print_zones` rows — the same seven
-  // rectangles V1's print-zone editor maintains — merged over the built-in
-  // presets. A zone corrected in V1 is corrected here, with no second copy.
-  const zonesQ = usePrintZones();
-  const presets = useMemo(() => {
-    const merged = zonesQ.data;
-    if (!merged) return presetsFor(blank?.garmentType);
-    const category = presetsFor(blank?.garmentType)[0]?.garmentCategory ?? "apparel";
-    return merged.filter((p) => p.garmentCategory === category);
-  }, [zonesQ.data, blank?.garmentType]);
 
   const garmentImage = useMemo(
     () => resolveBlankImage({ blank, colorName, surface: surface as Surface }),
@@ -389,19 +379,20 @@ export default function ConceptBuilder({
         // otherwise. Marking it production-ready would make productionReady lie.
         productionReady: false,
       });
-      const backZone = presets.find((p) => p.zoneId === "center_back");
+      // NO ZONE. This was the last path in V2 that snapped artwork into a
+      // print-zone rectangle — center_back — and stamped the record with a zone
+      // the operator never chose. Placement is freeform everywhere else; a file
+      // arriving by upload is not a reason to make it the exception.
       setPlaced((prev) => [
         ...prev,
         {
           id: `${designId}-back-${Date.now()}`,
           designId,
           surface: "back",
-          box: backZone
-            ? fitToZone({ zoneId: backZone.zoneId, label: backZone.label, surface: backZone.surface, x: backZone.x, y: backZone.y, w: backZone.w, h: backZone.h }, 1)
-            : defaultBox(1),
+          box: defaultBox(1),
           rotation: 0,
-          zoneId: backZone?.zoneId ?? null,
-          zoneLabel: backZone?.label ?? null,
+          zoneId: null,
+          zoneLabel: null,
         },
       ]);
       setSurface("back");
@@ -1733,45 +1724,22 @@ function ColorwayStrip({
                   : "border-[hsl(var(--ax-border))] hover:border-[hsl(var(--ax-accent)/0.6)]"
               }`}
             >
-              <div className="relative aspect-square w-full bg-white/[0.04]">
-                {img.url ? (
-                  <img src={img.url} alt={name} className="h-full w-full object-contain" />
-                ) : (
-                  <div className="flex h-full items-center justify-center px-2 text-center text-[9px] text-[hsl(var(--ax-faint))]">
-                    No {surface} photo
-                  </div>
-                )}
-                {onThisSurface.map((pl) => {
-                  const d = designsById.get(pl.designId);
-                  return (
-                    <div
-                      key={pl.id}
-                      className="pointer-events-none absolute"
-                      style={{
-                        left: `${pl.box.x}%`,
-                        top: `${pl.box.y}%`,
-                        width: `${pl.box.w}%`,
-                        height: `${pl.box.h}%`,
-                        transform: pl.rotation ? `rotate(${pl.rotation}deg)` : undefined,
-                      }}
-                    >
-                      <AssetImage
-                        bucket={d?.fileBucket}
-                        path={d?.filePath}
-                        alt={d?.title ?? "Artwork"}
-                        className="h-full w-full"
-                        fit="contain"
-                      />
-                    </div>
-                  );
-                })}
-                {img.approximate && img.url && (
-                  <span
-                    className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-amber))]"
-                    title="Not this colourway's own photograph"
-                  />
-                )}
-              </div>
+              <GarmentFrame
+                url={img.url}
+                alt={name}
+                className="aspect-square w-full"
+                empty={<span className="text-[9px]">No {surface} photo</span>}
+                badge={
+                  img.approximate ? (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-amber))]"
+                      title="Not this colourway's own photograph"
+                    />
+                  ) : undefined
+                }
+              >
+                <PlacedOverlay placed={onThisSurface} designsById={designsById} />
+              </GarmentFrame>
               <div className="truncate px-1.5 py-1 text-[9.5px] text-[hsl(var(--ax-secondary))]">{name}</div>
             </button>
           );
@@ -1802,43 +1770,20 @@ function StaticMockup({
   onEdit?: () => void;
 }) {
   return (
-    <div className="group relative mx-auto aspect-square w-full max-w-[420px] overflow-hidden rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.04]">
-      {image.url ? (
-        <img src={image.url} alt={blankName} className="h-full w-full object-contain" />
-      ) : (
-        <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-[hsl(var(--ax-faint))]">
-          No photograph for this side yet — the placement is saved regardless.
-        </div>
-      )}
-      {placed.map((p) => {
-        const d = designsById.get(p.designId);
-        return (
-          <div
-            key={p.id}
-            className="pointer-events-none absolute"
-            style={{
-              left: `${p.box.x}%`,
-              top: `${p.box.y}%`,
-              width: `${p.box.w}%`,
-              height: `${p.box.h}%`,
-              transform: p.rotation ? `rotate(${p.rotation}deg)` : undefined,
-            }}
-          >
-            <AssetImage
-              bucket={d?.fileBucket}
-              path={d?.filePath}
-              alt={d?.title ?? "Artwork"}
-              className="h-full w-full"
-              fit="contain"
-            />
-          </div>
-        );
-      })}
-      {image.approximate && image.url && (
-        <span className="absolute right-2 top-2 rounded-full bg-[hsl(var(--ax-amber)/0.92)] px-2 py-1 text-[10px] font-semibold text-black">
-          {image.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"}
-        </span>
-      )}
+    <GarmentFrame
+      url={image.url}
+      alt={blankName}
+      className="group mx-auto aspect-square w-full max-w-[420px] rounded-2xl border border-[hsl(var(--ax-border))]"
+      empty="No photograph for this side yet — the placement is saved regardless."
+      badge={
+        image.approximate ? (
+          <ApproximateBadge>
+            {image.source === "blank" ? "Catalogue photo — not this colour" : "Front photo shown"}
+          </ApproximateBadge>
+        ) : undefined
+      }
+    >
+      <PlacedOverlay placed={placed} designsById={designsById} />
 
       {onEdit && (
         <button
@@ -1852,7 +1797,7 @@ function StaticMockup({
           </span>
         </button>
       )}
-    </div>
+    </GarmentFrame>
   );
 }
 

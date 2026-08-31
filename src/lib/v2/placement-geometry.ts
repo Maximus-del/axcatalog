@@ -12,6 +12,33 @@
 // construction — there is no non-uniform scale to reach for, because there
 // should not be one.
 
+/**
+ * The two movable alignment lines, as percentages of the garment box.
+ *
+ * They live here rather than in the canvas component so a module of constants
+ * is not exported from a file of components (which breaks fast refresh), and
+ * so the geometry that reads them and the component that draws them share one
+ * definition.
+ */
+export interface Guides {
+  /** Percentage across the garment box. */
+  x: number;
+  /** Percentage down the garment box. */
+  y: number;
+}
+
+/**
+ * Where the lines start: centred horizontally, chest height vertically.
+ *
+ * y = 34 is not the middle of the garment and is not meant to be — it is where
+ * a chest print sits, which is where an operator wants a reference the moment
+ * the canvas opens.
+ */
+export const DEFAULT_GUIDES: Guides = { x: 50, y: 34 };
+
+/** Drag payload used to carry a design id from the shelf onto the canvas. */
+export const DRAG_MIME = "application/x-ax-design-id";
+
 export interface Box {
   x: number;
   y: number;
@@ -29,6 +56,32 @@ export interface PlacedDesign {
   /** The zone this was fitted to, when it was. Null once freely moved. */
   zoneId: string | null;
   zoneLabel: string | null;
+}
+
+/**
+ * The one conversion from a stored placement box to CSS.
+ *
+ * Four components used to compute this inline — the editing canvas, the
+ * colourway strip, the confirm preview and the mockup detail page — and a
+ * fifth copy draws the same maths onto a 2D canvas in mockup-export.ts. Copies
+ * of a formula do not stay equal; they drift the day one of them gets a
+ * rounding fix, and the symptom is an export that does not match the preview
+ * the client already approved.
+ */
+export function placementStyle(p: { box: Box; rotation: number }): {
+  left: string;
+  top: string;
+  width: string;
+  height: string;
+  transform: string | undefined;
+} {
+  return {
+    left: `${p.box.x}%`,
+    top: `${p.box.y}%`,
+    width: `${p.box.w}%`,
+    height: `${p.box.h}%`,
+    transform: p.rotation ? `rotate(${p.rotation}deg)` : undefined,
+  };
 }
 
 /** Smallest sensible artwork, as a percentage of the garment width. */
@@ -166,6 +219,47 @@ export function nearestZone(box: Box, zones: ZoneLike[], tolerance = 12): ZoneLi
     if (!best || d < best.d) best = { zone: z, d };
   }
   return best && best.d <= tolerance ? best.zone : null;
+}
+
+/**
+ * Re-fit a box to a newly measured artwork aspect, keeping its centre and width.
+ *
+ * Aspect is only knowable once the image has decoded, and artwork is routinely
+ * placed before that — a click-to-place from the shelf, or a drop of a design
+ * that has never rendered on the canvas. Those placements are built on an
+ * assumed square, so the SAVED w_pct/h_pct described a box the artwork does not
+ * fill. The preview hid it (object-contain letterboxes inside the box) but the
+ * stored geometry was wrong, and the production spec is computed from it.
+ *
+ * Correcting is safe at any time because every resize path is aspect-preserving:
+ * a box's proportions always equal the aspect that was assumed when it was
+ * built, so a mismatch is always a stale assumption and never operator intent.
+ */
+export function applyAspect(b: Box, artAspect: number, canvasAspect = 1): Box {
+  const h = heightFor(b.w, artAspect, canvasAspect);
+  return clampBox({ x: b.x, y: b.y + (b.h - h) / 2, w: b.w, h });
+}
+
+/** Whether a box's proportions already match the measured artwork. */
+export function matchesAspect(b: Box, artAspect: number, canvasAspect = 1, tolerance = 0.02): boolean {
+  if (!Number.isFinite(artAspect) || artAspect <= 0 || b.h <= 0) return true;
+  return Math.abs(b.w / b.h - artAspect / canvasAspect) <= tolerance;
+}
+
+/**
+ * Centre a box on a point — the alignment lines' intersection, in practice.
+ *
+ * The guides were references and nothing more, which meant "centre this on the
+ * shirt" was still done by eye and still came out 1% off. Pass only the axis
+ * you mean: centring vertically when you only wanted horizontal is exactly the
+ * kind of help nobody asks for.
+ */
+export function centreOn(b: Box, at: { x?: number; y?: number }): Box {
+  return clampBox({
+    ...b,
+    x: at.x == null ? b.x : at.x - b.w / 2,
+    y: at.y == null ? b.y : at.y - b.h / 2,
+  });
 }
 
 /** Where a design lands when dropped with no particular spot in mind. */
