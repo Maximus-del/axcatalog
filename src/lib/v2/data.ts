@@ -1041,7 +1041,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
   const [mockupRes, folderRes] = await Promise.all([
     t("mockups")
       .select(
-        "id, title, athlete_id, organization_id, blank_id, v2_blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, client_visible, product_id, collection_id, guides, created_at, updated_at",
+        "id, title, athlete_id, organization_id, v2_blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, client_visible, product_id, collection_id, guides, created_at, updated_at",
       )
       .eq("athlete_id", entityId)
       .eq("kind", "concept")
@@ -1055,32 +1055,31 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
 
   const rows = (mockupRes.data ?? []) as unknown as Row[];
   const ids = rows.map((r) => String(r.id));
-  const blankIds = [...new Set(rows.map((r) => str(r.v2_blank_id) ?? str(r.blank_id)).filter(Boolean))] as string[];
+  const blankIds = [...new Set(rows.map((r) => str(r.v2_blank_id)).filter(Boolean))] as string[];
 
   const [placementRes, blankRes] = await Promise.all([
     ids.length
       ? t("product_print_placements").select("mockup_id, surface").in("mockup_id", ids)
       : Promise.resolve({ data: [] }),
-    // LEGACY COMPATIBILITY, NOT A SOURCE OF TRUTH.
-    // Mockups made before the V2 catalog reference V1 blank ids, and a card with
-    // no garment name is worse than one naming a retired blank. v2_blanks answers
-    // first; V1 only fills ids it does not know. Delete the second query — and
-    // this comment — once no mockup references a V1 blank.
+    // V2 ONLY. The fallback that also read the legacy `blanks` table is gone:
+    // migration 20260831130000 moved every concept mockup and its placements
+    // onto v2_blanks by MANUFACTURER STYLE CODE — not by name — and the builder
+    // has written v2_blank_id exclusively since 6360180. A mockup with no V2
+    // blank now shows no garment name, which is true, rather than the name of a
+    // retired blank, which was not.
     blankIds.length
-      ? Promise.all([
-          t("v2_blanks").select("id, name").in("id", blankIds),
-          t("blanks").select("id, name").in("id", blankIds),
-        ])
-      : Promise.resolve([{ data: [] }, { data: [] }]),
+      ? t("v2_blanks").select("id, name, display_name").in("id", blankIds)
+      : Promise.resolve({ data: [] }),
   ]);
 
-  const [v2BlankRes, v1BlankRes] = blankRes as unknown as Array<{ data: unknown }>;
   const blankName = new Map(
-    ((v1BlankRes?.data ?? []) as unknown as Row[]).map((b) => [String(b.id), String(b.name ?? "")]),
+    (((blankRes as { data: unknown }).data ?? []) as unknown as Row[]).map((b) => [
+      String(b.id),
+      // Operator surface: the client name when one is set, the manufacturer's
+      // otherwise. Same rule as catalogTitle().
+      String(b.display_name ?? b.name ?? ""),
+    ]),
   );
-  for (const b of (v2BlankRes?.data ?? []) as unknown as Row[]) {
-    blankName.set(String(b.id), String(b.name ?? ""));
-  }
 
   // Which surfaces a mockup actually uses is a property of its placements, not
   // of the mockup row — a front-only mockup should say so.
@@ -1101,9 +1100,9 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
       title: String(r.title ?? "Untitled mockup"),
       entityId: str(r.athlete_id),
       organizationId: String(r.organization_id),
-      blankId: str(r.v2_blank_id) ?? str(r.blank_id),
+      blankId: str(r.v2_blank_id),
       blankName: (() => {
-        const bid = str(r.v2_blank_id) ?? str(r.blank_id);
+        const bid = str(r.v2_blank_id);
         return bid ? (blankName.get(bid) ?? null) : null;
       })(),
       colorName: str(r.color_name),

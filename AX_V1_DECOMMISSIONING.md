@@ -2,7 +2,7 @@
 
 What V2 has taken over, what V1 still owns, and what can safely be deleted.
 
-Last updated: 2026-08-31 · Branch `feature/ax-os-v2`
+Last updated: 2026-08-31 (second pass) · Branch `feature/ax-os-v2`
 
 **V1 is not being removed.** It stays live at `/admin` and remains the
 reference library. This document tracks the boundary so the two do not quietly
@@ -14,7 +14,7 @@ grow a second copy of the same thing.
 
 | V1 thing | Replaced by | Safe to drop? |
 |---|---|---|
-| `blanks`, `blank_colors`, `blank_sizes`, `blank_assortment_items` | `v2_blanks` / `v2_blank_colors` / `v2_blank_images`, fed from the Drive | **Not yet** — mockups created before the V2 catalog still carry V1 `blank_id`s, and `fetchMockupLibrary` falls back to `blanks` to name them. Drop after those rows are migrated to `v2_blank_id`; the fallback query is commented with exactly that condition. |
+| `blanks`, `blank_colors`, `blank_sizes`, `blank_assortment_items` | `v2_blanks` / `v2_blank_colors` / `v2_blank_images`, fed from the Drive | **Closer.** Every concept mockup and every one of its placements has been migrated to `v2_blank_id` (migration `20260831130000`, joined on MANUFACTURER STYLE CODE and only where that code resolved to exactly one V2 blank — never by name), and the fallback read of `blanks` is deleted. What still holds V1 blank references: the 42 legacy `mockups` rows with `kind <> 'concept'` (V1 photo rows), and any `products.blank_id` predating `products.v2_blank_id`. Those are V1's own surfaces, so V1 goes first. |
 | The `blanks` storage bucket | Drive URLs on `v2_blank_images` | Same condition as above. |
 | V1's three separate blank areas (`/admin/blanks`, `/blanks/list`, `/blanks/inventory`, `/blanks/import-images`) | One catalog at `/admin-v2/commerce?tab=blanks` | UI only — no data to drop. V1 routes stay reachable. |
 | Print-zone presets in the mockup flow | Freeform placement with alignment lines | `print_zones` stays: V1's editor maintains it and older `product_print_placements` rows still carry `zone_id`. Nothing in `/admin-v2` reads it — see the header of `src/lib/v2/placements.ts`. |
@@ -50,12 +50,19 @@ Rebuilding any of these would be duplication, not progress.
 
 ## 4. Before anything is deleted
 
-1. Migrate `mockups.blank_id` → `mockups.v2_blank_id` for every row that still
-   points at a V1 blank, and the same for `product_print_placements`.
-2. Delete the fallback query in `fetchMockupLibrary` and its comment.
-3. Confirm no V1 route still reads the table (V1 pages are not being removed,
+1. ~~Migrate `mockups.blank_id` → `mockups.v2_blank_id` for every row that still
+   points at a V1 blank, and the same for `product_print_placements`.~~ **Done**
+   — migration `20260831130000`. Re-runnable and self-limiting: it only moves a
+   row when the manufacturer's style code resolves to exactly one V2 blank, so
+   running it again as older mockups surface is safe.
+2. ~~Delete the fallback query in `fetchMockupLibrary` and its comment.~~ **Done.**
+3. Migrate the 42 `mockups` rows with `kind <> 'concept'` — V1's own photo
+   library — or accept that they pin the V1 tables for as long as V1 has a
+   mockups page.
+4. Backfill `products.v2_blank_id` for products that predate it.
+5. Confirm no V1 route still reads the table (V1 pages are not being removed,
    so this usually means the V1 page goes first).
-4. Only then drop the table.
+6. Only then drop the table.
 
 Nothing in this document authorises a destructive migration. Dropping anything
 is a decision for Chase, taken with a backup, in daylight.
