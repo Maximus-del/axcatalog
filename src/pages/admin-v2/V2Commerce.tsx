@@ -1,24 +1,34 @@
-import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useBlanks, useCollections, useProducts } from "@/lib/v2/data";
-import { AUDIENCES, fmtMoney, fmtPct, hasAccess, marginFor, priceFor } from "@/lib/v2/pricing";
-import { ISSUE_LABEL, auditColorways, colorwayIssues, imageSourceOf } from "@/lib/v2/blank-image";
+import { AUDIENCES, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
+import { colorwayIssues, photoCoverage } from "@/lib/v2/blank-image";
+import {
+  blankHref,
+  catalogHref,
+  catalogTitle,
+  type AccessFilter,
+  type CatalogTab,
+} from "@/lib/v2/catalog-nav";
 import type { AudienceKey, Blank } from "@/lib/v2/types";
-import { AssetImage, Card, Chip, EmptyState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, EmptyState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 
 // Commerce = Products, Collections, Blanks.
 //
 // One Blank Catalog, not three. Photography, pricing and availability are
 // ATTRIBUTES of the same Blank record — the V1 split into separate photo /
 // pricing / catalog areas is exactly what this replaces (§18).
+//
+// EVERY FILTER ON THIS PAGE LIVES IN THE URL. It used to live in useState,
+// which meant walking into a blank and pressing back dropped you on a reset
+// grid. The shelf you were standing on is part of where you were.
 
 const TABS = ["blanks", "products", "collections"] as const;
-type Tab = (typeof TABS)[number];
 
 export default function V2Commerce() {
   const [params, setParams] = useSearchParams();
-  const [tab, setTab] = useState<Tab>((params.get("tab") as Tab) ?? "blanks");
+  const tab = (TABS.find((t) => t === params.get("tab")) ?? "blanks") as CatalogTab;
 
   return (
     <>
@@ -28,13 +38,7 @@ export default function V2Commerce() {
           <Chip
             key={t}
             active={tab === t}
-            onClick={() => {
-              setTab(t);
-              const next = new URLSearchParams(params);
-              next.set("tab", t);
-              next.delete("filter");
-              setParams(next, { replace: true });
-            }}
+            onClick={() => setParams(new URLSearchParams(catalogHref({ tab: t }).split("?")[1] ?? ""), { replace: true })}
           >
             {t === "blanks" ? "Blank catalog" : t === "products" ? "Products" : "Collections"}
           </Chip>
@@ -53,14 +57,30 @@ export default function V2Commerce() {
 function BlankCatalog() {
   const { data, isLoading } = useBlanks();
   const [params, setParams] = useSearchParams();
-  const [audience, setAudience] = useState<AudienceKey>("athlete");
+
+  const audience = (AUDIENCES.find((a) => a.key === params.get("audience"))?.key ?? "athlete") as AudienceKey;
   // What the audience switch means for the LIST, not just for the price shown.
   // "in" is this audience's actual catalog; "out" is everything else AX stocks,
   // which is the list you shop from when deciding what to give them next.
-  const [access, setAccess] = useState<"in" | "out" | "all">("in");
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState<Blank | null>(null);
+  const access = ((["in", "out", "all"] as const).find((a) => a === params.get("access")) ?? "in") as AccessFilter;
+  const search = params.get("q") ?? "";
   const dataFilter = params.get("filter");
+
+  /** One writer for the whole toolbar, so no control can forget the others. */
+  const patch = (changes: Partial<{ audience: string; access: AccessFilter; filter: string | null; q: string }>) => {
+    setParams(
+      new URLSearchParams(
+        catalogHref({
+          tab: "blanks",
+          audience: changes.audience ?? audience,
+          access: changes.access ?? access,
+          filter: changes.filter === undefined ? dataFilter : changes.filter,
+          q: changes.q === undefined ? search : changes.q,
+        }).split("?")[1] ?? "",
+      ),
+      { replace: true },
+    );
+  };
 
   const rows = useMemo(() => {
     let out = data ?? [];
@@ -72,18 +92,15 @@ function BlankCatalog() {
     const q = search.trim().toLowerCase();
     if (q) {
       out = out.filter((b) =>
-        [b.name, b.brand, b.styleNumber, b.sku, b.garmentType].filter(Boolean).join(" ").toLowerCase().includes(q),
+        [b.name, b.displayName, b.brand, b.styleNumber, b.sku, b.garmentType]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
       );
     }
-    return [...out].sort((a, b) => a.name.localeCompare(b.name));
+    return [...out].sort((a, b) => catalogTitle(a).localeCompare(catalogTitle(b)));
   }, [data, search, dataFilter, access, audience]);
-
-  const setFilter = (f: string | null) => {
-    const next = new URLSearchParams(params);
-    if (f) next.set("filter", f);
-    else next.delete("filter");
-    setParams(next, { replace: true });
-  };
 
   const inCatalog = (data ?? []).filter((b) => hasAccess(b, audience)).length;
   const outOfCatalog = (data ?? []).length - inCatalog;
@@ -98,7 +115,7 @@ function BlankCatalog() {
           <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--ax-faint))]" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => patch({ q: e.target.value })}
             placeholder="Search blanks by name, brand, style or SKU…"
             className="w-full rounded-xl border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] py-2.5 pl-10 pr-4 text-[14px] outline-none placeholder:text-[hsl(var(--ax-faint))] focus:border-[hsl(var(--ax-accent))]"
           />
@@ -107,36 +124,36 @@ function BlankCatalog() {
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">Audience</span>
           {AUDIENCES.map((a) => (
-            <Chip key={a.key} active={audience === a.key} onClick={() => setAudience(a.key)}>
+            <Chip key={a.key} active={audience === a.key} onClick={() => patch({ audience: a.key })}>
               {a.label}
             </Chip>
           ))}
           <span className="mx-1 h-4 w-px bg-[hsl(var(--ax-border))]" />
-          <Chip active={access === "in"} onClick={() => setAccess("in")}>
+          <Chip active={access === "in"} onClick={() => patch({ access: "in" })}>
             In this catalog {inCatalog}
           </Chip>
-          <Chip active={access === "out"} onClick={() => setAccess("out")}>
+          <Chip active={access === "out"} onClick={() => patch({ access: "out" })}>
             Not yet {outOfCatalog}
           </Chip>
-          <Chip active={access === "all"} onClick={() => setAccess("all")}>
+          <Chip active={access === "all"} onClick={() => patch({ access: "all" })}>
             Every blank {data?.length ?? 0}
           </Chip>
           <span className="mx-1 h-4 w-px bg-[hsl(var(--ax-border))]" />
-          <Chip active={!dataFilter} onClick={() => setFilter(null)}>
+          <Chip active={!dataFilter} onClick={() => patch({ filter: null })}>
             All {data?.length ?? 0}
           </Chip>
           {missingCost > 0 && (
-            <Chip active={dataFilter === "missing_cost"} onClick={() => setFilter("missing_cost")}>
+            <Chip active={dataFilter === "missing_cost"} onClick={() => patch({ filter: "missing_cost" })}>
               No cost {missingCost}
             </Chip>
           )}
           {missingPhoto > 0 && (
-            <Chip active={dataFilter === "missing_photo"} onClick={() => setFilter("missing_photo")}>
+            <Chip active={dataFilter === "missing_photo"} onClick={() => patch({ filter: "missing_photo" })}>
               No photo {missingPhoto}
             </Chip>
           )}
           {missingAssort > 0 && (
-            <Chip active={dataFilter === "missing_assortment"} onClick={() => setFilter("missing_assortment")}>
+            <Chip active={dataFilter === "missing_assortment"} onClick={() => patch({ filter: "missing_assortment" })}>
               No assortment {missingAssort}
             </Chip>
           )}
@@ -146,13 +163,12 @@ function BlankCatalog() {
           that is not wired. In V2 the Drive is the curation — 03_APPROVED holds
           exactly what AX sells — so every blank is in every audience and the
           access filter has nothing to separate. Pricing comes from Shopify,
-          which is not connected. Leaving the old copy would have described
-          dimming that never happens and prices that never render.
+          which is not connected.
         */}
         <p className="text-[11px] text-[hsl(var(--ax-faint))]">
           Access and price are separate questions. Every blank in the V2 catalog is available to every audience —
           curation happens in the Drive, so nothing is dimmed yet. Pricing comes from Shopify, which is not connected,
-          so prices read “—”.
+          so prices read “—”. Click a garment, or any single colour, to open it.
         </p>
       </div>
 
@@ -167,220 +183,80 @@ function BlankCatalog() {
       {!isLoading && rows.length === 0 && <EmptyState>No blank matches that filter.</EmptyState>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {rows.map((b) => {
-          const eligible = hasAccess(b, audience);
-          return (
-            <Card key={b.id} className={`p-0 ${eligible ? "" : "opacity-45"}`} onClick={() => setOpen(b)}>
-              <AssetImage url={b.imageUrl} alt={b.name} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
-              <div className="p-2.5">
-                <div className="truncate text-[12px] font-medium">{b.name}</div>
-                <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
-                  {[b.brand, b.styleNumber].filter(Boolean).join(" · ") || "No brand recorded"}
-                </div>
-
-                <div className="mt-1.5 flex items-center justify-between text-[11px]">
-                  <span className="font-medium tabular-nums text-[hsl(var(--ax-accent))]">
-                    {fmtMoney(priceFor(b, audience))}
-                  </span>
-                  <span className="tabular-nums text-[hsl(var(--ax-faint))]">
-                    {b.cost != null ? `cost ${fmtMoney(b.cost)}` : "no cost"}
-                  </span>
-                </div>
-
-                <div className="mt-2 flex items-center gap-1">
-                  {b.colors.slice(0, 7).map((c) => (
-                    <span
-                      key={c.id}
-                      title={c.name}
-                      className="h-3 w-3 rounded-full border border-white/20"
-                      style={{ background: c.hex ?? "#555" }}
-                    />
-                  ))}
-                  {b.colors.length > 7 && (
-                    <span className="text-[10px] text-[hsl(var(--ax-faint))]">+{b.colors.length - 7}</span>
-                  )}
-                  {b.colors.length === 0 && <span className="text-[10px] text-[hsl(var(--ax-faint))]">no colours</span>}
-                </div>
-
-                <div className="mt-1.5 truncate text-[10px] text-[hsl(var(--ax-faint))]">
-                  {b.sizes.length > 0 ? b.sizes.join(" · ") : "no sizes"}
-                </div>
-
-                {!eligible && <div className="mt-1.5 text-[10px] text-[hsl(var(--ax-red))]">not in this catalog</div>}
-              </div>
-            </Card>
-          );
-        })}
+        {rows.map((b) => (
+          <BlankCard key={b.id} blank={b} audience={audience} />
+        ))}
       </div>
-
-      {open && <BlankDrawer blank={open} audience={audience} onClose={() => setOpen(null)} />}
     </>
   );
 }
 
-function BlankDrawer({ blank, audience, onClose }: { blank: Blank; audience: AudienceKey; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-black/70" />
-      <div className="admin-os relative h-full w-full max-w-md overflow-y-auto scroll-touch border-l border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-canvas))] p-5 text-[hsl(var(--ax-ink))]">
-        <button type="button" onClick={onClose} className="mb-4 text-[12px] text-[hsl(var(--ax-faint))]">
-          Close
-        </button>
-        <AssetImage url={blank.imageUrl} alt={blank.name} className="mb-4 aspect-square w-full rounded-xl bg-white/[0.03]" fit="contain" />
-        <h2 className="text-[18px] font-semibold">{blank.name}</h2>
-        <p className="mt-0.5 text-[12px] text-[hsl(var(--ax-faint))]">
-          {[blank.brand, blank.styleNumber, blank.sku].filter(Boolean).join(" · ")}
-        </p>
-
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          {AUDIENCES.map((a) => (
-            <div
-              key={a.key}
-              className="ax-card px-3 py-2"
-              style={a.key === audience ? { borderColor: "hsl(var(--ax-accent) / 0.5)" } : undefined}
-            >
-              <div className="text-[10px] uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">{a.label}</div>
-              <div className="text-[15px] font-semibold tabular-nums">{fmtMoney(priceFor(blank, a.key))}</div>
-              <div className="text-[10px] text-[hsl(var(--ax-faint))]">
-                {hasAccess(blank, a.key) ? `margin ${fmtPct(marginFor(blank, a.key))}` : "no access"}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <Detail label="Cost" value={fmtMoney(blank.cost)} />
-        <Detail label="Availability" value={blank.availability} />
-        <Detail label="Assortments" value={blank.assortments.join(", ") || "none — invisible in the builder"} />
-        <Detail label="Sizes" value={blank.sizes.join(" · ") || "none recorded"} />
-
-        <ColorwayAudit blank={blank} />
-
-        <div className="mt-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-          Colours ({blank.colors.length})
-        </div>
-        <div className="mt-2 grid grid-cols-4 gap-2">
-          {blank.colors.map((c) => (
-            <div key={c.id} className="text-center">
-              {c.imageUrl ? (
-                <AssetImage url={c.imageUrl} alt={c.name} className="aspect-square w-full rounded-lg bg-white/[0.03]" fit="contain" />
-              ) : (
-                <div className="aspect-square w-full rounded-lg" style={{ background: c.hex ?? "#444" }} />
-              )}
-              <div className="mt-1 truncate text-[9px] text-[hsl(var(--ax-faint))]">{c.name}</div>
-            </div>
-          ))}
-        </div>
-
-        <a
-          href={`/admin/blanks/${blank.id}`}
-          className="mt-5 block rounded-full border border-[hsl(var(--ax-border))] py-2 text-center text-[12px] text-[hsl(var(--ax-secondary))]"
-        >
-          Edit in V1
-        </a>
-      </div>
-    </div>
-  );
-}
-
 /**
- * Front and back, side by side, per colourway.
+ * A blank, and every colour it comes in, each one its own destination.
  *
- * Built after a real mismatch shipped: a hoodie whose front and back were
- * different colours, because the two surfaces were being served by two
- * different systems. Seeing them adjacent is the only way to catch that class
- * of error, and the source label under each one says WHY a pair is suspect
- * rather than leaving it to be noticed by eye.
+ * Structured as a plain container holding sibling links rather than one big
+ * clickable card, because the colour swatches have to be links in their own
+ * right — a link inside a link is invalid HTML and a button inside a button
+ * does not fire. That constraint is also the better interaction: the swatch row
+ * stopped being decoration the moment it became the fastest way to open the
+ * exact garment you have in mind.
  */
-function ColorwayAudit({ blank }: { blank: Blank }) {
-  const [openAudit, setOpenAudit] = useState(false);
-  const issues = auditColorways(blank);
-  const available = blank.colors.filter((c) => c.available);
+function BlankCard({ blank, audience }: { blank: Blank; audience: AudienceKey }) {
+  const eligible = hasAccess(blank, audience);
+  const coverage = photoCoverage(blank);
+  const flagged = blank.colors.filter((c) => c.available && colorwayIssues(c).length > 0).length;
+  const shown = blank.colors.slice(0, 7);
 
   return (
-    <section className="mt-5">
-      <button
-        type="button"
-        onClick={() => setOpenAudit((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-lg border border-[hsl(var(--ax-border))] px-3 py-2 text-left"
-      >
-        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-          Photography audit
-        </span>
-        <span
-          className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold"
-          style={{
-            background: issues.length ? "hsl(var(--ax-amber) / 0.16)" : "hsl(var(--ax-accent) / 0.16)",
-            color: issues.length ? "hsl(var(--ax-amber))" : "hsl(var(--ax-accent))",
-          }}
-        >
-          {issues.length ? `${issues.length} to check` : "All matched"}
-        </span>
-      </button>
+    <div className={`ax-card ax-card-hover overflow-hidden p-0 transition-all ${eligible ? "" : "opacity-45"}`}>
+      <Link to={blankHref(blank.id)} className="block" title={`Open ${catalogTitle(blank)}`}>
+        <AssetImage url={blank.imageUrl} alt={catalogTitle(blank)} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
+        <div className="px-2.5 pt-2.5">
+          <div className="truncate text-[12px] font-medium">{catalogTitle(blank)}</div>
+          <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
+            {[blank.brand, blank.styleNumber].filter(Boolean).join(" · ") || "No brand recorded"}
+          </div>
 
-      {openAudit && (
-        <div className="mt-2 space-y-2">
-          {available.map((c) => {
-            const problems = colorwayIssues(c);
-            return (
-              <div
-                key={c.id}
-                className={`rounded-lg border p-2 ${
-                  problems.length
-                    ? "border-[hsl(var(--ax-amber)/0.45)] bg-[hsl(var(--ax-amber)/0.05)]"
-                    : "border-[hsl(var(--ax-border))]"
-                }`}
-              >
-                <div className="mb-1.5 flex items-baseline gap-2">
-                  <span className="text-[12px] font-medium">{c.name}</span>
-                  {problems.length === 0 && (
-                    <span className="text-[10px] text-[hsl(var(--ax-accent))]">matched</span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {(["front", "back"] as const).map((side) => {
-                    const url = side === "front" ? c.imageUrl : c.imageUrlBack;
-                    const source = imageSourceOf(url);
-                    return (
-                      <div key={side}>
-                        {url ? (
-                          <AssetImage
-                            url={url}
-                            alt={`${c.name} ${side}`}
-                            className="aspect-square w-full rounded-md bg-white/[0.03]"
-                            fit="contain"
-                          />
-                        ) : (
-                          <div className="flex aspect-square w-full items-center justify-center rounded-md border border-dashed border-[hsl(var(--ax-border))] text-[10px] text-[hsl(var(--ax-faint))]">
-                            none
-                          </div>
-                        )}
-                        <div className="mt-0.5 flex items-baseline justify-between text-[9px] text-[hsl(var(--ax-faint))]">
-                          <span className="capitalize">{side}</span>
-                          <span>{source === "none" ? "—" : source}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {problems.map((p) => (
-                  <p key={p} className="mt-1 text-[10px] text-[hsl(var(--ax-amber))]">
-                    {ISSUE_LABEL[p]}
-                  </p>
-                ))}
-              </div>
-            );
-          })}
+          <div className="mt-1.5 flex items-center justify-between text-[11px]">
+            <span className="font-medium tabular-nums text-[hsl(var(--ax-accent))]">
+              {fmtMoney(priceFor(blank, audience))}
+            </span>
+            <span className="tabular-nums text-[hsl(var(--ax-faint))]">
+              {blank.cost != null ? `cost ${fmtMoney(blank.cost)}` : "no cost"}
+            </span>
+          </div>
         </div>
-      )}
-    </section>
-  );
-}
+      </Link>
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mt-3 flex gap-3 text-[12px]">
-      <span className="w-28 shrink-0 text-[hsl(var(--ax-faint))]">{label}</span>
-      <span className="min-w-0 flex-1">{value}</span>
+      <div className="flex flex-wrap items-center gap-1 px-2.5 pt-2">
+        {shown.map((c) => (
+          <Link
+            key={c.id}
+            to={blankHref(blank.id, c.name)}
+            title={c.name}
+            aria-label={`${catalogTitle(blank)} in ${c.name}`}
+            className="h-3.5 w-3.5 rounded-full border border-white/20 transition-transform hover:scale-125 hover:border-white/60"
+            style={{ background: c.hex ?? "#555" }}
+          />
+        ))}
+        {blank.colors.length > shown.length && (
+          <Link
+            to={blankHref(blank.id)}
+            className="text-[10px] text-[hsl(var(--ax-faint))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+          >
+            +{blank.colors.length - shown.length}
+          </Link>
+        )}
+        {blank.colors.length === 0 && <span className="text-[10px] text-[hsl(var(--ax-faint))]">no colours</span>}
+      </div>
+
+      <Link to={blankHref(blank.id)} className="block px-2.5 pb-2.5 pt-1.5">
+        <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
+          {coverage.total > 0 ? `${coverage.withPhoto}/${coverage.total} photographed` : "no colourways synced"}
+          {flagged > 0 && <span className="text-[hsl(var(--ax-amber))]"> · {flagged} to check</span>}
+        </div>
+        {!eligible && <div className="mt-1 text-[10px] text-[hsl(var(--ax-red))]">not in this catalog</div>}
+      </Link>
     </div>
   );
 }
@@ -406,7 +282,7 @@ function ProductGrid() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
       {rows.map((p) => (
-        <a key={p.id} href={`/admin/products/${p.id}`} className="ax-card ax-card-hover overflow-hidden transition-all">
+        <Link key={p.id} to={`/admin/products/${p.id}`} className="ax-card ax-card-hover overflow-hidden transition-all">
           <AssetImage url={p.imageUrl} alt={p.title} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
           <div className="p-2.5">
             <div className="truncate text-[12px] font-medium">{p.title}</div>
@@ -415,7 +291,7 @@ function ProductGrid() {
               {p.shopifyProductId ? <Chip tone="var(--ax-accent)">Live</Chip> : <Chip>{p.status}</Chip>}
             </div>
           </div>
-        </a>
+        </Link>
       ))}
     </div>
   );
@@ -431,7 +307,7 @@ function CollectionGrid() {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {(data ?? []).map((c) => (
-        <a key={c.id} href={`/admin/collections/${c.id}`} className="ax-card ax-card-hover p-4 transition-all">
+        <Link key={c.id} to={`/admin/collections/${c.id}`} className="ax-card ax-card-hover p-4 transition-all">
           <div className="text-[14px] font-medium">{c.name}</div>
           <div className="mt-0.5 text-[11px] capitalize text-[hsl(var(--ax-faint))]">
             {c.collectionType} · {c.status}
@@ -441,7 +317,7 @@ function CollectionGrid() {
             <span>{c.conceptCount} concepts</span>
             <span>{c.productCount} products</span>
           </div>
-        </a>
+        </Link>
       ))}
     </div>
   );
