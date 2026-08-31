@@ -1643,7 +1643,11 @@ async function fetchOverview() {
     (p) => p.approvalState === "approved" && !p.shopifyProductId && p.status !== "archived",
   );
   const blanksMissingPrice = blanks.filter((b) => b.missingCost);
-  const blanksMissingAssortment = blanks.filter((b) => b.missingAssortment);
+  // NO "missing assortment" ROW. In V2 the Drive is the curation — 03_APPROVED
+  // holds exactly what AX sells — so every synced blank is in every audience
+  // and missingAssortment is false by construction. An action queue that can
+  // never have anything in it is a line of noise on the page that is supposed
+  // to say what needs doing.
   const openOrders = orders.filter((o) => (o.fulfillmentStatus ?? "unfulfilled") !== "fulfilled");
 
   const actions: ActionItem[] = [
@@ -1678,14 +1682,6 @@ async function fetchOverview() {
       detail: "Cannot compute margin until cost is set",
       to: "/admin-v2/commerce?tab=blanks&filter=missing_cost",
       tone: "var(--ax-red)",
-    },
-    {
-      id: "blank-assortment",
-      count: blanksMissingAssortment.length,
-      label: "Blanks in no assortment",
-      detail: "Invisible to every audience in the builder",
-      to: "/admin-v2/commerce?tab=blanks&filter=missing_assortment",
-      tone: "var(--ax-faint)",
     },
     {
       id: "orders",
