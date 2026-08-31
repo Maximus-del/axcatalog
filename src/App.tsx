@@ -92,6 +92,7 @@ const V2EntityWorkspace = lazy(() => import("./pages/admin-v2/V2EntityWorkspace"
 const V2Creative = lazy(() => import("./pages/admin-v2/V2Creative"));
 const V2Commerce = lazy(() => import("./pages/admin-v2/V2Commerce"));
 const V2BlankDetail = lazy(() => import("./pages/admin-v2/V2BlankDetail"));
+const V2NotFound = lazy(() => import("./pages/admin-v2/V2NotFound"));
 const V2Orders = lazy(() => import("./pages/admin-v2/V2Orders"));
 
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
@@ -234,6 +235,12 @@ const App = () => (
                 <Route path="commerce/blanks" element={<V2Commerce />} />
                 <Route path="commerce/blanks/:id" element={<V2BlankDetail />} />
                 <Route path="orders" element={<V2Orders />} />
+                {/*
+                  A wrong V2 address stays inside V2. Falling through to the
+                  app-wide 404 threw the operator out of the dashboard shell
+                  entirely, with no nav to get back in.
+                */}
+                <Route path="*" element={<V2NotFound />} />
               </Route>
 
               {/* Portal */}

@@ -17,6 +17,7 @@ import {
   AssetImage,
   Chip,
   EmptyState,
+  ErrorState,
   Heading,
   Metric,
   PageHeader,
@@ -260,7 +261,7 @@ function CommerceOverview() {
 /* ---------------------------------------------------------- blank catalog */
 
 function BlankCatalog() {
-  const { data, isLoading } = useBlanks();
+  const { data, isLoading, isError, error, refetch } = useBlanks();
   const [params, setParams] = useSearchParams();
 
   const audience = (AUDIENCES.find((a) => a.key === params.get("audience"))?.key ?? "athlete") as AudienceKey;
@@ -396,7 +397,8 @@ function BlankCatalog() {
         </div>
       )}
 
-      {!isLoading && rows.length === 0 && <EmptyState>No blank matches that filter.</EmptyState>}
+      {isError && <ErrorState error={error} what="the blank catalog" onRetry={() => void refetch()} />}
+      {!isLoading && !isError && rows.length === 0 && <EmptyState>No blank matches that filter.</EmptyState>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {rows.map((b) => (
@@ -493,7 +495,7 @@ const PRODUCT_FILTERS = [
 ] as const;
 
 function ProductGrid() {
-  const { data, isLoading } = useProducts();
+  const { data, isLoading, isError, error, refetch } = useProducts();
   const [params, setParams] = useSearchParams();
   const filter = params.get("filter") ?? "all";
   const search = params.get("q") ?? "";
@@ -559,8 +561,9 @@ function ProductGrid() {
         </div>
       </div>
 
+      {isError && <ErrorState error={error} what="your products" onRetry={() => void refetch()} />}
       {isLoading && <Skeleton className="h-64" />}
-      {!isLoading && rows.length === 0 && <EmptyState>No products match.</EmptyState>}
+      {!isLoading && !isError && rows.length === 0 && <EmptyState>No products match.</EmptyState>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
         {rows.map((p) => (
@@ -598,7 +601,7 @@ function ProductCard({ product }: { product: Product }) {
 /* ------------------------------------------------------------ collections */
 
 function CollectionGrid() {
-  const { data, isLoading } = useCollections();
+  const { data, isLoading, isError, error, refetch } = useCollections();
   const [params, setParams] = useSearchParams();
   const search = params.get("q") ?? "";
 
@@ -625,8 +628,9 @@ function CollectionGrid() {
         />
       </div>
 
+      {isError && <ErrorState error={error} what="your collections" onRetry={() => void refetch()} />}
       {isLoading && <Skeleton className="h-64" />}
-      {!isLoading && rows.length === 0 && (
+      {!isLoading && !isError && rows.length === 0 && (
         <EmptyState>
           {search.trim()
             ? "No collection matches that search."

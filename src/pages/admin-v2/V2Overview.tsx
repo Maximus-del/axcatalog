@@ -4,7 +4,7 @@ import { useOverview } from "@/lib/v2/data";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { catalogHref } from "@/lib/v2/catalog-nav";
-import { AssetImage, Chip, Metric, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, ErrorState, Metric, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
 
 // THE START OF A WORKDAY, NOT AN ANALYTICS PAGE.
 //
@@ -14,7 +14,7 @@ import { AssetImage, Chip, Metric, PageHeader, Section, Skeleton } from "@/compo
 // costs the most.
 
 export default function V2Overview() {
-  const { data, isLoading } = useOverview();
+  const { data, isLoading, isError, error, refetch } = useOverview();
   const loading = isLoading || !data;
 
   return (
@@ -31,6 +31,12 @@ export default function V2Overview() {
         <Metric label="Blanks" value={data?.stats.blanks ?? 0} loading={loading} icon={<Package />} href={catalogHref({ tab: "blanks" })} />
         <Metric label="Open orders" value={data?.openOrders ?? 0} loading={loading} icon={<Receipt />} href="/admin-v2/orders?open=1" />
       </div>
+
+      {isError && (
+        <div className="mb-6">
+          <ErrorState error={error} what="your overview" onRetry={() => void refetch()} />
+        </div>
+      )}
 
       <Section
         eyebrow="Today"

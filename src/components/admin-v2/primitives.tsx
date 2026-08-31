@@ -380,6 +380,42 @@ export function TabBar<T extends string>({
   );
 }
 
+/**
+ * A query that failed, said out loud.
+ *
+ * Every V2 page used to render its empty state when a read failed — "No blanks
+ * match", "No mockups yet" — which tells the operator the opposite of what
+ * happened and sends them looking for data that is actually there. An empty
+ * shelf and an unreachable database are different facts.
+ */
+export function ErrorState({
+  error,
+  what = "this",
+  onRetry,
+}: {
+  error: unknown;
+  /** What could not be loaded, e.g. "the blank catalog". */
+  what?: string;
+  onRetry?: () => void;
+}) {
+  const message = error instanceof Error ? error.message : null;
+  return (
+    <div className="rounded-2xl border border-[hsl(var(--ax-red)/0.4)] bg-[hsl(var(--ax-red)/0.06)] px-5 py-6 text-center">
+      <div className="text-[13px] font-medium text-[hsl(var(--ax-ink))]">Could not load {what}.</div>
+      {message && <p className="mt-1 text-[11px] text-[hsl(var(--ax-faint))]">{message}</p>}
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-3 rounded-full border border-[hsl(var(--ax-border))] px-4 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function EmptyState({ children }: { children: ReactNode }) {
   return (
     <div className="rounded-2xl border border-dashed border-[hsl(var(--ax-border))] px-5 py-8 text-center text-[13px] text-[hsl(var(--ax-faint))]">

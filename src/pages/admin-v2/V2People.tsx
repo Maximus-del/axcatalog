@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, LayoutGrid, List, Search, UserPlus } from "lucide-react";
 import { useEntities } from "@/lib/v2/data";
 import { ENTITY_FACETS, matchesFilter, rankEntities, roleLabel, typeLabel } from "@/lib/v2/entity";
-import { AssetImage, Chip, EmptyState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 
 // People is the gateway into the AX ecosystem. One directory, one record per
 // entity — a person who is both an athlete and a client appears under both
@@ -14,7 +14,7 @@ import { AssetImage, Chip, EmptyState, PageHeader, Skeleton } from "@/components
 // "let me check the next client on that list".
 
 export default function V2People() {
-  const { data, isLoading } = useEntities();
+  const { data, isLoading, isError, error, refetch } = useEntities();
   const [params, setParams] = useSearchParams();
 
   const facet = params.get("facet") ?? "all";
@@ -131,6 +131,8 @@ export default function V2People() {
         </div>
       </div>
 
+      {isError && <ErrorState error={error} what="the directory" onRetry={() => void refetch()} />}
+
       {isLoading && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {Array.from({ length: 10 }).map((_, i) => (
@@ -139,7 +141,7 @@ export default function V2People() {
         </div>
       )}
 
-      {!isLoading && rows.length === 0 && (
+      {!isLoading && !isError && rows.length === 0 && (
         <EmptyState>No entity matches that filter. Try “All” or clear the search.</EmptyState>
       )}
 

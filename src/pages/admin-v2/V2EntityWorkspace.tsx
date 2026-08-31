@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import { ArrowUpRight, Plus } from "lucide-react";
-import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
+import { toast } from "sonner";
+import { ArrowUpRight, ImagePlus, Plus } from "lucide-react";
+import { useCreateCollection, useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
 import { cleanDesignTitle, isConfigurable, stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { catalogHref } from "@/lib/v2/catalog-nav";
 import { shopLink } from "@/lib/ecosystem/image";
-import { AssetImage, Card, Chip, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Card, Chip, ErrorState, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
 import WorkflowNav, { type WorkflowStep } from "@/components/admin-v2/WorkflowNav";
 import DesignShelf, { type ShelfFilter } from "@/components/admin-v2/DesignShelf";
 import ProductizeDrawer from "@/components/admin-v2/ProductizeDrawer";
@@ -36,7 +37,7 @@ const STEP_ORDER: StepKey[] = ["designs", "mockups", "products", "collections", 
 export default function V2EntityWorkspace() {
   const { id } = useParams();
   const [params, setParams] = useSearchParams();
-  const { data, isLoading } = useEntityWorkspace(id);
+  const { data, isLoading, isError, error, refetch } = useEntityWorkspace(id);
   const [building, setBuilding] = useState(false);
   // The design currently opened for its creative options, and the design the
   // mockup builder was launched from (they differ for a moment while the drawer
@@ -47,6 +48,8 @@ export default function V2EntityWorkspace() {
   const [editMockupId, setEditMockupId] = useState<string | null>(null);
   const [assetsFor, setAssetsFor] = useState<Mockup | null>(null);
   const [productizing, setProductizing] = useState<string | null>(null);
+  const [newCollection, setNewCollection] = useState(false);
+  const createCollection = useCreateCollection();
 
   /*
     WHICH MOCKUP IS OPEN IS PART OF THE ADDRESS.
@@ -135,6 +138,20 @@ export default function V2EntityWorkspace() {
     );
   }
 
+  // A failed read and a missing record are different facts. Telling someone
+  // their client "does not exist" because the network blinked sends them
+  // looking for a deletion that never happened.
+  if (isError) {
+    return (
+      <>
+        <Link to="/admin-v2/people" className="mb-3 inline-block text-[11px] text-[hsl(var(--ax-faint))]">
+          ← People
+        </Link>
+        <ErrorState error={error} what="this workspace" onRetry={() => void refetch()} />
+      </>
+    );
+  }
+
   if (!data || !derived) {
     return (
       <div className="py-20 text-center text-[13px] text-[hsl(var(--ax-faint))]">
@@ -209,6 +226,17 @@ export default function V2EntityWorkspace() {
 
   return (
     <>
+      {/*
+        Where you are. The shell's back arrow goes to wherever you came from,
+        which is not the same as saying which directory this record lives in.
+      */}
+      <Link
+        to="/admin-v2/people"
+        className="mb-3 inline-block text-[11px] text-[hsl(var(--ax-faint))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+      >
+        ← People
+      </Link>
+
       {/* ---------------------------------------------------------- identity */}
       <div className="mb-6 flex flex-wrap items-start gap-4">
         <AssetImage
@@ -245,8 +273,19 @@ export default function V2EntityWorkspace() {
                   className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))]"
                 >
                   <Plus className="h-4 w-4" />
-                  Create Mockup
+                  Create mockup
                 </button>
+                {/*
+                  The three things an operator starts here. Create product is
+                  deliberately absent: a product is configured FROM a mockup, so
+                  its entry point is on the mockup, not on the person.
+                */}
+                <Link
+                  to="/admin/designs/new"
+                  className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+                >
+                  <ImagePlus className="h-3.5 w-3.5" /> Create design
+                </Link>
                 {isAthlete && (
                   <a
                     href={`/a/${entity.slug}`}
@@ -360,6 +399,11 @@ export default function V2EntityWorkspace() {
         title="Products"
         detail="Configured, sellable objects with pricing and variants."
         count={products.length}
+        action={
+          <button type="button" onClick={() => goTo("mockups")} className="text-[12px] text-[hsl(var(--ax-accent))]">
+            + From a mockup
+          </button>
+        }
         empty="Nothing configured for sale yet. A product is a mockup that has been given the commerce details — colours, sizes, price."
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
@@ -401,6 +445,39 @@ export default function V2EntityWorkspace() {
         title="Collections"
         detail="Drops, capsules and lookbooks this entity’s work belongs to."
         count={collections.length}
+        action={
+          newCollection ? (
+            <input
+              autoFocus
+              placeholder="Collection name, then Enter"
+              onBlur={() => setNewCollection(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setNewCollection(false);
+                if (e.key !== "Enter") return;
+                const name = (e.target as HTMLInputElement).value.trim();
+                setNewCollection(false);
+                if (!name) return;
+                createCollection.mutate(
+                  { name, entityId: entity.id, organizationId: entity.organizationId },
+                  {
+                    onError: (err) =>
+                      toast.error(err instanceof Error ? err.message : "Could not create that collection"),
+                    onSuccess: () => toast.success(`Collection “${name}” created`),
+                  },
+                );
+              }}
+              className="rounded-full border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-card))] px-3 py-1 text-[12px] outline-none"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNewCollection(true)}
+              className="text-[12px] text-[hsl(var(--ax-accent))]"
+            >
+              + New collection
+            </button>
+          )
+        }
         empty="No collections yet. A collection is a permanent home for this entity's creative work — it does not need Shopify products to exist."
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

@@ -21,6 +21,7 @@ import {
   AssetImage,
   Chip,
   EmptyState,
+  ErrorState,
   Heading,
   Metric,
   PageHeader,
@@ -156,6 +157,12 @@ export default function V2Creative() {
   }, [conceptsQ.data, designsQ.data]);
 
   const loading = conceptsQ.isLoading || designsQ.isLoading;
+  const failed = conceptsQ.isError || designsQ.isError;
+  const failure = conceptsQ.error ?? designsQ.error;
+  const retry = () => {
+    void conceptsQ.refetch();
+    void designsQ.refetch();
+  };
 
   /** The one filter row every shelf shares, so they cannot drift apart. */
   const personFilter = (
@@ -198,6 +205,12 @@ export default function V2Creative() {
       />
 
       <TabBar tabs={TABS} active={tab} onSelect={goTab} label={(t) => TAB_LABEL[t]} />
+
+      {failed && tab !== "templates" && (
+        <div className="mb-5">
+          <ErrorState error={failure} what="your creative work" onRetry={retry} />
+        </div>
+      )}
 
       {tab === "overview" && (
         <CreativeOverview
@@ -547,7 +560,7 @@ function AssetStudio({
 /* -------------------------------------------------------- template index */
 
 function TemplateIndex() {
-  const { data, isLoading } = useDesignTemplates();
+  const { data, isLoading, isError, error, refetch } = useDesignTemplates();
 
   return (
     <>
@@ -557,8 +570,9 @@ function TemplateIndex() {
         detail="Reusable creative directions. Editing, master prompts and best-fit matching stay in V1 — this is the index."
       />
 
+      {isError && <ErrorState error={error} what="the template library" onRetry={() => void refetch()} />}
       {isLoading && <GridSkeleton />}
-      {!isLoading && (data ?? []).length === 0 && <EmptyState>No design templates yet.</EmptyState>}
+      {!isLoading && !isError && (data ?? []).length === 0 && <EmptyState>No design templates yet.</EmptyState>}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {(data ?? []).map((tpl) => (

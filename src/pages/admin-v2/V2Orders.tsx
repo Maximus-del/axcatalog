@@ -3,14 +3,14 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useEntities, useOrders } from "@/lib/v2/data";
 import { fmtMoney } from "@/lib/v2/pricing";
-import { Chip, EmptyState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 
 // Orders stay deliberately thin. The existing order + fulfilment infrastructure
 // is reused as-is; V2 only gives the operator a legible list — but a legible
 // list you can filter, search and link to.
 
 export default function V2Orders() {
-  const { data, isLoading } = useOrders();
+  const { data, isLoading, isError, error, refetch } = useOrders();
   const entitiesQ = useEntities();
   const [params, setParams] = useSearchParams();
 
@@ -78,8 +78,9 @@ export default function V2Orders() {
         </div>
       </div>
 
+      {isError && <ErrorState error={error} what="your orders" onRetry={() => void refetch()} />}
       {isLoading && <Skeleton className="h-72" />}
-      {!isLoading && rows.length === 0 && (
+      {!isLoading && !isError && rows.length === 0 && (
         <EmptyState>
           {query.trim() ? "No order matches that search." : "No orders match."}
         </EmptyState>

@@ -19,7 +19,7 @@ import {
   sourcingName,
 } from "@/lib/v2/catalog-nav";
 import type { Blank, BlankColor } from "@/lib/v2/types";
-import { AssetImage, Chip, EmptyState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 
 // ONE BLANK, AT ONE COLOURWAY, AT A REAL ADDRESS.
 //
@@ -36,7 +36,7 @@ import { AssetImage, Chip, EmptyState, PageHeader, Skeleton } from "@/components
 export default function V2BlankDetail() {
   const { id } = useParams<{ id: string }>();
   const [params, setParams] = useSearchParams();
-  const { data, isLoading } = useBlanks();
+  const { data, isLoading, isError, error, refetch } = useBlanks();
 
   const blank = useMemo(() => (data ?? []).find((b) => b.id === id) ?? null, [data, id]);
 
@@ -61,6 +61,15 @@ export default function V2BlankDetail() {
           <Skeleton className="h-[420px]" />
           <Skeleton className="h-[420px]" />
         </div>
+      </>
+    );
+  }
+
+  if (isError) {
+    return (
+      <>
+        <PageHeader title="Blank catalog" />
+        <ErrorState error={error} what="the blank catalog" onRetry={() => void refetch()} />
       </>
     );
   }
