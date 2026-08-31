@@ -263,6 +263,30 @@ vi.mock("@/lib/v2/data", () => ({
   useUpdatePlacementSpec: () => mutation(),
   useUploadDesign: () => mutation(),
   publicUrl: () => null,
+  useAssetBriefs: () =>
+    query([
+      {
+        id: "ab1",
+        organizationId: "o1",
+        entityId: "e1",
+        title: "Mooney launch post",
+        assetType: "launch",
+        aspectRatio: "4:5",
+        instructions: null,
+        promptPackageId: null,
+        status: "ready",
+        createdAt: "2026-08-30T00:00:00Z",
+        updatedAt: "2026-08-30T00:00:00Z",
+        mockups: [
+          { id: "i1", mockupId: "m1", title: "Mooney World Hoodie", imageUrl: null, imageBucket: null, imagePath: null },
+        ],
+        references: [],
+        outputs: [],
+      },
+    ]),
+  useSaveAssetBrief: () => mutation(),
+  useDeleteAssetBrief: () => mutation(),
+  ASSET_REFERENCE_BUCKET: "design-references",
   useV2Search: () =>
     query([
       { kind: "person", id: "e1", label: "Darnell Mooney", detail: "WR · NFL", to: "/admin-v2/people/e1" },
@@ -329,6 +353,18 @@ const PAGES: Array<{ name: string; render: () => ReactElement; route?: string; e
   { name: "Orders", render: () => <V2Orders />, expects: /#1042/ },
   { name: "Commerce", render: () => <V2Commerce />, route: "/admin-v2/commerce", expects: /needs attention/i },
   { name: "Creative", render: () => <V2Creative />, route: "/admin-v2/creative", expects: /needs you/i },
+  {
+    name: "Creative · Assets",
+    render: () => <V2Creative />,
+    route: "/admin-v2/creative?tab=assets",
+    expects: /Mooney launch post/i,
+  },
+  {
+    name: "Creative · Templates",
+    render: () => <V2Creative />,
+    route: "/admin-v2/creative?tab=templates",
+    expects: /Collegiate 01/i,
+  },
   {
     name: "Blank catalog",
     render: () => <V2Commerce />,

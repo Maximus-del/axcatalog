@@ -12,10 +12,18 @@ import {
   Sparkles,
   WandSparkles,
 } from "lucide-react";
-import { useConcepts, useDesignTemplates, useDesigns, useEntities } from "@/lib/v2/data";
+import { toast } from "sonner";
+import {
+  useAssetBriefs,
+  useConcepts,
+  useDesignTemplates,
+  useDesigns,
+  useEntities,
+  type AssetBrief,
+} from "@/lib/v2/data";
 import { cleanDesignTitle, stageOf, STAGE_LABELS, STAGE_TONES, type ConceptStage } from "@/lib/v2/concepts";
 import type { Design, ProductConcept } from "@/lib/v2/types";
-import AssetsDrawer, { type AssetSource } from "@/components/admin-v2/AssetsDrawer";
+import AssetsDrawer, { ASSET_TYPES, type AssetSource } from "@/components/admin-v2/AssetsDrawer";
 import {
   ActionCard,
   AssetImage,
@@ -285,11 +293,12 @@ export default function V2Creative() {
       {tab === "assets" && (
         <AssetStudio
           concepts={conceptsQ.data ?? []}
-          entityName={entityName}
+          entities={entitiesQ.data ?? []}
           loading={loading}
           query={query}
           onQuery={(v) => patch({ q: v })}
           personFilter={personFilter}
+          entityId={entityId}
           filter={(c) => matchesEntity(c.entityId) && matchesQuery(c.title, c.entityId)}
         />
       )}
@@ -462,41 +471,156 @@ function CreativeOverview({
 /* ----------------------------------------------------------- asset studio */
 
 /**
- * Where an asset starts.
+ * ASSETS — the briefs, and where a new one starts.
  *
- * The asset flow existed only inside one entity's mockup menu, which meant
- * "make a launch graphic" began with remembering whose mockup it was. Assets
- * derive from mockups, so the entry point is the mockup shelf.
+ * Two halves, because there are two questions. "What have we got in flight"
+ * comes first: a brief is a real object now, so a shelf of them is the point of
+ * the tab. "Make a new one" is underneath, and it starts from the mockup shelf
+ * — an asset is made FROM a mockup, and the flow used to be buried in one
+ * entity's mockup menu, so making a launch graphic began with remembering
+ * whose mockup it was.
  *
  * Generation is still deliberately unbuilt — see AssetsDrawer for why.
  */
 function AssetStudio({
   concepts,
-  entityName,
+  entities,
   loading,
   query,
   onQuery,
   personFilter,
+  entityId,
   filter,
 }: {
   concepts: ProductConcept[];
-  entityName: Map<string, string>;
+  entities: Array<{ id: string; name: string; organizationId: string }>;
   loading: boolean;
   query: string;
   onQuery: (value: string) => void;
   personFilter: React.ReactNode;
+  /** "all" or one entity id — the shelf filter, applied to briefs too. */
+  entityId: string;
   filter: (concept: ProductConcept) => boolean;
 }) {
-  const [source, setSource] = useState<{ asset: AssetSource; owner: string } | null>(null);
+  const briefsQ = useAssetBriefs(entityId === "all" ? undefined : entityId);
+  const [open, setOpen] = useState<{
+    organizationId: string;
+    entityId: string | null;
+    entityName: string;
+    initial: string[];
+    brief: AssetBrief | null;
+  } | null>(null);
+
+  const entityById = useMemo(() => new Map(entities.map((e) => [e.id, e])), [entities]);
   const rows = concepts.filter(filter);
+
+  /** Everything that could be added to a brief, in the drawer's own shape. */
+  const candidates: AssetSource[] = useMemo(
+    () =>
+      concepts.map((c) => ({
+        id: c.id,
+        title: c.title,
+        imageUrl: c.imageUrl,
+        imageBucket: c.imageBucket,
+        imagePath: c.imagePath,
+        colorName: c.colorName,
+      })),
+    [concepts],
+  );
+
+  const ownerOf = (id: string | null) => (id ? entityById.get(id) : undefined);
+
+  const startFrom = (concept: ProductConcept) => {
+    const owner = ownerOf(concept.entityId);
+    if (!owner) {
+      toast.error("This mockup has no owner", { description: "Give it one before making an asset from it." });
+      return;
+    }
+    setOpen({
+      organizationId: owner.organizationId,
+      entityId: owner.id,
+      entityName: owner.name,
+      initial: [concept.id],
+      brief: null,
+    });
+  };
+
+  const reopen = (brief: AssetBrief) => {
+    const owner = ownerOf(brief.entityId);
+    setOpen({
+      organizationId: brief.organizationId,
+      entityId: brief.entityId,
+      entityName: owner?.name ?? "AX",
+      initial: brief.mockups.map((m) => m.mockupId),
+      brief,
+    });
+  };
+
+  const briefs = briefsQ.data ?? [];
 
   return (
     <>
       <Heading
         eyebrow="Assets"
-        title="Make something from a mockup"
-        detail="Posts, stories, launch graphics and lookbook images — each one traceable back to the mockup it came from."
+        title="What is being made"
+        detail="Posts, stories, launch graphics and lookbook images — each one traceable back to the mockups it came from."
       />
+
+      {briefsQ.isError && (
+        <ErrorState error={briefsQ.error} what="your asset briefs" onRetry={() => void briefsQ.refetch()} />
+      )}
+
+      {!briefsQ.isError && briefs.length === 0 && !briefsQ.isLoading && (
+        <EmptyState>No asset briefs yet. Pick a mockup below to start one.</EmptyState>
+      )}
+
+      {briefs.length > 0 && (
+        <div className="mb-8 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+          {briefs.map((b) => {
+            const type = ASSET_TYPES.find((t) => t.key === b.assetType);
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => reopen(b)}
+                className="ax-card ax-card-hover flex gap-3 p-2.5 text-left transition-all"
+              >
+                <div className="flex shrink-0 -space-x-3">
+                  {b.mockups.slice(0, 3).map((m) => (
+                    <AssetImage
+                      key={m.id}
+                      url={m.imageUrl}
+                      bucket={m.imageBucket}
+                      path={m.imagePath}
+                      alt={m.title}
+                      className="h-12 w-12 rounded-lg border border-[hsl(var(--ax-canvas))] bg-white/[0.04]"
+                      fit="contain"
+                    />
+                  ))}
+                  {b.mockups.length === 0 && (
+                    <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/[0.04] text-[10px] text-[hsl(var(--ax-faint))]">
+                      —
+                    </span>
+                  )}
+                </div>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12px] font-medium">{b.title || "Untitled brief"}</span>
+                  <span className="block truncate text-[10px] text-[hsl(var(--ax-faint))]">
+                    {[type?.label ?? b.assetType, b.aspectRatio, ownerOf(b.entityId)?.name]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                  <span className="mt-1.5 inline-block">
+                    <Chip tone={BRIEF_TONE[b.status]}>{BRIEF_LABEL[b.status]}</Chip>
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <Heading eyebrow="New" title="Start from a mockup" detail="An asset is made from one — pick where it begins." />
 
       <Toolbar query={query} onQuery={onQuery} placeholder="Search mockups to start from…">
         {personFilter}
@@ -514,19 +638,7 @@ function AssetStudio({
             <button
               key={c.id}
               type="button"
-              onClick={() =>
-                setSource({
-                  asset: {
-                    id: c.id,
-                    title: c.title,
-                    imageUrl: c.imageUrl,
-                    imageBucket: c.imageBucket,
-                    imagePath: c.imagePath,
-                    colorName: c.colorName,
-                  },
-                  owner: (c.entityId ? entityName.get(c.entityId) : null) ?? "AX",
-                })
-              }
+              onClick={() => startFrom(c)}
               className="ax-card ax-card-hover overflow-hidden p-0 text-left transition-all"
             >
               <AssetImage
@@ -541,7 +653,7 @@ function AssetStudio({
               <div className="p-2.5">
                 <div className="truncate text-[12px] font-medium">{c.title}</div>
                 <div className="truncate text-[10px] text-[hsl(var(--ax-faint))]">
-                  {(c.entityId ? entityName.get(c.entityId) : null) ?? "No owner"}
+                  {ownerOf(c.entityId)?.name ?? "No owner"}
                 </div>
                 <div className="mt-1.5 text-[10px] font-semibold text-[hsl(var(--ax-accent))]">Make an asset →</div>
               </div>
@@ -550,12 +662,36 @@ function AssetStudio({
         </div>
       )}
 
-      {source && (
-        <AssetsDrawer mockup={source.asset} entityName={source.owner} onClose={() => setSource(null)} />
+      {open && (
+        <AssetsDrawer
+          organizationId={open.organizationId}
+          entityId={open.entityId}
+          entityName={open.entityName}
+          candidates={candidates}
+          initialMockupIds={open.initial}
+          brief={open.brief}
+          onClose={() => setOpen(null)}
+        />
       )}
     </>
   );
 }
+
+const BRIEF_LABEL: Record<string, string> = {
+  draft: "Draft",
+  ready: "Ready to make",
+  generating: "Generating",
+  complete: "Done",
+  archived: "Archived",
+};
+
+const BRIEF_TONE: Record<string, string | undefined> = {
+  draft: undefined,
+  ready: "var(--ax-blue)",
+  generating: "var(--ax-amber)",
+  complete: "var(--ax-accent)",
+  archived: "var(--ax-faint)",
+};
 
 /* -------------------------------------------------------- template index */
 

@@ -1714,6 +1714,237 @@ export function useOverview() {
   return useQuery({ queryKey: ["v2", "overview"], queryFn: fetchOverview, staleTime: 30_000 });
 }
 
+/* ------------------------------------------------------- asset briefs */
+
+/**
+ * An ASSET BRIEF is one job: make something from one or more mockups.
+ *
+ * Distinct from a prompt package, which is a reusable TEMPLATE. A brief may
+ * point at a package; it is never stored as one. Filing jobs in the template
+ * table would make "which of these is worth reusing" unanswerable within a
+ * week. See the migration for the rest of that reasoning.
+ */
+export type AssetBriefStatus = "draft" | "ready" | "generating" | "complete" | "archived";
+
+export interface AssetBriefFile {
+  id: string;
+  bucket: string | null;
+  path: string | null;
+  url: string | null;
+  isSelected: boolean;
+}
+
+export interface AssetBriefMockup {
+  id: string;
+  mockupId: string;
+  title: string;
+  imageUrl: string | null;
+  imageBucket: string | null;
+  imagePath: string | null;
+}
+
+export interface AssetBrief {
+  id: string;
+  organizationId: string;
+  entityId: string | null;
+  title: string;
+  assetType: string;
+  aspectRatio: string | null;
+  instructions: string | null;
+  promptPackageId: string | null;
+  status: AssetBriefStatus;
+  createdAt: string;
+  updatedAt: string;
+  mockups: AssetBriefMockup[];
+  references: AssetBriefFile[];
+  outputs: AssetBriefFile[];
+}
+
+/** Where a brief's uploaded reference images live. Reuses the existing bucket. */
+export const ASSET_REFERENCE_BUCKET = "design-references";
+
+async function fetchAssetBriefs(entityId?: string): Promise<AssetBrief[]> {
+  let q = t("asset_briefs")
+    .select(
+      "id, organization_id, athlete_id, title, asset_type, aspect_ratio, instructions, prompt_package_id, status, created_at, updated_at",
+    )
+    .order("updated_at", { ascending: false });
+  if (entityId) q = (q as never as { eq: (c: string, v: string) => typeof q }).eq("athlete_id", entityId);
+  const briefRes = await q.limit(200);
+
+  const briefs = (briefRes.data ?? []) as unknown as Row[];
+  const ids = briefs.map((b) => String(b.id));
+  if (ids.length === 0) return [];
+
+  const itemRes = await t("asset_brief_items")
+    .select("id, brief_id, kind, mockup_id, storage_bucket, storage_path, url, is_selected, sort_order")
+    .in("brief_id", ids)
+    .order("sort_order", { ascending: true });
+  const items = (itemRes.data ?? []) as unknown as Row[];
+
+  // One extra read to give the source mockups a name and a picture; a brief
+  // listing that shows "3 mockups" and no thumbnails is a row of numbers.
+  const mockupIds = [...new Set(items.filter((i) => i.kind === "mockup").map((i) => String(i.mockup_id)))];
+  const mockupRes = mockupIds.length
+    ? await t("mockups").select("id, title, image_url, storage_bucket, storage_path").in("id", mockupIds)
+    : { data: [] };
+  const mockupById = new Map(
+    ((mockupRes.data ?? []) as unknown as Row[]).map((m) => [String(m.id), m]),
+  );
+
+  const file = (i: Row): AssetBriefFile => ({
+    id: String(i.id),
+    bucket: str(i.storage_bucket),
+    path: str(i.storage_path),
+    url: str(i.url),
+    isSelected: i.is_selected === true,
+  });
+
+  return briefs.map((b) => {
+    const mine = items.filter((i) => String(i.brief_id) === String(b.id));
+    return {
+      id: String(b.id),
+      organizationId: String(b.organization_id),
+      entityId: str(b.athlete_id),
+      title: String(b.title ?? ""),
+      assetType: String(b.asset_type ?? "other"),
+      aspectRatio: str(b.aspect_ratio),
+      instructions: str(b.instructions),
+      promptPackageId: str(b.prompt_package_id),
+      status: (str(b.status) ?? "draft") as AssetBriefStatus,
+      createdAt: String(b.created_at ?? ""),
+      updatedAt: String(b.updated_at ?? ""),
+      mockups: mine
+        .filter((i) => i.kind === "mockup")
+        .map((i) => {
+          const m = mockupById.get(String(i.mockup_id));
+          return {
+            id: String(i.id),
+            mockupId: String(i.mockup_id),
+            title: String(m?.title ?? "Mockup"),
+            imageUrl: str(m?.image_url),
+            imageBucket: str(m?.storage_bucket),
+            imagePath: str(m?.storage_path),
+          };
+        }),
+      references: mine.filter((i) => i.kind === "reference").map(file),
+      outputs: mine.filter((i) => i.kind === "output").map(file),
+    };
+  });
+}
+
+export function useAssetBriefs(entityId?: string) {
+  return useQuery({
+    queryKey: ["v2", "asset-briefs", entityId ?? "all"],
+    queryFn: () => fetchAssetBriefs(entityId),
+    staleTime: 15_000,
+  });
+}
+
+export interface AssetBriefInput {
+  id?: string | null;
+  organizationId: string;
+  entityId: string | null;
+  title: string;
+  assetType: string;
+  aspectRatio: string | null;
+  instructions: string | null;
+  promptPackageId?: string | null;
+  status: AssetBriefStatus;
+  mockupIds: string[];
+  /** Reference images already stored — kept as-is. */
+  referenceUrls: string[];
+  /** New uploads, stored under the brief once it has an id. */
+  files: File[];
+}
+
+/**
+ * Create or update a brief and its attachments in one call.
+ *
+ * Source mockups and references are REPLACED wholesale rather than diffed: the
+ * sets are small, an operator edits them by adding and removing in one sitting,
+ * and a diff would be more code than the thing it optimises. Generated outputs
+ * are never touched here — they are the record of what was made, not part of
+ * the instruction.
+ */
+export function useSaveAssetBrief() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AssetBriefInput) => {
+      const row = {
+        organization_id: input.organizationId,
+        athlete_id: input.entityId,
+        title: input.title.trim(),
+        asset_type: input.assetType,
+        aspect_ratio: input.aspectRatio,
+        instructions: input.instructions?.trim() || null,
+        prompt_package_id: input.promptPackageId ?? null,
+        status: input.status,
+      };
+
+      let briefId = input.id ?? null;
+      if (briefId) {
+        await must(t("asset_briefs").update(row as never).eq("id", briefId));
+      } else {
+        const created = await t("asset_briefs").insert(row as never).select("id").single();
+        if (created.error) throw created.error;
+        briefId = String((created.data as unknown as Row).id);
+      }
+
+      // Upload anything new before the item rows are written, so a failed
+      // upload cannot leave an item pointing at a file that does not exist.
+      const uploaded: string[] = [];
+      for (const f of input.files) {
+        const ext = (f.name.split(".").pop() ?? "png").toLowerCase();
+        const path = `asset-briefs/${briefId}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`;
+        const up = await supabase.storage
+          .from(ASSET_REFERENCE_BUCKET)
+          .upload(path, f, { contentType: f.type || "image/png", upsert: false });
+        if (up.error) throw up.error;
+        uploaded.push(publicUrl(ASSET_REFERENCE_BUCKET, path) ?? path);
+      }
+
+      await must(
+        t("asset_brief_items").delete().eq("brief_id", briefId).in("kind", ["mockup", "reference"]),
+      );
+
+      const items = [
+        ...input.mockupIds.map((mockupId, i) => ({
+          brief_id: briefId,
+          kind: "mockup",
+          mockup_id: mockupId,
+          sort_order: i,
+        })),
+        ...[...input.referenceUrls, ...uploaded].map((url, i) => ({
+          brief_id: briefId,
+          kind: "reference",
+          url,
+          sort_order: i,
+        })),
+      ];
+      if (items.length > 0) await must(t("asset_brief_items").insert(items as never));
+
+      return briefId;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "asset-briefs"] });
+    },
+  });
+}
+
+export function useDeleteAssetBrief() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (briefId: string) => {
+      // Items cascade with the brief.
+      await must(t("asset_briefs").delete().eq("id", briefId));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "asset-briefs"] });
+    },
+  });
+}
+
 /* ------------------------------------------------------------- search */
 
 /**

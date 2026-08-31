@@ -659,7 +659,24 @@ export default function V2EntityWorkspace() {
       )}
 
       {assetsFor && (
-        <AssetsDrawer mockup={assetsFor} entityName={entity.name} onClose={() => setAssetsFor(null)} />
+        <AssetsDrawer
+          organizationId={entity.organizationId}
+          entityId={entity.id}
+          entityName={entity.name}
+          // The whole library, so a launch graphic can be the range rather than
+          // one garment without leaving the drawer to go and find the others.
+          candidates={(libraryQ.data?.mockups ?? []).map((m) => ({
+            id: m.id,
+            title: m.title,
+            imageUrl: m.imageUrl,
+            imageBucket: m.imageBucket,
+            imagePath: m.imagePath,
+            blankName: m.blankName,
+            colorName: m.colorName,
+          }))}
+          initialMockupIds={[assetsFor.id]}
+          onClose={() => setAssetsFor(null)}
+        />
       )}
 
       {productizing &&
