@@ -43,6 +43,8 @@ export default function MockupCanvas({
   designsById,
   surface,
   guides,
+  defaultGuides,
+  garmentNote,
   onGuidesChange,
   onChange,
   onDropDesign,
@@ -55,6 +57,10 @@ export default function MockupCanvas({
   designsById: Map<string, Design>;
   surface: "front" | "back";
   guides: Guides;
+  /** Where "Reset lines" goes — this garment's starting point, not a global one. */
+  defaultGuides?: Guides;
+  /** One line explaining why this garment starts where it does. */
+  garmentNote?: string;
   onGuidesChange: (next: Guides) => void;
   onChange: (next: PlacedDesign[]) => void;
   onDropDesign: (designId: string, xPct: number, yPct: number, aspect: number) => void;
@@ -376,8 +382,8 @@ export default function MockupCanvas({
         </button>
         <button
           type="button"
-          onClick={() => onGuidesChange(DEFAULT_GUIDES)}
-          title="Back to centred horizontally, chest height vertically"
+          onClick={() => onGuidesChange(defaultGuides ?? DEFAULT_GUIDES)}
+          title={garmentNote ? `Back to this garment's starting point — ${garmentNote}` : "Back to the starting point"}
           className="rounded-full border border-[hsl(var(--ax-border))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
         >
           Reset lines
@@ -428,7 +434,11 @@ export default function MockupCanvas({
         </p>
         <span
           className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] text-[hsl(var(--ax-secondary))]"
-          title="Guidance for the operator. Artwork is not automatically restricted to this size."
+          title={
+            garmentNote
+              ? `${garmentNote} Artwork is not automatically restricted to the maximum print size.`
+              : "Guidance for the operator. Artwork is not automatically restricted to this size."
+          }
         >
           <Info className="h-3 w-3" aria-hidden />
           Maximum print size: 16&quot; &times; 20&quot;

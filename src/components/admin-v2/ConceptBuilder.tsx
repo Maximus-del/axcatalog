@@ -17,13 +17,13 @@ import MockupCanvas from "./MockupCanvas";
 import {
   DEFAULT_GUIDES,
   DRAG_MIME,
-  boxAtPoint,
-  defaultBox,
+  boxCentredAt,
   toRows,
   usedSurfaces,
   type Guides,
   type PlacedDesign,
 } from "@/lib/v2/placement-geometry";
+import { defaultsFor, startGuidesBoth, startPoint } from "@/lib/v2/garment-placement";
 import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
 import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
 import { storeMockupComposite } from "@/lib/v2/mockup-export";
@@ -123,6 +123,15 @@ export default function ConceptBuilder({
   );
 
   const color = blank?.colors.find((c) => c.name === colorName) ?? null;
+
+  /*
+    WHERE ARTWORK STARTS, PER GARMENT.
+    A hoodie's pocket and hood, a zip up the front, a leg instead of a chest —
+    these change where a print goes and how big it lands, and they used to be
+    one hardcoded 34%-wide square in the middle of everything. Still just a
+    starting point: nothing snaps and one drag overrides it.
+  */
+  const garment = useMemo(() => defaultsFor(blank?.garmentType), [blank?.garmentType]);
 
   const garmentImage = useMemo(
     () => resolveBlankImage({ blank, colorName, surface: surface as Surface }),
@@ -273,6 +282,9 @@ export default function ConceptBuilder({
     // undo the restored colourway a tick after it was set.
     if (isEdit && hydrated) return;
     setColorName(null);
+    // The alignment lines start where this garment's print starts, so "centre
+    // on lines" is a no-op on a fresh placement rather than a surprise.
+    if (blank) setGuides(startGuidesBoth(blank.garmentType));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blank?.id]);
 
@@ -303,18 +315,26 @@ export default function ConceptBuilder({
   }, [editing.data, blanksQ.data, hydrated]);
 
   // Choosing the headline design seeds a front placement, so the common case —
-  // one design, centred on the chest — needs no canvas work at all.
+  // one design, sitting where a print sits on THIS garment — needs no canvas
+  // work at all. The blank may not be chosen yet, in which case the plain-top
+  // baseline applies and the operator adjusts once they pick one.
   useEffect(() => {
     if (!design || isEdit) return;
-    setPlaced((prev) => (prev.length > 0 ? prev : [{
-      id: `${design.id}-front-seed`,
-      designId: design.id,
-      surface: "front",
-      box: defaultBox(1),
-      rotation: 0,
-      zoneId: null,
-      zoneLabel: null,
-    }]));
+    setPlaced((prev) =>
+      prev.length > 0
+        ? prev
+        : [
+            {
+              id: `${design.id}-front-seed`,
+              designId: design.id,
+              surface: "front",
+              box: boxCentredAt(startPoint(blank?.garmentType, "front"), garment.width, 1),
+              rotation: 0,
+              zoneId: null,
+              zoneLabel: null,
+            },
+          ],
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [design?.id]);
 
@@ -428,7 +448,7 @@ export default function ConceptBuilder({
           id: `${designId}-back-${Date.now()}`,
           designId,
           surface: "back",
-          box: defaultBox(1),
+          box: boxCentredAt(startPoint(blank?.garmentType, "back"), garment.width, 1),
           rotation: 0,
           zoneId: null,
           zoneLabel: null,
@@ -908,10 +928,12 @@ export default function ConceptBuilder({
                 designsById={designsById}
                 surface={surface}
                 guides={guides[surface] ?? DEFAULT_GUIDES}
+                defaultGuides={surface === "back" ? garment.guides.back : garment.guides.front}
+                garmentNote={garment.note}
                 onGuidesChange={(next) => setGuides((prev) => ({ ...prev, [surface]: next }))}
                 onChange={setPlaced}
                 onDropDesign={(designId, x, y, aspect) =>
-                  addPlacement(designId, boxAtPoint(x, y, aspect), null)
+                  addPlacement(designId, boxCentredAt({ x, y }, garment.width, aspect), null)
                 }
               />
 
@@ -931,7 +953,7 @@ export default function ConceptBuilder({
                   entityId={entity.id}
                   onQuickAdd={(d) => {
                     const at = dropCentre();
-                    addPlacement(d.id, boxAtPoint(at.x, at.y, 1), null);
+                    addPlacement(d.id, boxCentredAt(at, garment.width, 1), null);
                   }}
                 />
               </div>

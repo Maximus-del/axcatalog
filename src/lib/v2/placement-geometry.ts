@@ -269,6 +269,25 @@ export function defaultBox(artAspect: number, canvasAspect = 1): Box {
   return roundBox({ x: 50 - w / 2, y: 34 - h / 2, w, h });
 }
 
+/**
+ * A box of a given width, centred on a point.
+ *
+ * The general form of defaultBox and boxAtPoint, and the one the builder uses:
+ * both the width and the centre now come from the garment, because a hoodie
+ * with a pouch pocket and a pair of sweatpants do not want the same 34%-wide
+ * square in the same place. See garment-placement.ts.
+ */
+export function boxCentredAt(
+  at: { x: number; y: number },
+  widthPct: number,
+  artAspect: number,
+  canvasAspect = 1,
+): Box {
+  const w = clamp(widthPct, MIN_W, MAX_W);
+  const h = heightFor(w, artAspect, canvasAspect);
+  return clampBox({ x: at.x - w / 2, y: at.y - h / 2, w, h });
+}
+
 /** Drop point → a box centred on it, for dragging artwork onto a specific spot. */
 export function boxAtPoint(xPct: number, yPct: number, artAspect: number, canvasAspect = 1): Box {
   const w = 34;
