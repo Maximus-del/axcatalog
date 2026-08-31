@@ -99,6 +99,7 @@ const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
 const PortalProductDetail = lazy(() => import("./pages/portal/PortalProductDetail"));
 const PortalProducts = lazy(() => import("./pages/portal/PortalProducts"));
+const PortalMockups = lazy(() => import("./pages/portal/PortalMockups"));
 const PortalAnalytics = lazy(() => import("./pages/portal/PortalAnalytics"));
 const PortalContent = lazy(() => import("./pages/portal/PortalContent"));
 const PortalDrops = lazy(() => import("./pages/portal/PortalDrops"));
@@ -247,6 +248,7 @@ const App = () => (
               <Route path="/portal" element={<RequirePortal><PortalLayout /></RequirePortal>}>
                 <Route index element={<PortalHome />} />
                 <Route path="products" element={<PortalProducts />} />
+                <Route path="mockups" element={<PortalMockups />} />
                 <Route path="analytics" element={<PortalAnalytics />} />
                 <Route path="content" element={<PortalContent />} />
                 <Route path="drops" element={<PortalDrops />} />

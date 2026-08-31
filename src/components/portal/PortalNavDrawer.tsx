@@ -5,6 +5,7 @@ import {
   Home,
   Layers,
   Shirt,
+  Palette,
   Sparkles,
   Image,
   MessageSquare,
@@ -21,6 +22,7 @@ interface Props {
 const LINKS = [
   { to: "/portal", label: "Home", icon: Home, end: true },
   { to: "/portal/products", label: "Product Lineup", icon: Shirt },
+  { to: "/portal/mockups", label: "Made For You", icon: Palette },
   { to: "/portal/studio", label: "Design Studio", icon: Wand2 },
   { to: "/portal/content", label: "Social Content", icon: Image },
   { to: "/portal/messages", label: "Messages", icon: MessageSquare },
