@@ -30,13 +30,27 @@ export interface ConceptDraft {
   guides?: Record<string, { x: number; y: number }>;
 }
 
-/** Everything a concept is still missing before it could become a Product. */
+/**
+ * Everything a concept is still missing before it could become a Product.
+ *
+ * PLACEMENT IS `surface`, NOT `zoneId`.
+ *
+ * `zone_id` records which print-zone PRESET was used, and V2 placement is
+ * freeform: the canvas clears the zone the instant the operator drags the
+ * artwork, which is every real mockup. Testing zoneId therefore reported a
+ * finished, fully-placed, hand-positioned mockup as an unspecified "Idea",
+ * and both "ready to configure" queues — the one on Overview and the one in
+ * the entity workspace — could never fire.
+ *
+ * `surface` is written whenever anything is actually placed, so it is the
+ * honest signal that a placement exists.
+ */
 export function missingForProduct(c: ProductConcept): string[] {
   const gaps: string[] = [];
   if (!c.designId) gaps.push("design");
   if (!c.blankId) gaps.push("blank");
   if (!c.colorName) gaps.push("colour");
-  if (!c.zoneId) gaps.push("placement");
+  if (!c.surface) gaps.push("placement");
   return gaps;
 }
 

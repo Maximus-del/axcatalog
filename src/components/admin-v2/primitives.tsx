@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { ArrowRight, CheckCircle2, Search } from "lucide-react";
 import { useSignedUrl } from "@/lib/storage";
 import { initialsOf, tintOf } from "@/lib/v2/entity";
@@ -162,12 +163,15 @@ export function Metric({
   loading,
   icon,
   onClick,
+  href,
 }: {
   label: string;
   value: ReactNode;
   loading?: boolean;
   icon?: ReactNode;
   onClick?: () => void;
+  /** Where this number lives. A figure you cannot open is decoration. */
+  href?: string;
 }) {
   const body = (
     <>
@@ -178,8 +182,16 @@ export function Metric({
       {loading ? <Skeleton className="h-8 w-14" /> : <div className="text-[27px] font-semibold tabular-nums">{value}</div>}
     </>
   );
+  const interactive = "ax-card ax-card-hover block px-4 py-3.5 text-left transition-all";
+  if (href) {
+    return (
+      <Link to={href} className={interactive}>
+        {body}
+      </Link>
+    );
+  }
   return onClick ? (
-    <button type="button" onClick={onClick} className="ax-card ax-card-hover px-4 py-3.5 text-left transition-all">
+    <button type="button" onClick={onClick} className={interactive}>
       {body}
     </button>
   ) : (
@@ -240,14 +252,23 @@ export function WorkspaceCard({
       </div>
     </>
   );
-  return href ? (
-    <a href={href} className="ax-card ax-card-hover block p-4">
+  if (!href) {
+    return (
+      <Card onClick={onClick} className="p-4">
+        {body}
+      </Card>
+    );
+  }
+  // An internal destination routes; a full page reload would throw away the
+  // whole React tree and the query cache to move one screen.
+  return href.startsWith("/") ? (
+    <Link to={href} className="ax-card ax-card-hover block p-4">
+      {body}
+    </Link>
+  ) : (
+    <a href={href} target="_blank" rel="noreferrer" className="ax-card ax-card-hover block p-4">
       {body}
     </a>
-  ) : (
-    <Card onClick={onClick} className="p-4">
-      {body}
-    </Card>
   );
 }
 

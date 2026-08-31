@@ -5,6 +5,7 @@ import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
 import { cleanDesignTitle, isConfigurable, stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { fmtMoney } from "@/lib/v2/pricing";
+import { catalogHref } from "@/lib/v2/catalog-nav";
 import { shopLink } from "@/lib/ecosystem/image";
 import { AssetImage, Card, Chip, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
 import WorkflowNav, { type WorkflowStep } from "@/components/admin-v2/WorkflowNav";
@@ -230,17 +231,20 @@ export default function V2EntityWorkspace() {
                 {isAthlete && (
                   <a
                     href={`/a/${entity.slug}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Opens the public fan profile in a new tab"
                     className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
                   >
                     Fan profile <ArrowUpRight className="h-3.5 w-3.5" />
                   </a>
                 )}
-                <a
-                  href={`/admin/athletes/${entity.id}`}
+                <Link
+                  to={`/admin/athletes/${entity.id}`}
                   className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
                 >
                   Open in V1 <ArrowUpRight className="h-3.5 w-3.5" />
-                </a>
+                </Link>
               </>
             }
           />
@@ -340,9 +344,9 @@ export default function V2EntityWorkspace() {
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
           {products.slice(0, 18).map((p) => (
-            <a
+            <Link
               key={p.id}
-              href={`/admin/products/${p.id}`}
+              to={`/admin/products/${p.id}`}
               className="ax-card ax-card-hover overflow-hidden transition-all"
             >
               <AssetImage url={p.imageUrl} alt={p.title} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
@@ -357,11 +361,16 @@ export default function V2EntityWorkspace() {
                   )}
                 </div>
               </div>
-            </a>
+            </Link>
           ))}
         </div>
         {products.length > 18 && (
-          <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">Showing 18 of {products.length}.</p>
+          <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">
+            Showing 18 of {products.length}.{" "}
+            <Link to={catalogHref({ tab: "products", q: entity.name })} className="text-[hsl(var(--ax-accent))]">
+              See them all in Commerce
+            </Link>
+          </p>
         )}
       </Section>
 
@@ -376,9 +385,9 @@ export default function V2EntityWorkspace() {
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {collections.map((c) => (
-            <a
+            <Link
               key={c.id}
-              href={`/admin/collections/${c.id}`}
+              to={`/admin/collections/${c.id}`}
               className="ax-card ax-card-hover overflow-hidden transition-all"
             >
               <AssetImage url={c.coverImageUrl} alt={c.name} className="aspect-[4/3] w-full" fallbackSeed={c.id} />
@@ -388,7 +397,7 @@ export default function V2EntityWorkspace() {
                   {c.designCount} designs · {c.conceptCount} mockups · {c.productCount} products
                 </div>
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       </Section>
@@ -417,9 +426,9 @@ export default function V2EntityWorkspace() {
                   <div className="truncate text-[12px] font-medium">{p.title}</div>
                   <div className="mt-1 flex items-center justify-between text-[11px]">
                     <span className="tabular-nums text-[hsl(var(--ax-secondary))]">{fmtMoney(p.price)}</span>
-                    <a href={`/admin/products/${p.id}`} className="text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-ink))]">
+                    <Link to={`/admin/products/${p.id}`} className="text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-ink))]">
                       Edit
-                    </a>
+                    </Link>
                   </div>
                   {store && (
                     <a
@@ -448,9 +457,9 @@ export default function V2EntityWorkspace() {
       >
         <div className="ax-card divide-y divide-[hsl(var(--ax-line))] overflow-hidden">
           {orders.map((o) => (
-            <a
+            <Link
               key={o.id}
-              href={`/admin/orders/${o.id}`}
+              to={`/admin/orders/${o.id}`}
               className="flex items-center gap-3 px-3 py-2.5 text-[12px] hover:bg-white/[0.03]"
             >
               <span className="w-24 shrink-0 truncate font-medium">{o.name ?? "—"}</span>
@@ -462,7 +471,7 @@ export default function V2EntityWorkspace() {
               <span className="hidden w-24 shrink-0 truncate text-right text-[hsl(var(--ax-faint))] sm:block">
                 {o.fulfillmentStatus ?? "unfulfilled"}
               </span>
-            </a>
+            </Link>
           ))}
         </div>
         {orders.length > 0 && <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">{ordersNote}</p>}

@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { displayNameOf } from "./entity";
 import { slugify } from "@/lib/slug";
-import { draftToRow, type ConceptDraft } from "./concepts";
+import { draftToRow, isConfigurable, type ConceptDraft } from "./concepts";
 import type { DesignGroup, OrderWrite } from "./design-groups";
 import { draftToProductRow, type ProductDraft } from "./productize";
 import { mergeZones, type PrintZoneRow } from "./placements";
@@ -1578,7 +1578,7 @@ async function fetchOverview() {
 
   const awaitingApproval = concepts.filter((c) => c.approvalState === "pending");
   const readyToConfigure = concepts.filter(
-    (c) => c.approvalState !== "pending" && !c.productId && c.designId && c.blankId && c.colorName && c.zoneId,
+    (c) => c.approvalState !== "pending" && !c.productId && isConfigurable(c),
   );
   const readyForShopify = products.filter(
     (p) => p.approvalState === "approved" && !p.shopifyProductId && p.status !== "archived",
@@ -1593,7 +1593,7 @@ async function fetchOverview() {
       count: awaitingApproval.length,
       label: "Concepts awaiting approval",
       detail: "Sent to the entity, no decision yet",
-      to: "/admin-v2/creative?stage=awaiting_approval",
+      to: "/admin-v2/creative?tab=concepts&stage=awaiting_approval",
       tone: "var(--ax-amber)",
     },
     {
@@ -1601,7 +1601,7 @@ async function fetchOverview() {
       count: readyToConfigure.length,
       label: "Concepts ready to configure",
       detail: "Design, blank, colour and placement all chosen",
-      to: "/admin-v2/creative?stage=specified",
+      to: "/admin-v2/creative?tab=concepts&stage=specified",
       tone: "var(--ax-blue)",
     },
     {
@@ -1609,7 +1609,7 @@ async function fetchOverview() {
       count: readyForShopify.length,
       label: "Products ready for Shopify",
       detail: "Approved but never pushed to the store",
-      to: "/admin-v2/commerce?filter=ready_for_shopify",
+      to: "/admin-v2/commerce?tab=products&filter=ready_for_shopify",
       tone: "var(--ax-violet)",
     },
     {
@@ -1617,7 +1617,7 @@ async function fetchOverview() {
       count: blanksMissingPrice.length,
       label: blanksMissingPrice.length === 1 ? "Blank missing cost" : "Blanks missing cost",
       detail: "Cannot compute margin until cost is set",
-      to: "/admin-v2/commerce/blanks?filter=missing_cost",
+      to: "/admin-v2/commerce?tab=blanks&filter=missing_cost",
       tone: "var(--ax-red)",
     },
     {
@@ -1625,7 +1625,7 @@ async function fetchOverview() {
       count: blanksMissingAssortment.length,
       label: "Blanks in no assortment",
       detail: "Invisible to every audience in the builder",
-      to: "/admin-v2/commerce/blanks?filter=missing_assortment",
+      to: "/admin-v2/commerce?tab=blanks&filter=missing_assortment",
       tone: "var(--ax-faint)",
     },
     {
@@ -1648,6 +1648,10 @@ async function fetchOverview() {
     },
     recentEntities: activeEntities.slice(0, 6),
     recentConcepts: concepts.slice(0, 6),
+    // Overview asks "what is moving through the business", and orders are the
+    // only part of that answer that is not creative work.
+    recentOrders: orders.slice(0, 6),
+    openOrders: openOrders.length,
   };
 }
 

@@ -6,7 +6,7 @@
 // `// @vitest-environment jsdom` gets the DOM matchers and the matchMedia stub;
 // a node test gets neither and does not pay for them.
 if (typeof window !== "undefined") {
-  await import("@testing-library/jest-dom");
+  await import("@testing-library/jest-dom/vitest");
 
   // jsdom implements no media queries. Any component that asks gets "no match"
   // rather than a crash.

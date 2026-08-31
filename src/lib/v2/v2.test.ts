@@ -146,7 +146,7 @@ describe("concept stage is derived, never stored", () => {
   });
 
   it("becomes specified once design, blank, colour and placement exist", () => {
-    const c = concept({ designId: "d", blankId: "b", colorName: "Black", zoneId: "center_chest" });
+    const c = concept({ designId: "d", blankId: "b", colorName: "Black", surface: "front" });
     expect(isConfigurable(c)).toBe(true);
     expect(stageOf(c)).toBe("specified");
   });
