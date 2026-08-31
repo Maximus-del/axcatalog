@@ -1955,9 +1955,18 @@ export function useShelfActions(entityId: string, organizationId: string) {
           return;
         }
         case "rename-group": {
-          await t("design_collections")
-            .update({ name: job.name } as never)
-            .eq("id", job.groupId);
+          await must(t("design_collections").update({ name: job.name } as never).eq("id", job.groupId));
+          return;
+        }
+        /*
+          Pin a folder's cover. coverOf() has always honoured cover_design_id
+          and nothing could ever write it, so choosing a cover meant dragging
+          the whole shelf until the right design happened to be first.
+        */
+        case "set-group-cover": {
+          await must(
+            t("design_collections").update({ cover_design_id: job.designId } as never).eq("id", job.groupId),
+          );
           return;
         }
         case "set-design-visibility": {
@@ -2080,7 +2089,9 @@ export type ShelfJob =
   /** Put a previously unlinked design back exactly where it was. */
   | { type: "relink"; link: DesignLinkSnapshot }
   /** designs.status -> 'archived'. Global to the design, not per entity. */
-  | { type: "archive"; designId: string; archived: boolean };
+  | { type: "archive"; designId: string; archived: boolean }
+  /** Pin a folder's cover. Null hands it back to "whatever is first". */
+  | { type: "set-group-cover"; groupId: string; designId: string | null };
 
 /**
  * Everything needed to put an unlinked design back.

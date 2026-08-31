@@ -545,6 +545,16 @@ export default function DesignShelf({
           onClose={() => setOpenGroup(null)}
           onUngroup={() => ungroup(open.key, open.designs)}
           onSetVisibility={(v) => setGroupVisibility(open.key, open.designs, v)}
+          onSetCover={(designId) =>
+            actions.mutate(
+              { type: "set-group-cover", groupId: open.key, designId },
+              {
+                onError: () => fail("Could not set that cover"),
+                onSuccess: () =>
+                  toast.success(designId ? "Folder cover pinned" : "Folder cover back to whatever is first"),
+              },
+            )
+          }
           onShowAll={() => showAll(promotableMembers(open.designs))}
           onMemberDragStart={(designId) => {
             memberDrag.current = { groupId: open.key, designId };
@@ -918,6 +928,7 @@ function OpenGroup({
   onClose,
   onUngroup,
   onSetVisibility,
+  onSetCover,
   onShowAll,
   onMemberDragStart,
   onMemberDragEnd,
@@ -934,6 +945,8 @@ function OpenGroup({
   onClose: () => void;
   onUngroup: () => void;
   onSetVisibility: (v: ClientVisibility) => void;
+  /** Pin a member as the folder cover, or null to go back to "whatever is first". */
+  onSetCover: (designId: string | null) => void;
   onShowAll: () => void;
   onMemberDragStart: (designId: string) => void;
   onMemberDragEnd: () => void;
@@ -1004,7 +1017,7 @@ function OpenGroup({
       </div>
 
       <p className="mb-3 text-[11px] text-[hsl(var(--ax-faint))]">
-        Drag to reorder. The first design is the folder cover. Drag a design out, or use its menu, to
+        Drag to reorder. The first design is the cover unless you pin one. Drag a design out, or use the ×, to
         take it back to the shelf.
       </p>
 
@@ -1012,7 +1025,7 @@ function OpenGroup({
         {item.designs.map((d, i) => (
           <div
             key={d.id}
-            className="relative"
+            className="group relative"
             draggable
             onDragStart={() => onMemberDragStart(d.id)}
             onDragEnd={onMemberDragEnd}
@@ -1023,11 +1036,28 @@ function OpenGroup({
             }}
           >
             {renderCard(d)}
-            {i === 0 && (
-              <span className="pointer-events-none absolute left-1 top-1 rounded-full bg-[hsl(var(--ax-accent))] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[hsl(var(--ax-on-accent))]">
-                cover
-              </span>
-            )}
+            {(() => {
+              const pinned = item.group.coverDesignId === d.id;
+              const isCover = pinned || (!item.group.coverDesignId && i === 0);
+              return (
+                <button
+                  type="button"
+                  onClick={() => onSetCover(pinned ? null : d.id)}
+                  title={
+                    pinned
+                      ? "Pinned as the folder cover — click to go back to whatever is first"
+                      : "Pin this as the folder cover"
+                  }
+                  className={`absolute left-1 top-1 z-20 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider transition-colors ${
+                    isCover
+                      ? "bg-[hsl(var(--ax-accent))] text-[hsl(var(--ax-on-accent))]"
+                      : "bg-black/65 text-white/70 opacity-0 hover:text-white group-hover:opacity-100"
+                  }`}
+                >
+                  {isCover ? "cover" : "make cover"}
+                </button>
+              );
+            })()}
             <button
               type="button"
               onClick={() => onRemoveMember(d.id)}

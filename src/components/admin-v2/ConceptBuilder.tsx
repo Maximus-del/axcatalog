@@ -87,6 +87,7 @@ export default function ConceptBuilder({
     back: DEFAULT_GUIDES,
   });
   const [collectionId, setCollectionId] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [scopeAllDesigns, setScopeAllDesigns] = useState(false);
@@ -369,6 +370,44 @@ export default function ConceptBuilder({
     }
   };
 
+  /**
+   * Upload artwork and start a mockup on it.
+   *
+   * The freshly-created design is constructed locally rather than waited for:
+   * the insert returns its id and storage path, which is everything the picker
+   * and the canvas need, and the shelf query refetches behind us.
+   */
+  const uploadAndStart = async (file: File) => {
+    setUploading(true);
+    try {
+      const title = file.name.replace(/\.[^.]+$/, "") || "Untitled design";
+      const { designId, path } = await upload.mutateAsync({ file, title, productionReady: false });
+      setDesign({
+        id: designId,
+        title,
+        status: "concept",
+        entityId: entity.id,
+        fileBucket: "design-files",
+        filePath: path,
+        fileType: "source",
+        productionReady: false,
+        clientVisibility: "hidden",
+        hasPreview: false,
+        previewPath: null,
+        createdAt: new Date().toISOString(),
+      });
+      setFlow("design_first");
+      setStep("blank");
+      toast.success("Uploaded", {
+        description: "Filed as concept art — mark it production-ready on the design's own page.",
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not upload that artwork");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   /** Upload artwork and drop it straight onto the back of the garment. */
   const uploadBack = async (file: File) => {
     try {
@@ -590,15 +629,32 @@ export default function ConceptBuilder({
                   setStep("blank");
                 }}
               />
-              <div className="ax-card flex items-start gap-3 px-4 py-3.5 opacity-60">
+              {/*
+                This card said "not wired in this first pass" long after upload
+                was wired — the confirm step has used it for back artwork for
+                weeks. A control that describes itself as broken is worse than
+                no control.
+              */}
+              <label className="ax-card ax-card-hover flex cursor-pointer items-start gap-3 px-4 py-3.5 transition-all">
                 <Upload className="mt-0.5 h-4 w-4 shrink-0" />
                 <div className="text-[13px]">
-                  <div className="font-medium">Upload my own design</div>
+                  <div className="font-medium">{uploading ? "Uploading…" : "Upload my own design"}</div>
                   <div className="text-[12px] text-[hsl(var(--ax-faint))]">
-                    Not wired in this first pass — upload through the V1 Designs page, then it appears here.
+                    Filed against {entity.name} as concept art, then straight to choosing the blank.
                   </div>
                 </div>
-              </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void uploadAndStart(file);
+                  }}
+                />
+              </label>
             </div>
           )}
 
