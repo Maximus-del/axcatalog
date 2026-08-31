@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Home, Users, Palette, ShoppingBag, Receipt, ArrowLeft, ArrowUpRight } from "lucide-react";
+import CommandSearch from "./CommandSearch";
 
 // AX OS V2 shell.
 //
@@ -80,6 +81,8 @@ export default function V2Layout() {
               </NavLink>
             ))}
           </nav>
+
+          <CommandSearch />
 
           <a
             href="/admin"

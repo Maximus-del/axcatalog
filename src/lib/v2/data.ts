@@ -1716,6 +1716,145 @@ export function useOverview() {
   return useQuery({ queryKey: ["v2", "overview"], queryFn: fetchOverview, staleTime: 30_000 });
 }
 
+/* ------------------------------------------------------------- search */
+
+/**
+ * ONE SEARCH BOX FOR THE WHOLE OF V2.
+ *
+ * V1 has a global search and V2 had none, so finding a person meant People →
+ * type; finding a mockup meant remembering whose it was; finding a blank meant
+ * Commerce → Blank catalog → type. Three navigations to answer a question that
+ * is always the same shape: "where is the thing called X".
+ *
+ * Queried on demand rather than by filtering the cached lists: the caches are
+ * per-page and partial (mockups are loaded per entity in some places), and
+ * pulling six full tables into memory on every page just in case someone
+ * searches is the wrong trade. Six narrow ilike queries, five rows each, only
+ * once there are two characters to search for.
+ */
+export type SearchKind = "person" | "mockup" | "design" | "blank" | "collection" | "product";
+
+export interface SearchHit {
+  kind: SearchKind;
+  id: string;
+  label: string;
+  detail: string | null;
+  to: string;
+}
+
+const KIND_ORDER: SearchKind[] = ["person", "mockup", "design", "blank", "collection", "product"];
+
+export const SEARCH_KIND_LABEL: Record<SearchKind, string> = {
+  person: "People",
+  mockup: "Mockups",
+  design: "Designs",
+  blank: "Blanks",
+  collection: "Collections",
+  product: "Products",
+};
+
+async function fetchSearch(term: string): Promise<SearchHit[]> {
+  // Escape the wildcards so a literal % or _ searches for itself.
+  const safe = term.replace(/[%_]/g, (m) => `\\${m}`);
+  const like = `%${safe}%`;
+  const or = (columns: string[]) => columns.map((c) => `${c}.ilike.${like}`).join(",");
+  const q = (table: string, columns: string, or_: string) =>
+    (t(table).select(columns) as never as { or: (f: string) => { limit: (n: number) => PromiseLike<{ data: unknown }> } })
+      .or(or_)
+      .limit(5);
+
+  const [people, mockups, designs, blanks, collections, products] = await Promise.all([
+    q("athletes", "id, display_name, first_name, last_name, position, league", or(["display_name", "first_name", "last_name"])),
+    q("mockups", "id, title, athlete_id, color_name, kind", or(["title"])),
+    q("designs", "id, title, status", or(["title"])),
+    q("v2_blanks", "id, name, display_name, supplier, style_code", or(["name", "display_name", "style_code"])),
+    q("collections", "id, name, status, collection_type", or(["name"])),
+    q("products", "id, title, sku, status", or(["title", "sku"])),
+  ]);
+
+  const hits: SearchHit[] = [];
+
+  for (const r of ((people as { data: unknown }).data ?? []) as Row[]) {
+    hits.push({
+      kind: "person",
+      id: String(r.id),
+      label: displayNameOf(r as never),
+      detail: [str(r.position), str(r.league)].filter(Boolean).join(" · ") || null,
+      to: `/admin-v2/people/${String(r.id)}`,
+    });
+  }
+
+  for (const r of ((mockups as { data: unknown }).data ?? []) as Row[]) {
+    // Only V2 mockups; `mockups` also holds V1 photo rows.
+    if (r.kind !== "concept") continue;
+    const owner = str(r.athlete_id);
+    hits.push({
+      kind: "mockup",
+      id: String(r.id),
+      label: String(r.title ?? "Untitled mockup"),
+      detail: str(r.color_name),
+      to: owner ? `/admin-v2/people/${owner}?mockup=${String(r.id)}` : "/admin-v2/creative?tab=mockups",
+    });
+  }
+
+  for (const r of ((designs as { data: unknown }).data ?? []) as Row[]) {
+    hits.push({
+      kind: "design",
+      id: String(r.id),
+      label: String(r.title ?? "Untitled design"),
+      detail: str(r.status),
+      to: `/admin/designs/${String(r.id)}`,
+    });
+  }
+
+  for (const r of ((blanks as { data: unknown }).data ?? []) as Row[]) {
+    hits.push({
+      kind: "blank",
+      id: String(r.id),
+      // Operator surface: the client name when there is one, the
+      // manufacturer's otherwise. Same rule as catalogTitle().
+      label: str(r.display_name) ?? String(r.name ?? "Untitled blank"),
+      detail: [str(r.supplier), str(r.style_code)].filter(Boolean).join(" · ") || null,
+      to: `/admin-v2/commerce/blanks/${String(r.id)}`,
+    });
+  }
+
+  for (const r of ((collections as { data: unknown }).data ?? []) as Row[]) {
+    hits.push({
+      kind: "collection",
+      id: String(r.id),
+      label: String(r.name ?? "Untitled collection"),
+      detail: [str(r.collection_type), str(r.status)].filter(Boolean).join(" · ") || null,
+      to: `/admin/collections/${String(r.id)}`,
+    });
+  }
+
+  for (const r of ((products as { data: unknown }).data ?? []) as Row[]) {
+    hits.push({
+      kind: "product",
+      id: String(r.id),
+      label: String(r.title ?? "Untitled product"),
+      detail: [str(r.sku), str(r.status)].filter(Boolean).join(" · ") || null,
+      to: `/admin/products/${String(r.id)}`,
+    });
+  }
+
+  // People first, always: the operator is looking for a person far more often
+  // than for anything else, and a directory that buries them under six
+  // similarly-named mockups is not worth opening.
+  return hits.sort((a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind));
+}
+
+export function useV2Search(term: string) {
+  const trimmed = term.trim();
+  return useQuery({
+    queryKey: ["v2", "search", trimmed],
+    queryFn: () => fetchSearch(trimmed),
+    enabled: trimmed.length >= 2,
+    staleTime: 30_000,
+  });
+}
+
 /* ------------------------------------------------------- design templates */
 
 /**

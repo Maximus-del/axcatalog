@@ -263,6 +263,19 @@ vi.mock("@/lib/v2/data", () => ({
   useUpdatePlacementSpec: () => mutation(),
   useUploadDesign: () => mutation(),
   publicUrl: () => null,
+  useV2Search: () =>
+    query([
+      { kind: "person", id: "e1", label: "Darnell Mooney", detail: "WR · NFL", to: "/admin-v2/people/e1" },
+      { kind: "blank", id: "b1", label: "AX Heavyweight Hoodie", detail: "Cotton Collective", to: "/admin-v2/commerce/blanks/b1" },
+    ]),
+  SEARCH_KIND_LABEL: {
+    person: "People",
+    mockup: "Mockups",
+    design: "Designs",
+    blank: "Blanks",
+    collection: "Collections",
+    product: "Products",
+  },
 }));
 
 vi.mock("@/lib/storage", () => ({ useSignedUrl: () => ({ url: null, loading: false }) }));
@@ -277,6 +290,7 @@ import V2BlankDetail from "../V2BlankDetail";
 import V2Creative from "../V2Creative";
 import V2NotFound from "../V2NotFound";
 import V2EntityWorkspace from "../V2EntityWorkspace";
+import CommandSearch from "@/components/admin-v2/CommandSearch";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -371,6 +385,42 @@ describe("a failed read says so instead of showing an empty shelf", () => {
       expect(textOf(mount(page.render(), page.route))).toMatch(/could not load|does not exist|not found/i);
     });
   }
+});
+
+describe("global search", () => {
+  it("is a trigger until it is opened", () => {
+    const el = mount(<CommandSearch />);
+    expect(textOf(el)).toMatch(/search/i);
+    expect(textOf(el)).not.toMatch(/darnell mooney/i);
+  });
+
+  it("waits for two characters, then shows grouped results", () => {
+    vi.useFakeTimers();
+    try {
+      mount(<CommandSearch />);
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+      });
+      expect(document.body.textContent).toMatch(/two characters is enough/i);
+
+      const input = document.querySelector("input") as HTMLInputElement;
+      // React tracks the DOM value itself, so a plain assignment is ignored.
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      act(() => {
+        setValue?.call(input, "moo");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      expect(document.body.textContent).toMatch(/darnell mooney/i);
+      expect(document.body.textContent).toMatch(/AX Heavyweight Hoodie/i);
+      expect(document.body.textContent).toMatch(/People/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("an unknown V2 address stays inside V2", () => {

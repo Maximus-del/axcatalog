@@ -362,13 +362,16 @@ export function TabBar<T extends string>({
   label: (tab: T) => string;
 }) {
   return (
-    <div className="mb-6 flex border-b border-[hsl(var(--ax-line))]">
+    // Scrollable: Creative and Commerce carry five and four tabs, which do not
+    // fit a phone. Wrapping them onto two rows breaks the single underline that
+    // makes a tab bar read as a tab bar.
+    <div className="mb-6 flex overflow-x-auto scroll-touch border-b border-[hsl(var(--ax-line))]">
       {tabs.map((tab) => (
         <button
           key={tab}
           type="button"
           onClick={() => onSelect(tab)}
-          className={`relative px-4 pb-3 pt-1 text-[12px] font-semibold transition-colors ${
+          className={`relative shrink-0 px-4 pb-3 pt-1 text-[12px] font-semibold transition-colors ${
             active === tab ? "text-[hsl(var(--ax-accent))]" : "text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
           }`}
         >
