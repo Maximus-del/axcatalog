@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import {
   ChevronDown,
   Check,
+  Archive,
+  ArchiveRestore,
   Copy,
   Eye,
   EyeOff,
@@ -96,6 +98,7 @@ export default function MockupLibrary({
   const folderFilter = params.get("mfolder") ?? "all";
   const view = params.get("mview") === "list" ? "list" : "grid";
   const openFolder = params.get("mopen");
+  const sharedOnly = params.get("mshared") === "1";
 
   const patch = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -110,6 +113,7 @@ export default function MockupLibrary({
   const setFolderFilter = (v: string) => patch({ mfolder: v === "all" ? null : v });
   const setView = (v: "grid" | "list") => patch({ mview: v === "grid" ? null : v });
   const setOpenFolder = (v: string | null) => patch({ mopen: v });
+  const setSharedOnly = (v: boolean) => patch({ mshared: v ? "1" : null });
 
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [hint, setHint] = useState<{ key: string; zone: "before" | "onto" } | null>(null);
@@ -128,21 +132,23 @@ export default function MockupLibrary({
     // Status is a property of the mockup, so it filters the mockups BEFORE the
     // shelf is built — otherwise a folder whose members are all archived would
     // still render as an empty folder.
-    const mockups = applyLifecycleFilter(data.mockups, statusFilter);
+    let mockups = applyLifecycleFilter(data.mockups, statusFilter);
+    if (sharedOnly) mockups = mockups.filter((m) => m.clientVisible);
     const folders =
       folderFilter === "all" ? data.folders : data.folders.filter((f) => f.id === folderFilter);
     const scoped = folderFilter === "all" ? mockups : mockups.filter((m) => m.folderId === folderFilter);
     return buildMockupShelf(scoped, folders);
-  }, [data, statusFilter, folderFilter]);
+  }, [data, statusFilter, folderFilter, sharedOnly]);
 
   const counts = useMemo(() => countByLifecycle(data?.mockups ?? []), [data]);
+  const sharedCount = useMemo(() => (data?.mockups ?? []).filter((m) => m.clientVisible).length, [data]);
 
   useEffect(() => setOptimistic(null), [data]);
 
   // Selection is about what is on screen. Leaving it intact across a filter
   // change left the bulk bar offering to act on mockups the operator could no
   // longer see, which is how you archive the wrong five.
-  useEffect(() => setSelected([]), [statusFilter, folderFilter, query]);
+  useEffect(() => setSelected([]), [statusFilter, folderFilter, query, sharedOnly]);
 
   useEffect(() => {
     if (!menuFor) return;
@@ -237,21 +243,60 @@ export default function MockupLibrary({
   const setShared = (ids: string[], visible: boolean) => {
     setMenuFor(null);
     if (ids.length === 0) return;
+    /*
+      A mockup whose composite never rendered falls back to the BLANK's
+      catalogue photo — an empty garment. Internally that is a harmless
+      placeholder; shared with a client it is the wrong picture, presented as
+      their mockup. Sharing still goes ahead, because the operator may be about
+      to re-save it, but it does not go ahead quietly.
+    */
+    const unrendered = visible
+      ? (data?.mockups ?? []).filter((m) => ids.includes(m.id) && !m.imagePath).length
+      : 0;
     actions.mutate(
       { type: "set-client-visible", mockupIds: ids, visible },
       {
         onError: () => fail(visible ? "Could not share that" : "Could not hide that"),
         onSuccess: () => {
-          toast.success(
-            visible
-              ? `${ids.length === 1 ? "Shared" : `${ids.length} shared`} with ${entityName}`
-              : `${ids.length === 1 ? "Hidden" : `${ids.length} hidden`} from ${entityName}`,
-            visible
-              ? { description: "Marked for the client. The athlete-facing view that reads this is not built yet." }
-              : undefined,
-          );
+          const shared = `${ids.length === 1 ? "Shared" : `${ids.length} shared`} with ${entityName}`;
+          const hidden = `${ids.length === 1 ? "Hidden" : `${ids.length} hidden`} from ${entityName}`;
+          if (!visible) toast.success(hidden);
+          else if (unrendered > 0) {
+            toast.warning(shared, {
+              description:
+                unrendered === ids.length
+                  ? "No rendered preview yet, so they would see the plain garment. Open it and save once to render one."
+                  : `${unrendered} of these have no rendered preview and would show the plain garment.`,
+            });
+          } else {
+            toast.success(shared, {
+              description: "They see the flattened mockup — never the artwork it was built from.",
+            });
+          }
           setSelected([]);
         },
+      },
+    );
+  };
+
+  /**
+   * Archive, and unarchive.
+   *
+   * It was reachable only from the mockup's own page, behind a status list, so
+   * clearing a shelf meant opening every item on it. Archiving also hides the
+   * mockup from the client — see setShared: getting something out of the way
+   * should get it out of everyone's way.
+   */
+  const setArchived = (mockup: Mockup, archived: boolean) => {
+    setMenuFor(null);
+    actions.mutate(
+      { type: "set-lifecycle", mockupIds: [mockup.id], lifecycle: archived ? "archived" : "bin" },
+      {
+        onError: () => fail(archived ? "Could not archive that" : "Could not restore that"),
+        onSuccess: () =>
+          toast.success(archived ? `“${mockup.title}” archived` : `“${mockup.title}” restored`, {
+            description: archived ? "Hidden from this shelf, and from the client." : undefined,
+          }),
       },
     );
   };
@@ -386,6 +431,7 @@ export default function MockupLibrary({
       onDelete={() => remove(m)}
       confirmingDelete={confirmDelete === m.id}
       onSetShared={(visible) => setShared([m.id], visible)}
+      onSetArchived={(archived) => setArchived(m, archived)}
       onTurnIntoAssets={() => {
         setMenuFor(null);
         onTurnIntoAssets(m);
@@ -456,6 +502,15 @@ export default function MockupLibrary({
           browser dialog in a dark operator tool reads as a bug, cannot be
           styled, cannot be dismissed by clicking away, and blocks the tab.
         */}
+        {/*
+          Not another status. "Can the client see this" is a different question
+          from "where is this in the pipeline", and an operator asks it right
+          before a call rather than while filing.
+        */}
+        <Chip active={sharedOnly} onClick={() => setSharedOnly(!sharedOnly)} title="Only mockups shared with the client">
+          {sharedOnly ? "Shared only" : `Shared ${sharedCount}`}
+        </Chip>
+
         {newFolder ? (
           <input
             autoFocus
@@ -487,6 +542,21 @@ export default function MockupLibrary({
           </button>
         )}
       </Toolbar>
+
+      {/*
+        Whose library this is. The page header says it once, six sections up and
+        off screen by the time you are looking at a folder — and a mockup with
+        no owner on the card is exactly how work ends up filed under the wrong
+        person.
+      */}
+      <p className="mb-3 text-[11px] text-[hsl(var(--ax-faint))]">
+        {data?.mockups.length ?? 0} {(data?.mockups.length ?? 0) === 1 ? "mockup" : "mockups"} for{" "}
+        <span className="text-[hsl(var(--ax-secondary))]">{entityName}</span>
+        {sharedCount > 0 && <> · {sharedCount} shared with them</>}
+        {(data?.folders.length ?? 0) > 0 && (
+          <> · {data?.folders.length} {data?.folders.length === 1 ? "folder" : "folders"}</>
+        )}
+      </p>
 
       {selected.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.08)] px-3 py-2">
@@ -845,6 +915,7 @@ function MockupCard({
   onDelete,
   confirmingDelete,
   onSetShared,
+  onSetArchived,
   onTurnIntoAssets,
   onCreateProduct,
 }: {
@@ -864,6 +935,7 @@ function MockupCard({
   /** Delete is armed and waiting for a second click. */
   confirmingDelete: boolean;
   onSetShared: (visible: boolean) => void;
+  onSetArchived: (archived: boolean) => void;
   onTurnIntoAssets: () => void;
   onCreateProduct?: () => void;
 }) {
@@ -932,6 +1004,12 @@ function MockupCard({
               {mockup.clientVisible ? "Hide from client" : "Share with client"}
             </MenuItem>
             <MenuItem icon={Sparkles} onClick={onTurnIntoAssets}>Turn into Assets</MenuItem>
+            <MenuItem
+              icon={stage === "archived" ? ArchiveRestore : Archive}
+              onClick={() => onSetArchived(stage !== "archived")}
+            >
+              {stage === "archived" ? "Restore" : "Archive"}
+            </MenuItem>
             {onCreateProduct && (
               <MenuItem icon={PackagePlus} onClick={onCreateProduct}>Configure as Product</MenuItem>
             )}
