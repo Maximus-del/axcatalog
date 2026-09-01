@@ -11,15 +11,14 @@ import type { Blank, Design } from "@/lib/v2/types";
 // to notice a placement sits 3% low is the screen before saving.
 
 /**
- * EVERY SELECTED COLOURWAY, WITH THE ARRANGEMENT ALREADY ON IT.
+ * EVERY SELECTED COLOURWAY, WITH THE ARRANGEMENT IT ACTUALLY HAS.
  *
- * There is no "apply to all" button here, and its absence is the design rather
- * than an omission. Placement geometry is stored as percentages of the garment
- * box and is shared by the whole variant set, so a colour added after the
- * artwork was positioned is already positioned — there is nothing for a button
- * to do. Rather than ship a control that fires and changes nothing, the strip
- * shows the propagation happening: drag the logo on the canvas and all thirteen
- * thumbnails move with it.
+ * Each thumbnail renders its OWN placement, not a shared one. A colourway
+ * inherits the product's arrangement until somebody adjusts it, and the
+ * photography is why that matters: the same hoodie shot in Cream and in Shadow
+ * can sit a couple of percent apart in frame, so a chest hit that is right on
+ * one reads low on the other. Adjusted colourways carry a dot, because "which
+ * of these did I hand-tune" is unanswerable a week later otherwise.
  *
  * Clicking a colourway makes it the one the canvas shows, so a nudge can be
  * judged against the colour that looked wrong instead of the first one picked.
@@ -28,7 +27,8 @@ export function ColorwayStrip({
   blank,
   selected,
   master,
-  placed,
+  placedFor,
+  adjusted,
   designsById,
   surface,
   onMakeMaster,
@@ -36,12 +36,14 @@ export function ColorwayStrip({
   blank: Blank;
   selected: string[];
   master: string | null;
-  placed: PlacedDesign[];
+  /** This colourway's own arrangement — its adjustment, or the shared one. */
+  placedFor: (colorName: string) => PlacedDesign[];
+  /** Colourways hand-tuned away from the shared arrangement. */
+  adjusted: string[];
   designsById: Map<string, Design>;
   surface: "front" | "back";
   onMakeMaster: (name: string) => void;
 }) {
-  const onThisSurface = placed.filter((p) => p.surface === surface);
 
   return (
     <section className="rounded-2xl border border-[hsl(var(--ax-border))] bg-white/[0.02] p-3">
@@ -50,8 +52,9 @@ export function ColorwayStrip({
           {selected.length} colourway{selected.length === 1 ? "" : "s"} · {surface}
         </h4>
         <p className="text-[10.5px] text-[hsl(var(--ax-faint))]">
-          One arrangement, every colour. Worth a look before saving — a placement that sits right on one garment can
-          read slightly differently on another.
+          {adjusted.length > 0
+            ? `${adjusted.length} adjusted for ${adjusted.length === 1 ? "its" : "their"} own photograph.`
+            : "All sharing one arrangement."}
         </p>
       </div>
 
@@ -59,12 +62,20 @@ export function ColorwayStrip({
         {selected.map((name) => {
           const img = resolveBlankImage({ blank, colorName: name, surface });
           const isMaster = name === master;
+          const isAdjusted = adjusted.includes(name);
+          const onThisSurface = placedFor(name).filter((p) => p.surface === surface);
           return (
             <button
               key={name}
               type="button"
               onClick={() => onMakeMaster(name)}
-              title={isMaster ? `${name} — the canvas is showing this one` : `${name} — click to adjust on this colour`}
+              title={
+                isMaster
+                  ? `${name} — the canvas is showing this one`
+                  : isAdjusted
+                    ? `${name} — adjusted for its own photograph. Click to edit it.`
+                    : `${name} — click to adjust on this colour`
+              }
               className={`relative w-[104px] shrink-0 overflow-hidden rounded-xl border text-left transition-all ${
                 isMaster
                   ? "border-[hsl(var(--ax-accent))] ring-1 ring-[hsl(var(--ax-accent))]"
@@ -77,7 +88,12 @@ export function ColorwayStrip({
                 className="aspect-square w-full"
                 empty={<span className="text-[9px]">No {surface} photo</span>}
                 badge={
-                  img.approximate ? (
+                  isAdjusted ? (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-accent))]"
+                      title="Adjusted for this colourway"
+                    />
+                  ) : img.approximate ? (
                     <span
                       className="h-1.5 w-1.5 rounded-full bg-[hsl(var(--ax-amber))]"
                       title="Not this colourway's own photograph"

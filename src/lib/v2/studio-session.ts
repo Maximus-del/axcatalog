@@ -41,8 +41,26 @@ export interface StudioProduct {
   masterColor: string | null;
   /** Every colourway to create. The master is always in here. */
   colorNames: string[];
-  /** THIS product's arrangement. Never read from or written to another product. */
+  /**
+   * THIS product's SHARED arrangement — what a colourway shows when it has not
+   * been adjusted. Never read from or written to another product.
+   */
   placed: PlacedDesign[];
+  /**
+   * Colourways that have been hand-tuned away from the shared arrangement.
+   *
+   * WHY THIS EXISTS: colourway photography is not pixel-aligned. The same
+   * hoodie shot in Cream and in Shadow can sit a couple of percent apart in
+   * frame, so a chest hit that is perfect on one reads slightly low on the
+   * other. Percentages transfer the INTENT between colours; they do not
+   * guarantee the result, and the operator is the one who can see the
+   * difference.
+   *
+   * Keyed by colour name. Absent means "inherit the shared arrangement", which
+   * is why a colourway added later still gets the placement made before it
+   * existed.
+   */
+  overrides: Record<string, PlacedDesign[]>;
   guides: Record<string, Guides>;
   /**
    * Colourways of this product that have already been written to the library.
@@ -92,6 +110,7 @@ export function newProduct(input: {
     masterColor: master,
     colorNames: master ? [master] : [],
     placed: input.placed ?? [],
+    overrides: {},
     guides: input.guides ?? { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES },
     saved: [],
   };
@@ -200,6 +219,64 @@ export function setMaster(product: StudioProduct, name: string): StudioProduct {
   };
 }
 
+/* ------------------------------------------------ per-colourway placement */
+
+/** What this colourway actually shows: its own adjustment, or the shared one. */
+export function placementFor(product: StudioProduct, colorName: string | null): PlacedDesign[] {
+  if (colorName && product.overrides[colorName]) return product.overrides[colorName];
+  return product.placed;
+}
+
+/** Has this colourway been hand-tuned away from the shared arrangement? */
+export function isAdjusted(product: StudioProduct, colorName: string | null): boolean {
+  return Boolean(colorName && product.overrides[colorName]);
+}
+
+export function adjustedColors(product: StudioProduct): string[] {
+  return Object.keys(product.overrides);
+}
+
+/**
+ * Record a drag.
+ *
+ * THE FIRST PLACEMENT IS SHARED; EVERY LATER ONE IS LOCAL.
+ *
+ * Nothing placed yet means this is the arrangement for the product, so it goes
+ * to the shared slot and every colourway — including ones added tomorrow —
+ * inherits it. That is what makes "place once, get thirteen" work.
+ *
+ * After that, a drag only ever moves the colourway on screen. Adjusting Shadow
+ * because its photograph sits low must not silently move Cream, which somebody
+ * already approved. Apply to all is how propagation happens, deliberately.
+ */
+export function setPlacement(
+  product: StudioProduct,
+  colorName: string | null,
+  next: PlacedDesign[],
+): StudioProduct {
+  if (product.placed.length === 0 || !colorName) return { ...product, placed: next };
+  return { ...product, overrides: { ...product.overrides, [colorName]: next } };
+}
+
+/**
+ * Push this colourway's arrangement out to every colourway of this product.
+ *
+ * Clears the overrides too: after this they all genuinely share one
+ * arrangement, and leaving stale per-colour copies behind would mean the next
+ * edit to the shared placement quietly failed to reach them.
+ */
+export function applyToAll(product: StudioProduct, colorName: string | null): StudioProduct {
+  return { ...product, placed: placementFor(product, colorName), overrides: {} };
+}
+
+/** Put one colourway back on the shared arrangement. */
+export function resetToShared(product: StudioProduct, colorName: string): StudioProduct {
+  if (!product.overrides[colorName]) return product;
+  const overrides = { ...product.overrides };
+  delete overrides[colorName];
+  return { ...product, overrides };
+}
+
 /**
  * The product's colourways, master first.
  *
@@ -221,7 +298,7 @@ export function orderedColors(product: StudioProduct): string[] {
  * that says "this one still needs you".
  */
 export function needsPlacement(product: StudioProduct): boolean {
-  return product.placed.length === 0;
+  return product.placed.length === 0 && Object.keys(product.overrides).length === 0;
 }
 
 export function sessionNeedsPlacement(session: StudioSession): StudioProduct[] {
@@ -275,7 +352,8 @@ export function sessionVariants(session: StudioSession, blanksById: Map<string, 
         blankName: blank?.name ?? "Garment",
         colorName,
         photographed: hasPhoto(blank, colorName),
-        placed: product.placed,
+        // Its own adjustment when it has one, the shared arrangement otherwise.
+        placed: placementFor(product, colorName),
         guides: product.guides,
       });
     }

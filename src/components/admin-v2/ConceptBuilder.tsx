@@ -56,6 +56,12 @@ import { swapDesign } from "@/lib/v2/design-swap";
 import {
   activeProduct,
   addProduct,
+  adjustedColors,
+  applyToAll,
+  isAdjusted,
+  placementFor,
+  resetToShared,
+  setPlacement,
   emptySession,
   needsPlacement,
   newProduct,
@@ -247,7 +253,23 @@ export default function ConceptBuilder({
 
   const blank: Blank | null = active ? (blanksById.get(active.blankId) ?? null) : null;
   const colorName = active?.masterColor ?? null;
-  const placed = useMemo(() => active?.placed ?? [], [active]);
+
+  /*
+    THE CANVAS SHOWS ONE COLOURWAY, AND EDITS ONLY THAT ONE.
+
+    Colourway photography is not pixel-aligned — the same hoodie shot in Cream
+    and in Shadow can sit a couple of percent apart in frame — so a placement
+    that is right on one can read low on another. Percentages carry the intent
+    between colours; only the operator can see whether the result landed.
+
+    The first placement still goes to the shared slot, so "place once, get
+    thirteen" is intact and a colourway added tomorrow inherits it. Every drag
+    after that is local to the colour on screen, and Apply to all is how
+    propagation happens on purpose rather than by accident.
+  */
+  const placed = useMemo(() => (active ? placementFor(active, colorName) : []), [active, colorName]);
+  const colorIsAdjusted = Boolean(active && isAdjusted(active, colorName));
+  const adjustedCount = active ? adjustedColors(active).length : 0;
   const guides = useMemo(
     () => active?.guides ?? { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES },
     [active],
@@ -255,8 +277,19 @@ export default function ConceptBuilder({
 
   const setPlaced = (next: PlacedDesign[] | ((prev: PlacedDesign[]) => PlacedDesign[])) =>
     setSession((s) =>
-      updateActive(s, (p) => ({ ...p, placed: typeof next === "function" ? next(p.placed) : next })),
+      updateActive(s, (p) => {
+        const current = placementFor(p, p.masterColor);
+        return setPlacement(p, p.masterColor, typeof next === "function" ? next(current) : next);
+      }),
     );
+
+  /** Push what is on screen out to every colourway of this product. */
+  const applyPlacementToAll = () =>
+    setSession((s) => updateActive(s, (p) => applyToAll(p, p.masterColor)));
+
+  /** Put this colourway back on the product's shared arrangement. */
+  const resetPlacement = () =>
+    setSession((s) => updateActive(s, (p) => (p.masterColor ? resetToShared(p, p.masterColor) : p)));
 
   const setGuides = (
     next: Record<string, Guides> | ((prev: Record<string, Guides>) => Record<string, Guides>),
@@ -1391,6 +1424,46 @@ export default function ConceptBuilder({
                 </span>
               </div>
 
+              {/*
+                WHOSE PLACEMENT AM I EDITING?
+
+                Only shown once there is more than one colourway, because with
+                one there is nothing to propagate to and the question does not
+                arise. It states the rule rather than explaining it: edits are
+                local, Apply to all is the way out.
+              */}
+              {selectedColors.length > 1 && placed.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--ax-border))] bg-white/[0.02] px-3 py-2">
+                  <span className="min-w-0 flex-1 text-[11.5px] text-[hsl(var(--ax-secondary))]">
+                    Editing <strong className="font-semibold text-[hsl(var(--ax-ink))]">{colorName}</strong> only
+                    {colorIsAdjusted ? (
+                      <span className="ml-1.5 text-[hsl(var(--ax-amber))]">· adjusted from the shared placement</span>
+                    ) : (
+                      <span className="ml-1.5 text-[hsl(var(--ax-faint))]">
+                        · {selectedColors.length - 1} other{selectedColors.length === 2 ? "" : "s"} keep theirs
+                      </span>
+                    )}
+                  </span>
+                  {colorIsAdjusted && (
+                    <button
+                      type="button"
+                      onClick={resetPlacement}
+                      className="shrink-0 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1 text-[11.5px] text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-ink))]"
+                    >
+                      Reset to shared
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={applyPlacementToAll}
+                    title={`Give all ${selectedColors.length} colourways this arrangement`}
+                    className="shrink-0 rounded-full border border-[hsl(var(--ax-accent)/0.5)] px-3 py-1 text-[11.5px] font-semibold text-[hsl(var(--ax-accent))] hover:bg-[hsl(var(--ax-accent)/0.1)]"
+                  >
+                    Apply to all {selectedColors.length}
+                  </button>
+                </div>
+              )}
+
               <MockupCanvas
                 garmentUrl={garmentImage.url}
                 garmentLabel={`${blank?.name ?? "Blank"} ${surface}`}
@@ -1417,7 +1490,8 @@ export default function ConceptBuilder({
                     blank={blank}
                     selected={selectedColors}
                     master={colorName}
-                    placed={placed}
+                    placedFor={(name) => (active ? placementFor(active, name) : [])}
+                    adjusted={active ? adjustedColors(active) : []}
                     designsById={designsById}
                     surface={surface}
                     onMakeMaster={makeMaster}

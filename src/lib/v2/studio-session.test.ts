@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   activeProduct,
+  adjustedColors,
+  applyToAll,
   addProduct,
   emptySession,
   isEmptySession,
   isFullySaved,
   markSaved,
   needsPlacement,
+  isAdjusted,
   newProduct,
+  placementFor,
+  resetToShared,
+  setPlacement,
   orderedColors,
   removeProduct,
   sessionNeedsPlacement,
@@ -277,5 +283,99 @@ describe("the acceptance flow, at the model", () => {
     expect(s.products.every(isFullySaved)).toBe(true);
     expect(s.products[0].placed[0].id).toBe("hoodie-art");
     expect(s.products[1].placed[0].id).toBe("pants-art");
+  });
+});
+
+describe("colourways can be hand-tuned, because photography is not pixel-aligned", () => {
+  const base = place("shared");
+  const tuned = place("tuned");
+
+  function threeColours() {
+    let s = sessionWithHoodie();
+    s = updateActive(s, (p) => toggleColor(toggleColor(p, "Black"), "Shadow"));
+    return s;
+  }
+
+  it("inherits the shared arrangement until a colour is adjusted", () => {
+    const p = newProduct({ blankId: "hoodie", colorName: "Cream", placed: base, key: "k" });
+    expect(placementFor(p, "Cream")).toBe(base);
+    expect(placementFor(p, "Shadow")).toBe(base);
+    expect(isAdjusted(p, "Shadow")).toBe(false);
+  });
+
+  it("sends the FIRST placement to the shared slot, so later colours inherit it", () => {
+    let p = newProduct({ blankId: "hoodie", colorName: "Cream", key: "k" });
+    p = setPlacement(p, "Cream", base);
+    expect(p.placed).toBe(base);
+    expect(p.overrides).toEqual({});
+    // A colour added afterwards still gets it.
+    expect(placementFor(toggleColor(p, "Shadow"), "Shadow")).toBe(base);
+  });
+
+  it("keeps every later drag local to the colour on screen", () => {
+    let p = newProduct({ blankId: "hoodie", colorName: "Cream", placed: base, key: "k" });
+    p = toggleColor(p, "Shadow");
+    p = setPlacement(p, "Shadow", tuned);
+
+    expect(placementFor(p, "Shadow")).toBe(tuned);
+    // The one somebody already approved does not move.
+    expect(placementFor(p, "Cream")).toBe(base);
+    expect(isAdjusted(p, "Shadow")).toBe(true);
+    expect(isAdjusted(p, "Cream")).toBe(false);
+  });
+
+  it("lists which colourways were hand-tuned", () => {
+    let p = newProduct({ blankId: "hoodie", colorName: "Cream", placed: base, key: "k" });
+    p = setPlacement(p, "Shadow", tuned);
+    expect(adjustedColors(p)).toEqual(["Shadow"]);
+  });
+
+  it("applies one colourway's arrangement to all of them on request", () => {
+    let p = newProduct({ blankId: "hoodie", colorName: "Cream", placed: base, key: "k" });
+    p = setPlacement(p, "Shadow", tuned);
+    p = applyToAll(p, "Shadow");
+
+    expect(p.placed).toBe(tuned);
+    // Cleared, so the next shared edit actually reaches everything.
+    expect(p.overrides).toEqual({});
+    expect(placementFor(p, "Cream")).toBe(tuned);
+  });
+
+  it("puts one colourway back on the shared arrangement", () => {
+    let p = newProduct({ blankId: "hoodie", colorName: "Cream", placed: base, key: "k" });
+    p = setPlacement(p, "Shadow", tuned);
+    p = resetToShared(p, "Shadow");
+    expect(placementFor(p, "Shadow")).toBe(base);
+    expect(isAdjusted(p, "Shadow")).toBe(false);
+  });
+
+  it("is a no-op to reset a colourway that was never adjusted", () => {
+    const p = newProduct({ blankId: "hoodie", colorName: "Cream", placed: base, key: "k" });
+    expect(resetToShared(p, "Shadow")).toBe(p);
+  });
+
+  it("saves each colourway with the arrangement it actually shows", () => {
+    let s = threeColours();
+    s = updateActive(s, (p) => ({ ...p, placed: base }));
+    s = updateActive(s, (p) => setPlacement(p, "Shadow", tuned));
+
+    const variants = sessionVariants(s, blanks);
+    const byColour = new Map(variants.map((v) => [v.colorName, v.placed]));
+    expect(byColour.get("Shadow")).toBe(tuned);
+    expect(byColour.get("Cream")).toBe(base);
+    expect(byColour.get("Black")).toBe(base);
+  });
+
+  it("still counts as placed when only an override exists", () => {
+    let p = newProduct({ blankId: "hoodie", colorName: "Cream", key: "k" });
+    p = { ...p, overrides: { Cream: tuned } };
+    expect(needsPlacement(p)).toBe(false);
+  });
+
+  it("never leaks an adjustment to another product", () => {
+    let s = addProduct(sessionWithHoodie(), newProduct({ blankId: "pants", colorName: "Black", placed: place("pants"), key: "k2" }));
+    s = updateProduct(s, "k1", (p) => setPlacement(p, "Cream", tuned));
+    expect(s.products[1].overrides).toEqual({});
+    expect(placementFor(s.products[1], "Black")[0].id).toBe("pants");
   });
 });

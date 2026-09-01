@@ -134,6 +134,50 @@ export default function MockupLibrary({
   const [draggingMember, setDraggingMember] = useState<string | null>(null);
   // Multi-select for bulk moves and status changes. Empty means single-item mode.
   const [selected, setSelected] = useState<string[]>([]);
+  /** Two-step confirm for the bulk delete, matching the single-mockup one. */
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  /*
+    Arm and disarm together. Changing the selection after arming would let a
+    second click delete a different set from the one that was confirmed, which
+    is the one mistake a delete confirm exists to prevent.
+  */
+  useEffect(() => {
+    setConfirmBulkDelete(false);
+  }, [selected]);
+
+  /**
+   * Delete every selected mockup.
+   *
+   * Sequential rather than parallel so a partial failure is reportable: the
+   * count that comes back is the count that actually went. The design, the
+   * blank and any product made from a mockup are untouched — deleting the
+   * mockup deletes the arrangement, not what it was made from.
+   */
+  const deleteSelected = async () => {
+    const ids = [...selected];
+    let deleted = 0;
+    const failed: string[] = [];
+    for (const id of ids) {
+      try {
+        await actions.mutateAsync({ type: "delete", mockupId: id });
+        deleted += 1;
+      } catch {
+        failed.push(id);
+      }
+    }
+    setConfirmBulkDelete(false);
+    setSelected(failed);
+    if (failed.length > 0) {
+      toast.warning(`Deleted ${deleted} of ${ids.length}`, {
+        description: `${failed.length} could not be deleted and ${failed.length === 1 ? "is" : "are"} still selected.`,
+      });
+    } else {
+      toast.success(`Deleted ${deleted} mockup${deleted === 1 ? "" : "s"}`, {
+        description: "The designs and the blanks are untouched.",
+      });
+    }
+  };
 
   /**
    * Re-flatten artwork onto the garment for a set of mockups.
@@ -639,6 +683,31 @@ export default function MockupLibrary({
           <span className="text-[12px] font-medium text-[hsl(var(--ax-accent))]">
             {selected.length} selected
           </span>
+          {/*
+            Destructive, so it sits last and arms before it fires. The second
+            click is the one that deletes, and the label says how many.
+          */}
+          <button
+            type="button"
+            disabled={actions.isPending}
+            onClick={() => {
+              if (!confirmBulkDelete) {
+                setConfirmBulkDelete(true);
+                return;
+              }
+              void deleteSelected();
+            }}
+            className={`order-last inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors disabled:opacity-50 ${
+              confirmBulkDelete
+                ? "border-[hsl(var(--ax-red))] bg-[hsl(var(--ax-red)/0.14)] text-[hsl(var(--ax-red))]"
+                : "border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] text-[hsl(var(--ax-faint))] hover:border-[hsl(var(--ax-red)/0.5)] hover:text-[hsl(var(--ax-red))]"
+            }`}
+          >
+            <Trash2 className="h-3 w-3" />
+            {confirmBulkDelete
+              ? `Delete ${selected.length} — cannot be undone`
+              : `Delete ${selected.length}`}
+          </button>
           <button
             type="button"
             disabled={rebuilding != null}
