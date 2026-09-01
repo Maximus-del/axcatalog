@@ -472,9 +472,8 @@ export default function ConceptBuilder({
     setSession((s) => setActive(s, key));
     setAddingProduct(false);
     setSurface("front");
-    setStep(needsPlacement(session.products.find((p) => p.key === key) ?? { placed: [] } as StudioProduct)
-      ? "placement"
-      : "confirm");
+    const target = session.products.find((p) => p.key === key);
+    setStep(target && !needsPlacement(target) ? "confirm" : "placement");
   };
 
   const dropProduct = (key: string) => setSession((s) => removeProduct(s, key));

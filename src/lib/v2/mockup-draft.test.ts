@@ -107,3 +107,40 @@ describe("describeAge", () => {
     expect(describeAge("not a date")).toBe("earlier");
   });
 });
+
+describe("a draft written by an older build", () => {
+  it("is discarded, because the version moved", () => {
+    expect(parseDraft({ ...draft(), version: 3 }, "e1")).toBeNull();
+  });
+
+  it("fills in a product missing fields the current build reads", () => {
+    // Exactly the shape that crashed: no overrides, no saved.
+    const legacy = { key: "k", blankId: "b1", masterColor: "Cream", colorNames: ["Cream"], placed: [], guides: {} };
+    const out = parseDraft({ ...draft(), products: [legacy] }, "e1");
+    expect(out?.products[0].overrides).toEqual({});
+    expect(out?.products[0].saved).toEqual([]);
+  });
+
+  it("keeps a product's own arrangement and overrides when they are there", () => {
+    const full = {
+      key: "k",
+      blankId: "b1",
+      masterColor: "Cream",
+      colorNames: ["Cream", "Shadow"],
+      placed: [],
+      overrides: { Shadow: [] },
+      guides: {},
+      saved: ["Cream"],
+    };
+    const out = parseDraft({ ...draft(), products: [full] }, "e1");
+    expect(Object.keys(out?.products[0].overrides ?? {})).toEqual(["Shadow"]);
+    expect(out?.products[0].saved).toEqual(["Cream"]);
+  });
+
+  it("drops junk in the products array without losing the good ones", () => {
+    const good = { key: "k", blankId: "b1", placed: [] };
+    const out = parseDraft({ ...draft(), products: [good, "nope", null, { key: "no-blank" }] }, "e1");
+    expect(out?.products).toHaveLength(1);
+    expect(out?.products[0].key).toBe("k");
+  });
+});

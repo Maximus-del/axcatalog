@@ -36,8 +36,16 @@ export type BuilderFlow = "design_first" | "blank_first";
  * each with its own arrangement. There is no honest migration from the old
  * shape — the whole point is that the old shape's placements were only ever
  * valid for the garment they were made on.
+ *
+ * 4: per-colourway overrides. `overrides` was added to StudioProduct WITHOUT
+ * bumping this, so a version-3 draft restored into the newer build produced
+ * products with no such field — and every reader assumed it was there.
+ * Object.keys(undefined) threw during render and took the whole builder down
+ * as a permanent loading screen. Bumping discards those drafts; parseProduct
+ * below makes the shape safe regardless, which is the part that actually
+ * stops it happening again.
  */
-export const DRAFT_VERSION = 3;
+export const DRAFT_VERSION = 4;
 
 export interface MockupDraft {
   version: number;
@@ -78,10 +86,31 @@ export function isMeaningful(draft: Pick<MockupDraft, "designId" | "products" | 
   );
 }
 
-function isProduct(value: unknown): value is StudioProduct {
-  if (!value || typeof value !== "object") return false;
+/**
+ * Normalise a stored product into a complete one, or reject it.
+ *
+ * A DRAFT IS UNTRUSTED INPUT. It was written by whatever build was deployed
+ * when the operator last had the studio open, which is not necessarily this
+ * one. Every optional-looking field is filled in here rather than guarded at
+ * each of the twenty places that read it, because the twenty places is exactly
+ * how one gets missed.
+ */
+function parseProduct(value: unknown): StudioProduct | null {
+  if (!value || typeof value !== "object") return null;
   const p = value as Partial<StudioProduct>;
-  return typeof p.key === "string" && typeof p.blankId === "string" && Array.isArray(p.placed);
+  if (typeof p.key !== "string" || typeof p.blankId !== "string") return null;
+  if (!Array.isArray(p.placed)) return null;
+
+  return {
+    key: p.key,
+    blankId: p.blankId,
+    masterColor: typeof p.masterColor === "string" ? p.masterColor : null,
+    colorNames: Array.isArray(p.colorNames) ? p.colorNames.filter((c): c is string => typeof c === "string") : [],
+    placed: p.placed,
+    overrides: p.overrides && typeof p.overrides === "object" ? p.overrides : {},
+    guides: p.guides && typeof p.guides === "object" ? p.guides : {},
+    saved: Array.isArray(p.saved) ? p.saved.filter((c): c is string => typeof c === "string") : [],
+  };
 }
 
 function isStep(value: unknown): value is BuilderStep {
@@ -110,7 +139,9 @@ export function parseDraft(raw: unknown, entityId: string): MockupDraft | null {
     designId: typeof d.designId === "string" ? d.designId : null,
     // Products are taken as stored or not at all. A half-parsed arrangement is
     // worse than an empty studio: it would put artwork somewhere nobody chose.
-    products: Array.isArray(d.products) ? (d.products as StudioProduct[]).filter(isProduct) : [],
+    products: Array.isArray(d.products)
+      ? d.products.map(parseProduct).filter((p): p is StudioProduct => p !== null)
+      : [],
     activeKey: typeof d.activeKey === "string" ? d.activeKey : null,
     surface: d.surface === "back" ? "back" : "front",
     title: typeof d.title === "string" ? d.title : "",

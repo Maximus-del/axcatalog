@@ -379,3 +379,63 @@ describe("colourways can be hand-tuned, because photography is not pixel-aligned
     expect(placementFor(s.products[1], "Black")[0].id).toBe("pants");
   });
 });
+
+describe("a product restored from an older build never crashes the studio", () => {
+  /*
+    THE REAL BUG, REPRODUCED.
+
+    `overrides` was added to StudioProduct without bumping DRAFT_VERSION, so a
+    draft written by the previous deploy came back with no such field. Every
+    reader assumed it was there — Object.keys(undefined) throws — and it threw
+    during render, which took the whole builder down as a permanent loading
+    screen. The version bump clears those drafts; these keep the readers safe
+    for the next field somebody adds.
+  */
+  const legacy = {
+    key: "k",
+    blankId: "hoodie",
+    masterColor: "Cream",
+    colorNames: ["Cream", "Black"],
+    placed: place(),
+    guides: {},
+  } as unknown as ReturnType<typeof newProduct>;
+
+  it("does not throw asking whether it needs a placement", () => {
+    expect(() => needsPlacement(legacy)).not.toThrow();
+    expect(needsPlacement(legacy)).toBe(false);
+  });
+
+  it("does not throw on the empty-placement path either", () => {
+    // With artwork placed the && short-circuits before it reads overrides;
+    // an untouched product is the case that actually reaches Object.keys.
+    const untouched = { ...legacy, placed: [] };
+    expect(() => needsPlacement(untouched)).not.toThrow();
+    expect(needsPlacement(untouched)).toBe(true);
+  });
+
+  it("does not throw resolving a colourway's placement", () => {
+    expect(placementFor(legacy, "Black")).toBe(legacy.placed);
+  });
+
+  it("reports no adjustments rather than exploding", () => {
+    expect(isAdjusted(legacy, "Black")).toBe(false);
+    expect(adjustedColors(legacy)).toEqual([]);
+  });
+
+  it("does not throw asking whether it has been saved", () => {
+    expect(() => isFullySaved(legacy)).not.toThrow();
+    expect(isFullySaved(legacy)).toBe(false);
+  });
+
+  it("still yields variants, so the session is usable rather than lost", () => {
+    const s = addProduct(emptySession("e1"), legacy);
+    expect(() => sessionVariants(s, blanks)).not.toThrow();
+    expect(sessionVariants(s, blanks)).toHaveLength(2);
+  });
+
+  it("can be edited without first repairing it", () => {
+    expect(() => setPlacement(legacy, "Black", place("new"))).not.toThrow();
+    expect(() => toggleColor(legacy, "Shadow")).not.toThrow();
+    expect(() => orderedColors(legacy)).not.toThrow();
+  });
+});

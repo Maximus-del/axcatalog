@@ -118,8 +118,10 @@ export function newProduct(input: {
 
 /** Nothing left to write for this product. */
 export function isFullySaved(product: StudioProduct): boolean {
-  const names = product.colorNames.length > 0 ? product.colorNames : [SAVED_NO_COLOR];
-  return names.every((n) => product.saved.includes(n));
+  const saved = savedOf(product);
+  const colors = product.colorNames ?? [];
+  const names = colors.length > 0 ? colors : [SAVED_NO_COLOR];
+  return names.every((n) => saved.includes(n));
 }
 
 /** Record what a save actually created, so the next one does not repeat it. */
@@ -135,7 +137,7 @@ export function markSaved(session: StudioSession, done: Array<{ productKey: stri
     products: session.products.map((p) => {
       const added = byProduct.get(p.key);
       if (!added) return p;
-      return { ...p, saved: [...new Set([...p.saved, ...added])] };
+      return { ...p, saved: [...new Set([...savedOf(p), ...added])] };
     }),
   };
 }
@@ -198,11 +200,12 @@ export function setActive(session: StudioSession, key: string): StudioSession {
  * whose placement refers to a garment shot nobody selected.
  */
 export function toggleColor(product: StudioProduct, name: string): StudioProduct {
-  if (product.colorNames.includes(name)) {
+  const colors = product.colorNames ?? [];
+  if (colors.includes(name)) {
     if (name === product.masterColor) return product;
-    return { ...product, colorNames: product.colorNames.filter((c) => c !== name) };
+    return { ...product, colorNames: colors.filter((c) => c !== name) };
   }
-  return { ...product, colorNames: [...product.colorNames, name] };
+  return { ...product, colorNames: [...colors, name] };
 }
 
 /**
@@ -215,25 +218,45 @@ export function setMaster(product: StudioProduct, name: string): StudioProduct {
   return {
     ...product,
     masterColor: name,
-    colorNames: product.colorNames.includes(name) ? product.colorNames : [...product.colorNames, name],
+    colorNames: (product.colorNames ?? []).includes(name)
+      ? (product.colorNames ?? [])
+      : [...(product.colorNames ?? []), name],
   };
 }
 
 /* ------------------------------------------------ per-colourway placement */
 
+/*
+  A PRODUCT CAN ARRIVE FROM LAST WEEK'S CODE.
+
+  Products are persisted in the browser's draft, so a shape written by an
+  older build is restored into a newer one. `overrides` and `saved` were both
+  added after products started being stored, and every read of them assumed
+  they were there: Object.keys(undefined) throws, and it threw during render,
+  which took the whole builder down as a blank loading screen.
+
+  parseDraft now normalises on the way in, and these readers tolerate a gap on
+  the way out. Both, deliberately — a draft is untrusted input, and losing an
+  operator's studio to a missing map is never the right trade.
+*/
+const overridesOf = (product: StudioProduct): Record<string, PlacedDesign[]> => product.overrides ?? {};
+const savedOf = (product: StudioProduct): string[] => product.saved ?? [];
+const placedOf = (product: StudioProduct): PlacedDesign[] => product.placed ?? [];
+
 /** What this colourway actually shows: its own adjustment, or the shared one. */
 export function placementFor(product: StudioProduct, colorName: string | null): PlacedDesign[] {
-  if (colorName && product.overrides[colorName]) return product.overrides[colorName];
-  return product.placed;
+  const overrides = overridesOf(product);
+  if (colorName && overrides[colorName]) return overrides[colorName];
+  return placedOf(product);
 }
 
 /** Has this colourway been hand-tuned away from the shared arrangement? */
 export function isAdjusted(product: StudioProduct, colorName: string | null): boolean {
-  return Boolean(colorName && product.overrides[colorName]);
+  return Boolean(colorName && overridesOf(product)[colorName]);
 }
 
 export function adjustedColors(product: StudioProduct): string[] {
-  return Object.keys(product.overrides);
+  return Object.keys(overridesOf(product));
 }
 
 /**
@@ -254,8 +277,8 @@ export function setPlacement(
   colorName: string | null,
   next: PlacedDesign[],
 ): StudioProduct {
-  if (product.placed.length === 0 || !colorName) return { ...product, placed: next };
-  return { ...product, overrides: { ...product.overrides, [colorName]: next } };
+  if (placedOf(product).length === 0 || !colorName) return { ...product, placed: next };
+  return { ...product, overrides: { ...overridesOf(product), [colorName]: next } };
 }
 
 /**
@@ -271,8 +294,8 @@ export function applyToAll(product: StudioProduct, colorName: string | null): St
 
 /** Put one colourway back on the shared arrangement. */
 export function resetToShared(product: StudioProduct, colorName: string): StudioProduct {
-  if (!product.overrides[colorName]) return product;
-  const overrides = { ...product.overrides };
+  if (!overridesOf(product)[colorName]) return product;
+  const overrides = { ...overridesOf(product) };
   delete overrides[colorName];
   return { ...product, overrides };
 }
@@ -284,9 +307,10 @@ export function resetToShared(product: StudioProduct, colorName: string): Studio
  * placement was judged against; the rest are its inheritors.
  */
 export function orderedColors(product: StudioProduct): string[] {
+  const colors = product.colorNames ?? [];
   const master = product.masterColor;
-  if (!master) return [...product.colorNames];
-  return [master, ...product.colorNames.filter((c) => c !== master)];
+  if (!master) return [...colors];
+  return [master, ...colors.filter((c) => c !== master)];
 }
 
 /**
@@ -298,7 +322,7 @@ export function orderedColors(product: StudioProduct): string[] {
  * that says "this one still needs you".
  */
 export function needsPlacement(product: StudioProduct): boolean {
-  return product.placed.length === 0 && Object.keys(product.overrides).length === 0;
+  return placedOf(product).length === 0 && Object.keys(overridesOf(product)).length === 0;
 }
 
 export function sessionNeedsPlacement(session: StudioSession): StudioProduct[] {
@@ -339,10 +363,11 @@ export function sessionVariants(session: StudioSession, blanksById: Map<string, 
   for (const product of session.products) {
     if (needsPlacement(product)) continue;
     const blank = blanksById.get(product.blankId);
-    const names = product.colorNames.length > 0 ? product.colorNames : [null];
+    const colors = product.colorNames ?? [];
+    const names = colors.length > 0 ? colors : [null];
     for (const colorName of names) {
       // Already in the library — a second Save must not make it twice.
-      if (product.saved.includes(colorName ?? SAVED_NO_COLOR)) continue;
+      if (savedOf(product).includes(colorName ?? SAVED_NO_COLOR)) continue;
       const key = `${product.blankId}::${colorName ?? ""}`;
       if (seen.has(key)) continue;
       seen.add(key);

@@ -17,6 +17,7 @@ import WorkflowNav, { type WorkflowStep } from "@/components/admin-v2/WorkflowNa
 import DesignShelf, { type ShelfFilter } from "@/components/admin-v2/DesignShelf";
 import ProductizeDrawer from "@/components/admin-v2/ProductizeDrawer";
 import ConceptBuilder from "@/components/admin-v2/ConceptBuilder";
+import V2ErrorBoundary from "@/components/admin-v2/V2ErrorBoundary";
 import DesignDrawer from "@/components/admin-v2/DesignDrawer";
 import MockupLibrary from "@/components/admin-v2/MockupLibrary";
 import AssetsDrawer from "@/components/admin-v2/AssetsDrawer";
@@ -675,32 +676,38 @@ export default function V2EntityWorkspace() {
       )}
 
       {building && (
-        <ConceptBuilder
-          entity={entity}
-          initialFlow="design_first"
-          initialDesign={mockupFrom}
-          onClose={() => {
-            openBuilder(false);
-            setMockupFrom(null);
-          }}
-        />
+        <V2ErrorBoundary entityId={entity.id}>
+          <ConceptBuilder
+            entity={entity}
+            initialFlow="design_first"
+            initialDesign={mockupFrom}
+            onClose={() => {
+              openBuilder(false);
+              setMockupFrom(null);
+            }}
+          />
+        </V2ErrorBoundary>
       )}
 
       {editMockupId && (
-        <ConceptBuilder entity={entity} editMockupId={editMockupId} onClose={() => openEditor(null)} />
+        <V2ErrorBoundary entityId={entity.id}>
+          <ConceptBuilder entity={entity} editMockupId={editMockupId} onClose={() => openEditor(null)} />
+        </V2ErrorBoundary>
       )}
 
       {varyMockupId && !editMockupId && (
-        <ConceptBuilder
-          entity={entity}
-          varyFromId={varyMockupId}
-          onClose={() => {
-            const next = new URLSearchParams(params);
-            next.delete("vary");
-            next.delete("step");
-            setParams(next, { replace: true });
-          }}
-        />
+        <V2ErrorBoundary entityId={entity.id}>
+          <ConceptBuilder
+            entity={entity}
+            varyFromId={varyMockupId}
+            onClose={() => {
+              const next = new URLSearchParams(params);
+              next.delete("vary");
+              next.delete("step");
+              setParams(next, { replace: true });
+            }}
+          />
+        </V2ErrorBoundary>
       )}
 
       {/*
