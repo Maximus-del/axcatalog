@@ -10,6 +10,7 @@ import {
   FolderInput,
   Layers,
   Pencil,
+  RefreshCw,
   Sparkles,
   FileWarning,
   Ruler,
@@ -37,7 +38,8 @@ import { DEFAULT_SIZES, quoteBulkOrder } from "@/lib/v2/bulk-pricing";
 import { useAddToCart, useCart } from "@/lib/v2/cart-data";
 import { useAuth } from "@/auth/AuthProvider";
 import { Link } from "react-router-dom";
-import { downloadBlob, exportFilename, renderMockupJpeg } from "@/lib/v2/mockup-export";
+import { downloadBlob, exportFilename, renderMockupJpeg, storeMockupComposite } from "@/lib/v2/mockup-export";
+import { needsComposite } from "@/lib/v2/mockup-image";
 import { resolveBlankImage } from "@/lib/v2/blank-image";
 import { audienceForRoles, fmtMoney, priceFor } from "@/lib/v2/pricing";
 import type { Entity, Mockup } from "@/lib/v2/types";
@@ -87,6 +89,7 @@ export default function MockupDetail({
   const [panel, setPanel] = useState<Panel>(null);
   const [renaming, setRenaming] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
 
   const lifecycle = toLifecycle(mockup.lifecycle);
   const blank = (blanksQ.data ?? []).find((b) => b.id === mockup.blankId) ?? null;
@@ -106,14 +109,26 @@ export default function MockupDetail({
   const download = async () => {
     setExporting(true);
     try {
-      const { blob, skipped } = await renderMockupJpeg({
+      const { blob, skipped, garmentDrawn } = await renderMockupJpeg({
         garmentUrl: garment.url,
         placed,
         designsById,
         filename: exportFilename(mockup.title, surface),
       });
       downloadBlob(blob, exportFilename(mockup.title, surface));
-      if (skipped > 0) {
+      /*
+        SAY WHAT IS IN THE FILE.
+
+        A download missing its garment used to arrive silently as "Preview
+        downloaded" — artwork on a dark square, indistinguishable from a
+        design export. That is the failure that hid this bug for months, so
+        the garment now gets its own line.
+      */
+      if (!garmentDrawn && garment.url) {
+        toast.warning("Downloaded without the garment", {
+          description: "The blank's photograph could not be loaded, so this is the artwork alone.",
+        });
+      } else if (skipped > 0) {
         toast.warning(`Downloaded, but ${skipped} artwork file${skipped === 1 ? "" : "s"} could not be read`);
       } else {
         toast.success("Preview downloaded");
@@ -122,6 +137,45 @@ export default function MockupDetail({
       toast.error(err instanceof Error ? err.message : "Could not export that preview");
     } finally {
       setExporting(false);
+    }
+  };
+
+  /**
+   * Rebuild the flattened preview.
+   *
+   * Needed because previews rendered before the CORS proxy existed lost their
+   * garment silently — the blank is a Google Drive link and the canvas could
+   * not read it back, so what got saved was artwork on a dark square. Those
+   * mockups are otherwise perfectly correct, and re-flattening is all they
+   * need; there is no reason to make somebody open and re-save each one.
+   *
+   * Always renders the FRONT, because that is what a card shows.
+   */
+  const regenerate = async () => {
+    setRegenerating(true);
+    try {
+      const front = resolveBlankImage({ blank, colorName: mockup.colorName, surface: "front" });
+      const result = await storeMockupComposite({
+        mockupId: mockup.id,
+        garmentUrl: front.url,
+        placed: (composition.data?.placed ?? []).filter((p) => p.surface === "front"),
+        designsById,
+      });
+      if (result.ok === false) {
+        if (result.reason === "garment") {
+          toast.error("The garment photograph could not be loaded", {
+            description: "Nothing was overwritten. This blank's photo may not be shared publicly in the Drive.",
+          });
+        } else {
+          toast.error(result.message ?? "The preview could not be rebuilt");
+        }
+        return;
+      }
+      toast.success("Preview rebuilt");
+      await library.refetch();
+      await composition.refetch();
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -352,6 +406,16 @@ export default function MockupDetail({
                     blurb="File it in a collection you can send out."
                     onClick={() => setPanel(panel === "lookbook" ? null : "lookbook")}
                     active={panel === "lookbook"}
+                  />
+                  <ActionRow
+                    icon={RefreshCw}
+                    title={regenerating ? "Rebuilding…" : "Regenerate preview"}
+                    blurb={
+                      needsComposite(mockup)
+                        ? "This mockup is showing the bare blank. Flatten the artwork onto it."
+                        : "Rebuild the flattened image from the current placement."
+                    }
+                    onClick={() => void regenerate()}
                   />
                   <ActionRow
                     icon={Copy}

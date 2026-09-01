@@ -741,6 +741,23 @@ export default function ConceptBuilder({
     return inputs.reduce((n, i) => n + i.lines.reduce((m, l) => m + Math.max(0, l.quantity), 0), 0);
   };
 
+  /**
+   * The preview failed but the mockup did not.
+   *
+   * `garment` is the one worth naming: it means the blank's photograph could
+   * not be drawn, which for a Drive-hosted garment used to happen every single
+   * time and produced an artwork-only square nobody could tell was wrong.
+   */
+  const warnAboutPreview = (reason: "garment" | "render", count: number) => {
+    const many = count > 1 ? `${count} previews` : "The preview";
+    toast.warning(`${many} could not be rendered`, {
+      description:
+        reason === "garment"
+          ? "The garment photograph could not be loaded, so the mockup is showing the blank instead. Try Regenerate preview from the mockup."
+          : "The mockup saved correctly and is showing the blank instead.",
+    });
+  };
+
   const submit = async (mode: SubmitMode = "save") => {
     if (!design && !blank) return;
     try {
@@ -762,12 +779,13 @@ export default function ConceptBuilder({
         });
 
         // Re-flatten the preview so the card reflects what was just changed.
-        await storeMockupComposite({
+        const editPreview = await storeMockupComposite({
           mockupId: editMockupId,
           garmentUrl: frontImage.url,
           placed: placed.filter((p) => p.surface === "front"),
           designsById,
         });
+        if (editPreview.ok === false) warnAboutPreview(editPreview.reason, 1);
 
         const editedTitle = title.trim() || "Untitled mockup";
         const ordered = mode === "save" ? 0 : await sendToCart([editMockupId], () => editedTitle);
@@ -824,7 +842,7 @@ export default function ConceptBuilder({
       // each composite gets its own colourway's garment shot rather than the
       // one that happened to be on screen.
       const frontPlacements = placed.filter((p) => p.surface === "front");
-      await Promise.all(
+      const previews = await Promise.all(
         created.map((id, i) => {
           const v = variants[i];
           if (!v) return Promise.resolve(null);
@@ -841,6 +859,24 @@ export default function ConceptBuilder({
           });
         }),
       );
+      /*
+        A MOCKUP THAT SAVED WITHOUT ITS PREVIEW IS STILL SAVED.
+
+        The row, the placements and the arrangement are all correct; only the
+        flattened picture is missing, so the card falls back to the garment
+        photograph. Worth one line, not an error — but it must not be silent,
+        because a silent version of exactly this is why every preview in the
+        library was the bare blank.
+      */
+      const previewFailures = previews.filter(
+        (p): p is { ok: false; reason: "garment" | "render"; message?: string } => p != null && !p.ok,
+      );
+      if (previewFailures.length > 0) {
+        warnAboutPreview(
+          previewFailures.some((p) => p.reason === "garment") ? "garment" : "render",
+          previewFailures.length,
+        );
+      }
 
       if (created.length === 0) {
         // The draft is deliberately NOT cleared here. Nothing was saved, so the

@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMockupActions, useMockupLibrary } from "@/lib/v2/data";
+import { mockupCover } from "@/lib/v2/mockup-image";
 import {
   buildMockupShelf,
   coverOf,
@@ -949,9 +950,7 @@ function MockupCard({
       <div className={`relative ${dense ? "w-16 shrink-0" : ""}`}>
         <button type="button" onClick={onOpen} className="block w-full" title="Open this mockup">
           <AssetImage
-            url={mockup.imageUrl}
-            bucket={mockup.imageBucket}
-            path={mockup.imagePath}
+            {...mockupCover(mockup)}
             alt={mockup.title}
             className="aspect-square w-full bg-white/[0.03]"
             fit="contain"
@@ -1133,9 +1132,7 @@ function FolderCard({
           <div className="grid grid-cols-3 gap-1">
             <div className="col-span-2 overflow-hidden rounded-lg">
               <AssetImage
-                url={cover?.imageUrl}
-                bucket={cover?.imageBucket}
-                path={cover?.imagePath}
+                {...mockupCover(cover ?? {})}
                 alt={item.folder.name}
                 className="aspect-square w-full bg-white/[0.03]"
                 fit="contain"
@@ -1146,9 +1143,7 @@ function FolderCard({
               {item.mockups.slice(1, 3).map((m) => (
                 <div key={m.id} className="overflow-hidden rounded-md">
                   <AssetImage
-                    url={m.imageUrl}
-                    bucket={m.imageBucket}
-                    path={m.imagePath}
+                    {...mockupCover(m)}
                     alt={m.title}
                     className="aspect-square w-full bg-white/[0.03]"
                     fit="contain"

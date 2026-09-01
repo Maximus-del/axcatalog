@@ -27,6 +27,7 @@ import {
   statTiles,
 } from "@/lib/v2/entity-overview";
 import { isConfigurable } from "@/lib/v2/concepts";
+import { mockupCover } from "@/lib/v2/mockup-image";
 import { STATUS_LABEL, type BulkOrderStatus } from "@/lib/order-status";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
@@ -234,9 +235,7 @@ export default function V2EntityOverview() {
                 title={m.title}
               >
                 <AssetImage
-                  url={m.imageUrl}
-                  bucket={m.imageBucket}
-                  path={m.imagePath}
+                  {...mockupCover(m)}
                   alt={m.title}
                   className="aspect-square w-full rounded-xl border border-[hsl(var(--ax-border))] bg-white/[0.03] transition-colors group-hover:border-[hsl(var(--ax-accent))]"
                   fit="contain"

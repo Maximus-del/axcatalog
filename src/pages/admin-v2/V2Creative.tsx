@@ -22,6 +22,7 @@ import {
   type AssetBrief,
 } from "@/lib/v2/data";
 import { cleanDesignTitle, stageOf, STAGE_LABELS, STAGE_TONES, type ConceptStage } from "@/lib/v2/concepts";
+import { mockupCover } from "@/lib/v2/mockup-image";
 import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import type { Design, ProductConcept } from "@/lib/v2/types";
 import AssetsDrawer, { ASSET_TYPES, type AssetSource } from "@/components/admin-v2/AssetsDrawer";
@@ -590,9 +591,7 @@ function AssetStudio({
                   {b.mockups.slice(0, 3).map((m) => (
                     <AssetImage
                       key={m.id}
-                      url={m.imageUrl}
-                      bucket={m.imageBucket}
-                      path={m.imagePath}
+                      {...mockupCover(m)}
                       alt={m.title}
                       className="h-12 w-12 rounded-lg border border-[hsl(var(--ax-canvas))] bg-white/[0.04]"
                       fit="contain"
@@ -643,9 +642,7 @@ function AssetStudio({
               className="ax-card ax-card-hover overflow-hidden p-0 text-left transition-all"
             >
               <AssetImage
-                url={c.imageUrl}
-                bucket={c.imageBucket}
-                path={c.imagePath}
+                {...mockupCover(c)}
                 alt={c.title}
                 className="aspect-square w-full bg-white/[0.03]"
                 fit="contain"
@@ -772,9 +769,7 @@ function MockupCard({ concept, owner }: { concept: ProductConcept; owner?: strin
       className="ax-card ax-card-hover block overflow-hidden p-0 transition-all"
     >
       <AssetImage
-        url={concept.imageUrl}
-        bucket={concept.imageBucket}
-        path={concept.imagePath}
+        {...mockupCover(concept)}
         alt={concept.title}
         className="aspect-square w-full bg-white/[0.03]"
         fit="contain"

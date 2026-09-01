@@ -11,6 +11,14 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { getSignedUrl } from "@/lib/storage";
+import { planFor, proxiedUrl } from "./image-cors";
+
+// The client module is generated and exports only the configured client, so
+// the two public values the proxy URL needs are repeated here rather than
+// re-derived from it. Both already ship in the browser bundle.
+const SUPABASE_URL = "https://cuidofxidstqpgypxcop.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1aWRvZnhpZHN0cXBneXB4Y29wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzNzEwNzUsImV4cCI6MjA5MTk0NzA3NX0.1wSiRagMq_UROmq2vK7b7zxu8ZIcMyW4ensPwREWBQ8";
 import type { PlacedDesign } from "./placement-geometry";
 import type { Design } from "./types";
 
@@ -19,14 +27,43 @@ export const EXPORT_SIZE = 1600;
 const BACKGROUND = "#0f1116";
 const QUALITY = 0.9;
 
-function loadImage(url: string): Promise<HTMLImageElement> {
+function loadOnce(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    /*
+      REQUIRED, AND THE REASON THE PROXY EXISTS.
+
+      Without crossOrigin the image draws but the canvas is TAINTED and
+      toBlob() throws, so there is no export at all. With it, the load fails
+      outright unless the host sends Access-Control-Allow-Origin. There is no
+      third option, which is why a host that sends no header has to be fetched
+      through something that does.
+    */
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("An image could not be loaded for export"));
+    img.onerror = () => reject(new Error(`Could not load ${url.slice(0, 80)}`));
     img.src = url;
   });
+}
+
+/**
+ * Load an image in a state a canvas can be read back from.
+ *
+ * Google Drive — where all V2 blank photography lives — sends no CORS header,
+ * so a direct load throws and the garment vanishes from the export. Those go
+ * through the image-proxy edge function. An unknown host gets one direct
+ * attempt and falls back to the proxy if it refuses, so a new photography host
+ * works without a code change as long as the proxy will relay it.
+ */
+async function loadImage(url: string): Promise<HTMLImageElement> {
+  const plan = planFor(url);
+  if (plan.kind === "proxy") return loadOnce(proxiedUrl(url, SUPABASE_URL, SUPABASE_ANON_KEY));
+  try {
+    return await loadOnce(url);
+  } catch (err) {
+    if (plan.kind === "asis") throw err;
+    return loadOnce(proxiedUrl(url, SUPABASE_URL, SUPABASE_ANON_KEY));
+  }
 }
 
 /** Artwork lives in a private bucket, so it needs signing before it can be drawn. */
@@ -36,6 +73,20 @@ async function resolveArtworkUrl(design: Design | undefined): Promise<string | n
     return getSignedUrl(design.fileBucket, design.filePath, 120);
   }
   return null;
+}
+
+export interface ExportResult {
+  blob: Blob;
+  /** How many placements could not be drawn. */
+  skipped: number;
+  /**
+   * Did the garment actually make it into the image?
+   *
+   * False means what came out is artwork on a flat background. That used to be
+   * swallowed, and the result was months of previews and downloads with no
+   * garment in them that nobody could see was wrong from the file alone.
+   */
+  garmentDrawn: boolean;
 }
 
 export interface ExportRequest {
@@ -52,7 +103,7 @@ export interface ExportRequest {
  * export — a mockup with one unreadable file should still produce the rest of
  * the image, and the caller reports how many were missed.
  */
-export async function renderMockupJpeg(req: ExportRequest): Promise<{ blob: Blob; skipped: number }> {
+export async function renderMockupJpeg(req: ExportRequest): Promise<ExportResult> {
   const canvas = document.createElement("canvas");
   canvas.width = EXPORT_SIZE;
   canvas.height = EXPORT_SIZE;
@@ -64,6 +115,7 @@ export async function renderMockupJpeg(req: ExportRequest): Promise<{ blob: Blob
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
+  let garmentDrawn = false;
   if (req.garmentUrl) {
     try {
       const garment = await loadImage(req.garmentUrl);
@@ -72,8 +124,11 @@ export async function renderMockupJpeg(req: ExportRequest): Promise<{ blob: Blob
       const w = garment.naturalWidth * scale;
       const h = garment.naturalHeight * scale;
       ctx.drawImage(garment, (EXPORT_SIZE - w) / 2, (EXPORT_SIZE - h) / 2, w, h);
-    } catch {
-      // A missing garment shot still leaves a usable artwork-only export.
+      garmentDrawn = true;
+    } catch (err) {
+      // Still produce the image — artwork alone is occasionally what someone
+      // wants — but SAY SO. The caller decides whether that is acceptable.
+      console.error("mockup export: the garment could not be drawn", err);
     }
   }
 
@@ -112,7 +167,7 @@ export async function renderMockupJpeg(req: ExportRequest): Promise<{ blob: Blob
   const blob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("The export could not be encoded"))), "image/jpeg", QUALITY),
   );
-  return { blob, skipped };
+  return { blob, skipped, garmentDrawn };
 }
 
 /** Turn a mockup title into a filename someone can find again. */
@@ -140,19 +195,34 @@ export function exportFilename(title: string, surface: string): string {
  * shot until the next save. Losing the record over a canvas error would be a
  * much worse trade.
  */
+export type StoreResult =
+  | { ok: true; bucket: string; path: string }
+  /** `garment` means the photograph could not be drawn; `render` is everything else. */
+  | { ok: false; reason: "garment" | "render"; message?: string };
+
 export async function storeMockupComposite(args: {
   mockupId: string;
   garmentUrl: string | null;
   placed: PlacedDesign[];
   designsById: Map<string, Design>;
-}): Promise<{ bucket: string; path: string } | null> {
+}): Promise<StoreResult> {
   try {
-    const { blob } = await renderMockupJpeg({
+    const { blob, garmentDrawn } = await renderMockupJpeg({
       garmentUrl: args.garmentUrl,
       placed: args.placed,
       designsById: args.designsById,
       filename: "composite.jpg",
     });
+
+    /*
+      A COMPOSITE WITHOUT THE GARMENT IS WORSE THAN NO COMPOSITE.
+
+      Saving it makes it the mockup's cover, so the shelf fills with dark
+      squares carrying a floating logo — strictly less informative than the
+      bare garment photograph the card falls back to. Refusing to store it
+      keeps the fallback and lets the caller say what went wrong.
+    */
+    if (!garmentDrawn) return { ok: false, reason: "garment" };
 
     const path = `${args.mockupId}/composite-${Date.now()}.jpg`;
     const up = await supabase.storage
@@ -173,10 +243,10 @@ export async function storeMockupComposite(args: {
       .eq("id", args.mockupId);
     if (patch.error) throw patch.error;
 
-    return { bucket: "mockups", path };
+    return { ok: true, bucket: "mockups", path };
   } catch (err) {
     console.error("mockup composite failed", err);
-    return null;
+    return { ok: false, reason: "render", message: err instanceof Error ? err.message : undefined };
   }
 }
 
