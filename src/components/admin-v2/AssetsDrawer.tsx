@@ -8,6 +8,7 @@ import {
   type AssetBriefStatus,
 } from "@/lib/v2/data";
 import { AssetImage } from "./primitives";
+import { mockupCover } from "@/lib/v2/mockup-image";
 
 // TURN INTO ASSETS — the brief, which is now a real object.
 //
@@ -204,9 +205,7 @@ export default function AssetsDrawer({
                   {chosen.map((m) => (
                     <div key={m.id} className="relative">
                       <AssetImage
-                        url={m.imageUrl}
-                        bucket={m.imageBucket}
-                        path={m.imagePath}
+                        {...mockupCover(m)}
                         alt={m.title}
                         className="aspect-square w-full rounded-xl border border-[hsl(var(--ax-border))] bg-white/[0.03]"
                         fit="contain"
@@ -252,9 +251,7 @@ export default function AssetsDrawer({
                       }`}
                     >
                       <AssetImage
-                        url={c.imageUrl}
-                        bucket={c.imageBucket}
-                        path={c.imagePath}
+                        {...mockupCover(c)}
                         alt={c.title}
                         className="aspect-square w-full bg-white/[0.03]"
                         fit="contain"

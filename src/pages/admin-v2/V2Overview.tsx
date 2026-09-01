@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Layers3, Package, Receipt, ShoppingBag, Users } from "lucide-react";
 import { useOverview } from "@/lib/v2/data";
+import { mockupCover } from "@/lib/v2/mockup-image";
 import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
@@ -98,9 +99,7 @@ export default function V2Overview() {
                 className="ax-card ax-card-hover overflow-hidden p-0 transition-all"
               >
                 <AssetImage
-                  url={c.imageUrl}
-                  bucket={c.imageBucket}
-                  path={c.imagePath}
+                  {...mockupCover(c)}
                   alt={c.title}
                   className="aspect-square w-full"
                   fit="contain"

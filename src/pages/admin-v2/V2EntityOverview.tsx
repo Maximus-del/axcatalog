@@ -295,6 +295,12 @@ export default function V2EntityOverview() {
             to={lib("products")}
             render={(p: Product) => (
               <Link key={p.id} to={`/admin/products/${p.id}`} className="group min-w-0" title={p.title}>
+                {/*
+                  cover-source: product — url-first is correct here. A PRODUCT's
+                  imageUrl is its own picture; bucket/path is only the fallback
+                  copied from the concept it came from. That is the opposite of
+                  a mockup, where the bucket holds the real composite.
+                */}
                 <AssetImage
                   url={p.imageUrl}
                   bucket={p.imageBucket}

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, FolderOpen, ImageOff } from "lucide-react";
 import { useBlanks, useConcepts } from "@/lib/v2/data";
+import { mockupCover } from "@/lib/v2/mockup-image";
 import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import { AUDIENCES, fmtMoney, fmtPct, marginFor, priceFor } from "@/lib/v2/pricing";
 import {
@@ -452,9 +453,7 @@ function BuiltOnThis({ blank, selected }: { blank: Blank; selected: BlankColor |
           const body = (
             <>
               <AssetImage
-                url={c.imageUrl}
-                bucket={c.imageBucket}
-                path={c.imagePath}
+                {...mockupCover(c)}
                 alt={c.title}
                 className="aspect-square w-full bg-black/30"
                 fit="contain"

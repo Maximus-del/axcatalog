@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "sonner";
 import { useBlanks, useCreateProductFromConcept, useMockupPlacements } from "@/lib/v2/data";
+import { mockupCover } from "@/lib/v2/mockup-image";
 import { buildProductDraft, draftGaps, draftSlug, type ProductDraft } from "@/lib/v2/productize";
 import { audienceForRoles, fmtMoney, fmtPct, marginFor, priceFor } from "@/lib/v2/pricing";
 import type { Collection, Design, Entity, ProductConcept } from "@/lib/v2/types";
@@ -113,9 +114,7 @@ export default function ProductizeDrawer({
           */}
           <div className="mb-4 flex gap-3">
             <AssetImage
-              url={concept.imageUrl}
-              bucket={concept.imageBucket}
-              path={concept.imagePath}
+              {...mockupCover(concept)}
               alt={concept.title}
               className="h-24 w-24 shrink-0 rounded-xl bg-white/[0.03]"
               fit="contain"
