@@ -57,3 +57,25 @@ export function entityLibraryHref(entityId: string, target: LibraryTarget = {}):
   const query = params.toString();
   return `/admin-v2/people/${entityId}/library${query ? `?${query}` : ""}`;
 }
+
+/**
+ * A product, inside V2.
+ *
+ * There is one database — V2 reuses V1's `products` table rather than
+ * duplicating the backend — so this is the same row V1 shows. What changed is
+ * that clicking a product in V2 no longer throws you into V1's editor.
+ */
+export function productHref(productId: string): string {
+  return `/admin-v2/products/${productId}`;
+}
+
+/**
+ * The V1 screen for something V2 has no equivalent of yet.
+ *
+ * Every one of these is opened in a NEW TAB by its caller, and labelled. A V2
+ * page that silently replaces itself with a V1 page is the thing that made the
+ * dashboard feel like it leaked.
+ */
+export function v1Href(path: string): string {
+  return path.startsWith("/admin/") ? path : `/admin/${path.replace(/^\/+/, "")}`;
+}

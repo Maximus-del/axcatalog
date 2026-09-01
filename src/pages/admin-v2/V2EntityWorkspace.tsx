@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowUpRight, ImagePlus, Plus, ShoppingCart } from "lucide-react";
 import { useCreateCollection, useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
+import { productHref } from "@/lib/v2/entity-nav";
 import { useCart } from "@/lib/v2/cart-data";
 import { useAuth } from "@/auth/AuthProvider";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
@@ -11,7 +12,7 @@ import { fmtMoney } from "@/lib/v2/pricing";
 import { catalogHref } from "@/lib/v2/catalog-nav";
 import { entityCartHref, entityHref, entityLibraryHref, isEntitySection } from "@/lib/v2/entity-nav";
 import { shopLink } from "@/lib/ecosystem/image";
-import { AssetImage, Card, Chip, ErrorState, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Card, Chip, ErrorState, PageHeader, Section, Skeleton, V1Link } from "@/components/admin-v2/primitives";
 import WorkflowNav, { type WorkflowStep } from "@/components/admin-v2/WorkflowNav";
 import DesignShelf, { type ShelfFilter } from "@/components/admin-v2/DesignShelf";
 import ProductizeDrawer from "@/components/admin-v2/ProductizeDrawer";
@@ -366,12 +367,12 @@ export default function V2EntityWorkspace() {
                   deliberately absent: a product is configured FROM a mockup, so
                   its entry point is on the mockup, not on the person.
                 */}
-                <Link
+                <V1Link
                   to="/admin/designs/new"
                   className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
                 >
                   <ImagePlus className="h-3.5 w-3.5" /> Create design
-                </Link>
+                </V1Link>
                 {isAthlete && (
                   <a
                     href={`/a/${entity.slug}`}
@@ -383,12 +384,12 @@ export default function V2EntityWorkspace() {
                     Fan profile <ArrowUpRight className="h-3.5 w-3.5" />
                   </a>
                 )}
-                <Link
+                <V1Link
                   to={`/admin/athletes/${entity.id}`}
                   className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
                 >
                   Open in V1 <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
+                </V1Link>
               </>
             }
           />
@@ -496,7 +497,7 @@ export default function V2EntityWorkspace() {
           {products.slice(0, 18).map((p) => (
             <Link
               key={p.id}
-              to={`/admin/products/${p.id}`}
+              to={productHref(p.id)}
               className="ax-card ax-card-hover overflow-hidden transition-all"
             >
               <AssetImage url={p.imageUrl} alt={p.title} className="aspect-square w-full bg-white/[0.03]" fit="contain" />
@@ -568,7 +569,7 @@ export default function V2EntityWorkspace() {
       >
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {collections.map((c) => (
-            <Link
+            <V1Link
               key={c.id}
               to={`/admin/collections/${c.id}`}
               className="ax-card ax-card-hover overflow-hidden transition-all"
@@ -580,7 +581,7 @@ export default function V2EntityWorkspace() {
                   {c.designCount} designs · {c.conceptCount} mockups · {c.productCount} products
                 </div>
               </div>
-            </Link>
+            </V1Link>
           ))}
         </div>
       </Section>
@@ -609,7 +610,7 @@ export default function V2EntityWorkspace() {
                   <div className="truncate text-[12px] font-medium">{p.title}</div>
                   <div className="mt-1 flex items-center justify-between text-[11px]">
                     <span className="tabular-nums text-[hsl(var(--ax-secondary))]">{fmtMoney(p.price)}</span>
-                    <Link to={`/admin/products/${p.id}`} className="text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-ink))]">
+                    <Link to={productHref(p.id)} className="text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-ink))]">
                       Edit
                     </Link>
                   </div>
@@ -640,7 +641,7 @@ export default function V2EntityWorkspace() {
       >
         <div className="ax-card divide-y divide-[hsl(var(--ax-line))] overflow-hidden">
           {orders.map((o) => (
-            <Link
+            <V1Link
               key={o.id}
               to={`/admin/orders/${o.id}`}
               className="flex items-center gap-3 px-3 py-2.5 text-[12px] hover:bg-white/[0.03]"
@@ -654,7 +655,7 @@ export default function V2EntityWorkspace() {
               <span className="hidden w-24 shrink-0 truncate text-right text-[hsl(var(--ax-faint))] sm:block">
                 {o.fulfillmentStatus ?? "unfulfilled"}
               </span>
-            </Link>
+            </V1Link>
           ))}
         </div>
         {orders.length > 0 && <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">{ordersNote}</p>}

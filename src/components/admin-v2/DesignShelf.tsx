@@ -749,6 +749,9 @@ function DesignCard({
         ) : (
           <a
             href={`/admin/designs/${design.id}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Opens the design in V1, in a new tab"
             className="block truncate text-[10px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
           >
             {nameOf(design)}

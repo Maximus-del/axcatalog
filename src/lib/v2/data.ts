@@ -2475,3 +2475,133 @@ export interface DesignLinkSnapshot {
   sortOrder: number;
   clientVisibility: ClientVisibility;
 }
+
+/* ------------------------------------------------------------ one product */
+
+export interface ProductDetail extends Product {
+  description: string | null;
+  /** Every image, primary first. */
+  images: Array<{ id: string; url: string | null; isPrimary: boolean }>;
+  /** The mockup this product was configured from, when it came from one. */
+  fromMockup: { id: string; title: string; entityId: string | null } | null;
+  /** Entities this product is linked to. */
+  entities: Array<{ id: string; name: string }>;
+  collections: Array<{ id: string; name: string }>;
+}
+
+async function fetchProduct(productId: string): Promise<ProductDetail | null> {
+  const res = await t("products")
+    .select(
+      "id, title, sku, price, status, approval_state, shopify_sync_status, shopify_product_id, shopify_handle, blank_id, description, created_at",
+    )
+    .eq("id", productId)
+    .maybeSingle();
+  if (res.error) throw new Error(res.error.message);
+  const row = res.data as unknown as Row | null;
+  if (!row) return null;
+
+  const [imgRes, mockupRes, linkRes, collRes] = await Promise.all([
+    t("product_images")
+      .select("id, storage_bucket, storage_path, is_primary, sort_order")
+      .eq("product_id", productId),
+    // A product knows nothing about its origin; the mockup is the side that
+    // records what it became, so the lineage is read from there.
+    t("mockups").select("id, title, athlete_id").eq("product_id", productId),
+    t("product_athletes").select("athlete_id").eq("product_id", productId),
+    t("collection_products").select("collection_id").eq("product_id", productId),
+  ]);
+
+  const athleteIds = ((linkRes.data ?? []) as unknown as Row[]).map((r) => String(r.athlete_id));
+  const collectionIds = ((collRes.data ?? []) as unknown as Row[]).map((r) => String(r.collection_id));
+
+  const [athleteRes, collectionRes] = await Promise.all([
+    athleteIds.length
+      ? t("athletes").select("id, first_name, last_name, display_name").in("id", athleteIds)
+      : Promise.resolve({ data: [] }),
+    collectionIds.length
+      ? t("collections").select("id, name").in("id", collectionIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  const images = ((imgRes.data ?? []) as unknown as Row[])
+    .sort((a, b) => Number(b.is_primary === true) - Number(a.is_primary === true) || Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))
+    .map((im) => ({
+      id: String(im.id),
+      url: publicUrl(str(im.storage_bucket), str(im.storage_path)),
+      isPrimary: im.is_primary === true,
+    }));
+
+  const mockup = ((mockupRes.data ?? []) as unknown as Row[])[0] ?? null;
+
+  return {
+    id: String(row.id),
+    title: String(row.title ?? ""),
+    sku: str(row.sku),
+    price: num(row.price),
+    status: String(row.status ?? ""),
+    approvalState: String(row.approval_state ?? "none"),
+    shopifySyncStatus: String(row.shopify_sync_status ?? "not_synced"),
+    shopifyProductId: str(row.shopify_product_id),
+    shopifyHandle: str(row.shopify_handle),
+    blankId: str(row.blank_id),
+    imageUrl: images[0]?.url ?? null,
+    createdAt: String(row.created_at ?? ""),
+    description: str(row.description),
+    images,
+    fromMockup: mockup
+      ? { id: String(mockup.id), title: String(mockup.title ?? "Untitled mockup"), entityId: str(mockup.athlete_id) }
+      : null,
+    entities: (((athleteRes as { data: unknown }).data ?? []) as unknown as Row[]).map((a) => ({
+      id: String(a.id),
+      name: displayNameOf(a as never),
+    })),
+    collections: (((collectionRes as { data: unknown }).data ?? []) as unknown as Row[]).map((c) => ({
+      id: String(c.id),
+      name: String(c.name ?? "Untitled collection"),
+    })),
+  };
+}
+
+export function useProduct(productId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "product", productId],
+    queryFn: () => fetchProduct(productId as string),
+    enabled: Boolean(productId),
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Delete a product AX owns.
+ *
+ * REFUSES anything Shopify knows about. Deleting the AX row would leave a
+ * live storefront listing with nothing behind it, and this dashboard has no
+ * business silently orphaning a thing customers can still buy — unpublishing
+ * in Shopify is a different, deliberate act.
+ *
+ * The mockup it came from is left alone and simply stops pointing at a
+ * product, which puts it back in the "ready to configure" queue where it
+ * belongs.
+ */
+export function useDeleteProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (product: { id: string; shopifyProductId: string | null }) => {
+      if (product.shopifyProductId) {
+        throw new Error("This product is live on Shopify. Remove it there first.");
+      }
+      await must(t("mockups").update({ product_id: null } as never).eq("product_id", product.id));
+      await must(t("product_athletes").delete().eq("product_id", product.id));
+      await must(t("collection_products").delete().eq("product_id", product.id));
+      await must(t("product_images").delete().eq("product_id", product.id));
+      await must(t("products").delete().eq("id", product.id));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "products"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "overview"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "mockup-library"] });
+    },
+  });
+}

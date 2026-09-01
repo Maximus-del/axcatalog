@@ -15,6 +15,7 @@ import {
   Store,
 } from "lucide-react";
 import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
+import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
 import { useAuth } from "@/auth/AuthProvider";
 import { entityCartHref, entityLibraryHref, type EntitySection } from "@/lib/v2/entity-nav";
@@ -31,7 +32,7 @@ import { mockupCover } from "@/lib/v2/mockup-image";
 import { STATUS_LABEL, type BulkOrderStatus } from "@/lib/order-status";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
-import { AssetImage, Chip, ErrorState, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, ErrorState, Skeleton, V1Link } from "@/components/admin-v2/primitives";
 import type { Collection, Design, Entity, Mockup, Product } from "@/lib/v2/types";
 
 // THE ATHLETE OVERVIEW.
@@ -294,7 +295,7 @@ export default function V2EntityOverview() {
             remaining={preview(products).remaining}
             to={lib("products")}
             render={(p: Product) => (
-              <Link key={p.id} to={`/admin/products/${p.id}`} className="group min-w-0" title={p.title}>
+              <Link key={p.id} to={productHref(p.id)} className="group min-w-0" title={p.title}>
                 {/*
                   cover-source: product — url-first is correct here. A PRODUCT's
                   imageUrl is its own picture; bucket/path is only the fallback
@@ -451,13 +452,13 @@ function AthleteHeader({
               Cart · {cartUnits}
             </Link>
           )}
-          <Link
+          <V1Link
             to="/admin/designs/new"
             className="flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))]"
           >
             <Plus className="h-4 w-4" />
             Create Design
-          </Link>
+          </V1Link>
           <button
             type="button"
             onClick={onCreateMockup}
@@ -692,9 +693,9 @@ function OrderRowCells({ order }: { order: EntityOrder }) {
   return (
     <tr className="border-t border-[hsl(var(--ax-line))] transition-colors hover:bg-white/[0.03]">
       <td className="px-1 py-2.5">
-        <Link to={`/admin/orders/${order.id}`} className="font-medium hover:text-[hsl(var(--ax-accent))]">
+        <V1Link to={`/admin/orders/${order.id}`} className="font-medium hover:text-[hsl(var(--ax-accent))]">
           #{order.orderNumber ?? order.id.slice(0, 8)}
-        </Link>
+        </V1Link>
       </td>
       <td className="px-1 py-2.5">
         <span

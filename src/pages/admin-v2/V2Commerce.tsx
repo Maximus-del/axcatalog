@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { Camera, DollarSign, Package, Search, ShoppingBag } from "lucide-react";
 import { useBlanks, useCollections, useConcepts, useProducts } from "@/lib/v2/data";
+import { productHref } from "@/lib/v2/entity-nav";
 import { AUDIENCES, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
 import { auditColorways, colorwayIssues, photoCoverage } from "@/lib/v2/blank-image";
 import {
@@ -23,6 +24,7 @@ import {
   PageHeader,
   Skeleton,
   TabBar,
+  V1Link,
 } from "@/components/admin-v2/primitives";
 
 // Commerce = what AX sells, what it is built on, and how it is grouped.
@@ -594,7 +596,7 @@ function ProductGrid() {
 
 function ProductCard({ product }: { product: Product }) {
   return (
-    <Link to={`/admin/products/${product.id}`} className="ax-card ax-card-hover overflow-hidden transition-all">
+    <Link to={productHref(product.id)} className="ax-card ax-card-hover overflow-hidden transition-all">
       <AssetImage
         url={product.imageUrl}
         alt={product.title}
@@ -658,7 +660,7 @@ function CollectionGrid() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {rows.map((c) => (
-          <Link key={c.id} to={`/admin/collections/${c.id}`} className="ax-card ax-card-hover p-4 transition-all">
+          <V1Link key={c.id} to={`/admin/collections/${c.id}`} className="ax-card ax-card-hover p-4 transition-all">
             <div className="text-[14px] font-medium">{c.name}</div>
             <div className="mt-0.5 text-[11px] capitalize text-[hsl(var(--ax-faint))]">
               {c.collectionType} · {c.status}
@@ -668,7 +670,7 @@ function CollectionGrid() {
               <span>{c.conceptCount} mockups</span>
               <span>{c.productCount} products</span>
             </div>
-          </Link>
+          </V1Link>
         ))}
       </div>
     </>

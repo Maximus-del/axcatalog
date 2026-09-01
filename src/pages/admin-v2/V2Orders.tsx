@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import { useEntities, useOrders } from "@/lib/v2/data";
 import { fmtMoney } from "@/lib/v2/pricing";
-import { Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { Chip, EmptyState, ErrorState, PageHeader, Skeleton, V1Link } from "@/components/admin-v2/primitives";
 
 // Orders stay deliberately thin. The existing order + fulfilment infrastructure
 // is reused as-is; V2 only gives the operator a legible list — but a legible
@@ -100,7 +100,7 @@ export default function V2Orders() {
             {rows.map((o) => {
               const owner = o.attributedOrgId ? orgOwner.get(o.attributedOrgId) : undefined;
               return (
-                <Link
+                <V1Link
                   key={o.id}
                   to={`/admin/orders/${o.id}`}
                   className="flex flex-wrap items-center gap-3 px-3 py-2.5 text-[12px] hover:bg-white/[0.03]"
@@ -120,7 +120,7 @@ export default function V2Orders() {
                   <span className="w-24 shrink-0 truncate text-right text-[hsl(var(--ax-faint))]">
                     {o.fulfillmentStatus ?? "unfulfilled"}
                   </span>
-                </Link>
+                </V1Link>
               );
             })}
           </div>

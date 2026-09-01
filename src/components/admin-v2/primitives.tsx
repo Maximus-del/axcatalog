@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, CheckCircle2, Search } from "lucide-react";
+import { ArrowRight, CheckCircle2, Search, ArrowUpRight } from "lucide-react";
 import { useSignedUrl } from "@/lib/storage";
 import { initialsOf, tintOf } from "@/lib/v2/entity";
 
@@ -259,9 +259,14 @@ export function WorkspaceCard({
       </Card>
     );
   }
-  // An internal destination routes; a full page reload would throw away the
-  // whole React tree and the query cache to move one screen.
-  return href.startsWith("/") ? (
+  /*
+    A V2 destination routes in place — a full page reload would throw away the
+    whole React tree and the query cache to move one screen. A V1 destination
+    opens in a new tab: a V2 card must never replace the dashboard with a
+    different interface.
+  */
+  const isV1 = href.startsWith("/admin/") && !href.startsWith("/admin-v2");
+  return href.startsWith("/") && !isV1 ? (
     <Link to={href} className="ax-card ax-card-hover block p-4">
       {body}
     </Link>
@@ -519,4 +524,43 @@ export function Stat({ label, value }: { label: string; value: ReactNode }) {
 
 export function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse rounded-xl bg-white/[0.06] ${className}`} />;
+}
+
+/**
+ * A DELIBERATE HOP INTO V1.
+ *
+ * There is one database: V2 reuses V1's tables rather than duplicating the
+ * backend, so the records are the same records. What was wrong was the
+ * NAVIGATION — a V2 screen would replace itself with a V1 screen, and the
+ * operator lost the dashboard they were working in with no way back to the
+ * mockup they came from.
+ *
+ * So every remaining V1 destination goes through here: it opens in a new tab,
+ * it is labelled, and it carries an outward arrow. You are never moved out of
+ * V2 without choosing to be. As V2 grows its own screens these disappear one
+ * at a time; v2-routing.test.ts stops new ones appearing as plain links.
+ */
+export function V1Link({
+  to,
+  children,
+  className = "",
+  title,
+}: {
+  to: string;
+  children: ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <a
+      href={to}
+      target="_blank"
+      rel="noreferrer"
+      title={title ?? "Opens V1 in a new tab"}
+      className={className}
+    >
+      {children}
+      <ArrowUpRight className="ml-1 inline-block h-3 w-3 shrink-0 opacity-70" aria-hidden />
+    </a>
+  );
 }

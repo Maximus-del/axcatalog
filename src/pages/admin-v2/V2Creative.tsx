@@ -39,6 +39,7 @@ import {
   TabBar,
   Toolbar,
   WorkspaceCard,
+  V1Link,
 } from "@/components/admin-v2/primitives";
 
 // CREATIVE — the workspace for everything before a product exists.
@@ -197,12 +198,12 @@ export default function V2Creative() {
         subtitle="Artwork, mockups, the assets made from them, and everything waiting on a decision."
         actions={
           <>
-            <Link
+            <V1Link
               to="/admin/designs/new"
               className="flex items-center gap-2 rounded-full bg-[hsl(var(--ax-accent))] px-4 py-2 text-[12px] font-semibold text-[hsl(var(--ax-on-accent))]"
             >
               <ImagePlus className="h-3.5 w-3.5" /> Create design
-            </Link>
+            </V1Link>
             <Link
               to="/admin-v2/people"
               title="A mockup belongs to someone — pick who it is for"
@@ -710,7 +711,7 @@ function TemplateIndex() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {(data ?? []).map((tpl) => (
-          <Link
+          <V1Link
             key={tpl.id}
             to={`/admin/design-templates/${tpl.id}`}
             className={`ax-card ax-card-hover overflow-hidden transition-all ${tpl.isActive ? "" : "opacity-50"}`}
@@ -736,14 +737,14 @@ function TemplateIndex() {
                 {!tpl.isActive && <Chip tone="var(--ax-faint)">Archived</Chip>}
               </div>
             </div>
-          </Link>
+          </V1Link>
         ))}
       </div>
 
       <p className="mt-4 text-[11px] text-[hsl(var(--ax-faint))]">
-        <Link to="/admin/design-templates" className="text-[hsl(var(--ax-accent))]">
+        <V1Link to="/admin/design-templates" className="text-[hsl(var(--ax-accent))]">
           Open the full template library in V1 <ArrowUpRight className="inline h-3 w-3" />
-        </Link>{" "}
+        </V1Link>{" "}
         to edit a direction, manage reference sets, or run best-fit matching against a person.
       </p>
     </>
@@ -790,7 +791,7 @@ function MockupCard({ concept, owner }: { concept: ProductConcept; owner?: strin
 
 function DesignCard({ design, owner }: { design: Design; owner?: string }) {
   return (
-    <Link to={`/admin/designs/${design.id}`} className="ax-card ax-card-hover overflow-hidden transition-all">
+    <V1Link to={`/admin/designs/${design.id}`} className="ax-card ax-card-hover overflow-hidden transition-all">
       <AssetImage
         bucket={design.fileBucket}
         path={design.filePath}
@@ -810,7 +811,7 @@ function DesignCard({ design, owner }: { design: Design; owner?: string }) {
           {design.productionReady ? "Production asset" : "Concept art"}
         </div>
       </div>
-    </Link>
+    </V1Link>
   );
 }
 

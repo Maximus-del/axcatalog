@@ -50,6 +50,8 @@ export default function DesignDrawer({
           </div>
           <a
             href={`/admin/designs/${design.id}`}
+            target="_blank"
+            rel="noreferrer"
             className="flex items-center gap-1 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
           >
             Open in V1 <ArrowUpRight className="h-3 w-3" />

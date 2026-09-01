@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, LayoutGrid, List, Search, UserPlus } from "lucide-react";
 import { useEntities } from "@/lib/v2/data";
 import { ENTITY_FACETS, matchesFilter, rankEntities, roleLabel, typeLabel } from "@/lib/v2/entity";
-import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton, V1Link } from "@/components/admin-v2/primitives";
 
 // People is the gateway into the AX ecosystem. One directory, one record per
 // entity — a person who is both an athlete and a client appears under both
@@ -59,14 +59,14 @@ export default function V2People() {
               to own it would be duplication for its own sake. Linking out is
               honest; a disabled button would not be.
             */}
-            <Link
+            <V1Link
               to="/admin/athletes"
               className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
               title="Adding a person still happens in the V1 directory"
             >
               <UserPlus className="h-3.5 w-3.5" /> Add someone
               <ArrowUpRight className="h-3.5 w-3.5" />
-            </Link>
+            </V1Link>
             <div className="flex items-center gap-1 rounded-full border border-[hsl(var(--ax-border))] p-0.5">
               <button
                 type="button"

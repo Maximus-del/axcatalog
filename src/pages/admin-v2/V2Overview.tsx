@@ -6,7 +6,7 @@ import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { stageOf, STAGE_LABELS, STAGE_TONES } from "@/lib/v2/concepts";
 import { catalogHref } from "@/lib/v2/catalog-nav";
-import { AssetImage, Chip, ErrorState, Metric, PageHeader, Section, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, ErrorState, Metric, PageHeader, Section, Skeleton, V1Link } from "@/components/admin-v2/primitives";
 
 // THE START OF A WORKDAY, NOT AN ANALYTICS PAGE.
 //
@@ -131,7 +131,7 @@ export default function V2Overview() {
       >
         <div className="ax-card divide-y divide-[hsl(var(--ax-line))] overflow-hidden">
           {data?.recentOrders.map((o) => (
-            <Link
+            <V1Link
               key={o.id}
               to={`/admin/orders/${o.id}`}
               className="flex items-center gap-3 px-3 py-2.5 text-[12px] hover:bg-white/[0.03]"
@@ -145,7 +145,7 @@ export default function V2Overview() {
               <span className="hidden w-24 shrink-0 truncate text-right text-[hsl(var(--ax-faint))] sm:block">
                 {o.fulfillmentStatus ?? "unfulfilled"}
               </span>
-            </Link>
+            </V1Link>
           ))}
         </div>
       </Section>
