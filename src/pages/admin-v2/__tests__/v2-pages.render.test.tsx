@@ -91,6 +91,7 @@ const concept = {
   placementLabel: null,
   approvalState: "none",
   imageUrl: "https://example.test/m1.png",
+  previewGeneratedAt: null,
   imageBucket: null,
   imagePath: null,
   notes: null,

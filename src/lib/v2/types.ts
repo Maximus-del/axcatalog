@@ -212,6 +212,8 @@ export interface Mockup {
   colorName: string | null;
   /** Cover image — the garment shot the mockup was built on. */
   imageUrl: string | null;
+  /** When the flattened composite was last rendered. Null means never. */
+  previewGeneratedAt: string | null;
   imageBucket: string | null;
   imagePath: string | null;
   /** Organisational only. Null means loose on the shelf. */

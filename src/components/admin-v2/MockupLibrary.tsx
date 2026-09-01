@@ -10,6 +10,7 @@ import {
   EyeOff,
   FolderOpen,
   FolderPlus,
+  RefreshCw,
   GripVertical,
   Image as ImageIcon,
   LayoutGrid,
@@ -24,7 +25,9 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useMockupActions, useMockupLibrary } from "@/lib/v2/data";
+import { useBlanks, useDesigns, useMockupActions, useMockupLibrary } from "@/lib/v2/data";
+import { describeRebuild, rebuildPreviews } from "@/lib/v2/preview-rebuild";
+import { hasStalePreview } from "@/lib/v2/mockup-image";
 import { mockupCover } from "@/lib/v2/mockup-image";
 import {
   buildMockupShelf,
@@ -79,7 +82,11 @@ export default function MockupLibrary({
    */
   onCreateProduct: (mockup: Mockup) => void;
 }) {
-  const { data, isLoading } = useMockupLibrary(entityId);
+  const { data, isLoading, refetch } = useMockupLibrary(entityId);
+  const blanksQ = useBlanks();
+  const designsQ = useDesigns(entityId);
+  /** null when idle; otherwise how far through a rebuild we are. */
+  const [rebuilding, setRebuilding] = useState<{ done: number; total: number } | null>(null);
   const actions = useMockupActions(entityId, organizationId);
 
   /*
@@ -127,6 +134,47 @@ export default function MockupLibrary({
   const [draggingMember, setDraggingMember] = useState<string | null>(null);
   // Multi-select for bulk moves and status changes. Empty means single-item mode.
   const [selected, setSelected] = useState<string[]>([]);
+
+  /**
+   * Re-flatten artwork onto the garment for a set of mockups.
+   *
+   * Every preview rendered before the image proxy existed lost its garment and
+   * saved as artwork on a dark square, so this exists to repair them in one
+   * pass rather than one sheet at a time. Rebuilding a good preview is
+   * harmless — it just renders the same picture again.
+   */
+  /** Mockups whose saved preview is known to be missing its garment. */
+  const stalePreviews = useMemo(
+    () => (data?.mockups ?? []).filter((m) => hasStalePreview(m)),
+    [data],
+  );
+
+  const rebuild = async (ids: string[]) => {
+    const targets = (data?.mockups ?? []).filter((m) => ids.includes(m.id));
+    if (targets.length === 0) return;
+    setRebuilding({ done: 0, total: targets.length });
+    try {
+      const summary = await rebuildPreviews({
+        mockups: targets,
+        blanks: blanksQ.data ?? [],
+        designs: designsQ.data ?? [],
+        onProgress: (done, total) => setRebuilding({ done, total }),
+      });
+      await refetch();
+      setSelected([]);
+      if (summary.failed.length > 0) {
+        toast.warning(describeRebuild(summary), {
+          description: `${summary.failed[0].title}: ${summary.failed[0].reason}`,
+        });
+      } else {
+        toast.success(describeRebuild(summary));
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not rebuild those previews");
+    } finally {
+      setRebuilding(null);
+    }
+  };
 
   const serverItems = useMemo(() => {
     if (!data) return [];
@@ -559,11 +607,48 @@ export default function MockupLibrary({
         )}
       </p>
 
+      {/*
+        THE REPAIR PROMPT.
+
+        Shown only while some mockup on this shelf is still carrying a preview
+        that was rendered before the garment could be drawn. It disappears for
+        good once they are rebuilt, so it is a one-time chore with a button
+        rather than a permanent piece of furniture.
+      */}
+      {stalePreviews.length > 0 && selected.length === 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-xl border border-[hsl(var(--ax-amber)/0.4)] bg-[hsl(var(--ax-amber)/0.08)] px-3.5 py-2.5">
+          <span className="min-w-0 flex-1 text-[12px] text-[hsl(var(--ax-secondary))]">
+            {stalePreviews.length} {stalePreviews.length === 1 ? "preview was" : "previews were"} built before the
+            garment could be loaded, so {stalePreviews.length === 1 ? "it shows" : "they show"} the artwork on its own.
+            The mockups themselves are fine.
+          </span>
+          <button
+            type="button"
+            disabled={rebuilding != null}
+            onClick={() => void rebuild(stalePreviews.map((m) => m.id))}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-[hsl(var(--ax-accent))] px-3.5 py-1.5 text-[12px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${rebuilding ? "animate-spin" : ""}`} />
+            {rebuilding ? `Rebuilding ${rebuilding.done}/${rebuilding.total}…` : `Rebuild ${stalePreviews.length}`}
+          </button>
+        </div>
+      )}
+
       {selected.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent)/0.08)] px-3 py-2">
           <span className="text-[12px] font-medium text-[hsl(var(--ax-accent))]">
             {selected.length} selected
           </span>
+          <button
+            type="button"
+            disabled={rebuilding != null}
+            onClick={() => void rebuild(selected)}
+            title="Flatten the artwork onto the garment again"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-2.5 py-1 text-[11px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))] disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3 w-3 ${rebuilding ? "animate-spin" : ""}`} />
+            Rebuild previews
+          </button>
           <select
             defaultValue=""
             onChange={(e) => {

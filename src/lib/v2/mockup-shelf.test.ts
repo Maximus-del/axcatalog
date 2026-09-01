@@ -21,6 +21,7 @@ const mockup = (id: string, over: Partial<Mockup> = {}): Mockup => ({
   blankName: "Garment-Wash Hoodie 14oz",
   colorName: "Aqua",
   imageUrl: "img",
+  previewGeneratedAt: null,
   imageBucket: null,
   imagePath: null,
   folderId: null,

@@ -956,7 +956,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
   const [mockupRes, folderRes] = await Promise.all([
     t("mockups")
       .select(
-        "id, title, athlete_id, organization_id, v2_blank_id, color_name, image_url, storage_bucket, storage_path, folder_id, sort_order, status, lifecycle, approval_state, client_visible, product_id, collection_id, guides, created_at, updated_at",
+        "id, title, athlete_id, organization_id, v2_blank_id, color_name, image_url, storage_bucket, storage_path, preview_generated_at, folder_id, sort_order, status, lifecycle, approval_state, client_visible, product_id, collection_id, guides, created_at, updated_at",
       )
       .eq("athlete_id", entityId)
       .eq("kind", "concept")
@@ -1022,6 +1022,7 @@ async function fetchMockupLibrary(entityId: string): Promise<MockupLibrary> {
       })(),
       colorName: str(r.color_name),
       imageUrl: str(r.image_url),
+      previewGeneratedAt: str(r.preview_generated_at),
       imageBucket: str(r.storage_bucket),
       imagePath: str(r.storage_path),
       folderId: str(r.folder_id),

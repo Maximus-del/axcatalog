@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mockupCover, needsComposite } from "./mockup-image";
+import { hasStalePreview, mockupCover, needsComposite } from "./mockup-image";
 
 const garment = "https://drive.google.com/thumbnail?id=1abc";
 
@@ -43,5 +43,30 @@ describe("spotting a mockup whose preview was never built", () => {
 
   it("leaves a finished one alone", () => {
     expect(needsComposite({ imageBucket: "mockups", imagePath: "m1/c.jpg" })).toBe(false);
+  });
+});
+
+describe("spotting a preview built before the garment could be drawn", () => {
+  const withComposite = { imageBucket: "mockups", imagePath: "m1/c.jpg" };
+
+  it("flags a composite rendered before the fix", () => {
+    expect(hasStalePreview({ ...withComposite, previewGeneratedAt: "2026-08-31T19:39:51Z" })).toBe(true);
+  });
+
+  it("leaves a composite rendered afterwards alone", () => {
+    expect(hasStalePreview({ ...withComposite, previewGeneratedAt: "2026-09-02T10:00:00Z" })).toBe(false);
+  });
+
+  it("treats a composite with no timestamp as stale — it predates the column", () => {
+    expect(hasStalePreview({ ...withComposite, previewGeneratedAt: null })).toBe(true);
+  });
+
+  it("does not flag a mockup that has no composite at all", () => {
+    // It falls back to the garment photograph, which is honest, not broken.
+    expect(hasStalePreview({ imageUrl: "https://drive.google.com/thumbnail?id=1" })).toBe(false);
+  });
+
+  it("treats an unparseable timestamp as stale rather than trusting it", () => {
+    expect(hasStalePreview({ ...withComposite, previewGeneratedAt: "not a date" })).toBe(true);
   });
 });
