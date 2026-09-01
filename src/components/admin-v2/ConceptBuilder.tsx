@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { X, Check, ArrowLeft, ChevronDown, FolderOpen, ImageOff, Move, Repeat, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -13,7 +13,7 @@ import {
   useUpdateMockup,
   useUploadDesign,
 } from "@/lib/v2/data";
-import { expandVariants, overLimit, unphotographed, variantTitle, MAX_VARIANTS } from "@/lib/v2/variants";
+import { overLimit, unphotographed, variantTitle, MAX_VARIANTS } from "@/lib/v2/variants";
 import MockupCanvas from "./MockupCanvas";
 import {
   DEFAULT_GUIDES,
@@ -29,7 +29,8 @@ import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
 import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
 import { storeMockupComposite } from "@/lib/v2/mockup-export";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
-import { useAddToCart } from "@/lib/v2/cart-data";
+import { useAddToCart, useCart } from "@/lib/v2/cart-data";
+import { entityCartHref } from "@/lib/v2/entity-nav";
 import { useAuth } from "@/auth/AuthProvider";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
 import {
@@ -45,12 +46,31 @@ import {
 } from "@/lib/v2/mockup-draft";
 import { AssetImage, Chip, Skeleton } from "./primitives";
 import { FlatDesignGrid, FlowCard, GridSkeleton, GroupedDesignPicker } from "./builder/DesignStep";
-import { BlankCard, ColorChips, ColorStepHeader, OtherBlankRow } from "./builder/BlankStep";
+import { BlankCard, ColorChips, ColorStepHeader } from "./builder/BlankStep";
 import { MockupDesignRail } from "./builder/PlacementAside";
 import { ColorwayStrip, Line, StaticMockup } from "./builder/ReviewStep";
 import { OrderQuantities } from "./builder/OrderQuantities";
 import DesignSwitcher from "./builder/DesignSwitcher";
+import SessionStrip from "./builder/SessionStrip";
 import { swapDesign } from "@/lib/v2/design-swap";
+import {
+  activeProduct,
+  addProduct,
+  emptySession,
+  needsPlacement,
+  newProduct,
+  orderedColors,
+  removeProduct,
+  sessionNeedsPlacement,
+  sessionVariants,
+  setActive,
+  setMaster,
+  markSaved,
+  toggleColor as toggleProductColor,
+  updateActive,
+  type StudioProduct,
+  type StudioSession,
+} from "@/lib/v2/studio-session";
 import { gridUnits, rowUnits, sizesForRun, type QuantityGrid } from "@/lib/v2/cart";
 import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 import type { Blank, Design, Entity } from "@/lib/v2/types";
@@ -154,29 +174,33 @@ export default function ConceptBuilder({
     restored?.flow ?? initialFlow ?? (initialDesign ? "design_first" : null),
   );
   const [design, setDesign] = useState<Design | null>(initialDesign ?? null);
-  const [blank, setBlank] = useState<Blank | null>(null);
-  const [colorName, setColorName] = useState<string | null>(restored?.colorName ?? null);
-  // Artwork actually placed on the garment, front and back. `design` above stays
-  // the concept's headline design (the `design_id` column V1 and the rest of V2
-  // already read); this is the full arrangement.
-  const [placed, setPlaced] = useState<PlacedDesign[]>(restored?.placed ?? []);
+
+  /*
+    THE SESSION IS THE STATE.
+
+    One StudioSession holds every product being worked on, and each product
+    owns its own arrangement. The builder used to hold a single `placed[]` and
+    a bag of "extra blanks" that inherited it — which is how a hoodie's chest
+    placement ended up on a pair of sweatpants. See studio-session.ts.
+
+    Everything below reads the ACTIVE product, so the canvas, the design rail
+    and the placement step work exactly as they did.
+  */
+  const [session, setSession] = useState<StudioSession>(() => ({
+    ...emptySession(entity.id),
+    products: restored?.products ?? [],
+    activeKey: restored?.activeKey ?? restored?.products?.[0]?.key ?? null,
+  }));
   const [surface, setSurface] = useState<"front" | "back">(restored?.surface ?? "front");
-  // Alignment lines are per surface — where you want a reference on the chest
-  // is not where you want one on the back.
-  const [guides, setGuides] = useState<Record<string, Guides>>(
-    restored?.guides && Object.keys(restored.guides).length > 0
-      ? { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES, ...restored.guides }
-      : { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES },
-  );
+  /** True while the blank step is choosing a NEW product rather than re-choosing this one's. */
+  const [addingProduct, setAddingProduct] = useState(false);
+
+  const active = activeProduct(session);
   const [collectionId, setCollectionId] = useState<string>(restored?.collectionId ?? "");
   const [uploading, setUploading] = useState(false);
   const [title, setTitle] = useState(restored?.title ?? "");
   const [notes, setNotes] = useState(restored?.notes ?? "");
   const [scopeAllDesigns, setScopeAllDesigns] = useState(false);
-  // The run this mockup will be saved as: extra colourways of the same blank,
-  // and other blanks entirely. Empty means "just the one I built".
-  const [extraColors, setExtraColors] = useState<string[]>(restored?.extraColors ?? []);
-  const [extraBlanks, setExtraBlanks] = useState<Record<string, string[]>>(restored?.extraBlanks ?? {});
   const [newCollection, setNewCollection] = useState("");
   /**
    * How many of each, per colourway. Empty is the ordinary case: most
@@ -186,6 +210,7 @@ export default function ConceptBuilder({
    */
   const [qtyGrid, setQtyGrid] = useState<QuantityGrid>({});
   const [switching, setSwitching] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
   const [onlyEligible, setOnlyEligible] = useState(true);
 
   const designsQ = useDesigns(scopeAllDesigns ? undefined : entity.id);
@@ -199,6 +224,8 @@ export default function ConceptBuilder({
   const upload = useUploadDesign(entity.id, entity.organizationId);
   const { user } = useAuth();
   const addToCart = useAddToCart(entity.id, entity.organizationId, user?.id);
+  const cartQ = useCart(entity.id, user?.id);
+  const cartUnits = cartQ.data?.units ?? 0;
 
   const audience = audienceForRoles(entity.roles);
 
@@ -207,6 +234,58 @@ export default function ConceptBuilder({
     const eligible = onlyEligible ? all.filter((b) => hasAccess(b, audience)) : all;
     return [...eligible].sort((a, b) => a.name.localeCompare(b.name));
   }, [blanksQ.data, onlyEligible, audience]);
+
+  const blanksById = useMemo(
+    () => new Map((blanksQ.data ?? []).map((b) => [b.id, b])),
+    [blanksQ.data],
+  );
+
+  /* ------------------------------------------------ the active product, as
+     the rest of this component already expects to read it. These are the only
+     bridge between the session and the canvas/placement code, which is
+     unchanged. */
+
+  const blank: Blank | null = active ? (blanksById.get(active.blankId) ?? null) : null;
+  const colorName = active?.masterColor ?? null;
+  const placed = useMemo(() => active?.placed ?? [], [active]);
+  const guides = useMemo(
+    () => active?.guides ?? { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES },
+    [active],
+  );
+
+  const setPlaced = (next: PlacedDesign[] | ((prev: PlacedDesign[]) => PlacedDesign[])) =>
+    setSession((s) =>
+      updateActive(s, (p) => ({ ...p, placed: typeof next === "function" ? next(p.placed) : next })),
+    );
+
+  const setGuides = (
+    next: Record<string, Guides> | ((prev: Record<string, Guides>) => Record<string, Guides>),
+  ) =>
+    setSession((s) =>
+      updateActive(s, (p) => ({ ...p, guides: typeof next === "function" ? next(p.guides) : next })),
+    );
+
+  /**
+   * Choose the garment for the product being worked on.
+   *
+   * `addingProduct` is what separates "I picked the wrong hoodie, change it"
+   * from "now do the sweatpants". The second creates a NEW product with an
+   * EMPTY placement — inheriting the hoodie's would put a chest hit on a
+   * thigh — and the alignment lines start where this garment's print starts.
+   */
+  const setBlank = (b: Blank | null) => {
+    if (!b) return;
+    setSession((s) => {
+      const fresh = newProduct({ blankId: b.id, guides: startGuidesBoth(b.garmentType) });
+      if (addingProduct || !s.activeKey) return addProduct(s, fresh);
+      return updateActive(s, (p) =>
+        p.blankId === b.id
+          ? p
+          : { ...p, blankId: b.id, masterColor: null, colorNames: [], guides: startGuidesBoth(b.garmentType) },
+      );
+    });
+    setAddingProduct(false);
+  };
 
   const entityCollections = useMemo(
     () => (collectionsQ.data ?? []).filter((c) => c.entityId === entity.id),
@@ -220,7 +299,7 @@ export default function ConceptBuilder({
     honest outcome then is an empty slot the operator re-picks, not a crash and
     not a phantom.
   */
-  const reattached = useRef({ design: !restored?.designId, blank: !restored?.blankId });
+  const reattached = useRef({ design: !restored?.designId });
   useEffect(() => {
     if (reattached.current.design || !restored?.designId) return;
     const found = (designsQ.data ?? []).find((d) => d.id === restored.designId);
@@ -228,14 +307,6 @@ export default function ConceptBuilder({
     reattached.current.design = true;
     setDesign(found);
   }, [designsQ.data, restored?.designId]);
-
-  useEffect(() => {
-    if (reattached.current.blank || !restored?.blankId) return;
-    const found = (blanksQ.data ?? []).find((b) => b.id === restored.blankId);
-    if (!found) return;
-    reattached.current.blank = true;
-    setBlank(found);
-  }, [blanksQ.data, restored?.blankId]);
 
   const color = blank?.colors.find((c) => c.name === colorName) ?? null;
 
@@ -279,21 +350,10 @@ export default function ConceptBuilder({
   const dropCentre = () => guides[surface] ?? DEFAULT_GUIDES;
 
   const variants = useMemo(() => {
-    if (!blank) return [];
-    const all = blanksQ.data ?? [];
-    return expandVariants({
-      baseBlank: blank,
-      baseColorName: colorName,
-      extraColorNames: extraColors,
-      extraBlanks: Object.entries(extraBlanks)
-        .map(([id, colors]) => ({ blank: all.find((b) => b.id === id), colorNames: colors }))
-        .filter((x): x is { blank: Blank; colorNames: string[] } => Boolean(x.blank)),
-    });
-  }, [blank, colorName, extraColors, extraBlanks, blanksQ.data]);
+    return sessionVariants(session, blanksById);
+  }, [session, blanksById]);
 
   /* ------------------------------------------------------------- ordering */
-
-  const blanksById = useMemo(() => new Map((blanksQ.data ?? []).map((b) => [b.id, b])), [blanksQ.data]);
 
   /** Every size any garment in this run offers, in apparel order. */
   const orderSizes = useMemo(
@@ -312,6 +372,9 @@ export default function ConceptBuilder({
 
   /** Any of the three actions in flight disables all three. */
   const busy = create.isPending || update.isPending || addToCart.isPending;
+
+  /** The product on screen still has nothing on it. */
+  const needsPlacementNow = Boolean(active) && needsPlacement(active as StudioProduct);
 
   /**
    * Swap the artwork and leave everything else alone.
@@ -334,26 +397,19 @@ export default function ConceptBuilder({
       [variantIndex]: { ...(prev[variantIndex] ?? {}), [size]: quantity },
     }));
 
-  const toggleExtraColor = (name: string) =>
-    setExtraColors((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
-
   /**
-   * THE COLOURWAY SELECTION, MASTER FIRST.
+   * THE COLOURWAYS OF THE PRODUCT ON SCREEN, MASTER FIRST.
    *
-   * `colorName` is the master — the colourway you actually place artwork on —
-   * and `extraColors` is everything else that inherits that arrangement. They
-   * are two fields rather than one array because the master is the only colour
-   * the canvas can show, and the save path already keys off it.
+   * The master is the colourway the canvas shows and the one the placement was
+   * judged against; the rest inherit that product's arrangement. Placing once
+   * and inheriting is the whole point — a centre-chest logo is centre-chest on
+   * all thirteen colours of the same hoodie, and asking the operator to repeat
+   * the drag thirteen times would be asking them to do a computer's job.
    *
-   * Placing once and inheriting is the whole point: a centre-chest logo on the
-   * heavyweight hoodie is centre-chest on all thirteen colours, and asking the
-   * operator to repeat the same drag thirteen times would be asking them to do
-   * a computer's job.
+   * It inherits ACROSS COLOURS OF ONE GARMENT and never across garments. That
+   * is the rule the session model enforces; see studio-session.ts.
    */
-  const selectedColors = useMemo(
-    () => (colorName ? [colorName, ...extraColors.filter((n) => n !== colorName)] : []),
-    [colorName, extraColors],
-  );
+  const selectedColors = useMemo(() => (active ? orderedColors(active) : []), [active]);
 
   const availableColors = useMemo(
     // Only colours the supplier actually has. Building a mockup on a
@@ -362,58 +418,58 @@ export default function ConceptBuilder({
     [blank],
   );
 
-  const toggleColor = (name: string) => {
-    if (name === colorName) {
-      // Deselecting the master promotes the next colour rather than wiping the
-      // selection — the operator meant "not this one", not "start over".
-      const [next, ...rest] = extraColors;
-      setColorName(next ?? null);
-      setExtraColors(rest);
-      return;
-    }
-    if (extraColors.includes(name)) {
-      setExtraColors((prev) => prev.filter((n) => n !== name));
-      return;
-    }
-    if (!colorName) setColorName(name);
-    else setExtraColors((prev) => [...prev, name]);
+  /* ------------------------------------------------------ the studio moves */
+
+  /**
+   * + Add another product.
+   *
+   * Keeps the athlete, the design and everything already in the session, and
+   * sends the operator to the blank catalog to pick the next garment. What it
+   * deliberately does NOT do is carry the placement across: the new product
+   * arrives empty and the studio marks it "Place artwork", because a hoodie's
+   * chest coordinates are a sweatpants thigh.
+   */
+  const startAnotherProduct = () => {
+    setAddingProduct(true);
+    setStep("blank");
   };
 
-  /** Make this colour the one the canvas shows, without changing the selection. */
-  const makeMaster = (name: string) => {
-    if (name === colorName || !colorName) {
-      setColorName(name);
-      return;
-    }
-    setExtraColors((prev) => [...prev.filter((n) => n !== name), colorName]);
-    setColorName(name);
+  /** Bring a product already in the session back into the editor. */
+  const openProduct = (key: string) => {
+    setSession((s) => setActive(s, key));
+    setAddingProduct(false);
+    setSurface("front");
+    setStep(needsPlacement(session.products.find((p) => p.key === key) ?? { placed: [] } as StudioProduct)
+      ? "placement"
+      : "confirm");
   };
+
+  const dropProduct = (key: string) => setSession((s) => removeProduct(s, key));
+
+  const toggleColor = (name: string) =>
+    setSession((s) => updateActive(s, (p) => toggleProductColor(p, name)));
+
+  /** Make this colour the one the canvas shows. */
+  const makeMaster = (name: string) => setSession((s) => updateActive(s, (p) => setMaster(p, name)));
 
   const selectAllColors = () => {
     const names = availableColors.map((c) => c.name);
     if (names.length === 0) return;
-    setColorName((cur) => cur ?? names[0]);
-    setExtraColors(names.slice(colorName ? 0 : 1).filter((n) => n !== (colorName ?? names[0])));
+    setSession((s) =>
+      updateActive(s, (p) => ({
+        ...p,
+        masterColor: p.masterColor ?? names[0],
+        colorNames: names,
+      })),
+    );
   };
 
-  const clearColors = () => {
-    setColorName(null);
-    setExtraColors([]);
-  };
-
-  const toggleExtraBlank = (id: string) =>
-    setExtraBlanks((prev) => {
-      const next = { ...prev };
-      if (id in next) delete next[id];
-      else next[id] = [];
-      return next;
-    });
-
-  const toggleExtraBlankColor = (id: string, name: string) =>
-    setExtraBlanks((prev) => {
-      const cur = prev[id] ?? [];
-      return { ...prev, [id]: cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name] };
-    });
+  const clearColors = () =>
+    setSession((s) =>
+      // The master survives: it is the colour the arrangement was made against,
+      // and a product with none is a product whose placement refers to nothing.
+      updateActive(s, (p) => ({ ...p, colorNames: p.masterColor ? [p.masterColor] : [] })),
+    );
 
   /** Put a design on the garment. Fits the default chest/back zone when dropped blind. */
   const addPlacement = (designId: string, box: PlacedDesign["box"], zone: { zoneId: string; zoneLabel: string } | null) => {
@@ -431,26 +487,12 @@ export default function ConceptBuilder({
     ]);
   };
 
-  // Reset the colour when the blank changes; a colour name only means something
-  // inside one blank. Placements survive — the artwork arrangement is about the
-  // design, not the colourway, and re-placing it after every colour change would
-  // defeat the point of trying a design across a range.
-  const restoredBlankId = useRef(restored?.blankId ?? null);
-  useEffect(() => {
-    // Reopening sets the blank and the colour together; clearing here would
-    // undo the restored colourway a tick after it was set. Same for a draft:
-    // re-attaching its blank must not throw away the colour it was built on.
-    if (isEdit && hydrated) return;
-    if (blank && restoredBlankId.current === blank.id) {
-      restoredBlankId.current = null;
-      return;
-    }
-    setColorName(null);
-    // The alignment lines start where this garment's print starts, so "centre
-    // on lines" is a no-op on a fresh placement rather than a surprise.
-    if (blank) setGuides(startGuidesBoth(blank.garmentType));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blank?.id]);
+  /*
+    Changing the garment resets the colour and the alignment lines — a colour
+    name only means something inside one blank. That used to be an effect
+    watching blank.id, which then needed guards for every path that set the
+    two together. It now happens inside setBlank, where the intent is known.
+  */
 
   /**
    * Reopen: restore the exact composition.
@@ -471,13 +513,22 @@ export default function ConceptBuilder({
     setTitle(isVariation ? `${m.title} — variation` : m.title);
     setNotes(m.notes ?? "");
     setCollectionId(m.collectionId ?? "");
-    setColorName(m.colorName);
-    setPlaced(m.placed);
-    if (Object.keys(m.guides).length > 0) {
-      setGuides({ front: DEFAULT_GUIDES, back: DEFAULT_GUIDES, ...m.guides });
-    }
-    const b = (blanksQ.data ?? []).find((x) => x.id === m.blankId) ?? null;
-    if (b) setBlank(b);
+    /*
+      Reopening builds a session of exactly one product: this mockup, its
+      garment, its colourway and its own arrangement. Everything the studio can
+      do afterwards — more colourways, another product, another design — starts
+      from here.
+    */
+    const restoredProduct = newProduct({
+      blankId: m.blankId ?? "",
+      colorName: m.colorName,
+      placed: m.placed,
+      guides:
+        Object.keys(m.guides).length > 0
+          ? { front: DEFAULT_GUIDES, back: DEFAULT_GUIDES, ...m.guides }
+          : undefined,
+    });
+    setSession((s) => (m.blankId ? addProduct({ ...s, products: [], activeKey: null }, restoredProduct) : s));
     setStep("placement");
     // setStep writes a search param and is re-created every render; depending
     // on it would re-run this hydration on every keystroke.
@@ -533,6 +584,16 @@ export default function ConceptBuilder({
     (step === "blank" && Boolean(blank)) ||
     (step === "color" && Boolean(colorName)) ||
     (step === "placement" && placed.length > 0);
+
+  /**
+   * Is there anything to write?
+   *
+   * In edit mode the answer is always yes — there is a row on screen. In the
+   * studio it is however many unsaved variants the session holds, which drops
+   * to zero the moment everything has been saved, and the Save button goes
+   * quiet rather than writing duplicates.
+   */
+  const savable = isEdit ? 1 : variants.length;
 
   const goNext = () => {
     const i = order.indexOf(step);
@@ -649,34 +710,14 @@ export default function ConceptBuilder({
       flow,
       step,
       designId: design?.id ?? null,
-      blankId: blank?.id ?? null,
-      colorName,
-      extraColors,
-      extraBlanks,
-      placed,
-      guides,
+      products: session.products,
+      activeKey: session.activeKey,
       surface,
       title,
       notes,
       collectionId,
     });
-  }, [
-    isEdit,
-    entity.id,
-    flow,
-    step,
-    design?.id,
-    blank?.id,
-    colorName,
-    extraColors,
-    extraBlanks,
-    placed,
-    guides,
-    surface,
-    title,
-    notes,
-    collectionId,
-  ]);
+  }, [isEdit, entity.id, flow, step, design?.id, session, surface, title, notes, collectionId]);
 
   /** Throw the restored work away and start from an empty wizard. */
   const startFresh = () => {
@@ -684,11 +725,8 @@ export default function ConceptBuilder({
     setQtyGrid({});
     setShowRestored(false);
     setDesign(null);
-    setBlank(null);
-    setColorName(null);
-    setPlaced([]);
-    setExtraColors([]);
-    setExtraBlanks({});
+    setSession(emptySession(entity.id));
+    setAddingProduct(false);
     setTitle("");
     setNotes("");
     setCollectionId("");
@@ -711,7 +749,7 @@ export default function ConceptBuilder({
    * Ordering never happens without saving: a cart line points at a mockup, so
    * the mockup has to be real first. If the save half fails, nothing is added.
    */
-  type SubmitMode = "save" | "cart" | "cart-continue";
+  type SubmitMode = "save" | "cart" | "cart-continue" | "add-product";
 
   /**
    * Put what was just created into the cart.
@@ -794,10 +832,12 @@ export default function ConceptBuilder({
           description: ordered > 0 ? "The cart is a draft order. Nothing has been submitted." : undefined,
         });
         onCreated?.(editMockupId);
-        if (mode === "cart-continue") {
-          startFresh();
+        if (mode === "add-product") {
+          startAnotherProduct();
           return;
         }
+        // Adding to the cart is not the end of anything; only Save closes.
+        if (mode === "cart" || mode === "cart-continue") return;
         onClose();
         return;
       }
@@ -805,32 +845,43 @@ export default function ConceptBuilder({
       // The headline placement mirrors onto each mockup row's own columns so V1
       // and every existing V2 read keep working unchanged; the full arrangement
       // lives in product_print_placements.
-      const headline = placed.find((p) => p.surface === "front") ?? placed[0] ?? null;
-      const rows = toRows(placed);
-      const blanksById = new Map((blanksQ.data ?? []).map((b) => [b.id, b]));
       const multipleBlanks = new Set(variants.map((v) => v.blankId)).size > 1;
 
-      const jobs = variants.map((v) => ({
-        draft: {
-          title: variantTitle(title, v, { multipleBlanks, total: variants.length }),
-          entityId: entity.id,
-          organizationId: entity.organizationId,
-          designId: headline?.designId ?? design?.id ?? null,
-          blankId: v.blankId,
-          collectionId: collectionId || null,
-          colorName: v.colorName,
-          surface: headline?.surface ?? null,
-          zoneId: headline?.zoneId ?? null,
-          placementLabel: headline?.zoneLabel ?? null,
-          imageUrl:
-            resolveBlankImage({ blank: blanksById.get(v.blankId) ?? null, colorName: v.colorName, surface: "front" })
-              .url,
-          notes: notes.trim() || null,
-          flow: flow ?? "design_first",
-          guides,
-        },
-        placements: rows,
-      }));
+      /*
+        EACH VARIANT CARRIES ITS OWN PRODUCT'S ARRANGEMENT.
+
+        This used to build `rows` once, from the single `placed` the builder
+        held, and write it onto every mockup in the batch — including mockups
+        on entirely different garments. A run of a hoodie and a pair of
+        sweatpants got the hoodie's coordinates twice.
+
+        v.placed is its product's, so the hoodie's colourways share the hoodie's
+        placement and the sweatpants have their own.
+      */
+      const jobs = variants.map((v) => {
+        const headline = v.placed.find((p) => p.surface === "front") ?? v.placed[0] ?? null;
+        return {
+          draft: {
+            title: variantTitle(title, v, { multipleBlanks, total: variants.length }),
+            entityId: entity.id,
+            organizationId: entity.organizationId,
+            designId: headline?.designId ?? design?.id ?? null,
+            blankId: v.blankId,
+            collectionId: collectionId || null,
+            colorName: v.colorName,
+            surface: headline?.surface ?? null,
+            zoneId: headline?.zoneId ?? null,
+            placementLabel: headline?.zoneLabel ?? null,
+            imageUrl:
+              resolveBlankImage({ blank: blanksById.get(v.blankId) ?? null, colorName: v.colorName, surface: "front" })
+                .url,
+            notes: notes.trim() || null,
+            flow: flow ?? "design_first",
+            guides: v.guides,
+          },
+          placements: toRows(v.placed),
+        };
+      });
 
       const { created, failed } = await create.mutateAsync(jobs);
 
@@ -841,7 +892,6 @@ export default function ConceptBuilder({
       // back in the same order as `jobs`, which is the order of `variants`, so
       // each composite gets its own colourway's garment shot rather than the
       // one that happened to be on screen.
-      const frontPlacements = placed.filter((p) => p.surface === "front");
       const previews = await Promise.all(
         created.map((id, i) => {
           const v = variants[i];
@@ -854,7 +904,7 @@ export default function ConceptBuilder({
           return storeMockupComposite({
             mockupId: id,
             garmentUrl: image.url,
-            placed: frontPlacements,
+            placed: v.placed.filter((p) => p.surface === "front"),
             designsById,
           });
         }),
@@ -933,13 +983,36 @@ export default function ConceptBuilder({
         });
       }
 
-      // Saved: the wizard's copy is no longer the only one.
-      clearDraft(entity.id);
+      /*
+        THE STUDIO DOES NOT CLOSE WHEN YOU SAVE.
+
+        Mark what was actually written so a second Save does not create it
+        again, then decide where the operator goes. Only "save" ends the
+        session; the other two are mid-session moves and stay put.
+      */
+      setSession((s) =>
+        markSaved(
+          s,
+          created
+            .map((id, i) => (id ? variants[i] : null))
+            .filter((v): v is (typeof variants)[number] => Boolean(v))
+            .map((v) => ({ productKey: v.productKey, colorName: v.colorName })),
+        ),
+      );
       onCreated?.(created[0]);
-      if (mode === "cart-continue") {
-        startFresh();
+
+      if (mode === "add-product") {
+        startAnotherProduct();
         return;
       }
+      if (mode === "cart" || mode === "cart-continue") {
+        // Stays in the studio on purpose: adding to the cart is not the end of
+        // anything, and closing the sheet to reopen it is four clicks of nothing.
+        return;
+      }
+
+      // Saved and finished: the wizard's copy is no longer the only one.
+      clearDraft(entity.id);
       onClose();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not create the concept");
@@ -1204,7 +1277,7 @@ export default function ConceptBuilder({
               <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-6 lg:grid-cols-8">
                 {availableColors.map((c) => {
                   const isMaster = colorName === c.name;
-                  const isPicked = isMaster || extraColors.includes(c.name);
+                  const isPicked = selectedColors.includes(c.name);
                   return (
                     <button
                       key={c.id}
@@ -1359,7 +1432,7 @@ export default function ConceptBuilder({
                       className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-[hsl(var(--ax-accent)/0.4)] px-3 py-2 text-[12px] font-semibold text-[hsl(var(--ax-accent))] transition-colors hover:bg-[hsl(var(--ax-accent)/0.1)]"
                     >
                       <Repeat className="h-3.5 w-3.5" />
-                      Swap the design
+                      Add / change design
                     </button>
                   )}
                   <MockupDesignRail
@@ -1464,17 +1537,48 @@ export default function ConceptBuilder({
                     </button>
                   </div>
                 </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-                    Notes
-                  </span>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                    className="w-full resize-none rounded-lg border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-3 py-2 text-[13px] outline-none focus:border-[hsl(var(--ax-accent))]"
-                  />
-                </label>
+                {/*
+                  Notes are occasional, so they do not get permanent furniture.
+                  Opened automatically when there is something to read, because
+                  a note nobody can see is worse than no note.
+                */}
+                {showNotes || notes.trim() ? (
+                  <label className="block">
+                    <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
+                      Notes
+                    </span>
+                    <textarea
+                      value={notes}
+                      autoFocus={showNotes && !notes.trim()}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                      className="w-full resize-none rounded-lg border border-[hsl(var(--ax-border))] bg-[hsl(var(--ax-card))] px-3 py-2 text-[13px] outline-none focus:border-[hsl(var(--ax-accent))]"
+                    />
+                  </label>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowNotes(true)}
+                    className="text-left text-[12px] text-[hsl(var(--ax-accent))] hover:underline"
+                  >
+                    + Add notes
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setSwitching(true)}
+                  disabled={placed.length === 0}
+                  title={
+                    placed.length === 0
+                      ? "Place some artwork first"
+                      : "Put different artwork in exactly these boxes"
+                  }
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[hsl(var(--ax-border))] px-3 py-2 text-[12px] font-medium text-[hsl(var(--ax-secondary))] transition-colors hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))] disabled:opacity-40"
+                >
+                  <Repeat className="h-3.5 w-3.5" />
+                  Add / change design
+                </button>
 
                 <div className="ax-card space-y-1.5 px-3 py-2.5 text-[12px]">
                   <Line label="Entity" value={entity.name} />
@@ -1561,58 +1665,67 @@ export default function ConceptBuilder({
             {blank && (
               <section className="rounded-2xl border border-[hsl(var(--ax-border))] p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="text-[13px] font-semibold">Make it in more colours, or on more blanks</h3>
+                  <h3 className="text-[13px] font-semibold uppercase tracking-[0.12em]">Colorways</h3>
                   <span className="text-[12px] tabular-nums text-[hsl(var(--ax-secondary))]">
-                    {variants.length} mockup{variants.length === 1 ? "" : "s"}
+                    {variants.length} mockup{variants.length === 1 ? "" : "s"} in this session
                   </span>
                 </div>
-                <p className="mt-0.5 max-w-[70ch] text-[12px] text-[hsl(var(--ax-faint))]">
-                  Every one is saved with this exact arrangement. Placement is stored as a percentage of the garment, so
-                  a chest hit lands on the chest whether it is a tee or a hoodie.
+                {/*
+                  ONE LINE, NOT A PARAGRAPH.
+
+                  What used to sit here was two sentences explaining percentage
+                  geometry, above a grid of every other blank — which made
+                  copying a hoodie's placement onto pants look like the intended
+                  workflow. The colours below belong to THIS garment; another
+                  garment gets its own placement, through Add another product.
+                */}
+                <p className="mt-0.5 text-[11.5px] text-[hsl(var(--ax-faint))]">
+                  Selected colors use this product&rsquo;s placement.
                 </p>
 
                 <div className="mt-3">
-                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-                    More colourways of {blank.name}
-                  </div>
                   <ColorChips
                     blank={blank}
-                    selected={extraColors}
+                    selected={selectedColors}
                     baseColorName={colorName}
-                    onToggle={toggleExtraColor}
+                    onToggle={toggleColor}
                   />
                 </div>
 
-                <div className="mt-4">
-                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-[hsl(var(--ax-secondary))]">
-                    Other blanks
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {blanks
-                      .filter((b) => b.id !== blank.id)
-                      .slice(0, 12)
-                      .map((b) => (
-                        <OtherBlankRow
-                          key={b.id}
-                          blank={b}
-                          selected={b.id in extraBlanks}
-                          colors={extraBlanks[b.id] ?? []}
-                          onToggle={() => toggleExtraBlank(b.id)}
-                          onToggleColor={(name) => toggleExtraBlankColor(b.id, name)}
-                        />
-                      ))}
-                  </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={selectAllColors}
+                    className="rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[11.5px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+                  >
+                    Select all colors
+                  </button>
+                  {selectedColors.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={clearColors}
+                      className="rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[11.5px] text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-ink))]"
+                    >
+                      Clear
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={startAnotherProduct}
+                    className="ml-auto rounded-full border border-[hsl(var(--ax-accent)/0.5)] px-3.5 py-1.5 text-[12px] font-semibold text-[hsl(var(--ax-accent))] hover:bg-[hsl(var(--ax-accent)/0.1)]"
+                  >
+                    + Add another product
+                  </button>
                 </div>
 
                 {unphotographed(variants).length > 0 && (
                   <p className="mt-3 text-[11px] text-[hsl(var(--ax-amber))]">
-                    {unphotographed(variants).length} of these have no photograph — those mockups save their placement
-                    but will not have a garment image to show.
+                    {unphotographed(variants).length} of these have no photograph of their own.
                   </p>
                 )}
                 {overLimit(variants.length) && (
                   <p className="mt-3 text-[11px] font-medium text-[hsl(var(--ax-amber))]">
-                    That is {variants.length} mockups. The cap is {MAX_VARIANTS} in one go — trim the selection.
+                    {variants.length} mockups. The cap is {MAX_VARIANTS} in one go — trim the selection.
                   </p>
                 )}
               </section>
@@ -1621,41 +1734,65 @@ export default function ConceptBuilder({
           )}
         </div>
 
+        {/* ------------------------------------------------- the session strip */}
+        {step !== "flow" && session.products.length > 0 && (
+          <SessionStrip
+            products={session.products}
+            activeKey={session.activeKey}
+            blanksById={blanksById}
+            designsById={designsById}
+            onOpen={openProduct}
+            onRemove={dropProduct}
+            onAdd={startAnotherProduct}
+          />
+        )}
+
         {/* footer */}
         {step !== "flow" && (
-          <div className="flex items-center gap-3 border-t border-[hsl(var(--ax-line))] px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3 border-t border-[hsl(var(--ax-line))] px-4 py-3">
             <div className="min-w-0 flex-1 truncate text-[12px] text-[hsl(var(--ax-faint))]">
               {[
                 design && (cleanDesignTitle(design.title) ?? "Design"),
                 blank?.name,
                 colorName,
-                placed.length > 0 ? `${placed.length} placement${placed.length === 1 ? "" : "s"}` : null,
+                needsPlacementNow ? "needs placement" : null,
               ]
                 .filter(Boolean)
                 .join("  ·  ") || "Nothing chosen yet"}
             </div>
+
+            {/*
+              The cart is a draft order that outlives this sheet, so it is shown
+              here rather than left to be discovered on the athlete's page.
+              Quiet: a count, not a call to action.
+            */}
+            {cartUnits > 0 && (
+              <Link
+                to={entityCartHref(entity.id)}
+                title="A draft order. Nothing has been submitted."
+                className="shrink-0 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[11.5px] text-[hsl(var(--ax-secondary))] hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))]"
+              >
+                Cart ({cartUnits})
+              </Link>
+            )}
+
             {step === "confirm" ? (
               <div className="flex flex-wrap items-center justify-end gap-2">
                 {/*
-                  THREE ACTIONS, ONE OF THEM PRIMARY.
-
-                  Saving is the common case and keeps the filled button. The two
-                  cart actions are quieter and stay disabled until a quantity has
-                  actually been typed — a button called "Add to cart" that adds
-                  nothing teaches an operator to distrust the whole screen.
+                  THREE ACTIONS. Saving is the common case and keeps the filled
+                  button. Add to cart stays disabled until a quantity has been
+                  typed — a button called "Add to cart" that adds nothing
+                  teaches an operator to distrust the whole screen. Add product
+                  saves first, then carries the session on.
                 */}
                 <button
                   type="button"
-                  onClick={() => void submit("cart-continue")}
-                  disabled={busy || orderUnits === 0}
-                  title={
-                    orderUnits === 0
-                      ? "Enter some quantities above first"
-                      : "Save, add these units, and start the next mockup"
-                  }
-                  className="rounded-full border border-[hsl(var(--ax-border))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-secondary))] hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))] disabled:opacity-40 disabled:hover:border-[hsl(var(--ax-border))]"
+                  onClick={() => void submit("add-product")}
+                  disabled={busy || savable === 0}
+                  title="Save what is here and pick the next garment"
+                  className="rounded-full border border-[hsl(var(--ax-border))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-secondary))] hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))] disabled:opacity-40"
                 >
-                  Add to cart &amp; continue
+                  + Add product
                 </button>
                 <button
                   type="button"
@@ -1669,7 +1806,7 @@ export default function ConceptBuilder({
                 <button
                   type="button"
                   onClick={() => void submit("save")}
-                  disabled={busy || (!design && !blank) || (!isEdit && overLimit(variants.length))}
+                  disabled={busy || savable === 0 || (!isEdit && overLimit(variants.length))}
                   className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
                 >
                   {isEdit
@@ -1677,10 +1814,10 @@ export default function ConceptBuilder({
                       ? "Saving…"
                       : "Save mockup"
                     : create.isPending
-                      ? "Creating…"
+                      ? "Saving…"
                       : variants.length > 1
-                        ? `Create ${variants.length} mockups`
-                        : "Create mockup"}
+                        ? `Save ${variants.length} mockups`
+                        : "Save mockup"}
                 </button>
               </div>
             ) : (

@@ -7,6 +7,7 @@ import {
   parseDraft,
   type MockupDraft,
 } from "./mockup-draft";
+import { newProduct } from "./studio-session";
 
 const draft = (over: Partial<MockupDraft> = {}): MockupDraft => ({
   version: DRAFT_VERSION,
@@ -15,12 +16,8 @@ const draft = (over: Partial<MockupDraft> = {}): MockupDraft => ({
   flow: "design_first",
   step: "placement",
   designId: "d1",
-  blankId: "b1",
-  colorName: "Cool Blue",
-  extraColors: ["Sand"],
-  extraBlanks: {},
-  placed: [],
-  guides: { front: { x: 50, y: 34 } },
+  products: [newProduct({ blankId: "b1", colorName: "Cool Blue", key: "k1" })],
+  activeKey: "k1",
   surface: "front",
   title: "Mooney hoodie",
   notes: "",
@@ -36,15 +33,15 @@ describe("draftKey", () => {
 });
 
 describe("isMeaningful — opening the builder and closing it leaves nothing", () => {
-  it("says no to an untouched wizard", () => {
-    expect(isMeaningful({ designId: null, blankId: null, placed: [], title: "", notes: "" })).toBe(false);
-    expect(isMeaningful({ designId: null, blankId: null, placed: [], title: "   ", notes: "  " })).toBe(false);
+  it("says no to an untouched studio", () => {
+    expect(isMeaningful({ designId: null, products: [], title: "", notes: "" })).toBe(false);
+    expect(isMeaningful({ designId: null, products: [], title: "   ", notes: "  " })).toBe(false);
   });
 
   it("says yes once a real decision exists", () => {
-    expect(isMeaningful({ designId: "d1", blankId: null, placed: [], title: "", notes: "" })).toBe(true);
-    expect(isMeaningful({ designId: null, blankId: "b1", placed: [], title: "", notes: "" })).toBe(true);
-    expect(isMeaningful({ designId: null, blankId: null, placed: [], title: "Idea", notes: "" })).toBe(true);
+    expect(isMeaningful({ designId: "d1", products: [], title: "", notes: "" })).toBe(true);
+    expect(isMeaningful({ designId: null, products: [newProduct({ blankId: "b1" })], title: "", notes: "" })).toBe(true);
+    expect(isMeaningful({ designId: null, products: [], title: "Idea", notes: "" })).toBe(true);
   });
 });
 
@@ -69,18 +66,27 @@ describe("parseDraft", () => {
   });
 
   it("repairs individual fields instead of rejecting the whole draft", () => {
-    const out = parseDraft(
-      { ...draft(), step: "not-a-step", surface: "sideways", extraColors: ["Sand", 4, null], flow: "sideways" },
-      "e1",
-    );
+    const out = parseDraft({ ...draft(), step: "not-a-step", surface: "sideways", flow: "sideways" }, "e1");
     expect(out?.step).toBe("flow");
     expect(out?.surface).toBe("front");
-    expect(out?.extraColors).toEqual(["Sand"]);
     expect(out?.flow).toBeNull();
   });
 
+  it("drops a product that is not shaped like one rather than restoring a stub", () => {
+    // A half-parsed arrangement would put artwork somewhere nobody chose.
+    const out = parseDraft({ ...draft(), products: [{ key: "k" }, "nope", null] }, "e1");
+    expect(out?.products).toEqual([]);
+  });
+
+  it("keeps each product's own placement, which is the whole point", () => {
+    const hoodie = newProduct({ blankId: "hoodie", key: "h" });
+    const pants = newProduct({ blankId: "pants", key: "p" });
+    const out = parseDraft({ ...draft(), products: [hoodie, pants] }, "e1");
+    expect(out?.products.map((x) => x.blankId)).toEqual(["hoodie", "pants"]);
+  });
+
   it("returns nothing for a draft with nothing in it", () => {
-    expect(parseDraft(draft({ designId: null, blankId: null, placed: [], title: "", notes: "" }), "e1")).toBeNull();
+    expect(parseDraft(draft({ designId: null, products: [], title: "", notes: "" }), "e1")).toBeNull();
   });
 });
 

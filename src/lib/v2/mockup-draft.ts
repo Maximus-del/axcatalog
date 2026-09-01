@@ -21,15 +21,23 @@
 // outlive the design or blank it refers to. None of those may throw, and none
 // of them may hand back something half-restored.
 
-import type { Guides, PlacedDesign } from "./placement-geometry";
+import type { StudioProduct } from "./studio-session";
 
 export const BUILDER_STEPS = ["flow", "design", "blank", "color", "placement", "confirm"] as const;
 export type BuilderStep = (typeof BUILDER_STEPS)[number];
 
 export type BuilderFlow = "design_first" | "blank_first";
 
-/** Bump when the shape changes. An older draft is discarded, never migrated. */
-export const DRAFT_VERSION = 2;
+/**
+ * Bump when the shape changes. An older draft is discarded, never migrated.
+ *
+ * 3: the studio session. A draft used to hold ONE placement plus a bag of
+ * "extra blanks" that silently inherited it; it now holds a list of products,
+ * each with its own arrangement. There is no honest migration from the old
+ * shape — the whole point is that the old shape's placements were only ever
+ * valid for the garment they were made on.
+ */
+export const DRAFT_VERSION = 3;
 
 export interface MockupDraft {
   version: number;
@@ -40,12 +48,10 @@ export interface MockupDraft {
   step: BuilderStep;
   /** Ids, not objects — the objects come back from the queries that own them. */
   designId: string | null;
-  blankId: string | null;
-  colorName: string | null;
-  extraColors: string[];
-  extraBlanks: Record<string, string[]>;
-  placed: PlacedDesign[];
-  guides: Record<string, Guides>;
+  /** Every product in the session, each carrying its own placement. */
+  products: StudioProduct[];
+  /** Which one the editor was showing. */
+  activeKey: string | null;
   surface: "front" | "back";
   title: string;
   notes: string;
@@ -63,14 +69,19 @@ export function draftKey(entityId: string): string {
  * greets you next time. A draft counts once a real decision has been made —
  * artwork placed, a garment or a design chosen, or something typed.
  */
-export function isMeaningful(draft: Pick<MockupDraft, "designId" | "blankId" | "placed" | "title" | "notes">): boolean {
+export function isMeaningful(draft: Pick<MockupDraft, "designId" | "products" | "title" | "notes">): boolean {
   return Boolean(
     draft.designId ||
-      draft.blankId ||
-      (draft.placed?.length ?? 0) > 0 ||
+      (draft.products?.length ?? 0) > 0 ||
       draft.title?.trim() ||
       draft.notes?.trim(),
   );
+}
+
+function isProduct(value: unknown): value is StudioProduct {
+  if (!value || typeof value !== "object") return false;
+  const p = value as Partial<StudioProduct>;
+  return typeof p.key === "string" && typeof p.blankId === "string" && Array.isArray(p.placed);
 }
 
 function isStep(value: unknown): value is BuilderStep {
@@ -97,12 +108,10 @@ export function parseDraft(raw: unknown, entityId: string): MockupDraft | null {
     flow: d.flow === "design_first" || d.flow === "blank_first" ? d.flow : null,
     step: isStep(d.step) ? d.step : "flow",
     designId: typeof d.designId === "string" ? d.designId : null,
-    blankId: typeof d.blankId === "string" ? d.blankId : null,
-    colorName: typeof d.colorName === "string" ? d.colorName : null,
-    extraColors: Array.isArray(d.extraColors) ? d.extraColors.filter((c): c is string => typeof c === "string") : [],
-    extraBlanks: d.extraBlanks && typeof d.extraBlanks === "object" ? (d.extraBlanks as Record<string, string[]>) : {},
-    placed: Array.isArray(d.placed) ? (d.placed as PlacedDesign[]) : [],
-    guides: d.guides && typeof d.guides === "object" ? (d.guides as Record<string, Guides>) : {},
+    // Products are taken as stored or not at all. A half-parsed arrangement is
+    // worse than an empty studio: it would put artwork somewhere nobody chose.
+    products: Array.isArray(d.products) ? (d.products as StudioProduct[]).filter(isProduct) : [],
+    activeKey: typeof d.activeKey === "string" ? d.activeKey : null,
     surface: d.surface === "back" ? "back" : "front",
     title: typeof d.title === "string" ? d.title : "",
     notes: typeof d.notes === "string" ? d.notes : "",
