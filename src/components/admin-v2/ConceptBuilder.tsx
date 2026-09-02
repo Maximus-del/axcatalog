@@ -46,12 +46,13 @@ import {
 } from "@/lib/v2/mockup-draft";
 import { AssetImage, Chip, Skeleton } from "./primitives";
 import { FlatDesignGrid, FlowCard, GridSkeleton, GroupedDesignPicker } from "./builder/DesignStep";
-import { BlankCard, ColorChips, ColorStepHeader } from "./builder/BlankStep";
+import { BlankCard, ColorStepHeader } from "./builder/BlankStep";
 import { MockupDesignRail } from "./builder/PlacementAside";
 import { ColorwayStrip, Line, StaticMockup } from "./builder/ReviewStep";
 import { OrderQuantities } from "./builder/OrderQuantities";
 import DesignSwitcher from "./builder/DesignSwitcher";
 import SessionStrip from "./builder/SessionStrip";
+import ColorwayCards from "./builder/ColorwayCards";
 import { swapDesign } from "@/lib/v2/design-swap";
 import {
   activeProduct,
@@ -467,13 +468,21 @@ export default function ConceptBuilder({
     setStep("blank");
   };
 
-  /** Bring a product already in the session back into the editor. */
+  /**
+   * Make a product in the session the one the studio is showing.
+   *
+   * THIS IS A TAB SWITCH, NOT A NAVIGATION. The sheet stays open, nothing is
+   * saved or discarded, and the step does NOT move — the whole point is that
+   * clicking through an assortment feels like changing tabs rather than
+   * restarting a wizard. The single exception is a product that has never been
+   * placed: there is nothing to review, so it goes where the work is.
+   */
   const openProduct = (key: string) => {
+    const target = session.products.find((p) => p.key === key);
     setSession((s) => setActive(s, key));
     setAddingProduct(false);
     setSurface("front");
-    const target = session.products.find((p) => p.key === key);
-    setStep(target && !needsPlacement(target) ? "confirm" : "placement");
+    if (target && needsPlacement(target)) setStep("placement");
   };
 
   const dropProduct = (key: string) => setSession((s) => removeProduct(s, key));
@@ -1756,16 +1765,7 @@ export default function ConceptBuilder({
                   Selected colors use this product&rsquo;s placement.
                 </p>
 
-                <div className="mt-3">
-                  <ColorChips
-                    blank={blank}
-                    selected={selectedColors}
-                    baseColorName={colorName}
-                    onToggle={toggleColor}
-                  />
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-2">
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={selectAllColors}
@@ -1789,6 +1789,36 @@ export default function ConceptBuilder({
                   >
                     + Add another product
                   </button>
+                </div>
+
+                {/*
+                  THE MOCKUPS, AT A SIZE YOU CAN JUDGE.
+
+                  This was a row of pills, which tells you a colour is ticked
+                  and nothing about what the garment looks like — the only
+                  question a review screen exists to answer.
+                */}
+                <div className="mt-3">
+                  <ColorwayCards
+                    blank={blank}
+                    selected={selectedColors}
+                    master={colorName}
+                    placedFor={(name) => (active ? placementFor(active, name) : [])}
+                    adjusted={active ? adjustedColors(active) : []}
+                    designsById={designsById}
+                    surface={surface}
+                    available={availableColors}
+                    onSelect={makeMaster}
+                    onEditPlacement={(name) => {
+                      makeMaster(name);
+                      setStep("placement");
+                    }}
+                    onToggle={toggleColor}
+                    onRemove={toggleColor}
+                    onResetToShared={(name) =>
+                      setSession((s) => updateActive(s, (p) => resetToShared(p, name)))
+                    }
+                  />
                 </div>
 
                 {unphotographed(variants).length > 0 && (
