@@ -2617,3 +2617,47 @@ export function useDeleteProduct() {
     },
   });
 }
+
+/**
+ * Upload a dropped folder of artwork as designs.
+ *
+ * `productionReady` decides which shelf it lands on, and the distinction is
+ * already real in the data: 111 of 118 designs have no export file. Something
+ * dropped as INSPIRATION is concept art — a reference, a sketch, a screenshot
+ * — and is stored as such rather than being quietly promoted to a production
+ * asset it is not.
+ *
+ * Uploads run one at a time on purpose. Each file is a storage write plus two
+ * rows, and forty in parallel is how you get a rate limit and a half-written
+ * folder. Failures are collected rather than thrown so a folder with one bad
+ * file still lands the other thirty-nine.
+ */
+export function useUploadDesigns(entityId: string, organizationId: string) {
+  const qc = useQueryClient();
+  const upload = useUploadDesign(entityId, organizationId);
+  return useMutation({
+    mutationFn: async (input: { files: File[]; productionReady: boolean; titleFor: (file: File) => string }) => {
+      const uploaded: string[] = [];
+      const failed: Array<{ name: string; message: string }> = [];
+      for (const file of input.files) {
+        try {
+          const res = await upload.mutateAsync({
+            file,
+            title: input.titleFor(file),
+            productionReady: input.productionReady,
+          });
+          uploaded.push(res.designId);
+        } catch (err) {
+          failed.push({ name: file.name, message: err instanceof Error ? err.message : "upload failed" });
+        }
+      }
+      return { uploaded, failed };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "shelf", entityId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "designs"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace", entityId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+    },
+  });
+}

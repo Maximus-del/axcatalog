@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -14,7 +15,9 @@ import {
   Sparkles,
   Store,
 } from "lucide-react";
-import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
+import { useEntityWorkspace, useMockupLibrary, useUploadDesigns } from "@/lib/v2/data";
+import DropZone from "@/components/admin-v2/DropZone";
+import { planDrop, titleFromFilename } from "@/lib/v2/drop-files";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
 import { useAuth } from "@/auth/AuthProvider";
@@ -60,6 +63,46 @@ export default function V2EntityOverview() {
   const ordersQ = useEntityOrders(id);
   const cart = useCart(id, user?.id);
   const [menuOpen, setMenuOpen] = useState(false);
+  const uploadDesigns = useUploadDesigns(id ?? "", data?.entity.organizationId ?? "");
+
+  /**
+   * Take a dropped folder onto one of the two design shelves.
+   *
+   * `productionReady` is what separates them, and it is a real distinction in
+   * the data rather than a label: a design is production artwork only when an
+   * export file exists for it. Inspiration is everything else, which today is
+   * 111 of 118 designs.
+   */
+  const acceptDrop = (files: File[], productionReady: boolean) => {
+    const plan = planDrop(files);
+    if (plan.accepted.length === 0) {
+      toast.error("Nothing there AX can store", {
+        description: plan.rejected.length > 0 ? plan.rejected.map((r) => r.name).join(", ") : "Images only.",
+      });
+      return;
+    }
+    uploadDesigns.mutate(
+      {
+        files: plan.accepted,
+        productionReady,
+        titleFor: (file) => titleFromFilename(file.name) || "Untitled design",
+      },
+      {
+        onSuccess: ({ uploaded, failed }) => {
+          const where = productionReady ? "Designs" : "Design concepts";
+          if (failed.length > 0) {
+            toast.warning(`${uploaded.length} added to ${where}, ${failed.length} could not be`, {
+              description: failed[0].name,
+            });
+          } else {
+            toast.success(`${uploaded.length} added to ${where}`);
+          }
+          if (plan.trimmed) toast.info("Only the first 40 were taken", { description: "Drop the rest separately." });
+        },
+        onError: (err) => toast.error(err instanceof Error ? err.message : "Could not upload those"),
+      },
+    );
+  };
 
   const derived = useMemo(() => {
     if (!data) return null;
@@ -117,6 +160,17 @@ export default function V2EntityOverview() {
   }
 
   const { entity, collections, designs, products } = data;
+
+  /*
+    TWO SHELVES, ONE EXISTING FACT.
+
+    A design is production ARTWORK only when an export file exists for it.
+    Everything else is a reference, a sketch, a screenshot — inspiration — and
+    that is 111 of the 118 designs in the database. The split needed no new
+    column and no new table; it was already true and simply never shown.
+  */
+  const artwork = designs.filter((d) => d.productionReady);
+  const inspiration = designs.filter((d) => !d.productionReady);
   const mockups = libraryQ.data?.mockups ?? [];
   const orders = ordersQ.data;
   const lib = (section: EntitySection) => entityLibraryHref(entity.id, { focus: section });
@@ -249,40 +303,55 @@ export default function V2EntityOverview() {
           />
         </DashCard>
 
-        <DashCard
-          title="Designs"
-          to={lib("designs")}
-          empty="No artwork linked to this athlete yet."
-          count={designs.length}
+        <DropZone
+          onFiles={(files) => acceptDrop(files, true)}
+          busy={uploadDesigns.isPending}
+          label={`Add production artwork for ${entity.name}`}
         >
+          <DashCard
+            title="Designs"
+            to={lib("designs")}
+            empty="No production artwork yet. Drop a folder of exports here."
+            count={artwork.length}
+          >
           {/*
             Designs are judged by looking at them, so these tiles are the
             artwork and nothing else — no title, no status chip. The library is
             where the metadata lives.
           */}
-          <TileGrid
-            items={preview(designs).shown}
-            remaining={preview(designs).remaining}
+            <TileGrid
+              items={preview(artwork).shown}
+              remaining={preview(artwork).remaining}
+              to={lib("designs")}
+              render={(d: Design) => <DesignTile key={d.id} design={d} to={lib("designs")} />}
+            />
+          </DashCard>
+        </DropZone>
+
+        {/*
+          DESIGN CONCEPTS — inspiration. The same object as a design, minus a
+          production file, which is exactly what makes it a reference rather
+          than something you can print.
+        */}
+        <DropZone
+          onFiles={(files) => acceptDrop(files, false)}
+          busy={uploadDesigns.isPending}
+          label={`Add inspiration for ${entity.name}`}
+        >
+          <DashCard
+            title="Design concepts"
             to={lib("designs")}
-            render={(d: Design) => (
-              <Link
-                key={d.id}
-                to={lib("designs")}
-                title={d.title}
-                className="group min-w-0"
-              >
-                <AssetImage
-                  bucket={d.fileBucket}
-                  path={d.filePath}
-                  alt={d.title}
-                  className="aspect-square w-full rounded-xl border border-[hsl(var(--ax-border))] bg-black/40 transition-colors group-hover:border-[hsl(var(--ax-accent))]"
-                  fit="contain"
-                  fallbackSeed={d.id}
-                />
-              </Link>
-            )}
-          />
-        </DashCard>
+            empty="No inspiration yet. Drag a folder of references straight onto this card."
+            count={inspiration.length}
+          >
+            <TileGrid
+              items={preview(inspiration).shown}
+              remaining={preview(inspiration).remaining}
+              to={lib("designs")}
+              render={(d: Design) => <DesignTile key={d.id} design={d} to={lib("designs")} />}
+            />
+          </DashCard>
+        </DropZone>
 
         <DashCard
           title="Products"
@@ -511,6 +580,21 @@ function AthleteHeader({
         </div>
       </div>
     </div>
+  );
+}
+
+function DesignTile({ design, to }: { design: Design; to: string }) {
+  return (
+    <Link to={to} title={design.title} className="group min-w-0">
+      <AssetImage
+        bucket={design.fileBucket}
+        path={design.filePath}
+        alt={design.title}
+        className="aspect-square w-full rounded-xl border border-[hsl(var(--ax-border))] bg-black/40 transition-colors group-hover:border-[hsl(var(--ax-accent))]"
+        fit="contain"
+        fallbackSeed={design.id}
+      />
+    </Link>
   );
 }
 

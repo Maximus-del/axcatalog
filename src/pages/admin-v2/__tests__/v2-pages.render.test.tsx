@@ -265,6 +265,7 @@ vi.mock("@/lib/v2/data", () => ({
   useUpdateMockup: () => mutation(),
   useUpdatePlacementSpec: () => mutation(),
   useUploadDesign: () => mutation(),
+  useUploadDesigns: () => mutation(),
   publicUrl: () => null,
   useAssetBriefs: () =>
     query([
