@@ -2311,6 +2311,58 @@ export function useShelfActions(entityId: string, organizationId: string) {
           );
           return;
         }
+        case "set-production-ready": {
+          const files = await t("design_files")
+            .select("id, file_type, is_primary")
+            .eq("design_id", job.designId);
+          if (files.error) throw new Error(files.error.message);
+          const rows = (files.data ?? []) as unknown as Row[];
+          if (rows.length === 0) {
+            throw new Error("That design has no file, so there is nothing to reclassify");
+          }
+          // The primary file is the one the shelves render and the one the
+          // production check looks at; if none is flagged, the first will do.
+          const target = rows.find((r) => r.is_primary === true) ?? rows[0];
+          await must(
+            t("design_files")
+              .update({ file_type: job.productionReady ? "export" : "source" } as never)
+              .eq("id", String(target.id)),
+          );
+          // Keep designs.status in step so V1 and the filters agree.
+          await must(
+            t("designs")
+              .update({ status: job.productionReady ? "production_ready" : "concept" } as never)
+              .eq("id", job.designId),
+          );
+          return;
+        }
+        case "delete-design": {
+          /*
+            Storage first, rows second.
+
+            A deleted row with its objects still in the bucket is invisible
+            litter nobody will ever find; an object with no row is at least
+            reachable. Removing the files is best-effort for that reason — the
+            design still goes.
+          */
+          const files = await t("design_files")
+            .select("storage_bucket, storage_path")
+            .eq("design_id", job.designId);
+          const paths = ((files.data ?? []) as unknown as Row[])
+            .filter((r) => str(r.storage_bucket) === "design-files" && str(r.storage_path))
+            .map((r) => String(r.storage_path));
+          if (paths.length > 0) {
+            try {
+              await supabase.storage.from("design-files").remove(paths);
+            } catch (err) {
+              console.error("design file cleanup failed", err);
+            }
+          }
+          await must(t("design_athletes").delete().eq("design_id", job.designId));
+          await must(t("design_files").delete().eq("design_id", job.designId));
+          await must(t("designs").delete().eq("id", job.designId));
+          return;
+        }
         case "archive": {
           // Archiving is a property of the artwork, so it is global rather than
           // per entity. Restoring puts it back to 'concept' rather than guessing
@@ -2468,6 +2520,22 @@ export type ShelfJob =
   | { type: "relink"; link: DesignLinkSnapshot }
   /** designs.status -> 'archived'. Global to the design, not per entity. */
   | { type: "archive"; designId: string; archived: boolean }
+  /**
+   * Move a design between the two shelves.
+   *
+   * WHAT ACTUALLY SEPARATES THEM: a design is production artwork when it has a
+   * design_files row of type 'export'. Anything else — a white-background
+   * render, a screenshot, a sketch — is a concept. So the move is not a label
+   * on the design, it is the TYPE OF ITS FILE, which is the fact the rest of
+   * V2 already reads.
+   *
+   * A file cannot be made print-ready by reclassifying it, and this does not
+   * pretend otherwise: it records the operator's judgement about a file they
+   * can see, which is the only place that judgement can come from.
+   */
+  | { type: "set-production-ready"; designId: string; productionReady: boolean }
+  /** Delete the design, its files and its links. The storage objects go too. */
+  | { type: "delete-design"; designId: string }
   /** Pin a folder's cover. Null hands it back to "whatever is first". */
   | { type: "set-group-cover"; groupId: string; designId: string | null };
 

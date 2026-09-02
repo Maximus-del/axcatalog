@@ -5,11 +5,14 @@ import {
   ChevronDown,
   FolderOpen,
   GripVertical,
+  ImageOff,
   Images,
   Link2Off,
   MoreHorizontal,
   Pencil,
   RefreshCw,
+  Trash2,
+  Wand2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -262,6 +265,65 @@ export default function DesignShelf({
     );
   };
 
+  /**
+   * Move a design between the two shelves.
+   *
+   * Chase's rule: a transparent, print-ready PNG belongs in Designs; a
+   * white-background render or a sketch belongs in Design concepts. What
+   * actually decides it is the file's type, which is what this writes — see
+   * the ShelfJob for why that is the honest place for it.
+   */
+  const setProductionReady = (design: Design, productionReady: boolean) => {
+    setMenuFor(null);
+    actions.mutate(
+      { type: "set-production-ready", designId: design.id, productionReady },
+      {
+        onError: (err) =>
+          fail(err instanceof Error ? err.message : "Could not move that design"),
+        onSuccess: () =>
+          toast.success(
+            productionReady ? `Moved to Designs` : `Moved to Design concepts`,
+            {
+              description: productionReady
+                ? "Treated as print-ready artwork from here."
+                : "Treated as a reference, not something to print.",
+              action: {
+                label: "Undo",
+                onClick: () =>
+                  actions.mutate({
+                    type: "set-production-ready",
+                    designId: design.id,
+                    productionReady: !productionReady,
+                  }),
+              },
+            },
+          ),
+      },
+    );
+  };
+
+  const [confirmDeleteDesign, setConfirmDeleteDesign] = useState<string | null>(null);
+
+  /** Delete for good — the artwork, its files and its links. */
+  const deleteDesign = (design: Design) => {
+    if (confirmDeleteDesign !== design.id) {
+      setConfirmDeleteDesign(design.id);
+      return;
+    }
+    setConfirmDeleteDesign(null);
+    setMenuFor(null);
+    actions.mutate(
+      { type: "delete-design", designId: design.id },
+      {
+        onError: () => fail("Could not delete that design"),
+        onSuccess: () =>
+          toast.success(`Deleted “${nameOf(design)}”`, {
+            description: "The file is gone. Mockups already made from it keep their picture.",
+          }),
+      },
+    );
+  };
+
   const archive = (design: Design) => {
     setMenuFor(null);
     const wasArchived = design.status === "archived";
@@ -461,6 +523,9 @@ export default function DesignShelf({
       onToggleVisibility={() => toggleDesignVisibility(d)}
       onArchive={() => archive(d)}
       onUnlink={() => unlink(d)}
+      onSetProductionReady={() => setProductionReady(d, !d.productionReady)}
+      onDelete={() => deleteDesign(d)}
+      confirmingDelete={confirmDeleteDesign === d.id}
       onOpen={onOpenDesign ? () => onOpenDesign(d) : undefined}
       onRenderPreview={() => {
         setMenuFor(null);
@@ -663,6 +728,9 @@ function DesignCard({
   onToggleVisibility,
   onArchive,
   onUnlink,
+  onSetProductionReady,
+  onDelete,
+  confirmingDelete,
   onRenderPreview,
 }: {
   design: Design;
@@ -674,6 +742,9 @@ function DesignCard({
   onToggleVisibility: () => void;
   onArchive: () => void;
   onUnlink: () => void;
+  onSetProductionReady: () => void;
+  onDelete: () => void;
+  confirmingDelete: boolean;
   onRenderPreview: () => void;
 }) {
   const archived = design.status === "archived";
@@ -721,11 +792,22 @@ function DesignCard({
                 {design.hasPreview ? "Re-render preview" : "Render client preview"}
               </MenuItem>
             )}
+            {/*
+              THE MOVE BETWEEN THE TWO SHELVES, said in the operator's words
+              rather than the schema's. "Production-ready" is what the data
+              calls it; "print-ready PNG" is what it means on a garment.
+            */}
+            <MenuItem icon={design.productionReady ? ImageOff : Wand2} onClick={onSetProductionReady}>
+              {design.productionReady ? "Move to Design concepts" : "Move to Designs"}
+            </MenuItem>
             <MenuItem icon={Archive} onClick={onArchive}>
               {archived ? "Restore design" : "Archive design"}
             </MenuItem>
             <MenuItem icon={Link2Off} onClick={onUnlink} tone="var(--ax-amber)">
               Remove from this entity
+            </MenuItem>
+            <MenuItem icon={Trash2} onClick={onDelete} tone="var(--ax-red)">
+              {confirmingDelete ? "Delete for good?" : "Delete design"}
             </MenuItem>
           </div>
         )}
