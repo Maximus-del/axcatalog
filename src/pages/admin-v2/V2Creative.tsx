@@ -26,6 +26,7 @@ import { mockupCover } from "@/lib/v2/mockup-image";
 import { entityLibraryHref } from "@/lib/v2/entity-nav";
 import type { Design, ProductConcept } from "@/lib/v2/types";
 import AssetsDrawer, { ASSET_TYPES, type AssetSource } from "@/components/admin-v2/AssetsDrawer";
+import DesignInbox from "@/components/admin-v2/DesignInbox";
 import {
   ActionCard,
   AssetImage,
@@ -238,6 +239,16 @@ export default function V2Creative() {
 
       {tab === "designs" && (
         <>
+          {/*
+            The inbox sits ABOVE the catalogue on purpose. Artwork nobody has
+            filed is work waiting to happen; the designs already on people are
+            a reference. Putting the pile underneath the library would have
+            kept it as invisible as it was when it had no surface at all.
+          */}
+          <div className="mb-5">
+            <DesignInbox />
+          </div>
+
           <Toolbar query={query} onQuery={(v) => patch({ q: v })} placeholder="Search designs and owners…">
             {personFilter}
             <Chip active={!artworkOnly} onClick={() => patch({ artwork: null })}>

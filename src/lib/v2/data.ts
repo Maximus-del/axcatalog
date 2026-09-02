@@ -2729,3 +2729,176 @@ export function useUploadDesigns(entityId: string, organizationId: string) {
     },
   });
 }
+
+/* ----------------------------------------------------------- design inbox */
+
+/**
+ * Designs linked to nobody.
+ *
+ * 54 of 123 designs are in this state right now, which is not a corner case —
+ * it is a pile that has been accumulating invisibly because every design
+ * surface in V2 is scoped to an entity. A design with no athlete simply never
+ * appeared anywhere, so it could neither be used nor cleaned up.
+ */
+export function useUnassignedDesigns() {
+  return useQuery({
+    queryKey: ["v2", "design-inbox"],
+    staleTime: 30_000,
+    queryFn: async (): Promise<Design[]> => {
+      const [designRes, linkRes, fileRes] = await Promise.all([
+        t("designs")
+          .select("id, title, status, primary_athlete_id, organization_id, created_at")
+          .neq("status", "archived")
+          .order("created_at", { ascending: false })
+          .limit(400),
+        t("design_athletes").select("design_id"),
+        t("design_files").select("design_id, storage_bucket, storage_path, file_type, is_primary, sort_order"),
+      ]);
+      if (designRes.error) throw new Error(designRes.error.message);
+
+      const linked = new Set(((linkRes.data ?? []) as unknown as Row[]).map((r) => String(r.design_id)));
+
+      const fileFor = new Map<string, Row>();
+      const hasExport = new Set<string>();
+      for (const f of (fileRes.data ?? []) as unknown as Row[]) {
+        const key = String(f.design_id);
+        if (f.file_type === "export") hasExport.add(key);
+        const cur = fileFor.get(key);
+        if (!cur || (f.is_primary === true && cur.is_primary !== true)) fileFor.set(key, f);
+      }
+
+      return ((designRes.data ?? []) as unknown as Row[])
+        .filter((d) => !linked.has(String(d.id)))
+        .map((d) => {
+          const file = fileFor.get(String(d.id));
+          return {
+            id: String(d.id),
+            title: String(d.title ?? ""),
+            status: String(d.status ?? ""),
+            entityId: str(d.primary_athlete_id),
+            fileBucket: file ? str(file.storage_bucket) : null,
+            filePath: file ? str(file.storage_path) : null,
+            fileType: file ? str(file.file_type) : null,
+            productionReady: hasExport.has(String(d.id)),
+            ...CLIENT_HIDDEN,
+            createdAt: String(d.created_at ?? ""),
+          };
+        });
+    },
+  });
+}
+
+/**
+ * File a design onto one or more people.
+ *
+ * This is the whole point of the inbox: artwork arrives in a pile and is
+ * triaged later. A design may belong to several entities — the same wordmark
+ * on an athlete and on their club — so this inserts links rather than moving
+ * anything, and inserting one that already exists is a no-op rather than an
+ * error.
+ */
+export function useAssignDesigns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { designIds: string[]; entityIds: string[] }) => {
+      if (input.designIds.length === 0 || input.entityIds.length === 0) {
+        throw new Error("Pick at least one design and one person");
+      }
+      const existing = await t("design_athletes")
+        .select("design_id, athlete_id")
+        .in("design_id", input.designIds);
+      if (existing.error) throw new Error(existing.error.message);
+      const already = new Set(
+        ((existing.data ?? []) as unknown as Row[]).map((r) => `${r.design_id}:${r.athlete_id}`),
+      );
+
+      const rows = input.designIds.flatMap((designId) =>
+        input.entityIds
+          .filter((athleteId) => !already.has(`${designId}:${athleteId}`))
+          .map((athleteId) => ({ design_id: designId, athlete_id: athleteId, sort_order: 0 })),
+      );
+      if (rows.length === 0) return { linked: 0 };
+      await must(t("design_athletes").insert(rows as never));
+      return { linked: rows.length };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "design-inbox"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "designs"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "shelf"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "workspace"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+    },
+  });
+}
+
+/**
+ * Upload artwork that belongs to nobody yet.
+ *
+ * The ordinary upload path requires an entity because it links the design as
+ * it writes it. Clearing out a folder of exports is the opposite order:
+ * everything lands first and is filed afterwards, which is the only way to
+ * empty a Downloads folder in one pass.
+ */
+export function useUploadToInbox(organizationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { files: File[]; titleFor: (file: File) => string }) => {
+      const uploaded: string[] = [];
+      const failed: Array<{ name: string; message: string }> = [];
+
+      for (const file of input.files) {
+        try {
+          const name = input.titleFor(file) || "Untitled design";
+          const created = await must(
+            t("designs")
+              .insert({
+                organization_id: organizationId,
+                title: name,
+                slug: `${slugify(name)}-${Math.random().toString(36).slice(2, 7)}`,
+                // Everything arrives as a concept. Promotion to production
+                // artwork is a judgement about a file somebody has looked at.
+                status: "concept",
+              } as never)
+              .select("id")
+              .single(),
+          );
+          const designId = String((created.data as unknown as Row).id);
+
+          const ext = (file.name.split(".").pop() ?? "png").toLowerCase();
+          const path = `${designId}/${Date.now()}.${ext}`;
+          const up = await supabase.storage.from("design-files").upload(path, file, {
+            contentType: file.type || "image/png",
+            upsert: false,
+          });
+          if (up.error) {
+            await t("designs").delete().eq("id", designId);
+            throw up.error;
+          }
+          await must(
+            t("design_files").insert({
+              design_id: designId,
+              file_type: "source",
+              storage_bucket: "design-files",
+              storage_path: path,
+              file_name: file.name,
+              file_extension: ext,
+              file_size_bytes: file.size,
+              mime_type: file.type || "image/png",
+              is_primary: true,
+              sort_order: 0,
+              metadata: { uploaded_by: "admin-v2-inbox" },
+            } as never),
+          );
+          uploaded.push(designId);
+        } catch (err) {
+          failed.push({ name: file.name, message: err instanceof Error ? err.message : "upload failed" });
+        }
+      }
+      return { uploaded, failed };
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "design-inbox"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "designs"] });
+    },
+  });
+}

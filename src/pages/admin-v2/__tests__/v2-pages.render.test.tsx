@@ -266,6 +266,25 @@ vi.mock("@/lib/v2/data", () => ({
   useUpdatePlacementSpec: () => mutation(),
   useUploadDesign: () => mutation(),
   useUploadDesigns: () => mutation(),
+  useUploadToInbox: () => mutation(),
+  useAssignDesigns: () => mutation(),
+  useUnassignedDesigns: () =>
+    query([
+      {
+        id: "d9",
+        title: "Unfiled globe mark",
+        status: "concept",
+        entityId: null,
+        fileBucket: "design-files",
+        filePath: "d9/art.png",
+        fileType: "source",
+        productionReady: false,
+        clientVisibility: "hidden",
+        hasPreview: false,
+        previewPath: null,
+        createdAt: "2026-09-02T00:00:00Z",
+      },
+    ]),
   publicUrl: () => null,
   useAssetBriefs: () =>
     query([
@@ -435,6 +454,12 @@ const PAGES: Array<{ name: string; render: () => ReactElement; route?: string; e
   { name: "Orders", render: () => <V2Orders />, expects: /#1042/ },
   { name: "Commerce", render: () => <V2Commerce />, route: "/admin-v2/commerce", expects: /needs attention/i },
   { name: "Creative", render: () => <V2Creative />, route: "/admin-v2/creative", expects: /needs you/i },
+  {
+    name: "Creative · Designs",
+    render: () => <V2Creative />,
+    route: "/admin-v2/creative?tab=designs",
+    expects: /design inbox/i,
+  },
   {
     name: "Creative · Assets",
     render: () => <V2Creative />,
