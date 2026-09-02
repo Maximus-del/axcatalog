@@ -390,7 +390,15 @@ import CommandSearch from "@/components/admin-v2/CommandSearch";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-let cleanup: (() => void) | null = null;
+/*
+  EVERY mount, not the last one.
+
+  This was a single `cleanup` that each mount overwrote, so a test that mounted
+  twice left the first container in document.body for the rest of the run. It
+  was invisible until a test reached for `document.querySelector("input")` and
+  got an input belonging to a page nobody was looking at any more.
+*/
+const mounted: Array<() => void> = [];
 
 function mount(ui: ReactElement, route = "/admin-v2"): HTMLElement {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -412,10 +420,10 @@ function mount(ui: ReactElement, route = "/admin-v2"): HTMLElement {
       </QueryClientProvider>,
     );
   });
-  cleanup = () => {
+  mounted.push(() => {
     act(() => root.unmount());
     container.remove();
-  };
+  });
   return container;
 }
 
@@ -476,8 +484,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  cleanup?.();
-  cleanup = null;
+  while (mounted.length > 0) mounted.pop()?.();
 });
 
 describe("every V2 page renders with data", () => {

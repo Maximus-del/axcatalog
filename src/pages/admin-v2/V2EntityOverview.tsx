@@ -15,7 +15,7 @@ import {
   Store,
 } from "lucide-react";
 import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
-import DropZone from "@/components/admin-v2/DropZone";
+import DropZone, { DropTrigger } from "@/components/admin-v2/DropZone";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
@@ -270,9 +270,10 @@ export default function V2EntityOverview() {
         >
           <DashCard
             title="Designs"
-            to={lib("designs")}
-            empty="No production artwork yet. Drop a folder of exports here."
+            to={entityLibraryHref(entity.id, { focus: "designs", shelf: "ready" })}
+            empty="No production artwork yet. Drop a folder of exports here, or use Add files."
             count={artwork.length}
+            action={<DropTrigger onFiles={(files) => drop.accept(files, true)} busy={drop.busy} />}
           >
           {/*
             Designs are judged by looking at them, so these tiles are the
@@ -300,9 +301,10 @@ export default function V2EntityOverview() {
         >
           <DashCard
             title="Design concepts"
-            to={lib("designs")}
-            empty="No inspiration yet. Drag a folder of references straight onto this card."
+            to={entityLibraryHref(entity.id, { focus: "designs", shelf: "concept" })}
+            empty="No inspiration yet. Drag a folder of references onto this card, or use Add files."
             count={inspiration.length}
+            action={<DropTrigger onFiles={(files) => drop.accept(files, false)} busy={drop.busy} />}
           >
             <TileGrid
               items={preview(inspiration).shown}
@@ -579,6 +581,7 @@ function DashCard({
   loading,
   error,
   what,
+  action,
   children,
 }: {
   title: string;
@@ -588,12 +591,15 @@ function DashCard({
   loading?: boolean;
   error?: unknown;
   what?: string;
+  /** A visible control in the header, e.g. the file picker for a droppable card. */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
     <section className="ax-card p-4 sm:p-5">
-      <div className="mb-3 flex items-baseline justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[15px] font-semibold">{title}</h2>
+        {action}
         <Link
           to={to}
           className="flex shrink-0 items-center gap-1 text-[12px] font-medium text-[hsl(var(--ax-accent))] hover:underline"

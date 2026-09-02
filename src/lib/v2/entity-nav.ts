@@ -38,6 +38,15 @@ export interface LibraryTarget {
   /** Reopen a saved mockup for editing, or as the seed for variations. */
   edit?: string;
   vary?: string;
+  /**
+   * Which design shelf to show on arrival.
+   *
+   * The overview has two design cards — artwork and inspiration — and "View
+   * all" on the inspiration one should land on inspiration. Arriving on "All"
+   * and making somebody re-pick the filter they just clicked through is a
+   * small thing that reads as the app not having been paying attention.
+   */
+  shelf?: "all" | "ready" | "concept";
 }
 
 /**
@@ -54,6 +63,7 @@ export function entityLibraryHref(entityId: string, target: LibraryTarget = {}):
   if (target.build) params.set("build", "1");
   if (target.edit) params.set("edit", target.edit);
   if (target.vary) params.set("vary", target.vary);
+  if (target.shelf && target.shelf !== "all") params.set("shelf", target.shelf);
   const query = params.toString();
   return `/admin-v2/people/${entityId}/library${query ? `?${query}` : ""}`;
 }

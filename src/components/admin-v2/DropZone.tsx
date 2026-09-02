@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useId, useRef, useState, type ReactNode } from "react";
 import { Upload } from "lucide-react";
 import { filesFromDrop } from "@/lib/v2/drop-files";
 
@@ -13,6 +13,15 @@ import { filesFromDrop } from "@/lib/v2/drop-files";
 // naive version flickers the overlay on and off as you move across a grid. A
 // depth counter is the standard fix and the reason this is a component rather
 // than four lines in each caller.
+//
+// AN INVISIBLE AFFORDANCE IS NOT AN AFFORDANCE.
+//
+// The first version only revealed itself once a drag was already in flight,
+// which is useless: you cannot discover that a card accepts files by dragging
+// files at every card to find out. `<DropTrigger>` is the visible half — a
+// quiet control that says so and opens a file picker on click, so the feature
+// also works for somebody who has the files in a dialog rather than a window,
+// or who is on a device with no drag at all.
 
 export default function DropZone({
   onFiles,
@@ -88,5 +97,52 @@ export default function DropZone({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The visible half of a drop zone.
+ *
+ * Deliberately small and quiet — it sits in a section header, not across the
+ * middle of a shelf. Clicking opens a plain multi-file picker; folders still
+ * need a drag, because no browser exposes a directory through a file input in
+ * a way that works everywhere, and the label says which is which rather than
+ * pretending otherwise.
+ */
+export function DropTrigger({
+  onFiles,
+  busy,
+  children = "Add files",
+}: {
+  onFiles: (files: File[]) => void;
+  busy?: boolean;
+  children?: ReactNode;
+}) {
+  const inputId = useId();
+  return (
+    <label
+      htmlFor={inputId}
+      title="Click to pick files, or drag a folder onto this section"
+      className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[11.5px] text-[hsl(var(--ax-secondary))] transition-colors hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))] ${
+        busy ? "pointer-events-none opacity-60" : ""
+      }`}
+    >
+      <Upload className={`h-3 w-3 ${busy ? "animate-pulse" : ""}`} />
+      {busy ? "Uploading…" : children}
+      <input
+        id={inputId}
+        type="file"
+        multiple
+        accept="image/*"
+        className="hidden"
+        disabled={busy}
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          // Reset so picking the same folder twice in a row still fires.
+          e.target.value = "";
+          if (files.length > 0) onFiles(files);
+        }}
+      />
+    </label>
   );
 }

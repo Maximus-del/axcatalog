@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowUpRight, ImagePlus, Plus, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ImagePlus, Plus, ShoppingCart } from "lucide-react";
 import { useCreateCollection, useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
-import DropZone from "@/components/admin-v2/DropZone";
+import DropZone, { DropTrigger } from "@/components/admin-v2/DropZone";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart } from "@/lib/v2/cart-data";
@@ -138,7 +138,15 @@ export default function V2EntityWorkspace() {
   const focusParam = params.get("focus");
   const [active, setActive] = useState<StepKey>(isEntitySection(focusParam) ? focusParam : "designs");
   const [focused, setFocused] = useState(false);
-  const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
+  /*
+    The shelf the caller asked for. Read once as the initial value, so a later
+    click on a filter chip is never overwritten by the parameter that brought
+    us here.
+  */
+  const shelfParam = params.get("shelf");
+  const [designFilter, setDesignFilter] = useState<ShelfFilter>(
+    shelfParam === "ready" || shelfParam === "concept" ? shelfParam : "all",
+  );
   const designDrop = useDesignDrop(id ?? "", data?.entity.organizationId ?? "", data?.entity.name);
 
   const scrollingTo = useRef<StepKey | null>(null);
@@ -307,16 +315,28 @@ export default function V2EntityWorkspace() {
         Where you are. The shell's back arrow goes to wherever you came from,
         which is not the same as saying which directory this record lives in.
       */}
-      <div className="mb-3 flex flex-wrap items-center gap-1.5 text-[11px] text-[hsl(var(--ax-faint))]">
-        <Link to="/admin-v2/people" className="transition-colors hover:text-[hsl(var(--ax-ink))]">
-          People
+      {/*
+        STICKY, BECAUSE THIS PAGE IS LONG.
+
+        A breadcrumb at the top of a five-section shelf is only reachable by
+        scrolling back to where you already were. The library is one click from
+        the overview and the way back should be one click from anywhere in it.
+      */}
+      <div className="sticky top-0 z-30 -mx-4 mb-3 flex flex-wrap items-center gap-2 border-b border-[hsl(var(--ax-line))] bg-[hsl(var(--ax-canvas)/0.92)] px-4 py-2 backdrop-blur">
+        <Link
+          to={entityHref(entity.id)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] font-medium text-[hsl(var(--ax-secondary))] transition-colors hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))]"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          {entity.name} overview
         </Link>
-        <span>/</span>
-        <Link to={entityHref(entity.id)} className="transition-colors hover:text-[hsl(var(--ax-ink))]">
-          {entity.name}
+        <span className="text-[11px] text-[hsl(var(--ax-faint))]">Library · everything, in full</span>
+        <Link
+          to="/admin-v2/people"
+          className="ml-auto text-[11px] text-[hsl(var(--ax-faint))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+        >
+          All people
         </Link>
-        <span>/</span>
-        <span className="text-[hsl(var(--ax-secondary))]">Library</span>
       </div>
 
       {/* ---------------------------------------------------------- identity */}
@@ -430,19 +450,32 @@ export default function V2EntityWorkspace() {
         detail="Artwork linked to this entity. Everything downstream refers back to one."
         count={designs.length}
         action={
-          designs.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Chip active={designFilter === "all"} onClick={() => setDesignFilter("all")}>
-                All {designs.length}
-              </Chip>
-              <Chip active={designFilter === "ready"} onClick={() => setDesignFilter("ready")}>
-                Production-ready {productionReady.length}
-              </Chip>
-              <Chip active={designFilter === "concept"} onClick={() => setDesignFilter("concept")}>
-                No artwork yet {missingArtwork.length}
-              </Chip>
-            </div>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-1.5">
+            {designs.length > 0 && (
+              <>
+                <Chip active={designFilter === "all"} onClick={() => setDesignFilter("all")}>
+                  All {designs.length}
+                </Chip>
+                <Chip active={designFilter === "ready"} onClick={() => setDesignFilter("ready")}>
+                  Production-ready {productionReady.length}
+                </Chip>
+                <Chip active={designFilter === "concept"} onClick={() => setDesignFilter("concept")}>
+                  No artwork yet {missingArtwork.length}
+                </Chip>
+              </>
+            )}
+            {/*
+              Present whether or not the shelf has anything on it. An empty
+              shelf is exactly when somebody needs the way to fill it, and a
+              drag target alone is invisible until a drag is already moving.
+            */}
+            <DropTrigger
+              onFiles={(files) => designDrop.accept(files, designFilter === "ready")}
+              busy={designDrop.busy}
+            >
+              {designFilter === "ready" ? "Add artwork" : "Add designs"}
+            </DropTrigger>
+          </div>
         }
         empty="No artwork linked to this entity yet. Designs are the starting point — everything downstream refers back to one."
       >

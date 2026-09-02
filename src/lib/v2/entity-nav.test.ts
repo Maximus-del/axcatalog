@@ -48,3 +48,18 @@ describe("section names", () => {
     expect(isEntitySection("")).toBe(false);
   });
 });
+
+describe("landing on the right design shelf", () => {
+  it("carries the shelf so View all does not dump you on 'All'", () => {
+    expect(entityLibraryHref("e1", { focus: "designs", shelf: "concept" })).toContain("shelf=concept");
+    expect(entityLibraryHref("e1", { focus: "designs", shelf: "ready" })).toContain("shelf=ready");
+  });
+
+  it("omits the default, so the common link stays clean", () => {
+    expect(entityLibraryHref("e1", { focus: "designs", shelf: "all" })).not.toContain("shelf=");
+  });
+
+  it("still carries the section it was going to anyway", () => {
+    expect(entityLibraryHref("e1", { focus: "designs", shelf: "concept" })).toContain("focus=designs");
+  });
+});
