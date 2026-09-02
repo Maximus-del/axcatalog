@@ -401,7 +401,7 @@ const V2_AUDIENCES: AudienceKey[] = ["athlete", "client", "subscriber", "standar
 async function fetchBlanks(): Promise<Blank[]> {
   const [blanksRes, colorsRes, imagesRes] = await Promise.all([
     t("v2_blanks").select(
-      "id, supplier, name, display_name, style_code, garment_type, drive_folder_url, shopify_product_id, cost, price",
+      "id, supplier, name, display_name, style_code, garment_type, drive_folder_url, shopify_product_id, cost, price, price_standard, price_athlete, price_corporate",
     ),
     t("v2_blank_colors").select("id, blank_id, name, display_name, hex, available, sort_order"),
     t("v2_blank_images").select("blank_id, color_id, view_type, variant, is_primary, drive_url"),
@@ -458,10 +458,22 @@ async function fetchBlanks(): Promise<Blank[]> {
       garmentType: String(b.garment_type ?? "other"),
       imageUrl: image,
       cost,
-      // Shopify owns pricing and is not connected. Null renders as an em dash.
-      priceAthlete: null,
-      priceCorporate: null,
-      priceStandard: null,
+      /*
+        TIER PRICES NOW LIVE ON v2_blanks.
+
+        V2 used to read these as null because Shopify was declared the owner of
+        price, and serving V1's numbers would have made V1 the source of truth
+        again. That still holds for Shopify's retail price — but a bulk quote
+        is a TIER price, V1 already had it for the garments in both catalogues,
+        and it was copied across in 20260902090000. V2 owns these now and reads
+        no V1 table to render one.
+
+        Six of the thirteen have no counterpart and stay null: an em dash is
+        honest, and a borrowed price is a guess wearing a real number's clothes.
+      */
+      priceAthlete: num(b.price_athlete),
+      priceCorporate: num(b.price_corporate),
+      priceStandard: num(b.price_standard),
       availability: "available",
       colors,
       sizes: [],

@@ -9,6 +9,7 @@ import {
   useCreateMockupBatch,
   useDesignShelf,
   useDesigns,
+  useDiscountBreaks,
   useMockupForEdit,
   useUpdateMockup,
   useUploadDesign,
@@ -29,7 +30,7 @@ import { buildShelf, coverOf, type ShelfItem } from "@/lib/v2/design-groups";
 import { hasBackPhoto, isTwoSided, photoCoverage, resolveBlankImage, swatchFor, type Surface } from "@/lib/v2/blank-image";
 import { storeMockupComposite } from "@/lib/v2/mockup-export";
 import { audienceForRoles, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
-import { useAddToCart, useCart } from "@/lib/v2/cart-data";
+import { useAddToCart, useCart, useSubmitCart } from "@/lib/v2/cart-data";
 import { entityCartHref } from "@/lib/v2/entity-nav";
 import { useAuth } from "@/auth/AuthProvider";
 import { cleanDesignTitle, suggestTitle } from "@/lib/v2/concepts";
@@ -78,7 +79,7 @@ import {
   type StudioProduct,
   type StudioSession,
 } from "@/lib/v2/studio-session";
-import { gridUnits, rowUnits, sizesForRun, type QuantityGrid } from "@/lib/v2/cart";
+import { gridUnits, rowUnits, type QuantityGrid } from "@/lib/v2/cart";
 import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 import type { Blank, Design, Entity } from "@/lib/v2/types";
 
@@ -232,6 +233,8 @@ export default function ConceptBuilder({
   const { user } = useAuth();
   const addToCart = useAddToCart(entity.id, entity.organizationId, user?.id);
   const cartQ = useCart(entity.id, user?.id);
+  const discountBreaks = useDiscountBreaks();
+  const submitCart = useSubmitCart(entity.id, user?.id);
   const cartUnits = cartQ.data?.units ?? 0;
 
   const audience = audienceForRoles(entity.roles);
@@ -389,12 +392,6 @@ export default function ConceptBuilder({
 
   /* ------------------------------------------------------------- ordering */
 
-  /** Every size any garment in this run offers, in apparel order. */
-  const orderSizes = useMemo(
-    () => sizesForRun(variants, (id) => blanksById.get(id)?.sizes ?? []),
-    [variants, blanksById],
-  );
-
   /** Audience price for a variant's garment. Null means AX has never priced it. */
   const priceOfVariant = (index: number): number | null => {
     const v = variants[index];
@@ -405,7 +402,7 @@ export default function ConceptBuilder({
   const orderUnits = useMemo(() => gridUnits(qtyGrid), [qtyGrid]);
 
   /** Any of the three actions in flight disables all three. */
-  const busy = create.isPending || update.isPending || addToCart.isPending;
+  const busy = create.isPending || update.isPending || addToCart.isPending || submitCart.isPending;
 
   /** The product on screen still has nothing on it. */
   const needsPlacementNow = Boolean(active) && needsPlacement(active as StudioProduct);
@@ -790,7 +787,7 @@ export default function ConceptBuilder({
    * Ordering never happens without saving: a cart line points at a mockup, so
    * the mockup has to be real first. If the save half fails, nothing is added.
    */
-  type SubmitMode = "save" | "cart" | "cart-continue" | "add-product";
+  type SubmitMode = "save" | "cart" | "cart-continue" | "add-product" | "order";
 
   /**
    * Put what was just created into the cart.
@@ -837,6 +834,34 @@ export default function ConceptBuilder({
     });
   };
 
+  /**
+   * Submit the cart straight from the studio.
+   *
+   * THE POINT IS THE IMPULSE. An operator looking at a mockup they like should
+   * be able to turn it into a real order without navigating to a cart page and
+   * finding a second button — the moment passes. Adding to the cart is still
+   * the draft, and it is still one click away; this is the one that commits.
+   *
+   * It reuses useSubmitCart exactly as the cart page does, so a run submitted
+   * here freezes the same quote and moves the same draft to `submitted`. There
+   * is no second ordering path.
+   */
+  const placeOrder = async () => {
+    try {
+      const res = await submitCart.mutateAsync({ breaks: discountBreaks.data ?? [], notes: notes.trim() || null });
+      toast.success(`Order ${res.orderNumber} submitted`, {
+        description: `${res.units} units · ${fmtMoney(res.subtotal)}. It is in Orders now; nothing has been charged.`,
+      });
+      setQtyGrid({});
+    } catch (err) {
+      // The mockups and the cart are both real at this point, so the work is
+      // safe — only the submit failed, and the cart page can finish it.
+      toast.error(err instanceof Error ? err.message : "Saved to the cart, but the order could not be submitted", {
+        description: "Everything is in the cart. Open it to submit.",
+      });
+    }
+  };
+
   const submit = async (mode: SubmitMode = "save") => {
     if (!design && !blank) return;
     try {
@@ -868,6 +893,10 @@ export default function ConceptBuilder({
 
         const editedTitle = title.trim() || "Untitled mockup";
         const ordered = mode === "save" ? 0 : await sendToCart([editMockupId], () => editedTitle);
+        if (mode === "order" && ordered > 0) {
+          await placeOrder();
+          return;
+        }
 
         toast.success(ordered > 0 ? `Mockup saved · ${ordered} units in the cart` : "Mockup saved", {
           description: ordered > 0 ? "The cart is a draft order. Nothing has been submitted." : undefined,
@@ -1016,6 +1045,11 @@ export default function ConceptBuilder({
           // quantities are still on screen, so the add can simply be retried.
           toast.error(err instanceof Error ? err.message : "Saved, but could not add to the cart");
         }
+      }
+
+      if (mode === "order" && ordered > 0) {
+        await placeOrder();
+        return;
       }
 
       if (ordered > 0) {
@@ -1693,10 +1727,14 @@ export default function ConceptBuilder({
             {blank && variants.length > 0 && (
               <OrderQuantities
                 variants={variants}
-                sizes={orderSizes}
+                sizesOf={(id) => blanksById.get(id)?.sizes ?? []}
                 grid={qtyGrid}
                 priceOf={priceOfVariant}
+                breaks={discountBreaks.data ?? []}
                 onChange={setQty}
+                onFillVariant={(index, quantities) =>
+                  setQtyGrid((prev) => ({ ...prev, [index]: quantities }))
+                }
                 onClear={() => setQtyGrid({})}
               />
             )}
@@ -1899,18 +1937,9 @@ export default function ConceptBuilder({
                 </button>
                 <button
                   type="button"
-                  onClick={() => void submit("cart")}
-                  disabled={busy || orderUnits === 0}
-                  title={orderUnits === 0 ? "Enter some quantities above first" : undefined}
-                  className="rounded-full border border-[hsl(var(--ax-accent)/0.5)] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-accent))] hover:bg-[hsl(var(--ax-accent)/0.1)] disabled:opacity-40 disabled:hover:bg-transparent"
-                >
-                  {orderUnits > 0 ? `Add ${orderUnits} to cart` : "Add to cart"}
-                </button>
-                <button
-                  type="button"
                   onClick={() => void submit("save")}
                   disabled={busy || savable === 0 || (!isEdit && overLimit(variants.length))}
-                  className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
+                  className="rounded-full border border-[hsl(var(--ax-border))] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-secondary))] hover:border-[hsl(var(--ax-accent)/0.6)] hover:text-[hsl(var(--ax-ink))] disabled:opacity-40"
                 >
                   {isEdit
                     ? update.isPending
@@ -1921,6 +1950,41 @@ export default function ConceptBuilder({
                       : variants.length > 1
                         ? `Save ${variants.length} mockups`
                         : "Save mockup"}
+                </button>
+                {/*
+                  Saving to the cart is SAVE AS DRAFT. It keeps its own button
+                  because a draft is a real, useful outcome — but it is no
+                  longer the loudest thing on the bar.
+                */}
+                <button
+                  type="button"
+                  onClick={() => void submit("cart")}
+                  disabled={busy || orderUnits === 0}
+                  title={orderUnits === 0 ? "Enter some quantities above first" : "Keep it as a draft order"}
+                  className="rounded-full border border-[hsl(var(--ax-accent)/0.5)] px-4 py-2 text-[13px] font-semibold text-[hsl(var(--ax-accent))] hover:bg-[hsl(var(--ax-accent)/0.1)] disabled:opacity-40 disabled:hover:bg-transparent"
+                >
+                  {orderUnits > 0 ? `Save draft · ${orderUnits}` : "Save as draft"}
+                </button>
+                {/*
+                  THE IMPULSE BUTTON.
+
+                  Filled, last, and the widest thing on the bar. Somebody
+                  looking at a mockup they like should be able to commit
+                  without navigating to a cart page to find a second button —
+                  the moment passes. It saves, adds and submits in one go.
+                */}
+                <button
+                  type="button"
+                  onClick={() => void submit("order")}
+                  disabled={busy || submitCart.isPending || orderUnits === 0}
+                  title={
+                    orderUnits === 0
+                      ? "Enter some quantities above first"
+                      : "Save these mockups and submit the order"
+                  }
+                  className="rounded-full bg-[hsl(var(--ax-accent))] px-5 py-2 text-[13px] font-semibold text-[hsl(var(--ax-on-accent))] disabled:opacity-50"
+                >
+                  {submitCart.isPending ? "Submitting…" : `Submit order${orderUnits > 0 ? ` · ${orderUnits}` : ""}`}
                 </button>
               </div>
             ) : (
