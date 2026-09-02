@@ -268,6 +268,7 @@ vi.mock("@/lib/v2/data", () => ({
   useUploadDesigns: () => mutation(),
   useUploadToInbox: () => mutation(),
   useAssignDesigns: () => mutation(),
+  useUnassignDesigns: () => mutation(),
   useUnassignedDesigns: () =>
     query([
       {

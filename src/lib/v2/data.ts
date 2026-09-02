@@ -2804,29 +2804,80 @@ export function useAssignDesigns() {
       if (input.designIds.length === 0 || input.entityIds.length === 0) {
         throw new Error("Pick at least one design and one person");
       }
-      const existing = await t("design_athletes")
-        .select("design_id, athlete_id")
-        .in("design_id", input.designIds);
-      if (existing.error) throw new Error(existing.error.message);
-      const already = new Set(
-        ((existing.data ?? []) as unknown as Row[]).map((r) => `${r.design_id}:${r.athlete_id}`),
+      const rows = input.designIds.flatMap((designId) =>
+        input.entityIds.map((athleteId) => ({ design_id: designId, athlete_id: athleteId, sort_order: 0 })),
       );
 
-      const rows = input.designIds.flatMap((designId) =>
-        input.entityIds
-          .filter((athleteId) => !already.has(`${designId}:${athleteId}`))
-          .map((athleteId) => ({ design_id: designId, athlete_id: athleteId, sort_order: 0 })),
+      /*
+        UPSERT, AND READ BACK WHAT LANDED.
+
+        `design_athletes` has PRIMARY KEY (design_id, athlete_id), so filing
+        something twice cannot duplicate it — which makes the old read-then-
+        filter both redundant and racy. More importantly, Undo has to delete
+        exactly the links THIS assignment created. Undoing the requested pairs
+        instead would tear down a link that already existed before the drag,
+        silently unassigning a design somebody filed last week.
+
+        `client_visibility` is deliberately never written here: it defaults to
+        'hidden', so filing artwork onto a person never shows it to them.
+      */
+      const res = await must(
+        t("design_athletes")
+          .upsert(rows as never, { onConflict: "design_id,athlete_id", ignoreDuplicates: true })
+          .select("design_id, athlete_id"),
       );
-      if (rows.length === 0) return { linked: 0 };
-      await must(t("design_athletes").insert(rows as never));
-      return { linked: rows.length };
+      const created = ((res.data ?? []) as unknown as Row[]).map((r) => ({
+        designId: String(r.design_id),
+        entityId: String(r.athlete_id),
+      }));
+      return { linked: created.length, created };
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["v2", "design-inbox"] });
-      void qc.invalidateQueries({ queryKey: ["v2", "designs"] });
-      void qc.invalidateQueries({ queryKey: ["v2", "shelf"] });
-      void qc.invalidateQueries({ queryKey: ["v2", "workspace"] });
-      void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+      invalidateAssignment(qc);
+    },
+  });
+}
+
+/**
+ * Every surface that changes when a design gains or loses an owner.
+ *
+ * Assign and undo have to invalidate the SAME set or the two disagree: a
+ * design that left the inbox on assignment would not come back on undo, and
+ * the operator would refresh to find it there anyway. One list, both callers.
+ */
+function invalidateAssignment(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ["v2", "design-inbox"] });
+  void qc.invalidateQueries({ queryKey: ["v2", "designs"] });
+  void qc.invalidateQueries({ queryKey: ["v2", "shelf"] });
+  void qc.invalidateQueries({ queryKey: ["v2", "workspace"] });
+  void qc.invalidateQueries({ queryKey: ["v2", "entities"] });
+  void qc.invalidateQueries({ queryKey: ["v2", "overview"] });
+}
+
+/**
+ * Undo an assignment — remove exactly the links it created.
+ *
+ * Keyed on both halves of the composite primary key, one entity at a time, so
+ * this can never widen into "unassign this design from everybody".
+ */
+export function useUnassignDesigns() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { pairs: Array<{ designId: string; entityId: string }> }) => {
+      if (input.pairs.length === 0) return { removed: 0 };
+      const byEntity = new Map<string, string[]>();
+      for (const p of input.pairs) {
+        const list = byEntity.get(p.entityId) ?? [];
+        list.push(p.designId);
+        byEntity.set(p.entityId, list);
+      }
+      for (const [entityId, designIds] of byEntity) {
+        await must(t("design_athletes").delete().eq("athlete_id", entityId).in("design_id", designIds));
+      }
+      return { removed: input.pairs.length };
+    },
+    onSuccess: () => {
+      invalidateAssignment(qc);
     },
   });
 }
