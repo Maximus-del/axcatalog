@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { toast } from "sonner";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -15,9 +14,9 @@ import {
   Sparkles,
   Store,
 } from "lucide-react";
-import { useEntityWorkspace, useMockupLibrary, useUploadDesigns } from "@/lib/v2/data";
+import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import DropZone from "@/components/admin-v2/DropZone";
-import { planDrop, titleFromFilename } from "@/lib/v2/drop-files";
+import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
 import { useAuth } from "@/auth/AuthProvider";
@@ -63,46 +62,7 @@ export default function V2EntityOverview() {
   const ordersQ = useEntityOrders(id);
   const cart = useCart(id, user?.id);
   const [menuOpen, setMenuOpen] = useState(false);
-  const uploadDesigns = useUploadDesigns(id ?? "", data?.entity.organizationId ?? "");
-
-  /**
-   * Take a dropped folder onto one of the two design shelves.
-   *
-   * `productionReady` is what separates them, and it is a real distinction in
-   * the data rather than a label: a design is production artwork only when an
-   * export file exists for it. Inspiration is everything else, which today is
-   * 111 of 118 designs.
-   */
-  const acceptDrop = (files: File[], productionReady: boolean) => {
-    const plan = planDrop(files);
-    if (plan.accepted.length === 0) {
-      toast.error("Nothing there AX can store", {
-        description: plan.rejected.length > 0 ? plan.rejected.map((r) => r.name).join(", ") : "Images only.",
-      });
-      return;
-    }
-    uploadDesigns.mutate(
-      {
-        files: plan.accepted,
-        productionReady,
-        titleFor: (file) => titleFromFilename(file.name) || "Untitled design",
-      },
-      {
-        onSuccess: ({ uploaded, failed }) => {
-          const where = productionReady ? "Designs" : "Design concepts";
-          if (failed.length > 0) {
-            toast.warning(`${uploaded.length} added to ${where}, ${failed.length} could not be`, {
-              description: failed[0].name,
-            });
-          } else {
-            toast.success(`${uploaded.length} added to ${where}`);
-          }
-          if (plan.trimmed) toast.info("Only the first 40 were taken", { description: "Drop the rest separately." });
-        },
-        onError: (err) => toast.error(err instanceof Error ? err.message : "Could not upload those"),
-      },
-    );
-  };
+  const drop = useDesignDrop(id ?? "", data?.entity.organizationId ?? "", data?.entity.name);
 
   const derived = useMemo(() => {
     if (!data) return null;
@@ -304,8 +264,8 @@ export default function V2EntityOverview() {
         </DashCard>
 
         <DropZone
-          onFiles={(files) => acceptDrop(files, true)}
-          busy={uploadDesigns.isPending}
+          onFiles={(files) => drop.accept(files, true)}
+          busy={drop.busy}
           label={`Add production artwork for ${entity.name}`}
         >
           <DashCard
@@ -334,8 +294,8 @@ export default function V2EntityOverview() {
           than something you can print.
         */}
         <DropZone
-          onFiles={(files) => acceptDrop(files, false)}
-          busy={uploadDesigns.isPending}
+          onFiles={(files) => drop.accept(files, false)}
+          busy={drop.busy}
           label={`Add inspiration for ${entity.name}`}
         >
           <DashCard

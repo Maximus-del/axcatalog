@@ -2,6 +2,9 @@ import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, LayoutGrid, List, Search, UserPlus } from "lucide-react";
 import { useEntities } from "@/lib/v2/data";
+import DropZone from "@/components/admin-v2/DropZone";
+import { useDesignDrop } from "@/lib/v2/use-design-drop";
+import type { Entity } from "@/lib/v2/types";
 import { ENTITY_FACETS, matchesFilter, rankEntities, roleLabel, typeLabel } from "@/lib/v2/entity";
 import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton, V1Link } from "@/components/admin-v2/primitives";
 
@@ -148,7 +151,8 @@ export default function V2People() {
       {!isLoading && rows.length > 0 && view === "grid" && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {rows.map((e) => (
-            <Link key={e.id} to={`/admin-v2/people/${e.id}`} className="ax-card ax-card-hover p-3 transition-all">
+            <PersonDrop key={e.id} entity={e}>
+              <Link to={`/admin-v2/people/${e.id}`} className="ax-card ax-card-hover block p-3 transition-all">
               <AssetImage
                 url={e.avatarUrl}
                 alt={e.name}
@@ -164,10 +168,11 @@ export default function V2People() {
                   <Chip key={r}>{roleLabel(r)}</Chip>
                 ))}
               </div>
-              <div className="mt-2 text-[11px] tabular-nums text-[hsl(var(--ax-secondary))]">
-                {e.counts.products} products · {e.counts.designs} designs
-              </div>
-            </Link>
+                <div className="mt-2 text-[11px] tabular-nums text-[hsl(var(--ax-secondary))]">
+                  {e.counts.products} products · {e.counts.designs} designs
+                </div>
+              </Link>
+            </PersonDrop>
           ))}
         </div>
       )}
@@ -175,11 +180,11 @@ export default function V2People() {
       {!isLoading && rows.length > 0 && view === "list" && (
         <div className="ax-card divide-y divide-[hsl(var(--ax-line))] overflow-hidden">
           {rows.map((e) => (
-            <Link
-              key={e.id}
-              to={`/admin-v2/people/${e.id}`}
-              className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/[0.03]"
-            >
+            <PersonDrop key={e.id} entity={e}>
+              <Link
+                to={`/admin-v2/people/${e.id}`}
+                className="flex items-center gap-3 px-3 py-2.5 hover:bg-white/[0.03]"
+              >
               <AssetImage url={e.avatarUrl} alt={e.name} className="h-9 w-9 shrink-0 rounded-lg" fallbackSeed={e.id} />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium">{e.name}</span>
@@ -191,12 +196,40 @@ export default function V2People() {
                 <span>{e.counts.collections} coll</span>
                 <span>{e.counts.concepts} mockups</span>
                 <span>{e.counts.designs} designs</span>
-                <span>{e.counts.products} products</span>
-              </span>
-            </Link>
+                  <span>{e.counts.products} products</span>
+                </span>
+              </Link>
+            </PersonDrop>
           ))}
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * A person in the directory, as a drop target.
+ *
+ * POPULATING A ROSTER IS THE JOB. Opening a profile, dropping a folder, going
+ * back, opening the next one is four steps of navigation per athlete for one
+ * step of actual work. Dropping straight onto the row does the same thing from
+ * the list, so a whole roster can be filled in one pass.
+ *
+ * It files as INSPIRATION deliberately. A folder dragged in from a phone or a
+ * designer is reference material until somebody says otherwise, and promoting
+ * it to production artwork by default would put unfinished files where the
+ * production queue looks. The profile has both shelves when the distinction
+ * matters.
+ */
+function PersonDrop({ entity, children }: { entity: Entity; children: React.ReactNode }) {
+  const drop = useDesignDrop(entity.id, entity.organizationId, entity.name);
+  return (
+    <DropZone
+      onFiles={(files) => drop.accept(files, false)}
+      busy={drop.busy}
+      label={`Add inspiration for ${entity.name}`}
+    >
+      {children}
+    </DropZone>
   );
 }

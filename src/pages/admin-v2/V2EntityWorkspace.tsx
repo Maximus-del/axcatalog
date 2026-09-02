@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowUpRight, ImagePlus, Plus, ShoppingCart } from "lucide-react";
-import { useCreateCollection, useEntityWorkspace, useMockupLibrary, useUploadDesigns } from "@/lib/v2/data";
+import { useCreateCollection, useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import DropZone from "@/components/admin-v2/DropZone";
-import { planDrop, titleFromFilename } from "@/lib/v2/drop-files";
+import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart } from "@/lib/v2/cart-data";
 import { useAuth } from "@/auth/AuthProvider";
@@ -139,38 +139,8 @@ export default function V2EntityWorkspace() {
   const [active, setActive] = useState<StepKey>(isEntitySection(focusParam) ? focusParam : "designs");
   const [focused, setFocused] = useState(false);
   const [designFilter, setDesignFilter] = useState<ShelfFilter>("all");
-  const uploadDesigns = useUploadDesigns(id ?? "", data?.entity.organizationId ?? "");
+  const designDrop = useDesignDrop(id ?? "", data?.entity.organizationId ?? "", data?.entity.name);
 
-  /** Take a dropped folder onto the design shelf. See V2EntityOverview for the split. */
-  const acceptDesignDrop = (files: File[], productionReady: boolean) => {
-    const plan = planDrop(files);
-    if (plan.accepted.length === 0) {
-      toast.error("Nothing there AX can store", {
-        description: plan.rejected.length > 0 ? plan.rejected.map((r) => r.name).join(", ") : "Images only.",
-      });
-      return;
-    }
-    uploadDesigns.mutate(
-      {
-        files: plan.accepted,
-        productionReady,
-        titleFor: (file) => titleFromFilename(file.name) || "Untitled design",
-      },
-      {
-        onSuccess: ({ uploaded, failed }) => {
-          if (failed.length > 0) {
-            toast.warning(`${uploaded.length} uploaded, ${failed.length} could not be`, {
-              description: failed[0].name,
-            });
-          } else {
-            toast.success(`${uploaded.length} design${uploaded.length === 1 ? "" : "s"} added`);
-          }
-          if (plan.trimmed) toast.info("Only the first 40 were taken", { description: "Drop the rest separately." });
-        },
-        onError: (err) => toast.error(err instanceof Error ? err.message : "Could not upload those"),
-      },
-    );
-  };
   const scrollingTo = useRef<StepKey | null>(null);
 
   const goTo = useCallback((key: string) => {
@@ -483,8 +453,8 @@ export default function V2EntityWorkspace() {
           they were looking for when they went to find the folder.
         */}
         <DropZone
-          onFiles={(files) => acceptDesignDrop(files, designFilter === "ready")}
-          busy={uploadDesigns.isPending}
+          onFiles={(files) => designDrop.accept(files, designFilter === "ready")}
+          busy={designDrop.busy}
           label={
             designFilter === "ready"
               ? `Add production artwork for ${entity.name}`
