@@ -104,6 +104,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "affiliate_product_requests_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
         ]
       }
       affiliate_sales: {
@@ -159,6 +166,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "affiliate_sales_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
             referencedColumns: ["id"]
           },
           {
@@ -231,8 +245,159 @@ export type Database = {
         }
         Relationships: []
       }
+      asset_brief_items: {
+        Row: {
+          brief_id: string
+          created_at: string
+          id: string
+          is_selected: boolean
+          kind: string
+          mockup_id: string | null
+          sort_order: number
+          storage_bucket: string | null
+          storage_path: string | null
+          url: string | null
+        }
+        Insert: {
+          brief_id: string
+          created_at?: string
+          id?: string
+          is_selected?: boolean
+          kind: string
+          mockup_id?: string | null
+          sort_order?: number
+          storage_bucket?: string | null
+          storage_path?: string | null
+          url?: string | null
+        }
+        Update: {
+          brief_id?: string
+          created_at?: string
+          id?: string
+          is_selected?: boolean
+          kind?: string
+          mockup_id?: string | null
+          sort_order?: number
+          storage_bucket?: string | null
+          storage_path?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_brief_items_brief_id_fkey"
+            columns: ["brief_id"]
+            isOneToOne: false
+            referencedRelation: "asset_briefs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_brief_items_mockup_id_fkey"
+            columns: ["mockup_id"]
+            isOneToOne: false
+            referencedRelation: "mockups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      asset_briefs: {
+        Row: {
+          aspect_ratio: string | null
+          asset_type: string
+          athlete_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          instructions: string | null
+          organization_id: string
+          prompt_package_id: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          aspect_ratio?: string | null
+          asset_type?: string
+          athlete_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instructions?: string | null
+          organization_id: string
+          prompt_package_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          aspect_ratio?: string | null
+          asset_type?: string
+          athlete_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          instructions?: string | null
+          organization_id?: string
+          prompt_package_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_briefs_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "asset_briefs_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "asset_briefs_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_briefs_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_briefs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_briefs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_briefs_prompt_package_id_fkey"
+            columns: ["prompt_package_id"]
+            isOneToOne: false
+            referencedRelation: "prompt_packages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asset_folders: {
         Row: {
+          athlete_id: string | null
+          cover_mockup_id: string | null
           created_at: string
           id: string
           name: string
@@ -243,6 +408,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          athlete_id?: string | null
+          cover_mockup_id?: string | null
           created_at?: string
           id?: string
           name: string
@@ -253,6 +420,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          athlete_id?: string | null
+          cover_mockup_id?: string | null
           created_at?: string
           id?: string
           name?: string
@@ -263,6 +432,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "asset_folders_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "asset_folders_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "asset_folders_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_folders_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_folders_cover_mockup_id_fkey"
+            columns: ["cover_mockup_id"]
+            isOneToOne: false
+            referencedRelation: "mockups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "asset_folders_organization_id_fkey"
             columns: ["organization_id"]
@@ -346,6 +550,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "athlete_credit_transactions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "athlete_credit_transactions_order_request_id_fkey"
             columns: ["order_request_id"]
             isOneToOne: false
@@ -420,62 +631,182 @@ export type Database = {
             referencedRelation: "athletes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "athlete_credit_wallets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: true
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      athlete_follows: {
+        Row: {
+          athlete_id: string
+          created_at: string
+          fan_user_id: string
+          id: string
+          state: Database["public"]["Enums"]["follow_state"]
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: string
+          created_at?: string
+          fan_user_id: string
+          id?: string
+          state?: Database["public"]["Enums"]["follow_state"]
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string
+          created_at?: string
+          fan_user_id?: string
+          id?: string
+          state?: Database["public"]["Enums"]["follow_state"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athlete_follows_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "athlete_follows_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "athlete_follows_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athlete_follows_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      athlete_templates: {
+        Row: {
+          config: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          name: string
+          organization_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kind: string
+          name: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       athletes: {
         Row: {
+          capabilities: Json
+          category: string | null
           created_at: string
           current_team_id: string | null
+          display_name: string | null
+          entity_type: string
           first_name: string
           full_name: string | null
           id: string
           jersey_number: string | null
-          last_name: string
+          last_name: string | null
           league: Database["public"]["Enums"]["league_type"] | null
           metadata: Json
           notes: string | null
           organization_id: string
           position: string | null
+          primary_contact: string | null
+          roles: string[]
           shopify_tag: string | null
           slug: string
           status: Database["public"]["Enums"]["athlete_status"]
           updated_at: string
+          website: string | null
         }
         Insert: {
+          capabilities?: Json
+          category?: string | null
           created_at?: string
           current_team_id?: string | null
+          display_name?: string | null
+          entity_type?: string
           first_name: string
           full_name?: string | null
           id?: string
           jersey_number?: string | null
-          last_name: string
+          last_name?: string | null
           league?: Database["public"]["Enums"]["league_type"] | null
           metadata?: Json
           notes?: string | null
           organization_id: string
           position?: string | null
+          primary_contact?: string | null
+          roles?: string[]
           shopify_tag?: string | null
           slug: string
           status?: Database["public"]["Enums"]["athlete_status"]
           updated_at?: string
+          website?: string | null
         }
         Update: {
+          capabilities?: Json
+          category?: string | null
           created_at?: string
           current_team_id?: string | null
+          display_name?: string | null
+          entity_type?: string
           first_name?: string
           full_name?: string | null
           id?: string
           jersey_number?: string | null
-          last_name?: string
+          last_name?: string | null
           league?: Database["public"]["Enums"]["league_type"] | null
           metadata?: Json
           notes?: string | null
           organization_id?: string
           position?: string | null
+          primary_contact?: string | null
+          roles?: string[]
           shopify_tag?: string | null
           slug?: string
           status?: Database["public"]["Enums"]["athlete_status"]
           updated_at?: string
+          website?: string | null
         }
         Relationships: [
           {
@@ -501,6 +832,113 @@ export type Database = {
           },
           {
             foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blank_assortment_items: {
+        Row: {
+          assortment_id: string
+          blank_id: string
+          created_at: string
+          id: string
+          sort_order: number
+        }
+        Insert: {
+          assortment_id: string
+          blank_id: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+        }
+        Update: {
+          assortment_id?: string
+          blank_id?: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_assortment_items_assortment_id_fkey"
+            columns: ["assortment_id"]
+            isOneToOne: false
+            referencedRelation: "blank_assortments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_assortment_items_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
+          {
+            foreignKeyName: "blank_assortment_items_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_assortment_items_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blank_assortments: {
+        Row: {
+          created_at: string
+          default_price_tier: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          key: string
+          name: string
+          organization_id: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          default_price_tier?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          key: string
+          name: string
+          organization_id: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          default_price_tier?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          key?: string
+          name?: string
+          organization_id?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_assortments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_assortments_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations_safe"
@@ -572,6 +1010,272 @@ export type Database = {
           },
         ]
       }
+      blank_images: {
+        Row: {
+          blank_id: string
+          color: string | null
+          created_at: string
+          drive_file_id: string
+          drive_folder_id: string | null
+          drive_url: string | null
+          filename: string | null
+          id: string
+          is_primary: boolean
+          mime_type: string | null
+          missing: boolean
+          modified_at: string | null
+          normalized_color: string | null
+          updated_at: string
+          view_type: string
+        }
+        Insert: {
+          blank_id: string
+          color?: string | null
+          created_at?: string
+          drive_file_id: string
+          drive_folder_id?: string | null
+          drive_url?: string | null
+          filename?: string | null
+          id?: string
+          is_primary?: boolean
+          mime_type?: string | null
+          missing?: boolean
+          modified_at?: string | null
+          normalized_color?: string | null
+          updated_at?: string
+          view_type: string
+        }
+        Update: {
+          blank_id?: string
+          color?: string | null
+          created_at?: string
+          drive_file_id?: string
+          drive_folder_id?: string | null
+          drive_url?: string | null
+          filename?: string | null
+          id?: string
+          is_primary?: boolean
+          mime_type?: string | null
+          missing?: boolean
+          modified_at?: string | null
+          normalized_color?: string | null
+          updated_at?: string
+          view_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_images_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
+          {
+            foreignKeyName: "blank_images_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_images_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blank_inventory_audit: {
+        Row: {
+          actor: string | null
+          after: Json | null
+          before: Json | null
+          blank_id: string | null
+          blank_variant_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          source: string | null
+        }
+        Insert: {
+          actor?: string | null
+          after?: Json | null
+          before?: Json | null
+          blank_id?: string | null
+          blank_variant_id?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          source?: string | null
+        }
+        Update: {
+          actor?: string | null
+          after?: Json | null
+          before?: Json | null
+          blank_id?: string | null
+          blank_variant_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_inventory_audit_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
+          {
+            foreignKeyName: "blank_inventory_audit_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_inventory_audit_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_inventory_audit_blank_variant_id_fkey"
+            columns: ["blank_variant_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blank_inventory_levels: {
+        Row: {
+          available_quantity: number
+          blank_variant_id: string
+          created_at: string
+          id: string
+          last_shopify_sync_at: string | null
+          location_name: string | null
+          shopify_location_id: string
+        }
+        Insert: {
+          available_quantity?: number
+          blank_variant_id: string
+          created_at?: string
+          id?: string
+          last_shopify_sync_at?: string | null
+          location_name?: string | null
+          shopify_location_id: string
+        }
+        Update: {
+          available_quantity?: number
+          blank_variant_id?: string
+          created_at?: string
+          id?: string
+          last_shopify_sync_at?: string | null
+          location_name?: string | null
+          shopify_location_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_inventory_levels_blank_variant_id_fkey"
+            columns: ["blank_variant_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blank_mvp_snapshot_20260821: {
+        Row: {
+          assortment_key: string | null
+          blank_id: string | null
+          name: string | null
+          price_athlete: number | null
+          price_corporate: number | null
+          price_standard: number | null
+          sku: string | null
+          was_hidden: boolean | null
+        }
+        Insert: {
+          assortment_key?: string | null
+          blank_id?: string | null
+          name?: string | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          sku?: string | null
+          was_hidden?: boolean | null
+        }
+        Update: {
+          assortment_key?: string | null
+          blank_id?: string | null
+          name?: string | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          sku?: string | null
+          was_hidden?: boolean | null
+        }
+        Relationships: []
+      }
+      blank_rotation_snapshot_20260822: {
+        Row: {
+          id: string | null
+          name: string | null
+          price_athlete: number | null
+          price_corporate: number | null
+          price_standard: number | null
+          sku: string | null
+          snapshot_at: string | null
+          was_assortments: string | null
+          was_drive_folder_id: string | null
+          was_hidden: boolean | null
+          was_image_match_status: string | null
+          was_main_rotation: boolean | null
+          was_shopify_product_id: string | null
+          was_shopify_status: string | null
+          was_supplier_status: string | null
+        }
+        Insert: {
+          id?: string | null
+          name?: string | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          sku?: string | null
+          snapshot_at?: string | null
+          was_assortments?: string | null
+          was_drive_folder_id?: string | null
+          was_hidden?: boolean | null
+          was_image_match_status?: string | null
+          was_main_rotation?: boolean | null
+          was_shopify_product_id?: string | null
+          was_shopify_status?: string | null
+          was_supplier_status?: string | null
+        }
+        Update: {
+          id?: string | null
+          name?: string | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          sku?: string | null
+          snapshot_at?: string | null
+          was_assortments?: string | null
+          was_drive_folder_id?: string | null
+          was_hidden?: boolean | null
+          was_image_match_status?: string | null
+          was_main_rotation?: boolean | null
+          was_shopify_product_id?: string | null
+          was_shopify_status?: string | null
+          was_supplier_status?: string | null
+        }
+        Relationships: []
+      }
       blank_sizes: {
         Row: {
           available: boolean
@@ -627,6 +1331,79 @@ export type Database = {
           },
         ]
       }
+      blank_variants: {
+        Row: {
+          barcode: string | null
+          blank_id: string
+          color: string | null
+          cost: number | null
+          created_at: string
+          id: string
+          last_shopify_sync_at: string | null
+          normalized_color: string | null
+          retail_price: number | null
+          shopify_inventory_item_id: string | null
+          shopify_variant_id: string
+          size: string | null
+          sku: string | null
+          updated_at: string
+        }
+        Insert: {
+          barcode?: string | null
+          blank_id: string
+          color?: string | null
+          cost?: number | null
+          created_at?: string
+          id?: string
+          last_shopify_sync_at?: string | null
+          normalized_color?: string | null
+          retail_price?: number | null
+          shopify_inventory_item_id?: string | null
+          shopify_variant_id: string
+          size?: string | null
+          sku?: string | null
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string | null
+          blank_id?: string
+          color?: string | null
+          cost?: number | null
+          created_at?: string
+          id?: string
+          last_shopify_sync_at?: string | null
+          normalized_color?: string | null
+          retail_price?: number | null
+          shopify_inventory_item_id?: string | null
+          shopify_variant_id?: string
+          size?: string | null
+          sku?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blank_variants_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
+          {
+            foreignKeyName: "blank_variants_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blank_variants_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       blanks: {
         Row: {
           additional_cost: number
@@ -638,13 +1415,24 @@ export type Database = {
           cost_last_updated: string | null
           created_at: string
           decoration_cost: number
+          drive_product_folder_id: string | null
+          drive_product_folder_url: string | null
           fabric: string | null
           fabric_specs: Json
           garment_title: string | null
           garment_type: Database["public"]["Enums"]["garment_type"]
           id: string
+          image_match_status: string
           image_url: string | null
           internal_only: boolean
+          inventory_sync_state: string
+          is_inventory_managed: boolean
+          is_main_rotation: boolean
+          last_drive_sync_at: string | null
+          last_inventory_error: string | null
+          last_inventory_error_at: string | null
+          last_inventory_success_at: string | null
+          last_shopify_sync_at: string | null
           metadata: Json
           moq: number | null
           name: string
@@ -654,6 +1442,8 @@ export type Database = {
           price_corporate: number | null
           price_standard: number | null
           sellable_as_blank: boolean
+          shopify_product_id: string | null
+          shopify_status: string | null
           sku: string | null
           slug: string
           style_number: string | null
@@ -672,13 +1462,24 @@ export type Database = {
           cost_last_updated?: string | null
           created_at?: string
           decoration_cost?: number
+          drive_product_folder_id?: string | null
+          drive_product_folder_url?: string | null
           fabric?: string | null
           fabric_specs?: Json
           garment_title?: string | null
           garment_type?: Database["public"]["Enums"]["garment_type"]
           id?: string
+          image_match_status?: string
           image_url?: string | null
           internal_only?: boolean
+          inventory_sync_state?: string
+          is_inventory_managed?: boolean
+          is_main_rotation?: boolean
+          last_drive_sync_at?: string | null
+          last_inventory_error?: string | null
+          last_inventory_error_at?: string | null
+          last_inventory_success_at?: string | null
+          last_shopify_sync_at?: string | null
           metadata?: Json
           moq?: number | null
           name: string
@@ -688,6 +1489,8 @@ export type Database = {
           price_corporate?: number | null
           price_standard?: number | null
           sellable_as_blank?: boolean
+          shopify_product_id?: string | null
+          shopify_status?: string | null
           sku?: string | null
           slug: string
           style_number?: string | null
@@ -706,13 +1509,24 @@ export type Database = {
           cost_last_updated?: string | null
           created_at?: string
           decoration_cost?: number
+          drive_product_folder_id?: string | null
+          drive_product_folder_url?: string | null
           fabric?: string | null
           fabric_specs?: Json
           garment_title?: string | null
           garment_type?: Database["public"]["Enums"]["garment_type"]
           id?: string
+          image_match_status?: string
           image_url?: string | null
           internal_only?: boolean
+          inventory_sync_state?: string
+          is_inventory_managed?: boolean
+          is_main_rotation?: boolean
+          last_drive_sync_at?: string | null
+          last_inventory_error?: string | null
+          last_inventory_error_at?: string | null
+          last_inventory_success_at?: string | null
+          last_shopify_sync_at?: string | null
           metadata?: Json
           moq?: number | null
           name?: string
@@ -722,6 +1536,8 @@ export type Database = {
           price_corporate?: number | null
           price_standard?: number | null
           sellable_as_blank?: boolean
+          shopify_product_id?: string | null
+          shopify_status?: string | null
           sku?: string | null
           slug?: string
           style_number?: string | null
@@ -850,6 +1666,7 @@ export type Database = {
           customization: Json | null
           id: string
           line_subtotal: number | null
+          mockup_id: string | null
           notes: string | null
           order_request_id: string
           product_id: string | null
@@ -858,6 +1675,7 @@ export type Database = {
           size: string
           unit_retail_price: number | null
           unit_wholesale_price: number | null
+          v2_blank_id: string | null
         }
         Insert: {
           blank_id?: string | null
@@ -866,6 +1684,7 @@ export type Database = {
           customization?: Json | null
           id?: string
           line_subtotal?: number | null
+          mockup_id?: string | null
           notes?: string | null
           order_request_id: string
           product_id?: string | null
@@ -874,6 +1693,7 @@ export type Database = {
           size: string
           unit_retail_price?: number | null
           unit_wholesale_price?: number | null
+          v2_blank_id?: string | null
         }
         Update: {
           blank_id?: string | null
@@ -882,6 +1702,7 @@ export type Database = {
           customization?: Json | null
           id?: string
           line_subtotal?: number | null
+          mockup_id?: string | null
           notes?: string | null
           order_request_id?: string
           product_id?: string | null
@@ -890,6 +1711,7 @@ export type Database = {
           size?: string
           unit_retail_price?: number | null
           unit_wholesale_price?: number | null
+          v2_blank_id?: string | null
         }
         Relationships: [
           {
@@ -914,6 +1736,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bulk_order_items_mockup_id_fkey"
+            columns: ["mockup_id"]
+            isOneToOne: false
+            referencedRelation: "mockups"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bulk_order_items_order_request_id_fkey"
             columns: ["order_request_id"]
             isOneToOne: false
@@ -925,6 +1754,20 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bulk_order_items_v2_blank_id_fkey"
+            columns: ["v2_blank_id"]
+            isOneToOne: false
+            referencedRelation: "v2_blanks"
             referencedColumns: ["id"]
           },
         ]
@@ -1043,6 +1886,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bulk_order_requests_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bulk_order_requests_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1136,6 +1986,80 @@ export type Database = {
           },
         ]
       }
+      collection_design_slots: {
+        Row: {
+          collection_id: string
+          created_at: string
+          design_id: string | null
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          product_type: string | null
+          purpose: string | null
+          slot_no: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          collection_id: string
+          created_at?: string
+          design_id?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id: string
+          product_type?: string | null
+          purpose?: string | null
+          slot_no: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          collection_id?: string
+          created_at?: string
+          design_id?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          product_type?: string | null
+          purpose?: string | null
+          slot_no?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collection_design_slots_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_design_slots_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_design_slots_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collection_design_slots_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       collection_designs: {
         Row: {
           collection_id: string
@@ -1206,6 +2130,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "collection_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
         ]
       }
       collections: {
@@ -1220,6 +2151,8 @@ export type Database = {
           name: string
           organization_id: string
           slug: string
+          source_application_id: string | null
+          source_template_id: string | null
           start_date: string | null
           status: string
           team_id: string | null
@@ -1236,6 +2169,8 @@ export type Database = {
           name: string
           organization_id: string
           slug: string
+          source_application_id?: string | null
+          source_template_id?: string | null
           start_date?: string | null
           status?: string
           team_id?: string | null
@@ -1252,6 +2187,8 @@ export type Database = {
           name?: string
           organization_id?: string
           slug?: string
+          source_application_id?: string | null
+          source_template_id?: string | null
           start_date?: string | null
           status?: string
           team_id?: string | null
@@ -1280,6 +2217,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "collections_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "collections_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1294,6 +2238,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "collections_source_application_id_fkey"
+            columns: ["source_application_id"]
+            isOneToOne: false
+            referencedRelation: "design_template_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collections_source_template_id_fkey"
+            columns: ["source_template_id"]
+            isOneToOne: false
+            referencedRelation: "design_templates"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "collections_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
@@ -1305,6 +2263,145 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_assets: {
+        Row: {
+          athlete_id: string | null
+          athlete_ids: string[]
+          body: string | null
+          category: string | null
+          content_format: string | null
+          content_purpose: Database["public"]["Enums"]["content_purpose"]
+          created_at: string
+          created_by: string | null
+          event_id: string | null
+          hero_url: string | null
+          id: string
+          media: Json
+          mockup_id: string | null
+          notify: Json
+          organization_id: string
+          product_id: string | null
+          publish_at: string | null
+          status: Database["public"]["Enums"]["content_status"]
+          title: string
+          type: Database["public"]["Enums"]["content_type"]
+          updated_at: string
+          visibility: Database["public"]["Enums"]["content_visibility"]
+        }
+        Insert: {
+          athlete_id?: string | null
+          athlete_ids?: string[]
+          body?: string | null
+          category?: string | null
+          content_format?: string | null
+          content_purpose?: Database["public"]["Enums"]["content_purpose"]
+          created_at?: string
+          created_by?: string | null
+          event_id?: string | null
+          hero_url?: string | null
+          id?: string
+          media?: Json
+          mockup_id?: string | null
+          notify?: Json
+          organization_id: string
+          product_id?: string | null
+          publish_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          title: string
+          type?: Database["public"]["Enums"]["content_type"]
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["content_visibility"]
+        }
+        Update: {
+          athlete_id?: string | null
+          athlete_ids?: string[]
+          body?: string | null
+          category?: string | null
+          content_format?: string | null
+          content_purpose?: Database["public"]["Enums"]["content_purpose"]
+          created_at?: string
+          created_by?: string | null
+          event_id?: string | null
+          hero_url?: string | null
+          id?: string
+          media?: Json
+          mockup_id?: string | null
+          notify?: Json
+          organization_id?: string
+          product_id?: string | null
+          publish_at?: string | null
+          status?: Database["public"]["Enums"]["content_status"]
+          title?: string
+          type?: Database["public"]["Enums"]["content_type"]
+          updated_at?: string
+          visibility?: Database["public"]["Enums"]["content_visibility"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_mockup_id_fkey"
+            columns: ["mockup_id"]
+            isOneToOne: false
+            referencedRelation: "mockups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
             referencedColumns: ["id"]
           },
         ]
@@ -1344,20 +2441,29 @@ export type Database = {
       design_athletes: {
         Row: {
           athlete_id: string
+          client_visibility: Database["public"]["Enums"]["design_client_visibility"]
           created_at: string
           design_id: string
+          group_id: string | null
+          sort_order: number
           team_id_at_creation: string | null
         }
         Insert: {
           athlete_id: string
+          client_visibility?: Database["public"]["Enums"]["design_client_visibility"]
           created_at?: string
           design_id: string
+          group_id?: string | null
+          sort_order?: number
           team_id_at_creation?: string | null
         }
         Update: {
           athlete_id?: string
+          client_visibility?: Database["public"]["Enums"]["design_client_visibility"]
           created_at?: string
           design_id?: string
+          group_id?: string | null
+          sort_order?: number
           team_id_at_creation?: string | null
         }
         Relationships: [
@@ -1383,10 +2489,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "design_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "design_athletes_design_id_fkey"
             columns: ["design_id"]
             isOneToOne: false
             referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_athletes_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "design_collections"
             referencedColumns: ["id"]
           },
           {
@@ -1407,30 +2527,77 @@ export type Database = {
       }
       design_collections: {
         Row: {
+          athlete_id: string | null
+          client_visibility: Database["public"]["Enums"]["design_client_visibility"]
+          cover_design_id: string | null
           created_at: string
           id: string
           name: string
           notes: string | null
           organization_id: string
+          sort_order: number
           updated_at: string
         }
         Insert: {
+          athlete_id?: string | null
+          client_visibility?: Database["public"]["Enums"]["design_client_visibility"]
+          cover_design_id?: string | null
           created_at?: string
           id?: string
           name: string
           notes?: string | null
           organization_id: string
+          sort_order?: number
           updated_at?: string
         }
         Update: {
+          athlete_id?: string | null
+          client_visibility?: Database["public"]["Enums"]["design_client_visibility"]
+          cover_design_id?: string | null
           created_at?: string
           id?: string
           name?: string
           notes?: string | null
           organization_id?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "design_collections_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_collections_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_collections_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_collections_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_collections_cover_design_id_fkey"
+            columns: ["cover_design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "design_collections_organization_id_fkey"
             columns: ["organization_id"]
@@ -1499,6 +2666,181 @@ export type Database = {
             columns: ["design_id"]
             isOneToOne: false
             referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_submission_files: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          file_size_bytes: number | null
+          id: string
+          mime_type: string | null
+          sort_order: number
+          storage_bucket: string
+          storage_path: string
+          submission_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          sort_order?: number
+          storage_bucket?: string
+          storage_path: string
+          submission_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          file_size_bytes?: number | null
+          id?: string
+          mime_type?: string | null
+          sort_order?: number
+          storage_bucket?: string
+          storage_path?: string
+          submission_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_submission_files_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "design_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_submissions: {
+        Row: {
+          athlete_id: string
+          brief: string | null
+          converted_design_id: string | null
+          converted_product_id: string | null
+          created_at: string
+          fan_user_id: string
+          id: string
+          kind: string
+          notes: string | null
+          organization_id: string
+          questionnaire_response_id: string | null
+          review_notes: string | null
+          review_state: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          athlete_id: string
+          brief?: string | null
+          converted_design_id?: string | null
+          converted_product_id?: string | null
+          created_at?: string
+          fan_user_id: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          organization_id: string
+          questionnaire_response_id?: string | null
+          review_notes?: string | null
+          review_state?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string
+          brief?: string | null
+          converted_design_id?: string | null
+          converted_product_id?: string | null
+          created_at?: string
+          fan_user_id?: string
+          id?: string
+          kind?: string
+          notes?: string | null
+          organization_id?: string
+          questionnaire_response_id?: string | null
+          review_notes?: string | null
+          review_state?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_submissions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_submissions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_submissions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_converted_design_id_fkey"
+            columns: ["converted_design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_converted_product_id_fkey"
+            columns: ["converted_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_converted_product_id_fkey"
+            columns: ["converted_product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_submissions_questionnaire_response_id_fkey"
+            columns: ["questionnaire_response_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaire_responses"
             referencedColumns: ["id"]
           },
         ]
@@ -1572,6 +2914,290 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_template_applications: {
+        Row: {
+          athlete_direction: string | null
+          athlete_id: string
+          created_at: string
+          created_by: string | null
+          default_reference_set_id: string | null
+          id: string
+          instance: Json
+          notes: string | null
+          organization_id: string
+          status: string
+          template_id: string | null
+          updated_at: string
+          variables: Json
+        }
+        Insert: {
+          athlete_direction?: string | null
+          athlete_id: string
+          created_at?: string
+          created_by?: string | null
+          default_reference_set_id?: string | null
+          id?: string
+          instance?: Json
+          notes?: string | null
+          organization_id: string
+          status?: string
+          template_id?: string | null
+          updated_at?: string
+          variables?: Json
+        }
+        Update: {
+          athlete_direction?: string | null
+          athlete_id?: string
+          created_at?: string
+          created_by?: string | null
+          default_reference_set_id?: string | null
+          id?: string
+          instance?: Json
+          notes?: string | null
+          organization_id?: string
+          status?: string
+          template_id?: string | null
+          updated_at?: string
+          variables?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_template_applications_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_template_applications_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "design_template_applications_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_applications_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_applications_default_reference_set_id_fkey"
+            columns: ["default_reference_set_id"]
+            isOneToOne: false
+            referencedRelation: "reference_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_applications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_applications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_applications_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "design_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_template_prompts: {
+        Row: {
+          body: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_current_best: boolean
+          master_candidate: boolean
+          notes: string | null
+          organization_id: string | null
+          output_requirements: string | null
+          reference_set_id: string | null
+          required_variables: string[]
+          role: string
+          template_id: string
+          title: string | null
+          updated_at: string
+          variation: string
+          version: number
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_current_best?: boolean
+          master_candidate?: boolean
+          notes?: string | null
+          organization_id?: string | null
+          output_requirements?: string | null
+          reference_set_id?: string | null
+          required_variables?: string[]
+          role?: string
+          template_id: string
+          title?: string | null
+          updated_at?: string
+          variation?: string
+          version?: number
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_current_best?: boolean
+          master_candidate?: boolean
+          notes?: string | null
+          organization_id?: string | null
+          output_requirements?: string | null
+          reference_set_id?: string | null
+          required_variables?: string[]
+          role?: string
+          template_id?: string
+          title?: string | null
+          updated_at?: string
+          variation?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_template_prompts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_prompts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_prompts_reference_set_id_fkey"
+            columns: ["reference_set_id"]
+            isOneToOne: false
+            referencedRelation: "reference_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_template_prompts_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "design_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      design_templates: {
+        Row: {
+          athlete_examples: Json
+          attributes: Json
+          collection_recipe: Json
+          color_tendencies: string[]
+          compatible_product_types: string[]
+          created_at: string
+          description: string | null
+          example_products: Json
+          graphic_characteristics: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          organization_id: string | null
+          preview_images: Json
+          reference_policy: string
+          source_ref: string | null
+          sport_compatibility: string[]
+          style: string | null
+          tags: string[]
+          typography_characteristics: string | null
+          updated_at: string
+        }
+        Insert: {
+          athlete_examples?: Json
+          attributes?: Json
+          collection_recipe?: Json
+          color_tendencies?: string[]
+          compatible_product_types?: string[]
+          created_at?: string
+          description?: string | null
+          example_products?: Json
+          graphic_characteristics?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          organization_id?: string | null
+          preview_images?: Json
+          reference_policy?: string
+          source_ref?: string | null
+          sport_compatibility?: string[]
+          style?: string | null
+          tags?: string[]
+          typography_characteristics?: string | null
+          updated_at?: string
+        }
+        Update: {
+          athlete_examples?: Json
+          attributes?: Json
+          collection_recipe?: Json
+          color_tendencies?: string[]
+          compatible_product_types?: string[]
+          created_at?: string
+          description?: string | null
+          example_products?: Json
+          graphic_characteristics?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          organization_id?: string | null
+          preview_images?: Json
+          reference_policy?: string
+          source_ref?: string | null
+          sport_compatibility?: string[]
+          style?: string | null
+          tags?: string[]
+          typography_characteristics?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "design_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "design_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
             referencedColumns: ["id"]
           },
         ]
@@ -1672,6 +3298,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "designs_primary_athlete_id_fkey"
+            columns: ["primary_athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "designs_primary_team_id_fkey"
             columns: ["primary_team_id"]
             isOneToOne: false
@@ -1686,6 +3319,379 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      domain_events: {
+        Row: {
+          actor_user_id: string | null
+          athlete_id: string | null
+          audience: Database["public"]["Enums"]["notify_audience"]
+          body: string | null
+          category: string | null
+          created_at: string
+          id: string
+          link: string | null
+          occurred_at: string
+          organization_id: string | null
+          subject_id: string | null
+          subject_type: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          athlete_id?: string | null
+          audience?: Database["public"]["Enums"]["notify_audience"]
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          occurred_at?: string
+          organization_id?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          athlete_id?: string | null
+          audience?: Database["public"]["Enums"]["notify_audience"]
+          body?: string | null
+          category?: string | null
+          created_at?: string
+          id?: string
+          link?: string | null
+          occurred_at?: string
+          organization_id?: string | null
+          subject_id?: string | null
+          subject_type?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "domain_events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "domain_events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "domain_events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "domain_events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drop_products: {
+        Row: {
+          created_at: string
+          drop_id: string
+          product_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          drop_id: string
+          product_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          drop_id?: string
+          product_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drop_products_drop_id_fkey"
+            columns: ["drop_id"]
+            isOneToOne: false
+            referencedRelation: "drops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drop_products_drop_id_fkey"
+            columns: ["drop_id"]
+            isOneToOne: false
+            referencedRelation: "public_drops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drop_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drop_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      drops: {
+        Row: {
+          access_date: string | null
+          approval_note: string | null
+          approval_state: Database["public"]["Enums"]["product_approval"]
+          athlete_id: string | null
+          campaign_image_url: string | null
+          collection_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          metadata: Json
+          name: string
+          notify: Json
+          organization_id: string
+          public_date: string | null
+          slug: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          access_date?: string | null
+          approval_note?: string | null
+          approval_state?: Database["public"]["Enums"]["product_approval"]
+          athlete_id?: string | null
+          campaign_image_url?: string | null
+          collection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          metadata?: Json
+          name: string
+          notify?: Json
+          organization_id: string
+          public_date?: string | null
+          slug?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          access_date?: string | null
+          approval_note?: string | null
+          approval_state?: Database["public"]["Enums"]["product_approval"]
+          athlete_id?: string | null
+          campaign_image_url?: string | null
+          collection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          metadata?: Json
+          name?: string
+          notify?: Json
+          organization_id?: string
+          public_date?: string | null
+          slug?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drops_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drops_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drops_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          access_date: string | null
+          athlete_id: string | null
+          city: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          event_date: string | null
+          id: string
+          image_url: string | null
+          location: string | null
+          name: string
+          organization_id: string
+          public_date: string | null
+          registration_url: string | null
+          status: Database["public"]["Enums"]["event_status"]
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          access_date?: string | null
+          athlete_id?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string | null
+          id?: string
+          image_url?: string | null
+          location?: string | null
+          name: string
+          organization_id: string
+          public_date?: string | null
+          registration_url?: string | null
+          status?: Database["public"]["Enums"]["event_status"]
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          access_date?: string | null
+          athlete_id?: string | null
+          city?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          event_date?: string | null
+          id?: string
+          image_url?: string | null
+          location?: string | null
+          name?: string
+          organization_id?: string
+          public_date?: string | null
+          registration_url?: string | null
+          status?: Database["public"]["Enums"]["event_status"]
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fan_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          preferences: Json
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          preferences?: Json
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          preferences?: Json
+          updated_at?: string
+        }
+        Relationships: []
       }
       fulfillment_materials: {
         Row: {
@@ -1903,6 +3909,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "ingestion_jobs_created_product_id_fkey"
+            columns: ["created_product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "ingestion_jobs_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1918,11 +3931,212 @@ export type Database = {
           },
         ]
       }
-      mockups: {
+      inspiration_images: {
         Row: {
           athlete_id: string | null
-          blank_id: string | null
+          collection_id: string | null
           created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          sort_order: number
+          source_url: string | null
+          storage_bucket: string | null
+          storage_path: string | null
+          tags: string[]
+          title: string | null
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          athlete_id?: string | null
+          collection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id: string
+          sort_order?: number
+          source_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          tags?: string[]
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          athlete_id?: string | null
+          collection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          sort_order?: number
+          source_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          tags?: string[]
+          title?: string | null
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspiration_images_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "inspiration_images_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "inspiration_images_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspiration_images_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspiration_images_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspiration_images_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inspiration_images_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      membership_plans: {
+        Row: {
+          athlete_id: string | null
+          benefits: Json
+          created_at: string
+          currency: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          price_cents: number
+          sort_order: number
+          tier: Database["public"]["Enums"]["membership_tier"]
+          updated_at: string
+        }
+        Insert: {
+          athlete_id?: string | null
+          benefits?: Json
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          price_cents?: number
+          sort_order?: number
+          tier?: Database["public"]["Enums"]["membership_tier"]
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string | null
+          benefits?: Json
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          price_cents?: number
+          sort_order?: number
+          tier?: Database["public"]["Enums"]["membership_tier"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "membership_plans_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "membership_plans_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "membership_plans_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_plans_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mockups: {
+        Row: {
+          approval_note: string | null
+          approval_state: string
+          athlete_id: string | null
+          blank_id: string | null
+          client_visible: boolean
+          collection_id: string | null
+          color_name: string | null
+          created_at: string
+          created_from: Json
           description: string | null
           design_id: string | null
           drop_name: string | null
@@ -1930,26 +4144,42 @@ export type Database = {
           file_size: number | null
           file_type: string | null
           folder_id: string | null
+          guides: Json
           id: string
+          image_url: string | null
+          kind: string
+          lifecycle: string
           organization_id: string
           photographer: string | null
+          placement_label: string | null
+          preview_generated_at: string | null
           product_id: string | null
           published_to_shopify: boolean
           shot_type: Database["public"]["Enums"]["mockup_shot_type"]
+          sort_order: number
           status: Database["public"]["Enums"]["mockup_status"]
           storage_bucket: string
           storage_path: string | null
+          surface: string | null
           tags: string[]
           team_id: string | null
           thumbnail_path: string | null
           title: string
           updated_at: string
           uploaded_by: string | null
+          v2_blank_id: string | null
+          zone_id: string | null
         }
         Insert: {
+          approval_note?: string | null
+          approval_state?: string
           athlete_id?: string | null
           blank_id?: string | null
+          client_visible?: boolean
+          collection_id?: string | null
+          color_name?: string | null
           created_at?: string
+          created_from?: Json
           description?: string | null
           design_id?: string | null
           drop_name?: string | null
@@ -1957,26 +4187,42 @@ export type Database = {
           file_size?: number | null
           file_type?: string | null
           folder_id?: string | null
+          guides?: Json
           id?: string
+          image_url?: string | null
+          kind?: string
+          lifecycle?: string
           organization_id: string
           photographer?: string | null
+          placement_label?: string | null
+          preview_generated_at?: string | null
           product_id?: string | null
           published_to_shopify?: boolean
           shot_type?: Database["public"]["Enums"]["mockup_shot_type"]
+          sort_order?: number
           status?: Database["public"]["Enums"]["mockup_status"]
           storage_bucket?: string
           storage_path?: string | null
+          surface?: string | null
           tags?: string[]
           team_id?: string | null
           thumbnail_path?: string | null
           title: string
           updated_at?: string
           uploaded_by?: string | null
+          v2_blank_id?: string | null
+          zone_id?: string | null
         }
         Update: {
+          approval_note?: string | null
+          approval_state?: string
           athlete_id?: string | null
           blank_id?: string | null
+          client_visible?: boolean
+          collection_id?: string | null
+          color_name?: string | null
           created_at?: string
+          created_from?: Json
           description?: string | null
           design_id?: string | null
           drop_name?: string | null
@@ -1984,21 +4230,31 @@ export type Database = {
           file_size?: number | null
           file_type?: string | null
           folder_id?: string | null
+          guides?: Json
           id?: string
+          image_url?: string | null
+          kind?: string
+          lifecycle?: string
           organization_id?: string
           photographer?: string | null
+          placement_label?: string | null
+          preview_generated_at?: string | null
           product_id?: string | null
           published_to_shopify?: boolean
           shot_type?: Database["public"]["Enums"]["mockup_shot_type"]
+          sort_order?: number
           status?: Database["public"]["Enums"]["mockup_status"]
           storage_bucket?: string
           storage_path?: string | null
+          surface?: string | null
           tags?: string[]
           team_id?: string | null
           thumbnail_path?: string | null
           title?: string
           updated_at?: string
           uploaded_by?: string | null
+          v2_blank_id?: string | null
+          zone_id?: string | null
         }
         Relationships: [
           {
@@ -2023,6 +4279,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "mockups_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "mockups_blank_id_fkey"
             columns: ["blank_id"]
             isOneToOne: false
@@ -2041,6 +4304,13 @@ export type Database = {
             columns: ["blank_id"]
             isOneToOne: false
             referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
             referencedColumns: ["id"]
           },
           {
@@ -2079,6 +4349,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "mockups_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "mockups_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
@@ -2097,6 +4374,13 @@ export type Database = {
             columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mockups_v2_blank_id_fkey"
+            columns: ["v2_blank_id"]
+            isOneToOne: false
+            referencedRelation: "v2_blanks"
             referencedColumns: ["id"]
           },
         ]
@@ -2282,11 +4566,57 @@ export type Database = {
         }
         Relationships: []
       }
+      organization_memberships: {
+        Row: {
+          created_at: string
+          id: string
+          organization_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          organization_id: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          organization_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_memberships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_memberships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
           id: string
           name: string
+          org_type: Database["public"]["Enums"]["org_type"]
           pricing_tier_id: string | null
           shopify_access_token: string | null
           shopify_connected: boolean
@@ -2301,6 +4631,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          org_type?: Database["public"]["Enums"]["org_type"]
           pricing_tier_id?: string | null
           shopify_access_token?: string | null
           shopify_connected?: boolean
@@ -2315,6 +4646,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          org_type?: Database["public"]["Enums"]["org_type"]
           pricing_tier_id?: string | null
           shopify_access_token?: string | null
           shopify_connected?: boolean
@@ -2384,7 +4716,29 @@ export type Database = {
           sender_user_id?: string | null
           thread_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "portal_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "portal_threads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       portal_threads: {
         Row: {
@@ -2435,7 +4789,343 @@ export type Database = {
           subject?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "portal_threads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "portal_threads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "portal_threads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_threads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_threads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_threads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_kit_items: {
+        Row: {
+          content_asset_id: string | null
+          created_at: string
+          id: string
+          kind: string
+          post_kit_id: string
+          sort_order: number
+          storage_bucket: string | null
+          storage_path: string | null
+          title: string | null
+          url: string | null
+        }
+        Insert: {
+          content_asset_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          post_kit_id: string
+          sort_order?: number
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Update: {
+          content_asset_id?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          post_kit_id?: string
+          sort_order?: number
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_kit_items_content_asset_id_fkey"
+            columns: ["content_asset_id"]
+            isOneToOne: false
+            referencedRelation: "content_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kit_items_content_asset_id_fkey"
+            columns: ["content_asset_id"]
+            isOneToOne: false
+            referencedRelation: "public_content"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kit_items_post_kit_id_fkey"
+            columns: ["post_kit_id"]
+            isOneToOne: false
+            referencedRelation: "post_kits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_kits: {
+        Row: {
+          athlete_id: string | null
+          collection_id: string | null
+          created_at: string
+          created_by: string | null
+          drop_id: string | null
+          id: string
+          name: string
+          organization_id: string
+          product_id: string | null
+          product_link: string | null
+          status: string
+          suggested_caption: string | null
+          updated_at: string
+        }
+        Insert: {
+          athlete_id?: string | null
+          collection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          drop_id?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          product_id?: string | null
+          product_link?: string | null
+          status?: string
+          suggested_caption?: string | null
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string | null
+          collection_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          drop_id?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          product_id?: string | null
+          product_link?: string | null
+          status?: string
+          suggested_caption?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_kits_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "post_kits_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "post_kits_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_drop_id_fkey"
+            columns: ["drop_id"]
+            isOneToOne: false
+            referencedRelation: "drops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_drop_id_fkey"
+            columns: ["drop_id"]
+            isOneToOne: false
+            referencedRelation: "public_drops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_kits_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      preference_profiles: {
+        Row: {
+          created_at: string
+          id: string
+          notes: string | null
+          organization_id: string | null
+          profile: Json
+          source_response_id: string | null
+          subject_id: string
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          profile?: Json
+          source_response_id?: string | null
+          subject_id: string
+          subject_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          profile?: Json
+          source_response_id?: string | null
+          subject_id?: string
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preference_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preference_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "preference_profiles_source_response_id_fkey"
+            columns: ["source_response_id"]
+            isOneToOne: false
+            referencedRelation: "questionnaire_responses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_rules: {
+        Row: {
+          charm_offset: number
+          id: string
+          margin: number
+          min_price: number | null
+          organization_id: string
+          round_to: number
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          charm_offset?: number
+          id?: string
+          margin?: number
+          min_price?: number | null
+          organization_id: string
+          round_to?: number
+          tier: string
+          updated_at?: string
+        }
+        Update: {
+          charm_offset?: number
+          id?: string
+          margin?: number
+          min_price?: number | null
+          organization_id?: string
+          round_to?: number
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pricing_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pricing_tiers: {
         Row: {
@@ -2466,13 +5156,17 @@ export type Database = {
           created_at: string
           garment_category: string
           h: number
+          height_in: number | null
           id: string
           label: string
+          max_height_in: number | null
+          max_width_in: number | null
           organization_id: string
           sort_order: number
           surface: string
           updated_at: string
           w: number
+          width_in: number | null
           x: number
           y: number
           zone_id: string
@@ -2481,13 +5175,17 @@ export type Database = {
           created_at?: string
           garment_category: string
           h: number
+          height_in?: number | null
           id?: string
           label: string
+          max_height_in?: number | null
+          max_width_in?: number | null
           organization_id: string
           sort_order?: number
           surface: string
           updated_at?: string
           w: number
+          width_in?: number | null
           x: number
           y: number
           zone_id: string
@@ -2496,13 +5194,17 @@ export type Database = {
           created_at?: string
           garment_category?: string
           h?: number
+          height_in?: number | null
           id?: string
           label?: string
+          max_height_in?: number | null
+          max_width_in?: number | null
           organization_id?: string
           sort_order?: number
           surface?: string
           updated_at?: string
           w?: number
+          width_in?: number | null
           x?: number
           y?: number
           zone_id?: string
@@ -2524,6 +5226,99 @@ export type Database = {
           },
         ]
       }
+      product_approvals: {
+        Row: {
+          athlete_id: string | null
+          created_at: string
+          decided_by: string | null
+          id: string
+          note: string | null
+          organization_id: string
+          product_id: string
+          snapshot: Json
+          state: string
+        }
+        Insert: {
+          athlete_id?: string | null
+          created_at?: string
+          decided_by?: string | null
+          id?: string
+          note?: string | null
+          organization_id: string
+          product_id: string
+          snapshot?: Json
+          state: string
+        }
+        Update: {
+          athlete_id?: string | null
+          created_at?: string
+          decided_by?: string | null
+          id?: string
+          note?: string | null
+          organization_id?: string
+          product_id?: string
+          snapshot?: Json
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_approvals_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "product_approvals_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "product_approvals_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_approvals_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_approvals_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_approvals_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_approvals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_approvals_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_athletes: {
         Row: {
           athlete_id: string
@@ -2531,6 +5326,7 @@ export type Database = {
           id: string
           product_id: string
           role: Database["public"]["Enums"]["athlete_role"]
+          sort_order: number
           team_id_at_release: string | null
         }
         Insert: {
@@ -2539,6 +5335,7 @@ export type Database = {
           id?: string
           product_id: string
           role?: Database["public"]["Enums"]["athlete_role"]
+          sort_order?: number
           team_id_at_release?: string | null
         }
         Update: {
@@ -2547,6 +5344,7 @@ export type Database = {
           id?: string
           product_id?: string
           role?: Database["public"]["Enums"]["athlete_role"]
+          sort_order?: number
           team_id_at_release?: string | null
         }
         Relationships: [
@@ -2572,10 +5370,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "product_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "product_athletes_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_athletes_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
             referencedColumns: ["id"]
           },
           {
@@ -2704,6 +5516,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "product_designs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "product_designs_variation_of_fkey"
             columns: ["variation_of"]
             isOneToOne: false
@@ -2755,6 +5574,142 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_print_placements: {
+        Row: {
+          blank_id: string | null
+          color_name: string | null
+          created_at: string
+          design_id: string | null
+          h_pct: number
+          id: string
+          mockup_id: string | null
+          notes: string | null
+          print_height_in: number | null
+          print_width_in: number | null
+          product_id: string | null
+          rotation_deg: number
+          sort_order: number
+          surface: string
+          updated_at: string
+          v2_blank_id: string | null
+          w_pct: number
+          x_pct: number
+          y_pct: number
+          zone_id: string | null
+          zone_label: string | null
+        }
+        Insert: {
+          blank_id?: string | null
+          color_name?: string | null
+          created_at?: string
+          design_id?: string | null
+          h_pct?: number
+          id?: string
+          mockup_id?: string | null
+          notes?: string | null
+          print_height_in?: number | null
+          print_width_in?: number | null
+          product_id?: string | null
+          rotation_deg?: number
+          sort_order?: number
+          surface?: string
+          updated_at?: string
+          v2_blank_id?: string | null
+          w_pct?: number
+          x_pct?: number
+          y_pct?: number
+          zone_id?: string | null
+          zone_label?: string | null
+        }
+        Update: {
+          blank_id?: string | null
+          color_name?: string | null
+          created_at?: string
+          design_id?: string | null
+          h_pct?: number
+          id?: string
+          mockup_id?: string | null
+          notes?: string | null
+          print_height_in?: number | null
+          print_width_in?: number | null
+          product_id?: string | null
+          rotation_deg?: number
+          sort_order?: number
+          surface?: string
+          updated_at?: string
+          v2_blank_id?: string | null
+          w_pct?: number
+          x_pct?: number
+          y_pct?: number
+          zone_id?: string | null
+          zone_label?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_print_placements_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blank_variant_barcodes"
+            referencedColumns: ["blank_id"]
+          },
+          {
+            foreignKeyName: "product_print_placements_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_print_placements_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "public_catalog"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_print_placements_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_print_placements_mockup_id_fkey"
+            columns: ["mockup_id"]
+            isOneToOne: false
+            referencedRelation: "mockups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_print_placements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_print_placements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_print_placements_v2_blank_id_fkey"
+            columns: ["v2_blank_id"]
+            isOneToOne: false
+            referencedRelation: "v2_blanks"
             referencedColumns: ["id"]
           },
         ]
@@ -2832,6 +5787,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "product_tags_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "product_tags_tag_id_fkey"
             columns: ["tag_id"]
             isOneToOne: false
@@ -2862,6 +5824,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_teams_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
             referencedColumns: ["id"]
           },
           {
@@ -2985,6 +5954,13 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
         ]
       }
       product_videos: {
@@ -3067,15 +6043,26 @@ export type Database = {
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "product_videos_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
         ]
       }
       products: {
         Row: {
+          access_date: string | null
           ai_confidence_score: number | null
+          approval_note: string | null
+          approval_state: Database["public"]["Enums"]["product_approval"]
           blank_id: string | null
           compare_at_price: number | null
           created_at: string
           description: string | null
+          drop_date: string | null
           id: string
           is_hidden_from_dashboard: boolean
           metadata: Json
@@ -3084,6 +6071,7 @@ export type Database = {
           organization_id: string
           price: number | null
           product_type: Database["public"]["Enums"]["product_type"]
+          public_date: string | null
           shopify_handle: string | null
           shopify_last_synced_at: string | null
           shopify_product_id: string | null
@@ -3095,15 +6083,20 @@ export type Database = {
           status: Database["public"]["Enums"]["product_status"]
           title: string
           updated_at: string
+          v2_blank_id: string | null
           wholesale_price: number | null
           wholesale_price_source: string
         }
         Insert: {
+          access_date?: string | null
           ai_confidence_score?: number | null
+          approval_note?: string | null
+          approval_state?: Database["public"]["Enums"]["product_approval"]
           blank_id?: string | null
           compare_at_price?: number | null
           created_at?: string
           description?: string | null
+          drop_date?: string | null
           id?: string
           is_hidden_from_dashboard?: boolean
           metadata?: Json
@@ -3112,6 +6105,7 @@ export type Database = {
           organization_id: string
           price?: number | null
           product_type?: Database["public"]["Enums"]["product_type"]
+          public_date?: string | null
           shopify_handle?: string | null
           shopify_last_synced_at?: string | null
           shopify_product_id?: string | null
@@ -3123,15 +6117,20 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           title: string
           updated_at?: string
+          v2_blank_id?: string | null
           wholesale_price?: number | null
           wholesale_price_source?: string
         }
         Update: {
+          access_date?: string | null
           ai_confidence_score?: number | null
+          approval_note?: string | null
+          approval_state?: Database["public"]["Enums"]["product_approval"]
           blank_id?: string | null
           compare_at_price?: number | null
           created_at?: string
           description?: string | null
+          drop_date?: string | null
           id?: string
           is_hidden_from_dashboard?: boolean
           metadata?: Json
@@ -3140,6 +6139,7 @@ export type Database = {
           organization_id?: string
           price?: number | null
           product_type?: Database["public"]["Enums"]["product_type"]
+          public_date?: string | null
           shopify_handle?: string | null
           shopify_last_synced_at?: string | null
           shopify_product_id?: string | null
@@ -3151,6 +6151,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["product_status"]
           title?: string
           updated_at?: string
+          v2_blank_id?: string | null
           wholesale_price?: number | null
           wholesale_price_source?: string
         }
@@ -3188,6 +6189,173 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_v2_blank_id_fkey"
+            columns: ["v2_blank_id"]
+            isOneToOne: false
+            referencedRelation: "v2_blanks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_packages: {
+        Row: {
+          application_id: string | null
+          athlete_direction: string | null
+          athlete_id: string | null
+          collection_id: string | null
+          compiled_prompt: string
+          created_at: string
+          created_by: string | null
+          direction_mode: string
+          id: string
+          label: string | null
+          organization_id: string
+          prompt_id: string | null
+          prompt_role: string | null
+          rating: number | null
+          rating_notes: Json
+          reference_set_id: string | null
+          slot_id: string | null
+          status: string
+          template_id: string | null
+          updated_at: string
+          variables: Json
+          variation: string
+        }
+        Insert: {
+          application_id?: string | null
+          athlete_direction?: string | null
+          athlete_id?: string | null
+          collection_id?: string | null
+          compiled_prompt: string
+          created_at?: string
+          created_by?: string | null
+          direction_mode?: string
+          id?: string
+          label?: string | null
+          organization_id: string
+          prompt_id?: string | null
+          prompt_role?: string | null
+          rating?: number | null
+          rating_notes?: Json
+          reference_set_id?: string | null
+          slot_id?: string | null
+          status?: string
+          template_id?: string | null
+          updated_at?: string
+          variables?: Json
+          variation?: string
+        }
+        Update: {
+          application_id?: string | null
+          athlete_direction?: string | null
+          athlete_id?: string | null
+          collection_id?: string | null
+          compiled_prompt?: string
+          created_at?: string
+          created_by?: string | null
+          direction_mode?: string
+          id?: string
+          label?: string | null
+          organization_id?: string
+          prompt_id?: string | null
+          prompt_role?: string | null
+          rating?: number | null
+          rating_notes?: Json
+          reference_set_id?: string | null
+          slot_id?: string | null
+          status?: string
+          template_id?: string | null
+          updated_at?: string
+          variables?: Json
+          variation?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_packages_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "design_template_applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_prompt_id_fkey"
+            columns: ["prompt_id"]
+            isOneToOne: false
+            referencedRelation: "design_template_prompts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_reference_set_id_fkey"
+            columns: ["reference_set_id"]
+            isOneToOne: false
+            referencedRelation: "reference_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_slot_fk"
+            columns: ["slot_id"]
+            isOneToOne: false
+            referencedRelation: "collection_design_slots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_packages_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "design_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -3239,6 +6407,7 @@ export type Database = {
       }
       questionnaire_question_options: {
         Row: {
+          attributes: Json
           created_at: string
           design_id: string | null
           id: string
@@ -3248,6 +6417,7 @@ export type Database = {
           question_id: string
         }
         Insert: {
+          attributes?: Json
           created_at?: string
           design_id?: string | null
           id?: string
@@ -3257,6 +6427,7 @@ export type Database = {
           question_id: string
         }
         Update: {
+          attributes?: Json
           created_at?: string
           design_id?: string | null
           id?: string
@@ -3284,6 +6455,7 @@ export type Database = {
       }
       questionnaire_questions: {
         Row: {
+          attributes: Json
           created_at: string
           help_text: string | null
           id: string
@@ -3294,6 +6466,7 @@ export type Database = {
           type: Database["public"]["Enums"]["questionnaire_question_type"]
         }
         Insert: {
+          attributes?: Json
           created_at?: string
           help_text?: string | null
           id?: string
@@ -3304,6 +6477,7 @@ export type Database = {
           type: Database["public"]["Enums"]["questionnaire_question_type"]
         }
         Update: {
+          attributes?: Json
           created_at?: string
           help_text?: string | null
           id?: string
@@ -3327,6 +6501,7 @@ export type Database = {
         Row: {
           athlete_id: string | null
           created_at: string
+          fan_user_id: string | null
           id: string
           questionnaire_id: string
           respondent_email: string | null
@@ -3336,6 +6511,7 @@ export type Database = {
         Insert: {
           athlete_id?: string | null
           created_at?: string
+          fan_user_id?: string | null
           id?: string
           questionnaire_id: string
           respondent_email?: string | null
@@ -3345,6 +6521,7 @@ export type Database = {
         Update: {
           athlete_id?: string | null
           created_at?: string
+          fan_user_id?: string | null
           id?: string
           questionnaire_id?: string
           respondent_email?: string | null
@@ -3374,6 +6551,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "questionnaire_responses_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "questionnaire_responses_questionnaire_id_fkey"
             columns: ["questionnaire_id"]
             isOneToOne: false
@@ -3384,15 +6568,173 @@ export type Database = {
       }
       questionnaires: {
         Row: {
+          athlete_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
           id: string
           intro_text: string | null
           is_active: boolean
+          organization_id: string | null
+          purpose: string | null
           slug: string
           thank_you_text: string | null
           title: string
+          updated_at: string
+        }
+        Insert: {
+          athlete_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          intro_text?: string | null
+          is_active?: boolean
+          organization_id?: string | null
+          purpose?: string | null
+          slug: string
+          thank_you_text?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          intro_text?: string | null
+          is_active?: boolean
+          organization_id?: string | null
+          purpose?: string | null
+          slug?: string
+          thank_you_text?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questionnaires_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "questionnaires_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "questionnaires_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questionnaires_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questionnaires_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "questionnaires_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reference_images: {
+        Row: {
+          created_at: string
+          id: string
+          is_recommended: boolean
+          notes: string | null
+          organization_id: string | null
+          reference_set_id: string
+          sort_order: number
+          storage_bucket: string | null
+          storage_path: string | null
+          title: string | null
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_recommended?: boolean
+          notes?: string | null
+          organization_id?: string | null
+          reference_set_id: string
+          sort_order?: number
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_recommended?: boolean
+          notes?: string | null
+          organization_id?: string | null
+          reference_set_id?: string
+          sort_order?: number
+          storage_bucket?: string | null
+          storage_path?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reference_images_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reference_images_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reference_images_reference_set_id_fkey"
+            columns: ["reference_set_id"]
+            isOneToOne: false
+            referencedRelation: "reference_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reference_sets: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          organization_id: string | null
+          recommended_max: number
+          recommended_min: number
+          reference_dependency: string
+          style_notes: Json
+          template_id: string
           updated_at: string
         }
         Insert: {
@@ -3400,11 +6742,14 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
-          intro_text?: string | null
-          is_active?: boolean
-          slug: string
-          thank_you_text?: string | null
-          title: string
+          is_default?: boolean
+          name: string
+          organization_id?: string | null
+          recommended_max?: number
+          recommended_min?: number
+          reference_dependency?: string
+          style_notes?: Json
+          template_id: string
           updated_at?: string
         }
         Update: {
@@ -3412,14 +6757,39 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           id?: string
-          intro_text?: string | null
-          is_active?: boolean
-          slug?: string
-          thank_you_text?: string | null
-          title?: string
+          is_default?: boolean
+          name?: string
+          organization_id?: string | null
+          recommended_max?: number
+          recommended_min?: number
+          reference_dependency?: string
+          style_notes?: Json
+          template_id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "reference_sets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reference_sets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reference_sets_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "design_templates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       revenue_splits: {
         Row: {
@@ -3487,6 +6857,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "revenue_splits_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "revenue_splits_collection_id_fkey"
             columns: ["collection_id"]
             isOneToOne: false
@@ -3512,6 +6889,75 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "revenue_splits_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_items: {
+        Row: {
+          athlete_id: string | null
+          created_at: string
+          fan_user_id: string
+          id: string
+          item_ref: string
+          item_type: string
+          metadata: Json
+          title: string | null
+        }
+        Insert: {
+          athlete_id?: string | null
+          created_at?: string
+          fan_user_id: string
+          id?: string
+          item_ref: string
+          item_type: string
+          metadata?: Json
+          title?: string | null
+        }
+        Update: {
+          athlete_id?: string | null
+          created_at?: string
+          fan_user_id?: string
+          id?: string
+          item_ref?: string
+          item_type?: string
+          metadata?: Json
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_items_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "saved_items_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "saved_items_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_items_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
             referencedColumns: ["id"]
           },
         ]
@@ -3594,6 +7040,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_mapping_queue_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
             referencedColumns: ["id"]
           },
           {
@@ -3695,6 +7148,13 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shopify_order_line_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
             referencedColumns: ["id"]
           },
           {
@@ -4098,6 +7558,126 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          athlete_id: string | null
+          created_at: string
+          current_period_end: string | null
+          fan_user_id: string
+          id: string
+          plan_id: string | null
+          status: Database["public"]["Enums"]["subscription_status"]
+          updated_at: string
+        }
+        Insert: {
+          athlete_id?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          fan_user_id: string
+          id?: string
+          plan_id?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+        }
+        Update: {
+          athlete_id?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          fan_user_id?: string
+          id?: string
+          plan_id?: string | null
+          status?: Database["public"]["Enums"]["subscription_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "subscriptions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "subscriptions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "membership_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      system_prompts: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          key: string
+          name: string | null
+          notes: string | null
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          key: string
+          name?: string | null
+          notes?: string | null
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          key?: string
+          name?: string | null
+          notes?: string | null
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_prompts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "system_prompts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       system_settings: {
         Row: {
           key: string
@@ -4331,6 +7911,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "team_memberships_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "team_memberships_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -4468,6 +8055,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "user_athlete_links_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "user_athlete_links_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -4517,6 +8111,206 @@ export type Database = {
           },
           {
             foreignKeyName: "user_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v2_blank_colors: {
+        Row: {
+          available: boolean
+          blank_id: string
+          created_at: string
+          display_name: string | null
+          drive_folder_id: string | null
+          hex: string | null
+          id: string
+          name: string
+          quantity: number | null
+          shopify_variant_id: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          available?: boolean
+          blank_id: string
+          created_at?: string
+          display_name?: string | null
+          drive_folder_id?: string | null
+          hex?: string | null
+          id?: string
+          name: string
+          quantity?: number | null
+          shopify_variant_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          available?: boolean
+          blank_id?: string
+          created_at?: string
+          display_name?: string | null
+          drive_folder_id?: string | null
+          hex?: string | null
+          id?: string
+          name?: string
+          quantity?: number | null
+          shopify_variant_id?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "v2_blank_colors_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "v2_blanks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v2_blank_images: {
+        Row: {
+          blank_id: string
+          color_id: string | null
+          created_at: string
+          drive_file_id: string
+          drive_folder_id: string | null
+          drive_url: string
+          filename: string | null
+          id: string
+          is_primary: boolean
+          mime_type: string | null
+          modified_at: string | null
+          updated_at: string
+          variant: string | null
+          view_type: string
+        }
+        Insert: {
+          blank_id: string
+          color_id?: string | null
+          created_at?: string
+          drive_file_id: string
+          drive_folder_id?: string | null
+          drive_url: string
+          filename?: string | null
+          id?: string
+          is_primary?: boolean
+          mime_type?: string | null
+          modified_at?: string | null
+          updated_at?: string
+          variant?: string | null
+          view_type: string
+        }
+        Update: {
+          blank_id?: string
+          color_id?: string | null
+          created_at?: string
+          drive_file_id?: string
+          drive_folder_id?: string | null
+          drive_url?: string
+          filename?: string | null
+          id?: string
+          is_primary?: boolean
+          mime_type?: string | null
+          modified_at?: string | null
+          updated_at?: string
+          variant?: string | null
+          view_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "v2_blank_images_blank_id_fkey"
+            columns: ["blank_id"]
+            isOneToOne: false
+            referencedRelation: "v2_blanks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "v2_blank_images_color_id_fkey"
+            columns: ["color_id"]
+            isOneToOne: false
+            referencedRelation: "v2_blank_colors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v2_blanks: {
+        Row: {
+          cost: number | null
+          created_at: string
+          display_name: string | null
+          drive_folder_id: string
+          drive_folder_url: string | null
+          garment_type: string | null
+          id: string
+          last_drive_sync_at: string | null
+          name: string
+          organization_id: string
+          price: number | null
+          price_athlete: number | null
+          price_corporate: number | null
+          price_standard: number | null
+          shopify_handle: string | null
+          shopify_product_id: string | null
+          style_code: string | null
+          supplier: string
+          updated_at: string
+        }
+        Insert: {
+          cost?: number | null
+          created_at?: string
+          display_name?: string | null
+          drive_folder_id: string
+          drive_folder_url?: string | null
+          garment_type?: string | null
+          id?: string
+          last_drive_sync_at?: string | null
+          name: string
+          organization_id: string
+          price?: number | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          shopify_handle?: string | null
+          shopify_product_id?: string | null
+          style_code?: string | null
+          supplier: string
+          updated_at?: string
+        }
+        Update: {
+          cost?: number | null
+          created_at?: string
+          display_name?: string | null
+          drive_folder_id?: string
+          drive_folder_url?: string | null
+          garment_type?: string | null
+          id?: string
+          last_drive_sync_at?: string | null
+          name?: string
+          organization_id?: string
+          price?: number | null
+          price_athlete?: number | null
+          price_corporate?: number | null
+          price_standard?: number | null
+          shopify_handle?: string | null
+          shopify_product_id?: string | null
+          style_code?: string | null
+          supplier?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "v2_blanks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "v2_blanks_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations_safe"
@@ -4709,6 +8503,106 @@ export type Database = {
         }
         Relationships: []
       }
+      public_athlete_products: {
+        Row: {
+          access_date: string | null
+          athlete_id: string | null
+          athlete_role: string | null
+          compare_at_price: number | null
+          created_at: string | null
+          description: string | null
+          drop_date: string | null
+          id: string | null
+          image_bucket: string | null
+          image_path: string | null
+          organization_id: string | null
+          price: number | null
+          public_date: string | null
+          shopify_handle: string | null
+          slug: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "product_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "product_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_athletes_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_athletes: {
+        Row: {
+          first_name: string | null
+          full_name: string | null
+          id: string | null
+          image_url: string | null
+          jersey_number: string | null
+          last_name: string | null
+          league: string | null
+          org_name: string | null
+          org_slug: string | null
+          org_type: string | null
+          organization_id: string | null
+          position: string | null
+          slug: string | null
+          team_name: string | null
+          team_slug: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "athletes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       public_catalog: {
         Row: {
           garment_type: string | null
@@ -4805,6 +8699,175 @@ export type Database = {
           },
         ]
       }
+      public_content: {
+        Row: {
+          athlete_id: string | null
+          athlete_image: string | null
+          athlete_name: string | null
+          athlete_slug: string | null
+          body: string | null
+          category: string | null
+          content_format: string | null
+          content_purpose: string | null
+          created_at: string | null
+          event_id: string | null
+          hero_url: string | null
+          id: string | null
+          media: Json | null
+          product_id: string | null
+          publish_at: string | null
+          title: string | null
+          type: string | null
+          visibility: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_assets_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "public_athlete_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_drops: {
+        Row: {
+          access_date: string | null
+          athlete_id: string | null
+          athlete_image: string | null
+          athlete_name: string | null
+          athlete_slug: string | null
+          campaign_image_url: string | null
+          collection_id: string | null
+          description: string | null
+          id: string | null
+          name: string | null
+          public_date: string | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drops_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "drops_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      public_events: {
+        Row: {
+          access_date: string | null
+          athlete_id: string | null
+          athlete_image: string | null
+          athlete_name: string | null
+          athlete_slug: string | null
+          city: string | null
+          description: string | null
+          event_date: string | null
+          id: string | null
+          image_url: string | null
+          location: string | null
+          name: string | null
+          public_date: string | null
+          registration_url: string | null
+          status: string | null
+          type: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_revenue_summary: {
         Row: {
           first_order_at: string | null
@@ -4836,7 +8899,18 @@ export type Database = {
     }
     Functions: {
       accrue_monthly_credits: { Args: never; Returns: number }
-      mark_thread_read: { Args: { _thread_id: string }; Returns: undefined }
+      activate_blank_inventory: {
+        Args: {
+          _actor?: string
+          _blank_id: string
+          _levels: Json
+          _main_rotation?: boolean
+          _shopify_product_id: string
+          _shopify_status: string
+          _variants: Json
+        }
+        Returns: Json
+      }
       admin_adjust_credit: {
         Args: { _amount: number; _athlete_id: string; _notes: string }
         Returns: number
@@ -4845,9 +8919,38 @@ export type Database = {
         Args: { _display_name: string; _email?: string; _payout_notes?: string }
         Returns: string
       }
+      apply_athlete_template: {
+        Args: { _athlete_id: string; _template_id: string }
+        Returns: undefined
+      }
       apply_credit_to_order: {
         Args: { _amount: number; _order_id: string }
         Returns: number
+      }
+      apply_response_to_profile: {
+        Args: { _response_id: string }
+        Returns: string
+      }
+      athlete_access_summary: {
+        Args: { _athlete_id: string }
+        Returns: {
+          access: number
+          followers: number
+          vip: number
+        }[]
+      }
+      blank_folder_matches: { Args: { _folder: string }; Returns: boolean }
+      client_design_shelf: {
+        Args: { _athlete_id: string }
+        Returns: {
+          design_id: string
+          design_number: string
+          group_id: string
+          group_name: string
+          preview_paths: string[]
+          sort_order: number
+          title: string
+        }[]
       }
       compute_wholesale_price: {
         Args: {
@@ -4867,15 +8970,32 @@ export type Database = {
           volume_modifier_percent: number
         }[]
       }
+      current_user_has_org_role: {
+        Args: { _org_id: string; _roles: string[] }
+        Returns: boolean
+      }
       current_user_is_admin: { Args: never; Returns: boolean }
+      current_user_is_org_member: {
+        Args: { _org_id: string }
+        Returns: boolean
+      }
       current_user_is_platform_admin: { Args: never; Returns: boolean }
       current_user_org_id: { Args: never; Returns: string }
+      current_user_org_ids: { Args: never; Returns: string[] }
       decide_affiliate_request: {
         Args: { _approve: boolean; _notes?: string; _request_id: string }
         Returns: undefined
       }
+      design_client_visible: {
+        Args: { _athlete_id: string; _design_id: string }
+        Returns: boolean
+      }
       generate_affiliate_code: { Args: { _name: string }; Returns: string }
+      get_client_context: { Args: { p_org_id: string }; Returns: Json }
+      get_context_by_token: { Args: { p_token: string }; Returns: Json }
+      is_athlete_member: { Args: { _athlete_id: string }; Returns: boolean }
       is_org_accessible: { Args: { _org_id: string }; Returns: boolean }
+      mark_thread_read: { Args: { _thread_id: string }; Returns: undefined }
       mint_catalog_token: {
         Args: {
           p_email: string
@@ -4885,6 +9005,26 @@ export type Database = {
           p_tier: string
         }
         Returns: string
+      }
+      quote_blank: {
+        Args: { p_blank_id: string; p_quantity: number; p_tier?: string }
+        Returns: {
+          blank_id: string
+          discount_amount: number
+          line_subtotal: number
+          line_total: number
+          margin: number
+          margin_pct: number
+          name: string
+          quantity: number
+          style_number: string
+          tier: string
+          total_cost: number
+          unit_cost: number
+          unit_price: number
+          unit_price_after_discount: number
+          volume_discount_pct: number
+        }[]
       }
       record_affiliate_payout: {
         Args: {
@@ -4920,6 +9060,26 @@ export type Database = {
           tier: string
         }[]
       }
+      search_blanks: {
+        Args: {
+          p_garment_type?: string
+          p_limit?: number
+          p_manufacturer?: string
+          p_max_unit_price?: number
+          p_query?: string
+          p_tier?: string
+        }
+        Returns: {
+          availability: string
+          blank_id: string
+          garment_type: string
+          manufacturer: string
+          name: string
+          style_number: string
+          tier_unit_price: number
+          unit_cost: number
+        }[]
+      }
       set_affiliate_status: {
         Args: {
           _affiliate_id: string
@@ -4934,6 +9094,17 @@ export type Database = {
       affiliate_request_status: "pending" | "approved" | "rejected"
       affiliate_sale_status: "pending" | "approved" | "paid" | "void"
       affiliate_status: "pending" | "active" | "paused" | "rejected"
+      app_role:
+        | "owner"
+        | "admin"
+        | "staff"
+        | "executive"
+        | "manager"
+        | "member"
+        | "client"
+        | "brand_partner"
+        | "agency_user"
+        | "viewer"
       athlete_role: "primary" | "featured" | "collab"
       athlete_status: "active" | "inactive" | "archived"
       blank_availability:
@@ -4951,6 +9122,7 @@ export type Database = {
         | "typography"
         | "other"
       bulk_order_status:
+        | "draft"
         | "submitted"
         | "acknowledged"
         | "in_production"
@@ -4965,8 +9137,29 @@ export type Database = {
         | "campaign"
         | "capsule"
         | "other"
+        | "lookbook"
+      content_purpose: "access" | "marketing" | "editorial" | "internal"
+      content_status: "draft" | "scheduled" | "published" | "archived"
+      content_type:
+        | "photo"
+        | "video"
+        | "blog"
+        | "update"
+        | "drop"
+        | "camp"
+        | "event"
+        | "gallery"
+        | "bts"
+      content_visibility: "public" | "followers" | "access" | "vip"
       credit_txn_type: "accrual" | "used" | "adjustment" | "refund"
-      design_file_type: "source" | "export" | "mockup" | "backup" | "reference"
+      design_client_visibility: "hidden" | "preview"
+      design_file_type:
+        | "source"
+        | "export"
+        | "mockup"
+        | "backup"
+        | "reference"
+        | "preview"
       design_placement:
         | "front"
         | "back"
@@ -4985,6 +9178,13 @@ export type Database = {
         | "approved"
         | "production_ready"
         | "archived"
+      event_status:
+        | "draft"
+        | "announced"
+        | "registration_open"
+        | "completed"
+        | "cancelled"
+      follow_state: "following" | "subscriber" | "vip" | "former" | "blocked"
       garment_type:
         | "tee"
         | "long_sleeve"
@@ -5023,6 +9223,7 @@ export type Database = {
         | "mailer"
         | "filler"
         | "other"
+      membership_tier: "follow" | "access" | "vip"
       mockup_shot_type:
         | "flat_lay"
         | "model_front"
@@ -5032,6 +9233,18 @@ export type Database = {
         | "action"
         | "other"
       mockup_status: "draft" | "approved" | "published"
+      notify_audience: "public" | "followers" | "access" | "vip" | "operator"
+      org_type:
+        | "commerce"
+        | "membership"
+        | "athlete_brand"
+        | "agency"
+        | "brand"
+        | "team"
+        | "client"
+        | "internal"
+        | "other"
+      product_approval: "none" | "pending" | "approved" | "rejected"
       product_status:
         | "draft"
         | "internal"
@@ -5106,6 +9319,12 @@ export type Database = {
         | "failed"
         | "replayed"
       split_basis: "product" | "collection" | "athlete_global"
+      subscription_status:
+        | "active"
+        | "trialing"
+        | "past_due"
+        | "canceled"
+        | "expired"
       tag_category:
         | "style"
         | "theme"
@@ -5130,12 +9349,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5159,11 +9378,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5184,11 +9403,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5209,11 +9428,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5226,11 +9445,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5246,6 +9465,18 @@ export const Constants = {
       affiliate_request_status: ["pending", "approved", "rejected"],
       affiliate_sale_status: ["pending", "approved", "paid", "void"],
       affiliate_status: ["pending", "active", "paused", "rejected"],
+      app_role: [
+        "owner",
+        "admin",
+        "staff",
+        "executive",
+        "manager",
+        "member",
+        "client",
+        "brand_partner",
+        "agency_user",
+        "viewer",
+      ],
       athlete_role: ["primary", "featured", "collab"],
       athlete_status: ["active", "inactive", "archived"],
       blank_availability: [
@@ -5265,6 +9496,7 @@ export const Constants = {
         "other",
       ],
       bulk_order_status: [
+        "draft",
         "submitted",
         "acknowledged",
         "in_production",
@@ -5280,9 +9512,32 @@ export const Constants = {
         "campaign",
         "capsule",
         "other",
+        "lookbook",
       ],
+      content_purpose: ["access", "marketing", "editorial", "internal"],
+      content_status: ["draft", "scheduled", "published", "archived"],
+      content_type: [
+        "photo",
+        "video",
+        "blog",
+        "update",
+        "drop",
+        "camp",
+        "event",
+        "gallery",
+        "bts",
+      ],
+      content_visibility: ["public", "followers", "access", "vip"],
       credit_txn_type: ["accrual", "used", "adjustment", "refund"],
-      design_file_type: ["source", "export", "mockup", "backup", "reference"],
+      design_client_visibility: ["hidden", "preview"],
+      design_file_type: [
+        "source",
+        "export",
+        "mockup",
+        "backup",
+        "reference",
+        "preview",
+      ],
       design_placement: [
         "front",
         "back",
@@ -5303,6 +9558,14 @@ export const Constants = {
         "production_ready",
         "archived",
       ],
+      event_status: [
+        "draft",
+        "announced",
+        "registration_open",
+        "completed",
+        "cancelled",
+      ],
+      follow_state: ["following", "subscriber", "vip", "former", "blocked"],
       garment_type: [
         "tee",
         "long_sleeve",
@@ -5336,6 +9599,7 @@ export const Constants = {
         "filler",
         "other",
       ],
+      membership_tier: ["follow", "access", "vip"],
       mockup_shot_type: [
         "flat_lay",
         "model_front",
@@ -5346,6 +9610,19 @@ export const Constants = {
         "other",
       ],
       mockup_status: ["draft", "approved", "published"],
+      notify_audience: ["public", "followers", "access", "vip", "operator"],
+      org_type: [
+        "commerce",
+        "membership",
+        "athlete_brand",
+        "agency",
+        "brand",
+        "team",
+        "client",
+        "internal",
+        "other",
+      ],
+      product_approval: ["none", "pending", "approved", "rejected"],
       product_status: [
         "draft",
         "internal",
@@ -5430,6 +9707,13 @@ export const Constants = {
         "replayed",
       ],
       split_basis: ["product", "collection", "athlete_global"],
+      subscription_status: [
+        "active",
+        "trialing",
+        "past_due",
+        "canceled",
+        "expired",
+      ],
       tag_category: [
         "style",
         "theme",
