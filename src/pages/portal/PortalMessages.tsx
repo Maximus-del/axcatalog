@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ArrowLeft, Plus, Send, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
@@ -35,6 +36,39 @@ export default function PortalMessages() {
   const { user } = useAuth();
   const [threads, setThreads] = useState<PortalThread[] | null>(null);
   const [view, setView] = useState<View>({ mode: "list" });
+  // ?thread=<id> so a project card in the Studio can open its own conversation.
+  // Every card used to land on the generic list, which is useless once an
+  // athlete has more than one thing in the works. `as` and any other param
+  // survive because only this key is touched.
+  const [params, setParams] = useSearchParams();
+  const requestedThread = params.get("thread");
+
+  const openThread = useCallback(
+    (t: PortalThread) => {
+      setView({ mode: "thread", thread: t });
+      setParams(
+        (cur) => {
+          const next = new URLSearchParams(cur);
+          next.set("thread", t.id);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setParams],
+  );
+
+  const closeThread = useCallback(() => {
+    setView({ mode: "list" });
+    setParams(
+      (cur) => {
+        const next = new URLSearchParams(cur);
+        next.delete("thread");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setParams]);
 
   const loadThreads = useCallback(async () => {
     const { data } = await supabase
@@ -48,6 +82,14 @@ export default function PortalMessages() {
   useEffect(() => {
     void loadThreads();
   }, [loadThreads]);
+
+  // Resolve ?thread= once the list arrives. A stale or foreign id simply leaves
+  // the list showing rather than erroring.
+  useEffect(() => {
+    if (!requestedThread || !threads || view.mode === "thread") return;
+    const match = threads.find((t) => t.id === requestedThread);
+    if (match) setView({ mode: "thread", thread: match });
+  }, [requestedThread, threads, view.mode]);
 
   return (
     <main className="max-w-[900px] mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-bottom-nav md:pb-32">
@@ -67,7 +109,7 @@ export default function PortalMessages() {
         >
           <ThreadList
             threads={threads}
-            onOpen={(t) => setView({ mode: "thread", thread: t })}
+            onOpen={openThread}
             onNew={() => setView({ mode: "new" })}
           />
         </PortalSection>
@@ -81,7 +123,7 @@ export default function PortalMessages() {
           onCancel={() => setView({ mode: "list" })}
           onCreated={async (t) => {
             await loadThreads();
-            setView({ mode: "thread", thread: t });
+            openThread(t);
           }}
         />
       )}
@@ -93,7 +135,7 @@ export default function PortalMessages() {
           userId={user?.id ?? null}
           onBack={async () => {
             await loadThreads();
-            setView({ mode: "list" });
+            closeThread();
           }}
         />
       )}

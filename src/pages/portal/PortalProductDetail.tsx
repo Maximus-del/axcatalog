@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client";
 import { usePortalData } from "@/components/portal/PortalDataContext";
+import { sanitizeDescriptionHtml } from "@/lib/portal/sanitize-html";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
 import { ProductOrderDialog } from "@/components/portal/ProductOrderDialog";
@@ -52,7 +53,7 @@ export default function PortalProductDetail() {
 
   if (loading && !product) {
     return (
-      <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-6">
+      <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-6 pb-bottom-nav md:pb-32">
         <Skeleton className="h-8 w-1/3" />
         <Skeleton className="aspect-[4/3] w-full max-w-2xl" />
         <Skeleton className="h-32 w-full" />
@@ -62,7 +63,7 @@ export default function PortalProductDetail() {
 
   if (!product) {
     return (
-      <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-4">
+      <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-4 pb-bottom-nav md:pb-32">
         <Button variant="ghost" asChild className="gap-2">
           <Link to="/portal">
             <ArrowLeft className="h-4 w-4" /> Back
@@ -89,7 +90,7 @@ export default function PortalProductDetail() {
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-6">
+    <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-6 pb-bottom-nav md:pb-32">
       <Button variant="ghost" onClick={() => navigate("/portal")} className="gap-2 -ml-2">
         <ArrowLeft className="h-4 w-4" /> Back
       </Button>
@@ -152,7 +153,7 @@ export default function PortalProductDetail() {
           {description && (
             <div
               className="prose prose-sm prose-invert max-w-none text-sm text-muted-foreground"
-              dangerouslySetInnerHTML={{ __html: description }}
+              dangerouslySetInnerHTML={{ __html: sanitizeDescriptionHtml(description) }}
             />
           )}
 

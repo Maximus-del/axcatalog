@@ -6,6 +6,15 @@ import { useNavigate } from "react-router-dom";
 import { Mic, ImagePlus, X, ArrowRight, CheckCircle2, FolderOpen, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  isAcceptedReference,
+  MAX_REFERENCE_FILES,
+  REFERENCE_BUCKET,
+  referenceObjectPath,
+  referenceSummary,
+  referenceToast,
+  type UploadOutcome,
+} from "@/lib/portal/studio-uploads";
 import { useAuth } from "@/auth/AuthProvider";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 import { STUDIO_CATEGORIES, STUDIO_VIBES, threadToProject, PROJECT_STAGES, type Project } from "@/lib/portal-studio";
@@ -49,7 +58,18 @@ export default function PortalStudio() {
 
   function pickFiles(list: FileList | null) {
     if (!list) return;
-    setRefs((cur) => [...cur, ...Array.from(list)].slice(0, 8));
+    const picked = Array.from(list);
+    const ok = picked.filter((f) => isAcceptedReference(f));
+    if (ok.length < picked.length) {
+      toast.error("Images only, up to 10MB each.");
+    }
+    setRefs((cur) => {
+      const next = [...cur, ...ok];
+      if (next.length > MAX_REFERENCE_FILES) {
+        toast.info(`Up to ${MAX_REFERENCE_FILES} references.`);
+      }
+      return next.slice(0, MAX_REFERENCE_FILES);
+    });
   }
 
   function startVoice() {
@@ -88,19 +108,6 @@ export default function PortalStudio() {
     }
     setSubmitting(true);
     const subject = `${catLabel}: ${idea.trim().slice(0, 60)}${idea.trim().length > 60 ? "…" : ""}`;
-    const body = [
-      `New ${catLabel} idea from ${athlete.first_name} ${athlete.last_name}.`,
-      "",
-      `Idea: ${idea.trim()}`,
-      vibes.length ? `Vibe: ${vibes.join(", ")}` : null,
-      notes.trim() ? `Include: ${notes.trim()}` : null,
-      // NOTE (Phase 3.5): reference-image upload needs a storage bucket + RLS
-      // decision. For now we flag the count so AX can request them.
-      refs.length ? `Reference images: ${refs.length} (athlete will share)` : null,
-    ]
-      .filter((x) => x !== null)
-      .join("\n");
-
     const { data: thread, error } = await supabase
       .from("portal_threads")
       .insert({
@@ -118,6 +125,35 @@ export default function PortalStudio() {
       toast.error("Couldn't send your idea. Try again.");
       return;
     }
+    // Upload references into the thread's own prefix, then describe exactly
+    // what landed. The picker used to discard these entirely and send a count.
+    const outcome: UploadOutcome = { uploaded: [], failed: [] };
+    for (let i = 0; i < refs.length; i++) {
+      const file = refs[i];
+      const path = referenceObjectPath(athlete.id, thread.id, i, file.name);
+      const { error: upErr } = await supabase.storage
+        .from(REFERENCE_BUCKET)
+        .upload(path, file, { cacheControl: "3600", upsert: false });
+      if (upErr) {
+        console.error("reference upload failed", upErr);
+        outcome.failed.push(file.name);
+        continue;
+      }
+      const { data: pub } = supabase.storage.from(REFERENCE_BUCKET).getPublicUrl(path);
+      outcome.uploaded.push(pub.publicUrl);
+    }
+
+    const body = [
+      `New ${catLabel} idea from ${athlete.first_name} ${athlete.last_name}.`,
+      "",
+      `Idea: ${idea.trim()}`,
+      vibes.length ? `Vibe: ${vibes.join(", ")}` : null,
+      notes.trim() ? `Include: ${notes.trim()}` : null,
+      referenceSummary(outcome),
+    ]
+      .filter((x) => x !== null)
+      .join("\n");
+
     await supabase.from("portal_messages").insert({
       thread_id: thread.id,
       organization_id: athlete.organization_id,
@@ -127,6 +163,8 @@ export default function PortalStudio() {
     });
     setSubmitting(false);
     setDone(true);
+    const warn = referenceToast(outcome);
+    if (warn) toast.error(warn);
     setIdea("");
     setVibes([]);
     setNotes("");
@@ -274,7 +312,11 @@ export default function PortalStudio() {
             {projects.map((p) => (
               <button
                 key={p.id}
-                onClick={() => navigate({ pathname: "/portal/messages", search: window.location.search })}
+                onClick={() => {
+                  const next = new URLSearchParams(window.location.search);
+                  next.set("thread", p.id);
+                  navigate({ pathname: "/portal/messages", search: `?${next.toString()}` });
+                }}
                 className="w-full text-left rounded-2xl border border-border bg-card p-4 hover:border-accent/40 transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">
