@@ -8,6 +8,7 @@ import { AccessSummaryCard } from "@/components/portal/AccessSummaryCard";
 import { PortalApprovals } from "@/components/portal/PortalApprovals";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import { getTierProgress, fmtUsd } from "@/lib/portal-config";
+import { entityVoice } from "@/lib/portal/entity-voice";
 import { CodeVault } from "@/components/portal/CodeVault";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -34,7 +35,8 @@ export default function PortalProfile() {
   const { wallet, transactions, loading: creditLoading } = useAthleteCredit(athlete.id);
 
   const tier = getTierProgress(sales.lifetimeRevenue);
-  const fullName = athlete.full_name || `${athlete.first_name} ${athlete.last_name}`.trim();
+  const voice = entityVoice(athlete);
+  const fullName = voice.name;
 
   const bestSellers = useMemo(() => {
     const titleById = new Map(products.map((p) => [p.id, p.title]));
@@ -55,7 +57,7 @@ export default function PortalProfile() {
   return (
     <main className="max-w-[1000px] mx-auto px-4 sm:px-6 py-6 space-y-8 pb-bottom-nav md:pb-32">
       <header>
-        <div className="text-[10px] uppercase tracking-[0.2em] text-accent font-bold">Your Brand</div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-accent font-bold">{voice.brandHeading}</div>
         <h1 className="text-2xl font-bold mt-1">{fullName}</h1>
       </header>
 

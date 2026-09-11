@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Mic, ImagePlus, X, ArrowRight, CheckCircle2, FolderOpen, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { entityVoice } from "@/lib/portal/entity-voice";
 import {
   isAcceptedReference,
   MAX_REFERENCE_FILES,
@@ -144,7 +145,7 @@ export default function PortalStudio() {
     }
 
     const body = [
-      `New ${catLabel} idea from ${athlete.first_name} ${athlete.last_name}.`,
+      `New ${catLabel} idea from ${entityVoice(athlete).name}.`,
       "",
       `Idea: ${idea.trim()}`,
       vibes.length ? `Vibe: ${vibes.join(", ")}` : null,

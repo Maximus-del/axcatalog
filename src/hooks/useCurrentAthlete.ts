@@ -6,6 +6,16 @@ import { useAuth } from "@/auth/AuthProvider";
 export type CurrentAthlete = {
   id: string;
   organization_id: string;
+  /**
+   * Authoritative name. full_name is a generated column (first || ' ' || last)
+   * and reads "Dashletics ." for an organisation whose last_name is a period —
+   * resolve through entityVoice(), never by concatenating.
+   */
+  display_name: string | null;
+  /** What this entity IS. Portal voice branches on it. */
+  entity_type: string | null;
+  /** How AX works with it — athlete, client, partner… */
+  roles: string[] | null;
   first_name: string;
   last_name: string;
   full_name: string | null;
@@ -67,7 +77,7 @@ export function useCurrentAthlete(): State {
       const { data, error: err } = await supabase
         .from("athletes")
         .select(
-          "id, organization_id, first_name, last_name, full_name, slug, jersey_number, position, league, current_team_id",
+          "id, organization_id, display_name, first_name, last_name, full_name, slug, jersey_number, position, league, current_team_id, entity_type, roles",
         )
         .eq("id", targetId)
         .maybeSingle();

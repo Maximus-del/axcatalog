@@ -1,9 +1,10 @@
 // Mobile-first. Global portal header: identity + tier + lifetime revenue.
 import { Menu, Bell, TrendingUp } from "lucide-react";
-import { avatarColorFor, initialsFor } from "@/lib/avatar-color";
+import { avatarColorFor } from "@/lib/avatar-color";
 import { useCountUp } from "@/hooks/useCountUp";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 import { getTierProgress } from "@/lib/portal-config";
+import { entityVoice } from "@/lib/portal/entity-voice";
 
 interface Props {
   onMenuClick: () => void;
@@ -19,9 +20,10 @@ interface Props {
  */
 export function AthleteHeader({ onMenuClick, onBellClick, trendPct = null }: Props) {
   const { athlete, sales } = usePortalData();
-  const fullName = athlete.full_name || `${athlete.first_name} ${athlete.last_name}`.trim();
+  const voice = entityVoice(athlete);
+  const fullName = voice.name;
   const color = avatarColorFor(fullName);
-  const initials = initialsFor(fullName);
+  const initials = voice.initials;
 
   const tier = getTierProgress(sales.lifetimeRevenue);
   const animated = useCountUp(sales.lifetimeRevenue ?? 0, 900);
@@ -30,7 +32,6 @@ export function AthleteHeader({ onMenuClick, onBellClick, trendPct = null }: Pro
       ? "$—"
       : `$${animated.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
-  const position = athlete.position ?? "Athlete";
 
   return (
     <header id="sec-home" className="relative bg-[hsl(var(--dark))] border-b border-border">
@@ -62,7 +63,7 @@ export function AthleteHeader({ onMenuClick, onBellClick, trendPct = null }: Pro
             </h1>
             <div className="flex items-center gap-2 mt-0.5">
               <span className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground truncate">
-                {position} · The Vault
+                {voice.subtitle} · The Vault
               </span>
             </div>
           </div>
@@ -93,12 +94,15 @@ export function AthleteHeader({ onMenuClick, onBellClick, trendPct = null }: Pro
           </div>
         </div>
 
-        {/* Tier chip row */}
-        <div className="pb-3 -mt-1">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/12 border border-accent/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-accent">
-            {tier.label}
-          </span>
-        </div>
+        {/* Tier chip row — Rookie -> Legend is athlete framing, so a school or
+            an organisation does not get told it is a "Rookie". */}
+        {voice.showsAthleteTier && (
+          <div className="pb-3 -mt-1">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/12 border border-accent/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-accent">
+              {tier.label}
+            </span>
+          </div>
+        )}
       </div>
     </header>
   );

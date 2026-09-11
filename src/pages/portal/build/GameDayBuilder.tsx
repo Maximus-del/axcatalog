@@ -18,6 +18,7 @@ import {
 import { fmtUsd } from "@/lib/portal-config";
 import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
+import { entityVoice } from "@/lib/portal/entity-voice";
 
 function unitPrice(p: PortalProduct): number {
   return p.athlete_unit_price ?? p.price ?? p.wholesale_price ?? 35;
@@ -31,6 +32,7 @@ export default function GameDayBuilder() {
 
   const [productId, setProductId] = useState<string | null>(null);
   const [color, setColor] = useState<string | null>(null);
+  const voice = entityVoice(athlete);
   const [useNumber, setUseNumber] = useState(true);
   const [useName, setUseName] = useState(true);
   const [qtys, setQtys] = useState<Record<string, number>>({});
@@ -65,8 +67,10 @@ export default function GameDayBuilder() {
     }
     setSubmitting(true);
     const personalization = [
-      useNumber && athlete.jersey_number ? `#${athlete.jersey_number}` : null,
-      useName ? `${athlete.first_name} ${athlete.last_name}`.trim() : null,
+      voice.supportsJerseyPersonalisation && useNumber && athlete.jersey_number
+        ? `#${athlete.jersey_number}`
+        : null,
+      useName ? voice.name : null,
     ].filter(Boolean);
 
     const items: PortalOrderItem[] = Object.entries(qtys)
@@ -179,21 +183,27 @@ export default function GameDayBuilder() {
 
       {product && (
         <>
-          {/* Step 2: Personalization */}
+          {/* Step 2: Personalization — a school has no jersey number, so this
+              whole step is athlete-only rather than offering "use my number" to
+              Abbotsford Senior Secondary. */}
           <Section n={2} title="Personalization">
-            <div className="space-y-2">
-              <Toggle
-                label={`Use my number${athlete.jersey_number ? ` (#${athlete.jersey_number})` : ""}`}
-                checked={useNumber}
-                onChange={setUseNumber}
-                disabled={!athlete.jersey_number}
-              />
-              <Toggle
-                label={`Use my name (${athlete.first_name} ${athlete.last_name})`}
-                checked={useName}
-                onChange={setUseName}
-              />
-            </div>
+            {voice.supportsJerseyPersonalisation ? (
+              <div className="space-y-2">
+                <Toggle
+                  label={`Use my number${athlete.jersey_number ? ` (#${athlete.jersey_number})` : ""}`}
+                  checked={useNumber}
+                  onChange={setUseNumber}
+                  disabled={!athlete.jersey_number}
+                />
+                <Toggle
+                  label={`Use my name (${voice.name})`}
+                  checked={useName}
+                  onChange={setUseName}
+                />
+              </div>
+            ) : (
+              <Toggle label={`Print ${voice.name}`} checked={useName} onChange={setUseName} />
+            )}
             {product.colors.length > 0 && (
               <div className="mt-4">
                 <div className="ax-label mb-2">Color</div>
