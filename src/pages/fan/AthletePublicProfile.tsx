@@ -15,6 +15,7 @@ import { ACCESS_TYPES } from "@/lib/ecosystem/content-types";
 import { earlyAccess } from "@/lib/ecosystem/access";
 import type { PublicEvent } from "@/lib/ecosystem/content";
 import { AthleteHero, AthleteStatBar } from "@/components/fan/ui/AthleteHero";
+import { FanBottomNav } from "@/components/fan/FanBottomNav";
 import { FollowButton } from "@/components/fan/FollowButton";
 import { AccessButton } from "@/components/fan/ui/AccessButton";
 import { FeedCard } from "@/components/fan/ui/FeedCard";
@@ -56,7 +57,7 @@ export default function AthletePublicProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-16">
+    <div className={cn("min-h-screen bg-background text-foreground", canFollow && "pb-16")}>
       <header className="sticky top-0 z-40 bg-[hsl(var(--dark))]/95 backdrop-blur-md border-b border-border">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
           <Link to={canFollow ? "/feed/discover" : "/join"} className="h-9 w-9 -ml-2 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground">
@@ -155,6 +156,8 @@ export default function AthletePublicProfile() {
           </>
         )}
       </main>
+
+      {canFollow && <FanBottomNav />}
     </div>
   );
 }
