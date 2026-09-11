@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PendingPanel } from "@/components/portal/PendingPanel";
 
 interface TeamRow {
   id: string;
@@ -57,7 +58,15 @@ export function EraComparison({ athleteId }: Props) {
   if (teams === null) {
     return <Skeleton className="h-48 rounded-xl" />;
   }
-  if (teams.length < 2) return null;
+  if (teams.length < 2) {
+    return (
+      <PendingPanel
+        icon={<ArrowUp className="h-5 w-5" />}
+        title="Nothing to compare yet"
+        body="Once you've been with a second team, this compares how your merch performed across each era."
+      />
+    );
+  }
 
   const [current, previous] = teams;
   const fmt = (d: string | null) =>
@@ -72,11 +81,9 @@ export function EraComparison({ athleteId }: Props) {
         revenue="$—"
         tone="accent"
       />
-      <div className="flex justify-center">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/15 text-accent text-xs font-bold uppercase tracking-[0.14em] border border-accent/30">
-          <ArrowUp className="h-3.5 w-3.5" /> On pace vs prior era
-        </span>
-      </div>
+      <p className="text-center text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+        Per-era revenue needs orders attributed to a team
+      </p>
       <EraCard
         team={previous}
         label="Previous Era"

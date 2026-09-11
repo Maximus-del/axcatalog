@@ -30,12 +30,6 @@ import { cn } from "@/lib/utils";
 const TABS = ["home", "access", "shop", "ideas", "camps", "about"] as const;
 type Tab = (typeof TABS)[number];
 
-function mockFollowers(slug: string): string {
-  let h = 0;
-  for (const c of slug) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return `${(h % 380) + 20}K`;
-}
-
 export default function AthletePublicProfile() {
   const { slug } = useParams<{ slug: string }>();
   const { session, hasFanProfile } = useAuth();
@@ -97,7 +91,7 @@ export default function AthletePublicProfile() {
               )}
             </div>
 
-            <AthleteStatBar followers={mockFollowers(athlete.slug)} drops={products.length} posts={accessContent.length} />
+            <AthleteStatBar drops={products.length} posts={accessContent.length} />
 
             <div className="flex gap-1 mt-5 border-b border-border overflow-x-auto scroll-touch">
               {TABS.map((t) => (

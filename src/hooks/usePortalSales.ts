@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { monthlyRevenue, type RevenuePoint } from "@/lib/portal/revenue-series";
 
 export interface ProductSales {
   quantity: number;
@@ -10,6 +11,8 @@ export interface PortalSales {
   lifetimeRevenue: number;
   totalOrders: number;
   byProduct: Map<string, ProductSales>;
+  /** Attributed revenue per calendar month, last 12, oldest first. */
+  monthly: RevenuePoint[];
   loading: boolean;
 }
 
@@ -22,12 +25,13 @@ export function usePortalSales(organizationId: string | null): PortalSales {
     lifetimeRevenue: 0,
     totalOrders: 0,
     byProduct: new Map(),
+    monthly: [],
     loading: false,
   });
 
   useEffect(() => {
     if (!organizationId) {
-      setState({ lifetimeRevenue: 0, totalOrders: 0, byProduct: new Map(), loading: false });
+      setState({ lifetimeRevenue: 0, totalOrders: 0, byProduct: new Map(), monthly: [], loading: false });
       return;
     }
     let cancelled = false;
@@ -41,11 +45,12 @@ export function usePortalSales(organizationId: string | null): PortalSales {
       let revenue = 0;
       const orderIds = new Set<string>();
       const byProduct = new Map<string, ProductSales>();
+      const dated: Array<{ orderDate: string | null; lineTotal: number }> = [];
 
       while (true) {
         const { data, error } = await supabase
           .from("order_line_items")
-          .select("order_id, product_id, quantity, line_total, orders!inner(id, is_test)")
+          .select("order_id, product_id, quantity, line_total, orders!inner(id, is_test, order_date)")
           .eq("attributed_org_id", organizationId)
           .eq("orders.is_test", false)
           .order("id", { ascending: true })
@@ -57,10 +62,13 @@ export function usePortalSales(organizationId: string | null): PortalSales {
           product_id: string | null;
           quantity: number | null;
           line_total: number | null;
+          orders?: { order_date?: string | null } | Array<{ order_date?: string | null }> | null;
         }>) {
           const lt = Number(r.line_total ?? 0);
           revenue += lt;
           orderIds.add(r.order_id);
+          const joined = Array.isArray(r.orders) ? r.orders[0] : r.orders;
+          dated.push({ orderDate: joined?.order_date ?? null, lineTotal: lt });
           if (r.product_id) {
             const cur = byProduct.get(r.product_id) ?? { quantity: 0, revenue: 0 };
             cur.quantity += Number(r.quantity ?? 0);
@@ -77,6 +85,7 @@ export function usePortalSales(organizationId: string | null): PortalSales {
         lifetimeRevenue: Math.round(revenue * 100) / 100,
         totalOrders: orderIds.size,
         byProduct,
+        monthly: monthlyRevenue(dated),
         loading: false,
       });
     })();

@@ -16,14 +16,22 @@ export function AthleteHero({ athlete }: { athlete: PublicAthlete }) {
   );
 }
 
-export function AthleteStatBar({ followers, drops, posts }: { followers: string; drops: number; posts: number }) {
+/**
+ * `followers` is optional and currently never passed. It used to be a string
+ * hashed from the athlete's slug — a fabricated public number like "142K" shown
+ * to fans on the athlete's own page. A real count needs a public aggregate over
+ * athlete_follows, which RLS does not expose (a fan may read only their own
+ * rows), so the stat is omitted rather than invented.
+ */
+export function AthleteStatBar({ followers, drops, posts }: { followers?: string; drops: number; posts: number }) {
+  const stats = [
+    ...(followers ? [{ v: followers, l: "Followers" }] : []),
+    { v: String(drops), l: "Drops" },
+    { v: String(posts), l: "Access Posts" },
+  ];
   return (
-    <div className="grid grid-cols-3 gap-3 mt-3">
-      {[
-        { v: followers, l: "Followers" },
-        { v: String(drops), l: "Drops" },
-        { v: String(posts), l: "Access Posts" },
-      ].map((s) => (
+    <div className={`grid gap-3 mt-3 ${stats.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+      {stats.map((s) => (
         <div key={s.l} className="rounded-2xl border border-border bg-card py-3 text-center">
           <div className="text-lg font-black text-accent">{s.v}</div>
           <div className="ax-label mt-0.5">{s.l}</div>

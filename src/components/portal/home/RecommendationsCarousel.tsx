@@ -1,5 +1,6 @@
 // Mobile-first. Test at 375px before merging.
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { TrendingUp, Sparkles, Target, Users } from "lucide-react";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -9,36 +10,50 @@ interface Rec {
   title: string;
   body: string;
   cta: string;
+  to: string;
   tone: "accent" | "purple" | "blue" | "amber";
 }
 
+// These used to quote statistics nobody had measured — "fans buy 2.4x more in
+// the 48 hrs after a new drop", "your last drop was 12 days ago", "23 superfans
+// haven't bought in 60+ days", "most of your audience is in Atlanta". All four
+// were string literals, identical for every athlete, and two of the four cards
+// carried an enabled button with no click handler at all.
+//
+// They are prompts, not analytics, so they now read as prompts and every one of
+// them goes somewhere. When there is real per-athlete data to lead with, these
+// bodies are where it belongs.
 const RECS: Rec[] = [
   {
     icon: TrendingUp,
-    title: "Promote your top tee",
-    body: "Your highest-performing item this week is ready to share.",
-    cta: "Open share kit",
+    title: "Share what's selling",
+    body: "Ready-to-post images and captions for the products already in your lineup.",
+    cta: "Open content",
+    to: "/portal/content",
     tone: "accent",
   },
   {
     icon: Sparkles,
-    title: "Drop a fresh design",
-    body: "Fans buy 2.4x more in the 48 hrs after a new drop. Your last drop was 12 days ago.",
-    cta: "Plan a drop",
+    title: "Start something new",
+    body: "Send the AX team an idea — a vibe, a reference, a sketch — and they'll build it out.",
+    cta: "Open studio",
+    to: "/portal/studio",
     tone: "purple",
   },
   {
     icon: Target,
-    title: "Re-engage past buyers",
-    body: "23 superfans haven't bought in 60+ days. Send them a heads-up.",
-    cta: "Coming soon",
+    title: "Order for an event",
+    body: "Camp, game day or team order — pick pieces and sizes and we'll quote it.",
+    cta: "Build an order",
+    to: "/portal/build/camp",
     tone: "blue",
   },
   {
     icon: Users,
-    title: "Tap your fanbase",
-    body: "Most of your audience is in Atlanta — consider a regional tee.",
-    cta: "Coming soon",
+    title: "See how it's performing",
+    body: "Attributed revenue by month and the products doing the work.",
+    cta: "Open analytics",
+    to: "/portal/analytics",
     tone: "amber",
   },
 ];
@@ -57,6 +72,7 @@ const TONE_ICON: Record<Rec["tone"], string> = {
 };
 
 export function RecommendationsCarousel() {
+  const navigate = useNavigate();
   const railRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
@@ -113,8 +129,8 @@ export function RecommendationsCarousel() {
               </div>
               <button
                 type="button"
-                disabled={r.cta === "Coming soon"}
-                className="pressable mt-auto self-start text-xs font-bold uppercase tracking-[0.16em] text-accent disabled:text-muted-foreground disabled:opacity-60"
+                onClick={() => navigate(r.to)}
+                className="pressable mt-auto self-start text-xs font-bold uppercase tracking-[0.16em] text-accent"
               >
                 {r.cta} →
               </button>

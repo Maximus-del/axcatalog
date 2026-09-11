@@ -22,7 +22,7 @@ export default function PortalAnalytics() {
           </div>
           <div>
             <div className="ax-label mb-3">Revenue Over Time</div>
-            <AnalyticsRevenueChart />
+            <AnalyticsRevenueChart monthly={sales.monthly} loading={sales.loading} />
           </div>
           <div>
             <div className="ax-label mb-3">Recent Orders</div>
