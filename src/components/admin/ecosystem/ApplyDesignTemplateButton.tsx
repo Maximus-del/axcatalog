@@ -3,6 +3,7 @@
 // a preference profile (from the Q&A), templates are ranked with an explainable
 // match score ("because: vintage, bold, football").
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { Loader2, Sparkles, Check } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -75,7 +76,10 @@ export function ApplyDesignTemplateButton({ athleteId, organizationId }: { athle
                 </div>
               ))}
             </div>
-            <div className="mt-4 text-right">
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <Link to="/admin/design-templates" className="text-[12px] font-semibold text-[hsl(var(--ax-accent))] hover:underline">
+                Browse the full library →
+              </Link>
               <button onClick={() => setOpen(false)} className="h-9 px-4 rounded-lg border border-[hsl(var(--ax-border))] font-semibold text-sm">Close</button>
             </div>
           </div>

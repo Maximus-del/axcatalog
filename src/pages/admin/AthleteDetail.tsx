@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { differenceInYears, parseISO } from "date-fns";
-import { Pencil, Plus, Package, Palette, FolderOpen, Eye } from "lucide-react";
+import { Pencil, Plus, Package, Palette, FolderOpen, Eye, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,29 @@ import { AthleteDropsTab } from "@/components/admin/ecosystem/AthleteDropsTab";
 import { AthleteCollectionsTab } from "@/components/admin/ecosystem/AthleteCollectionsTab";
 import { ApplyTemplateButton } from "@/components/admin/ecosystem/ApplyTemplateButton";
 import { ApplyDesignTemplateButton } from "@/components/admin/ecosystem/ApplyDesignTemplateButton";
+import { RapidStartButton } from "@/components/admin/ecosystem/RapidStartButton";
+import {
+  QuickAddProductDialog,
+  QuickAddDesignDialog,
+  QuickAddCollectionDialog,
+} from "@/components/admin/ecosystem/AthleteMerchDialogs";
+import { ProductStatusChip, PendingClock } from "@/components/admin/ecosystem/ProductStatusChip";
+import { toProductLike } from "@/lib/ecosystem/merch";
+import { EntityRolesDialog } from "@/components/admin/ecosystem/EntityRolesDialog";
+import { EntityMerchWorkspace } from "@/components/admin/ecosystem/EntityMerchWorkspace";
+import { UploadConceptsDialog } from "@/components/admin/ecosystem/UploadConceptsDialog";
+import { UploadMockupsDialog } from "@/components/admin/ecosystem/UploadMockupsDialog";
+import { AddInspirationDialog } from "@/components/admin/ecosystem/AddInspirationDialog";
+import { SubmissionsTab } from "@/components/admin/ecosystem/SubmissionsTab";
+import { listInspiration, type InspirationImage } from "@/lib/ecosystem/board";
+import { useTabParam, useFreeTabParam } from "@/hooks/useTabParam";
+import { backTargetOf } from "@/hooks/useBackTarget";
+import {
+  displayNameOf, entityTypeOf, hasModule, hasRole, isPerson, rolesOf,
+  ENTITY_TYPES, AX_ROLES,
+} from "@/lib/ecosystem/entity";
 
-const MGMT_TABS = ["products", "collections", "drops", "content", "access", "events"] as const;
+const MGMT_TABS = ["merch", "ideas", "collections", "drops", "content", "access", "events"] as const;
 
 const UNTAGGED_KEY = "__untagged__";
 const GENERAL_KEY = "__general__";
@@ -41,6 +62,10 @@ interface Athlete {
   current_team_id: string | null;
   notes: string | null;
   metadata: Record<string, unknown> | null;
+  entity_type?: string | null;
+  roles?: string[] | null;
+  display_name?: string | null;
+  capabilities?: Record<string, boolean> | null;
 }
 
 interface Membership {
@@ -57,6 +82,18 @@ interface ProductLink {
   product: {
     id: string;
     title: string;
+    description?: string | null;
+    blank_id?: string | null;
+    updated_at?: string | null;
+    approval_state?: string | null;
+    approval_note?: string | null;
+    shopify_product_id?: string | null;
+    shopify_handle?: string | null;
+    shopify_sync_status?: string | null;
+    shopify_last_synced_at?: string | null;
+    metadata?: Record<string, unknown> | null;
+    designs?: { design_id: string }[];
+    collections?: { collection_id: string }[];
     price: number | null;
     status: string;
     images: Array<{ storage_path: string; storage_bucket: string }>;
@@ -106,14 +143,32 @@ export default function AthleteDetail() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [membershipOpen, setMembershipOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("");
-  const [mgmtTab, setMgmtTab] = useState<(typeof MGMT_TABS)[number]>("products");
+  // Both tabs live in the URL, so leaving for a product and coming back lands
+  // exactly where you were rather than on the default.
+  const [activeTab, setActiveTab] = useFreeTabParam("team", "");
+  const [mgmtTab, setMgmtTab] = useTabParam("tab", MGMT_TABS, "merch");
+  // load() runs long after the render that created it; a ref keeps it reading
+  // the tab that is selected NOW rather than the one at closure time.
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+
+  const location = useLocation();
+  // Creating from the athlete page — the whole point is not leaving this context.
+  const [addProduct, setAddProduct] = useState<{ concept: boolean } | null>(null);
+  const [addDesign, setAddDesign] = useState(false);
+  const [addCollection, setAddCollection] = useState(false);
+  const [entityOpen, setEntityOpen] = useState(false);
+  const [uploadConcepts, setUploadConcepts] = useState(false);
+  const [uploadMockups, setUploadMockups] = useState(false);
+  const [addInspiration, setAddInspiration] = useState(false);
+  const [inspiration, setInspiration] = useState<InspirationImage[]>([]);
+  const [mockups, setMockups] = useState<Array<{ id: string; title: string; shot_type: string | null; status: string; storage_bucket: string | null; storage_path: string | null }>>([]);
 
   async function load() {
     if (!id) return;
     setLoading(true);
 
-    const [aRes, mRes, pRes, dRes, cRes] = await Promise.all([
+    const [aRes, mRes, pRes, dRes, cRes, mkRes] = await Promise.all([
       supabase.from("athletes").select("*").eq("id", id).maybeSingle(),
       supabase
         .from("team_memberships")
@@ -123,11 +178,17 @@ export default function AthleteDetail() {
       supabase
         .from("product_athletes")
         .select(
-          `id, team_id_at_release,
-           product:products(id, title, price, status,
-             images:product_images(storage_path, storage_bucket))`,
+          `id, team_id_at_release, sort_order,
+           product:products(id, title, description, price, status, blank_id, updated_at,
+             approval_state, approval_note,
+             shopify_product_id, shopify_handle, shopify_sync_status, shopify_last_synced_at,
+             metadata,
+             images:product_images(storage_path, storage_bucket),
+             designs:product_designs(design_id),
+             collections:collection_products(collection_id))`,
         )
-        .eq("athlete_id", id),
+        .eq("athlete_id", id)
+        .order("sort_order"),
       supabase
         .from("design_athletes")
         .select(
@@ -140,9 +201,17 @@ export default function AthleteDetail() {
         .from("collections")
         .select("id, name, description, status, team_id")
         .eq("athlete_id", id),
+      supabase
+        .from("mockups")
+        .select("id, title, shot_type, status, storage_bucket, storage_path")
+        .eq("athlete_id", id)
+        .order("sort_order")
+        .order("created_at", { ascending: false }),
     ]);
 
     setAthlete((aRes.data as Athlete | null) ?? null);
+    setMockups((mkRes.data ?? []) as never);
+    listInspiration(id).then(setInspiration).catch(() => setInspiration([]));
     const memships = (mRes.data ?? []).map((m) => ({
       ...m,
       team: Array.isArray(m.team) ? (m.team[0] ?? null) : (m.team as Membership["team"]),
@@ -180,12 +249,15 @@ export default function AthleteDetail() {
       })),
     );
 
-    // Default tab
-    if (memships.length === 0) {
-      setActiveTab(GENERAL_KEY);
-    } else {
-      const current = memships.find((m) => !m.end_date);
-      setActiveTab(current?.team_id ?? memships[0].team_id);
+    // Default era tab — but never override one the URL already carries, or a
+    // return trip would snap back to the current team.
+    if (!activeTabRef.current) {
+      if (memships.length === 0) {
+        setActiveTab(GENERAL_KEY);
+      } else {
+        const current = memships.find((m) => !m.end_date);
+        setActiveTab(current?.team_id ?? memships[0].team_id);
+      }
     }
     setLoading(false);
   }
@@ -195,7 +267,7 @@ export default function AthleteDetail() {
   }, [id]);
 
   const name = athlete
-    ? athlete.full_name ?? `${athlete.first_name} ${athlete.last_name}`
+    ? displayNameOf(athlete)
     : "";
 
   const tabs = useMemo(() => {
@@ -330,28 +402,47 @@ export default function AthleteDetail() {
                   {currentTeam.name}
                 </span>
               )}
-              {athlete.position && <span>{athlete.position}</span>}
-              {athlete.jersey_number && (
+              {/* Athletic detail only makes sense for a person. */}
+              {isPerson(athlete.entity_type) && athlete.position && <span>{athlete.position}</span>}
+              {isPerson(athlete.entity_type) && athlete.jersey_number && (
                 <span>#{athlete.jersey_number.replace(/^#/, "")}</span>
               )}
-              {athlete.league && <span>{athlete.league}</span>}
+              {isPerson(athlete.entity_type) && athlete.league && <span>{athlete.league}</span>}
+              {!isPerson(athlete.entity_type) && (
+                <span className="px-2 py-0.5 rounded-md bg-muted text-foreground text-xs capitalize">
+                  {ENTITY_TYPES.find((t) => t.value === entityTypeOf(athlete))?.label ?? "Entity"}
+                </span>
+              )}
+              {rolesOf(athlete).map((r) => (
+                <span key={r} className="px-2 py-0.5 rounded-md bg-[hsl(var(--ax-accent)/0.15)] text-[hsl(var(--ax-accent))] text-[10px] font-bold uppercase tracking-wider">
+                  {AX_ROLES.find((x) => x.value === r)?.label ?? r}
+                </span>
+              ))}
               <span className={STATUS_BADGE[athlete.status]}>{athlete.status}</span>
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {hasModule(athlete, "fan_profile") && (
           <Button variant="outline" asChild className="gap-2">
             <Link to={`/a/${athlete.slug}`}>
               <Eye className="h-4 w-4" /> View Fan Profile
             </Link>
           </Button>
+          )}
+          {hasModule(athlete, "athlete_dashboard") && (
           <Button variant="outline" asChild className="gap-2">
             <Link to={`/portal?as=${athlete.id}`}>
               <Eye className="h-4 w-4" /> Athlete Dashboard
             </Link>
           </Button>
+          )}
           <ApplyTemplateButton athleteId={athlete.id} />
           <ApplyDesignTemplateButton athleteId={athlete.id} organizationId={athlete.organization_id} />
+          <RapidStartButton athleteId={athlete.id} organizationId={athlete.organization_id} lastName={athlete.last_name} />
+          <Button variant="outline" onClick={() => setEntityOpen(true)} className="gap-2">
+            <ShieldCheck className="h-4 w-4" /> Type &amp; Roles
+          </Button>
           <Button variant="outline" onClick={() => setMembershipOpen(true)} className="gap-2">
             <Plus className="h-4 w-4" /> Add Team Membership
           </Button>
@@ -379,8 +470,43 @@ export default function AthleteDetail() {
         ))}
       </div>
 
-      {mgmtTab === "collections" ? (
-        <AthleteCollectionsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
+      {mgmtTab === "merch" ? (
+        <EntityMerchWorkspace
+          entity={athlete}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          backTo={backTargetOf(location.pathname, location.search, name)}
+          products={products
+            .map((pl) => pl.product)
+            .filter(Boolean)
+            .map((p) => ({
+              ...p!,
+              collection_ids: (p!.collections ?? []).map((c) => c.collection_id),
+            }))}
+          designs={designs.map((d) => d.design).filter(Boolean) as never}
+          mockups={mockups}
+          inspiration={inspiration}
+          collections={collections}
+          onChanged={load}
+          onAddProduct={() => setAddProduct({ concept: false })}
+          onUploadConcepts={() => setUploadConcepts(true)}
+          onAddDesign={() => setAddDesign(true)}
+          onCreateCollection={() => setAddCollection(true)}
+          onAddMockups={() => setUploadMockups(true)}
+          onAddInspiration={() => setAddInspiration(true)}
+        />
+      ) : mgmtTab === "ideas" ? (
+        <SubmissionsTab
+          athleteId={athlete.id}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          backTo={backTargetOf(location.pathname, location.search, name)}
+          onConverted={load}
+        />
+      ) : mgmtTab === "collections" ? (
+        <AthleteCollectionsTab
+          athleteId={athlete.id}
+          organizationId={athlete.organization_id}
+          backTo={backTargetOf(location.pathname, location.search, name)}
+        />
       ) : mgmtTab === "drops" ? (
         <AthleteDropsTab athleteId={athlete.id} organizationId={athlete.organization_id} />
       ) : mgmtTab === "content" ? (
@@ -412,7 +538,14 @@ export default function AthleteDetail() {
                 title="Products"
                 icon={<Package className="h-4 w-4" />}
                 count={tabProducts.length}
-                emptyText="No products yet for this era"
+                emptyText="No products yet"
+                emptyHint={`Create the first product for ${name}, or upload a concept while the setup gets finished.`}
+                actions={
+                  <>
+                    <SectionAction onClick={() => setAddProduct({ concept: false })}>+ Add Product</SectionAction>
+                    <SectionAction onClick={() => setAddProduct({ concept: true })}>+ Upload Concept</SectionAction>
+                  </>
+                }
               >
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {tabProducts.slice(0, 12).map((pl) =>
@@ -421,7 +554,10 @@ export default function AthleteDetail() {
                         key={pl.id}
                         className="ax-card-hover w-44 shrink-0 p-3"
                       >
-                        <div className="aspect-square rounded-md bg-muted mb-2 overflow-hidden">
+                        <div className="aspect-square rounded-md bg-muted mb-2 overflow-hidden relative">
+                          <span className="absolute top-1.5 right-1.5 z-10">
+                            <PendingClock product={toProductLike(pl.product)} />
+                          </span>
                           {pl.product.images?.[0] && (
                             <img
                               src={
@@ -439,15 +575,13 @@ export default function AthleteDetail() {
                         <div className="text-sm font-medium truncate">
                           {pl.product.title}
                         </div>
-                        <div className="flex items-center justify-between mt-1">
+                        <div className="flex items-center justify-between mt-1 gap-1">
                           <span className="text-xs text-muted-foreground">
                             {pl.product.price != null
                               ? `$${Number(pl.product.price).toFixed(2)}`
                               : "—"}
                           </span>
-                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {pl.product.status}
-                          </span>
+                          <ProductStatusChip product={toProductLike(pl.product)} />
                         </div>
                       </div>
                     ) : null,
@@ -460,7 +594,9 @@ export default function AthleteDetail() {
                 title="Designs"
                 icon={<Palette className="h-4 w-4" />}
                 count={tabDesigns.length}
-                emptyText="No designs yet for this era"
+                emptyText="No designs yet"
+                emptyHint="Upload final artwork — transparent PNG, isolated, high resolution."
+                actions={<SectionAction onClick={() => setAddDesign(true)}>+ Add Design</SectionAction>}
               >
                 <div className="flex gap-3 overflow-x-auto pb-2">
                   {tabDesigns.slice(0, 12).map((dl, i) =>
@@ -489,7 +625,9 @@ export default function AthleteDetail() {
                 title="Collections"
                 icon={<FolderOpen className="h-4 w-4" />}
                 count={tabCollections.length}
-                emptyText="No collections yet for this era"
+                emptyText="No collections yet"
+                emptyHint="A collection is the permanent creative family. Drops release from it."
+                actions={<SectionAction onClick={() => setAddCollection(true)}>+ Create Collection</SectionAction>}
               >
                 <div className="space-y-2">
                   {tabCollections.map((c) => (
@@ -553,7 +691,72 @@ export default function AthleteDetail() {
         organizationId={athlete.organization_id}
         onSaved={load}
       />
+
+      {addProduct && athlete && (
+        <QuickAddProductDialog
+          athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          conceptOnly={addProduct.concept}
+          onClose={() => setAddProduct(null)}
+          onCreated={load}
+        />
+      )}
+      {addDesign && athlete && (
+        <QuickAddDesignDialog
+          athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setAddDesign(false)}
+          onCreated={load}
+        />
+      )}
+      {addInspiration && athlete && (
+        <AddInspirationDialog
+          entity={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setAddInspiration(false)}
+          onCreated={load}
+        />
+      )}
+      {uploadMockups && athlete && (
+        <UploadMockupsDialog
+          entity={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setUploadMockups(false)}
+          onCreated={load}
+        />
+      )}
+      {uploadConcepts && athlete && (
+        <UploadConceptsDialog
+          entity={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          teamId={activeTab !== GENERAL_KEY && activeTab !== UNTAGGED_KEY ? activeTab : null}
+          onClose={() => setUploadConcepts(false)}
+          onCreated={load}
+        />
+      )}
+      {entityOpen && athlete && (
+        <EntityRolesDialog
+          entity={athlete}
+          onClose={() => setEntityOpen(false)}
+          onSaved={load}
+        />
+      )}
+      {addCollection && athlete && (
+        <QuickAddCollectionDialog
+          athlete={{ id: athlete.id, organization_id: athlete.organization_id, name }}
+          onClose={() => setAddCollection(false)}
+          onCreated={load}
+        />
+      )}
     </div>
+  );
+}
+
+function SectionAction({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="text-xs font-semibold text-[hsl(var(--ax-accent))] hover:underline whitespace-nowrap"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -562,12 +765,17 @@ function EraSection({
   icon,
   count,
   emptyText,
+  emptyHint,
+  actions,
   children,
 }: {
   title: string;
   icon: React.ReactNode;
   count: number;
   emptyText: string;
+  emptyHint?: string;
+  /** Create affordances — shown in the header and again in the empty state. */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -580,19 +788,18 @@ function EraSection({
             ({count})
           </span>
         </div>
-        {count > 12 && (
-          <button
-            type="button"
-            className="text-xs text-accent hover:underline"
-            onClick={() => console.log(`View all ${title.toLowerCase()}`)}
-          >
-            View all {count} {title.toLowerCase()} →
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {count > 12 && (
+            <span className="text-xs text-muted-foreground">{count} total</span>
+          )}
+          {actions}
+        </div>
       </div>
       {count === 0 ? (
-        <div className="ax-card p-6 text-center text-sm text-muted-foreground">
-          {emptyText}
+        <div className="ax-card p-6 text-center space-y-2">
+          <div className="text-sm text-muted-foreground">{emptyText}</div>
+          {emptyHint && <div className="text-xs text-muted-foreground">{emptyHint}</div>}
+          {actions && <div className="flex items-center justify-center gap-2 pt-1">{actions}</div>}
         </div>
       ) : (
         children

@@ -8,6 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useFanEvents } from "@/hooks/useFanEvents";
+import { Skeleton } from "@/components/ui/skeleton";
 import { athleteName } from "@/lib/ecosystem/types";
 import type { NotifItem } from "@/lib/ecosystem/feed-engine";
 import { agoLabel } from "@/lib/ecosystem/demo-content";
@@ -24,7 +25,7 @@ export default function FanNotifications() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { notifications, followed } = useFanEvents();
+  const { notifications, followed, loading } = useFanEvents();
 
   const [fullPrefs, setFullPrefs] = useState<Record<string, unknown>>({});
   const [prefs, setPrefs] = useState<Prefs>({});
@@ -42,8 +43,13 @@ export default function FanNotifications() {
       setPrefs((p.notif as Prefs) ?? {});
       const iso = p.notif_seen as string | undefined;
       seenThreshold.current = iso ? Math.max(0, (Date.now() - new Date(iso).getTime()) / 3_600_000) : 24 * 30;
-      // Mark seen now so the bell badge clears.
-      await supabase.from("fan_profiles" as never).update({ preferences: { ...p, notif_seen: new Date().toISOString() } } as never).eq("id", user.id);
+      // Mark seen now so the bell badge clears. `merged` is also pushed into
+      // state: toggle() writes { ...fullPrefs, notif } later, and if fullPrefs
+      // still held the pre-mount object that write would revert notif_seen and
+      // light the bell back up with everything unread.
+      const merged = { ...p, notif_seen: new Date().toISOString() };
+      setFullPrefs(merged);
+      await supabase.from("fan_profiles" as never).update({ preferences: merged } as never).eq("id", user.id);
       qc.invalidateQueries({ queryKey: ["notif-seen", user.id] });
     })();
     return () => { cancelled = true; };
@@ -54,7 +60,10 @@ export default function FanNotifications() {
   async function toggle(athleteId: string, cat: Cat) {
     const next: Prefs = { ...prefs, [athleteId]: { ...prefs[athleteId], [cat]: !enabled(athleteId, cat) } };
     setPrefs(next);
-    if (user) await supabase.from("fan_profiles" as never).update({ preferences: { ...fullPrefs, notif: next } } as never).eq("id", user.id);
+    if (!user) return;
+    const merged = { ...fullPrefs, notif: next };
+    setFullPrefs(merged);
+    await supabase.from("fan_profiles" as never).update({ preferences: merged } as never).eq("id", user.id);
   }
 
   const visible = useMemo(() => notifications.filter((n) => enabled(n.athleteId, n.cat)), [notifications, enabled]);
@@ -70,7 +79,15 @@ export default function FanNotifications() {
         )}
       </div>
 
-      {visible.length === 0 ? (
+      {loading ? (
+        // Without this the page rendered "You're all caught up" on every open,
+        // for as long as the fetch took, before the list appeared underneath it.
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 rounded-2xl" />
+          ))}
+        </div>
+      ) : visible.length === 0 ? (
         <EmptyState icon={Bell} title="You're all caught up" body="Follow athletes to get drops, camps, and content alerts here." ctaLabel="Discover Athletes" ctaTo="/feed/discover" />
       ) : (
         <ul className="space-y-2">

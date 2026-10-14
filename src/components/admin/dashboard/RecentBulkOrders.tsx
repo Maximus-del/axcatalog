@@ -4,7 +4,7 @@ import { formatDistanceToNow } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/admin/orders/StatusBadge";
-import type { BulkOrderStatus } from "@/lib/order-status";
+import { DRAFT_STATUS, type BulkOrderStatus } from "@/lib/order-status";
 
 interface RecentOrder {
   id: string;
@@ -30,6 +30,7 @@ export function RecentBulkOrders() {
          athlete:athletes!bulk_order_requests_athlete_id_fkey(full_name, first_name, last_name),
          team:teams!bulk_order_requests_team_id_fkey(name)`,
       )
+      .neq("status", DRAFT_STATUS)
       .order("created_at", { ascending: false })
       .limit(5)
       .then(({ data }) => {

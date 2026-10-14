@@ -61,7 +61,7 @@ export default function FanShop() {
       )}
 
       <section>
-        <h2 className="ax-section-header mb-3">New Drops</h2>
+        <h2 className="ax-section-header mb-3">Latest</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {allProducts.slice(0, 9).map((p) => (
             <ProductCard key={p.id} product={p} athleteName={nameById.get(p.athlete_id)} />
@@ -69,14 +69,16 @@ export default function FanShop() {
         </div>
       </section>
 
-      <section>
-        <h2 className="ax-section-header mb-3">All Athletes</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {allProducts.map((p) => (
-            <ProductCard key={p.id} product={p} athleteName={nameById.get(p.athlete_id)} />
-          ))}
-        </div>
-      </section>
+      {allProducts.length > 9 && (
+        <section>
+          <h2 className="ax-section-header mb-3">More from the network</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {allProducts.slice(9).map((p) => (
+              <ProductCard key={p.id} product={p} athleteName={nameById.get(p.athlete_id)} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

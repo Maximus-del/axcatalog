@@ -8,10 +8,11 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAthleteCollections } from "@/hooks/useCommerce";
 import { createCollection } from "@/lib/ecosystem/commerce";
+import { backState, type BackTarget } from "@/hooks/useBackTarget";
 
 const TYPES = ["athlete", "season", "campaign", "capsule", "other"] as const;
 
-export function AthleteCollectionsTab({ athleteId, organizationId }: { athleteId: string; organizationId: string }) {
+export function AthleteCollectionsTab({ athleteId, organizationId, backTo }: { athleteId: string; organizationId: string; backTo?: BackTarget }) {
   const qc = useQueryClient();
   const { data: collections = [], isLoading } = useAthleteCollections(athleteId);
   const [creating, setCreating] = useState(false);
@@ -38,7 +39,12 @@ export function AthleteCollectionsTab({ athleteId, organizationId }: { athleteId
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {collections.map((c) => (
-            <Link key={c.id} to={`/admin/collections/${c.id}`} className="ax-card overflow-hidden hover:border-[hsl(var(--ax-accent)/0.5)] transition-colors group">
+            <Link
+              key={c.id}
+              to={`/admin/collections/${c.id}`}
+              state={backTo ? backState(backTo) : undefined}
+              className="ax-card overflow-hidden hover:border-[hsl(var(--ax-accent)/0.5)] transition-colors group"
+            >
               <div className="aspect-[16/9] bg-[hsl(var(--ax-line))] flex items-center justify-center overflow-hidden">
                 {c.hero_url ? (
                   <img src={c.hero_url} alt={c.name} className="w-full h-full object-cover" loading="lazy" />

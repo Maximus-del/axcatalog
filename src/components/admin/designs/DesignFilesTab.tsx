@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatDistanceToNow } from "date-fns";
 import { formatBytes, getSignedUrl } from "@/lib/storage";
 import { cn } from "@/lib/utils";
+import { PngCreationPanel } from "@/components/admin/ecosystem/PngCreationPanel";
 
 export type DesignFileType = "mockup" | "source" | "export" | "backup" | "reference";
 
@@ -35,12 +36,14 @@ interface DesignFileRow {
 
 interface Props {
   designId: string;
+  /** Prefills the design name inside the PNG Creation prompt. */
+  designTitle?: string;
   onPrimaryChanged?: () => void;
 }
 
 const IMAGE_MIME = /^image\//;
 
-export function DesignFilesTab({ designId, onPrimaryChanged }: Props) {
+export function DesignFilesTab({ designId, designTitle, onPrimaryChanged }: Props) {
   const [files, setFiles] = useState<DesignFileRow[] | null>(null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState<Record<DesignFileType, boolean>>({
@@ -200,6 +203,8 @@ export function DesignFilesTab({ designId, onPrimaryChanged }: Props) {
 
   return (
     <div className="space-y-6">
+      <PngCreationPanel designName={designTitle} />
+
       {FILE_TYPE_ORDER.map((type) => {
         const items = files.filter((f) => f.file_type === type);
         return (

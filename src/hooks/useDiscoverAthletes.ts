@@ -35,10 +35,19 @@ export function useProductById(id: string | undefined) {
   });
 }
 
-export function useAllAthleteProducts(limit = 48) {
-  return useQuery<PublicAthleteProduct[]>({
-    queryKey: ["all-athlete-products", limit],
-    queryFn: () => svc.fetchAllProducts(limit),
+/**
+ * Network-wide products. The limit is applied AFTER the cache, not inside the
+ * query key: callers asked for 24 and 48 and got two independent fetches and
+ * two caches of overlapping rows, so the same product could be stale on one
+ * screen and fresh on the next.
+ */
+const ALL_PRODUCTS_LIMIT = 48;
+
+export function useAllAthleteProducts(limit = ALL_PRODUCTS_LIMIT) {
+  return useQuery<PublicAthleteProduct[], Error, PublicAthleteProduct[]>({
+    queryKey: ["all-athlete-products"],
+    queryFn: () => svc.fetchAllProducts(ALL_PRODUCTS_LIMIT),
+    select: (rows) => (limit < rows.length ? rows.slice(0, limit) : rows),
   });
 }
 

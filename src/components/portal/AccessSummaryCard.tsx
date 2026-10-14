@@ -12,7 +12,10 @@ export function AccessSummaryCard({ athleteId }: { athleteId: string }) {
     queryFn: async (): Promise<Summary> => {
       const { data, error } = await supabase.rpc("athlete_access_summary" as never, { _athlete_id: athleteId } as never);
       if (error) throw error;
-      const row = (Array.isArray(data) ? data[0] : data) as Summary | null;
+      // The rpc can return null, an array or a single row; narrow before casting.
+      if (data == null) return { followers: 0, access: 0, vip: 0 };
+      const rows = data as unknown;
+      const row = (Array.isArray(rows) ? rows[0] : rows) as Summary | null;
       return row ?? { followers: 0, access: 0, vip: 0 };
     },
   });

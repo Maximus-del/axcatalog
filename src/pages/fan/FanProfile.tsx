@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useFollows } from "@/hooks/useFan";
+import { useSavedItems } from "@/hooks/useSaved";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -18,6 +19,7 @@ export default function FanProfile() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const { rows } = useFollows();
+  const { rows: savedRows } = useSavedItems();
   const [displayName, setDisplayName] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -56,7 +58,7 @@ export default function FanProfile() {
   const stats = [
     { v: following, l: "Following" },
     { v: access, l: "Access" },
-    { v: 0, l: "Saved" },
+    { v: savedRows?.length ?? 0, l: "Saved" },
   ];
 
   return (

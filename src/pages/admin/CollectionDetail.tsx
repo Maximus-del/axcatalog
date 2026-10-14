@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { useBackTarget } from "@/hooks/useBackTarget";
 import { Package, Palette, Image as ImageIcon, Rocket, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -40,6 +41,8 @@ function first<T>(v: T | T[] | null): T | null {
 
 export default function CollectionDetail() {
   const { id } = useParams<{ id: string }>();
+  // Opened from an athlete board? Go back to that board, on the tab you left.
+  const back = useBackTarget({ to: "/admin/collections", label: "Collections" });
   const [collection, setCollection] = useState<Collection | null>(null);
   const [products, setProducts] = useState<ProductLite[]>([]);
   const [designs, setDesigns] = useState<DesignLite[]>([]);
@@ -133,8 +136,8 @@ export default function CollectionDetail() {
   if (notFound || !collection) {
     return (
       <div className="p-6 lg:p-8 max-w-[1200px] mx-auto space-y-4">
-        <Link to="/admin/collections" className="text-accent text-sm">
-          ← Back to Collections
+        <Link to={back.to} className="text-accent text-sm">
+          ← Back to {back.label}
         </Link>
         <div className="ax-card p-12 text-center text-muted-foreground">Collection not found.</div>
       </div>
@@ -158,8 +161,8 @@ export default function CollectionDetail() {
 
   return (
     <div className="p-6 lg:p-8 max-w-[1200px] mx-auto space-y-6">
-      <Link to="/admin/collections" className="text-muted-foreground hover:text-foreground text-sm">
-        ← Back to Collections
+      <Link to={back.to} className="text-muted-foreground hover:text-foreground text-sm">
+        ← Back to {back.label}
       </Link>
 
       <header className="space-y-2">

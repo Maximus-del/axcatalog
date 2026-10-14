@@ -1,37 +1,17 @@
 import { useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import {
-  BarChart3,
-  Home,
-  Layers,
-  Shirt,
-  Sparkles,
-  Image,
-  MessageSquare,
-  Wand2,
-  User,
-} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isActive, labelFor, PORTAL_NAV, toWithSearch } from "@/lib/portal/nav";
+import { NAV_ICONS } from "@/components/portal/portal-nav-icons";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-const LINKS = [
-  { to: "/portal", label: "Home", icon: Home, end: true },
-  { to: "/portal/products", label: "Product Lineup", icon: Shirt },
-  { to: "/portal/studio", label: "Design Studio", icon: Wand2 },
-  { to: "/portal/content", label: "Social Content", icon: Image },
-  { to: "/portal/messages", label: "Messages", icon: MessageSquare },
-  { to: "/portal/profile", label: "Profile & Brand", icon: User },
-  { to: "/portal/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/portal/drops", label: "Upcoming Drops", icon: Sparkles },
-  { to: "/portal/era", label: "AR / Era", icon: Layers },
-];
 
 export function PortalNavDrawer({ open, onClose }: Props) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   // Lock body scroll while open
   useEffect(() => {
@@ -75,26 +55,24 @@ export function PortalNavDrawer({ open, onClose }: Props) {
         <div className="p-6">
           <div className="ax-label mb-6">Navigate</div>
           <nav className="flex flex-col gap-1">
-            {LINKS.map((l) => {
-              const Icon = l.icon;
-              const isActive = l.end
-                ? pathname === l.to
-                : pathname.startsWith(l.to);
+            {PORTAL_NAV.map((l) => {
+              const Icon = NAV_ICONS[l.icon];
+              const active = isActive(l, pathname);
               return (
                 <NavLink
                   key={l.to}
-                  to={l.to}
+                  to={toWithSearch(l.to, search)}
                   end={l.end}
                   onClick={onClose}
                   className={cn(
                     "flex items-center gap-3 px-3 py-3 rounded-md text-base transition-colors",
-                    isActive
+                    active
                       ? "bg-accent/10 text-accent font-medium"
                       : "text-foreground hover:bg-accent/10 hover:text-accent",
                   )}
                 >
-                  <Icon className="h-5 w-5" aria-hidden />
-                  <span>{l.label}</span>
+                  {Icon && <Icon className="h-5 w-5" aria-hidden />}
+                  <span>{labelFor(l, true)}</span>
                 </NavLink>
               );
             })}

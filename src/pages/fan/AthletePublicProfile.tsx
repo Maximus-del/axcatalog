@@ -15,6 +15,7 @@ import { ACCESS_TYPES } from "@/lib/ecosystem/content-types";
 import { earlyAccess } from "@/lib/ecosystem/access";
 import type { PublicEvent } from "@/lib/ecosystem/content";
 import { AthleteHero, AthleteStatBar } from "@/components/fan/ui/AthleteHero";
+import { FanBottomNav } from "@/components/fan/FanBottomNav";
 import { FollowButton } from "@/components/fan/FollowButton";
 import { AccessButton } from "@/components/fan/ui/AccessButton";
 import { FeedCard } from "@/components/fan/ui/FeedCard";
@@ -23,17 +24,12 @@ import { ContentCard } from "@/components/fan/ui/ContentCard";
 import { AccessPlans } from "@/components/fan/ui/AccessPlans";
 import { ProductCard } from "@/components/fan/ProductCard";
 import { HorizontalSection } from "@/components/fan/ui/HorizontalSection";
+import { FanIdeasTab } from "@/components/fan/ui/FanIdeasTab";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-const TABS = ["home", "access", "shop", "camps", "about"] as const;
+const TABS = ["home", "access", "shop", "ideas", "camps", "about"] as const;
 type Tab = (typeof TABS)[number];
-
-function mockFollowers(slug: string): string {
-  let h = 0;
-  for (const c of slug) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return `${(h % 380) + 20}K`;
-}
 
 export default function AthletePublicProfile() {
   const { slug } = useParams<{ slug: string }>();
@@ -61,7 +57,7 @@ export default function AthletePublicProfile() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-16">
+    <div className={cn("min-h-screen bg-background text-foreground", canFollow && "pb-16")}>
       <header className="sticky top-0 z-40 bg-[hsl(var(--dark))]/95 backdrop-blur-md border-b border-border">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
           <Link to={canFollow ? "/feed/discover" : "/join"} className="h-9 w-9 -ml-2 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground">
@@ -96,7 +92,7 @@ export default function AthletePublicProfile() {
               )}
             </div>
 
-            <AthleteStatBar followers={mockFollowers(athlete.slug)} drops={products.length} posts={accessContent.length} />
+            <AthleteStatBar drops={products.length} posts={accessContent.length} />
 
             <div className="flex gap-1 mt-5 border-b border-border overflow-x-auto scroll-touch">
               {TABS.map((t) => (
@@ -146,6 +142,9 @@ export default function AthletePublicProfile() {
                 </div>
               )}
               {tab === "shop" && <ProfileShop products={products} loading={productsLoading} />}
+              {tab === "ideas" && (
+                <FanIdeasTab athlete={athlete} isMember={access.isMember} canFollow={canFollow} />
+              )}
               {tab === "camps" && (
                 <div className="space-y-3 max-w-lg">
                   {realEvents.map((e) => <EventRow key={e.id} event={e} isMember={access.isMember} />)}
@@ -157,6 +156,8 @@ export default function AthletePublicProfile() {
           </>
         )}
       </main>
+
+      {canFollow && <FanBottomNav />}
     </div>
   );
 }

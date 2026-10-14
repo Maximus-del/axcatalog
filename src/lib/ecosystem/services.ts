@@ -11,10 +11,19 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { PublicAthlete, PublicAthleteProduct } from "./types";
 
-const ATHLETE_COLS =
+export const ATHLETE_COLS =
   "id, slug, full_name, first_name, last_name, position, jersey_number, league, organization_id, org_name, org_slug, org_type, team_name, team_slug, image_url";
-const PRODUCT_COLS =
-  "id, title, slug, description, price, compare_at_price, shopify_handle, athlete_id, athlete_role, organization_id, created_at, updated_at, image_bucket, image_path";
+/**
+ * Must cover every field PublicAthleteProduct declares. A field the type
+ * promises but the select omits arrives as undefined and fails silently — that
+ * is how the whole member-early-access feature sat dead: access_date,
+ * public_date and drop_date were in the view and in the type but not in this
+ * string, so earlyAccess() always returned "none" and neither the early-access
+ * banner nor the "Get Access" upsell could ever render.
+ * `product-columns.test.ts` fails if the two drift apart again.
+ */
+export const PRODUCT_COLS =
+  "id, title, slug, description, price, compare_at_price, shopify_handle, athlete_id, athlete_role, organization_id, created_at, updated_at, image_bucket, image_path, access_date, public_date, drop_date";
 
 export async function fetchAthletes(limit = 500): Promise<PublicAthlete[]> {
   const { data, error } = await supabase

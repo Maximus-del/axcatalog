@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -41,6 +41,9 @@ const AdminContent = lazy(() => import("./pages/admin/AdminContent"));
 const AdminAccess = lazy(() => import("./pages/admin/AdminAccess"));
 const AdminEvents = lazy(() => import("./pages/admin/AdminEvents"));
 const AdminTemplates = lazy(() => import("./pages/admin/AdminTemplates"));
+const DesignTemplatesList = lazy(() => import("./pages/admin/DesignTemplatesList"));
+const DesignTemplateDetail = lazy(() => import("./pages/admin/DesignTemplateDetail"));
+const DesignTemplateInstance = lazy(() => import("./pages/admin/DesignTemplateInstance"));
 const AthletesList = lazy(() => import("./pages/admin/AthletesList"));
 const AthleteDetail = lazy(() => import("./pages/admin/AthleteDetail"));
 const ProductsList = lazy(() => import("./pages/admin/ProductsList"));
@@ -48,6 +51,8 @@ const AdminProductDetail = lazy(() => import("./pages/admin/ProductDetail"));
 const IngestionQueue = lazy(() => import("./pages/admin/IngestionQueue"));
 const DesignsList = lazy(() => import("./pages/admin/DesignsList"));
 const DesignDetail = lazy(() => import("./pages/admin/DesignDetail"));
+const BlankCatalog = lazy(() => import("./pages/admin/BlankCatalog"));
+const BlanksInventory = lazy(() => import("./pages/admin/BlanksInventory"));
 const BlanksList = lazy(() => import("./pages/admin/BlanksList"));
 const BlankDetail = lazy(() => import("./pages/admin/BlankDetail"));
 const OrdersList = lazy(() => import("./pages/admin/OrdersList"));
@@ -71,16 +76,33 @@ const CollectionsList = lazy(() => import("./pages/admin/CollectionsList"));
 const CollectionDetail = lazy(() => import("./pages/admin/CollectionDetail"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+const AdminPrompts = lazy(() => import("./pages/admin/AdminPrompts"));
+const BlankImagesImport = lazy(() => import("./pages/admin/BlankImagesImport"));
 const AdminMockups = lazy(() => import("./pages/admin/AdminMockups"));
 const AdminBrandAssets = lazy(() => import("./pages/admin/AdminBrandAssets"));
 const AdminFulfillment = lazy(() => import("./pages/admin/AdminFulfillment"));
 const AdminPrintQueue = lazy(() => import("./pages/admin/AdminPrintQueue"));
 const AdminInbox = lazy(() => import("./pages/admin/AdminInbox"));
 
+// AX OS V2 — parallel operator namespace. Everything above is V1 and untouched.
+const V2Layout = lazy(() => import("@/components/admin-v2/V2Layout"));
+const V2Overview = lazy(() => import("./pages/admin-v2/V2Overview"));
+const V2People = lazy(() => import("./pages/admin-v2/V2People"));
+const V2EntityOverview = lazy(() => import("./pages/admin-v2/V2EntityOverview"));
+const V2EntityWorkspace = lazy(() => import("./pages/admin-v2/V2EntityWorkspace"));
+const V2Creative = lazy(() => import("./pages/admin-v2/V2Creative"));
+const V2Commerce = lazy(() => import("./pages/admin-v2/V2Commerce"));
+const V2BlankDetail = lazy(() => import("./pages/admin-v2/V2BlankDetail"));
+const V2NotFound = lazy(() => import("./pages/admin-v2/V2NotFound"));
+const V2Orders = lazy(() => import("./pages/admin-v2/V2Orders"));
+const V2Cart = lazy(() => import("./pages/admin-v2/V2Cart"));
+const V2ProductDetail = lazy(() => import("./pages/admin-v2/V2ProductDetail"));
+
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
 const PortalProductDetail = lazy(() => import("./pages/portal/PortalProductDetail"));
 const PortalProducts = lazy(() => import("./pages/portal/PortalProducts"));
+const PortalMockups = lazy(() => import("./pages/portal/PortalMockups"));
 const PortalAnalytics = lazy(() => import("./pages/portal/PortalAnalytics"));
 const PortalContent = lazy(() => import("./pages/portal/PortalContent"));
 const PortalDrops = lazy(() => import("./pages/portal/PortalDrops"));
@@ -143,16 +165,34 @@ const App = () => (
               {/* Admin */}
               <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
                 <Route index element={<AdminOverview />} />
+
+                {/* A department is a grouping, not a page — so its URL lands on
+                    its first tool and the tab strip takes over from there.
+                    Having them resolve at all matters: they are what the cards
+                    and the icon rail would otherwise 404 on. */}
+                <Route path="creative" element={<Navigate to="/admin/designs" replace />} />
+                <Route path="commerce" element={<Navigate to="/admin/products" replace />} />
+                <Route path="people" element={<Navigate to="/admin/athletes" replace />} />
                 <Route path="pulse" element={<AdminDashboard />} />
                 <Route path="content" element={<AdminContent />} />
                 <Route path="access" element={<AdminAccess />} />
                 <Route path="events" element={<AdminEvents />} />
                 <Route path="templates" element={<AdminTemplates />} />
+                <Route path="design-templates" element={<DesignTemplatesList />} />
+                <Route path="design-templates/:id" element={<DesignTemplateDetail />} />
+                <Route path="design-templates/:id/instances/:applicationId" element={<DesignTemplateInstance />} />
                 <Route path="products" element={<ProductsList />} />
                 <Route path="products/:id" element={<AdminProductDetail />} />
                 <Route path="designs" element={<DesignsList />} />
                 <Route path="designs/:id" element={<DesignDetail />} />
-                <Route path="blanks" element={<BlanksList />} />
+                {/* Blanks, pricing and blank photography are one experience.
+                    The old destinations still resolve — /admin/blanks/list is
+                    the previous list, and /admin/pricing lands on the pricing
+                    view of the catalogue rather than 404ing. */}
+                <Route path="blanks" element={<BlankCatalog />} />
+                <Route path="blanks/inventory" element={<BlanksInventory />} />
+                <Route path="blanks/list" element={<BlanksList />} />
+                <Route path="blanks/import-images" element={<BlankImagesImport />} />
                 <Route path="blanks/:id" element={<BlankDetail />} />
                 <Route path="athletes" element={<AthletesList />} />
                 <Route path="athletes/:id" element={<AthleteDetail />} />
@@ -170,13 +210,15 @@ const App = () => (
                 <Route path="print-queue" element={<AdminPrintQueue />} />
                 <Route path="analytics" element={<AdminAnalytics />} />
                 <Route path="settings" element={<AdminSettings />} />
+                <Route path="prompts" element={<AdminPrompts />} />
                 <Route path="team" element={<TeamUsers />} />
                 <Route path="users" element={<TeamUsers />} />
                 <Route path="ingestion" element={<IngestionQueue />} />
                 <Route path="ingestion/:id" element={<IngestionQueue />} />
                 <Route path="orders" element={<OrdersList />} />
                 <Route path="orders/:id" element={<OrderDetail />} />
-                <Route path="pricing" element={<PricingMaster />} />
+                <Route path="pricing" element={<Navigate to="/admin/blanks?view=pricing" replace />} />
+                <Route path="pricing/sheet" element={<PricingMaster />} />
                 <Route path="credits" element={<AthleteCredits />} />
                 <Route path="affiliates" element={<AffiliatesList />} />
                 <Route path="questionnaires" element={<QuestionnairesList />} />
@@ -187,10 +229,41 @@ const App = () => (
                 <Route path="imports/orders/:id" element={<ImportBatchDetail />} />
               </Route>
 
+              {/* AX OS V2 — built in parallel; V1 stays live at /admin */}
+              <Route path="/admin-v2" element={<RequireAdmin><V2Layout /></RequireAdmin>}>
+                <Route index element={<V2Overview />} />
+                <Route path="people" element={<V2People />} />
+                {/*
+                  An athlete has two addresses. The bare route is the OVERVIEW —
+                  what is happening right now. /library is the full pipeline,
+                  which this page used to be: it had grown into a vertical feed
+                  of every design, mockup, product and collection, which answers
+                  "show me everything" rather than "what needs me".
+                */}
+                <Route path="people/:id" element={<V2EntityOverview />} />
+                <Route path="people/:id/library" element={<V2EntityWorkspace />} />
+                {/* The operator's draft order for this entity. */}
+                <Route path="people/:id/cart" element={<V2Cart />} />
+                <Route path="creative" element={<V2Creative />} />
+                <Route path="commerce" element={<V2Commerce />} />
+                <Route path="commerce/blanks" element={<V2Commerce />} />
+                <Route path="commerce/blanks/:id" element={<V2BlankDetail />} />
+                <Route path="orders" element={<V2Orders />} />
+                {/* A product opened from V2 stays in V2. */}
+                <Route path="products/:id" element={<V2ProductDetail />} />
+                {/*
+                  A wrong V2 address stays inside V2. Falling through to the
+                  app-wide 404 threw the operator out of the dashboard shell
+                  entirely, with no nav to get back in.
+                */}
+                <Route path="*" element={<V2NotFound />} />
+              </Route>
+
               {/* Portal */}
               <Route path="/portal" element={<RequirePortal><PortalLayout /></RequirePortal>}>
                 <Route index element={<PortalHome />} />
                 <Route path="products" element={<PortalProducts />} />
+                <Route path="mockups" element={<PortalMockups />} />
                 <Route path="analytics" element={<PortalAnalytics />} />
                 <Route path="content" element={<PortalContent />} />
                 <Route path="drops" element={<PortalDrops />} />

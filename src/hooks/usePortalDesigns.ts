@@ -1,21 +1,28 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  mapShelf,
+  type ClientShelfRow,
+  type PortalDesign,
+} from "@/lib/portal/client-designs";
 
-export interface PortalDesign {
-  id: string;
-  title: string | null;
-  status: string | null;
-  /** First design file, for a thumbnail (bucket is usually private). */
-  file: { bucket: string; path: string } | null;
-}
+export type { PortalDesign } from "@/lib/portal/client-designs";
+export { CLIENT_PREVIEW_BUCKET } from "@/lib/portal/client-designs";
 
-function first<T>(v: T | T[] | null): T | null {
-  return Array.isArray(v) ? (v[0] ?? null) : v;
-}
-
-/** Designs AX has created for this athlete (via design_athletes). */
+/**
+ * Designs AX has shared with this entity.
+ *
+ * Reads `public.client_design_shelf`, which applies the visibility ceiling (a
+ * design is visible only if it AND its folder are marked visible) and returns
+ * preview paths only. This hook previously joined design_athletes -> designs ->
+ * design_files and handed whatever bucket the row named to createSignedUrl,
+ * which meant a client session could be issued a signed URL for the production
+ * PNG in `design-files`. Nothing was exposed — every account was an admin — but
+ * the first non-admin login would have been. See AX_CLIENT_VISIBILITY.md.
+ */
 export function usePortalDesigns(athleteId: string | null) {
   const [designs, setDesigns] = useState<PortalDesign[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!athleteId) {
@@ -23,49 +30,33 @@ export function usePortalDesigns(athleteId: string | null) {
       return;
     }
     let cancelled = false;
+    setDesigns(null);
+    setError(null);
     void (async () => {
-      const { data } = await supabase
-        .from("design_athletes")
-        .select(
-          `design:designs!inner(id, title, status,
-             files:design_files(storage_path, storage_bucket, is_primary))`,
-        )
-        .eq("athlete_id", athleteId);
+      // `client_design_shelf` is applied in the database but absent from the
+      // generated types (src/integrations/supabase/types.ts is behind the live
+      // schema — see AX_OS_V2_SOURCE_OF_TRUTH.md). Typed narrowly here rather
+      // than with a blanket `as never`, so the row shape is still checked
+      // against ClientShelfRow at the mapping boundary.
+      const rpc = supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: { message: string } | null }>;
+      const { data, error: err } = await rpc("client_design_shelf", { _athlete_id: athleteId });
 
       if (cancelled) return;
-      const rows = (data ?? [])
-        .map((r) => first(r.design) as {
-          id: string;
-          title: string | null;
-          status: string | null;
-          files: Array<{ storage_path: string; storage_bucket: string; is_primary: boolean }>;
-        } | null)
-        .filter(Boolean) as Array<{
-        id: string;
-        title: string | null;
-        status: string | null;
-        files: Array<{ storage_path: string; storage_bucket: string; is_primary: boolean }>;
-      }>;
-
-      setDesigns(
-        rows.map((d) => {
-          const files = [...(d.files ?? [])].sort(
-            (a, b) => Number(b.is_primary) - Number(a.is_primary),
-          );
-          const f = files[0];
-          return {
-            id: d.id,
-            title: d.title,
-            status: d.status,
-            file: f ? { bucket: f.storage_bucket, path: f.storage_path } : null,
-          };
-        }),
-      );
+      if (err) {
+        console.error("client_design_shelf error", err);
+        setError(err.message);
+        setDesigns([]);
+        return;
+      }
+      setDesigns(mapShelf(data as unknown as ClientShelfRow[]));
     })();
     return () => {
       cancelled = true;
     };
   }, [athleteId]);
 
-  return { designs, loading: designs === null };
+  return { designs, loading: designs === null, error };
 }

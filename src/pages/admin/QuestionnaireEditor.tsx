@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { FAN_DESIGN_PURPOSE } from "@/lib/ecosystem/submissions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +41,7 @@ interface Questionnaire {
   intro_text: string | null;
   thank_you_text: string | null;
   is_active: boolean;
+  purpose: string | null;
 }
 interface DesignOption {
   id: string;
@@ -300,6 +302,27 @@ export default function QuestionnaireEditor() {
           <div>
             <Label>Thank-you message after submit</Label>
             <Textarea value={q.thank_you_text ?? ""} onChange={(e) => setQ({ ...q, thank_you_text: e.target.value })} onBlur={() => void saveQuestionnaire({ thank_you_text: q.thank_you_text })} />
+          </div>
+          <div>
+            {/* Which questionnaire the fan "Have an idea?" door opens is a
+                setting, not a hardcoded slug — so this can be renamed or
+                replaced without touching code. */}
+            <Label>Role in the app</Label>
+            <select
+              value={q.purpose ?? ""}
+              onChange={(e) => {
+                const purpose = e.target.value || null;
+                setQ({ ...q, purpose });
+                void saveQuestionnaire({ purpose });
+              }}
+              className="w-full h-10 rounded-lg border border-border bg-transparent px-2 text-sm"
+            >
+              <option value="">Standalone — shared by link only</option>
+              <option value={FAN_DESIGN_PURPOSE}>Fan design idea survey</option>
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              The fan design survey is what members see under Ideas on an athlete's profile.
+            </p>
           </div>
           <div>
             <Label>Public URL</Label>

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 import { usePortalBlanks } from "@/hooks/usePortalBlanks";
 import { usePortalDesigns } from "@/hooks/usePortalDesigns";
+import { CLIENT_PREVIEW_BUCKET } from "@/lib/portal/client-designs";
 import { useAuth } from "@/auth/AuthProvider";
 import { useSignedUrl } from "@/lib/storage";
 import { PRINT_PLACEMENTS, submitPortalOrder } from "@/lib/portal-commerce";
@@ -41,7 +42,10 @@ export default function CustomBuilder() {
   const blank = blanks?.find((b) => b.id === blankId) ?? null;
   const design = designs?.find((d) => d.id === designId) ?? null;
   const color = blank?.colors[colorIdx] ?? blank?.colors[0] ?? null;
-  const { url: designUrl } = useSignedUrl(design?.file?.bucket ?? null, design?.file?.path ?? null);
+  const { url: designUrl } = useSignedUrl(
+    design?.previewPath ? CLIENT_PREVIEW_BUCKET : null,
+    design?.previewPath ?? null,
+  );
   const place = PRINT_PLACEMENTS.find((p) => p.key === placement) ?? PRINT_PLACEMENTS[1];
 
   const canSubmit = useMemo(() => !!blank && !!design && qty > 0, [blank, design, qty]);
@@ -118,12 +122,13 @@ export default function CustomBuilder() {
           )}
         </div>
         <div className="text-center text-[11px] text-muted-foreground mt-2">
-          {blank?.name ?? "Pick a blank"}{color ? ` · ${color.name}` : ""} · {place.surface} {place.label}
+          {blank?.name ?? "Pick a product"}{color ? ` · ${color.name}` : ""} · {place.surface} {place.label}
         </div>
       </div>
 
-      {/* Blank */}
-      <Field label="Blank">
+      {/* The garment choice is a step in making something — the athlete picks
+          a product, not a blank from our supply catalogue. */}
+      <Field label="Product">
         <div className="flex gap-2 flex-wrap">
           {(blanks ?? []).map((b) => (
             <Chip key={b.id} label={b.name} active={blankId === b.id} onClick={() => { setBlankId(b.id); setColorIdx(0); }} />
@@ -154,7 +159,7 @@ export default function CustomBuilder() {
         {designs && designs.length > 0 ? (
           <div className="flex gap-2 flex-wrap">
             {designs.map((d) => (
-              <Chip key={d.id} label={d.title ?? "Untitled"} active={designId === d.id} onClick={() => setDesignId(d.id)} />
+              <Chip key={d.id} label={d.title} active={designId === d.id} onClick={() => setDesignId(d.id)} />
             ))}
           </div>
         ) : (

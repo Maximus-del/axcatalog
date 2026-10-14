@@ -26,3 +26,10 @@ verify_jwt = true
 
 [functions.admin-manage-users]
 verify_jwt = true
+
+# Public on purpose: an <img> tag cannot send an Authorization header, and
+# the canvas has to load the garment through a plain src. It only relays
+# images from an exact-match allowlist of hosts AX already stores
+# photography on, so there is nothing behind it to protect.
+[functions.image-proxy]
+verify_jwt = false

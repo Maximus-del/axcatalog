@@ -111,6 +111,25 @@
     padding: 1.25rem;
   }
 
+  /* Native <select> popups are drawn by the OS, not by us. On these dark
+     panels a transparent select renders white-on-white options in Chrome and
+     Firefox — invisible, and only once the list is OPEN, so it survives every
+     visual check of the closed control. color-scheme is what tells the browser
+     to paint the popup dark; the explicit option colours cover the browsers
+     that ignore it.
+
+     Scoped to the admin shell and applied to every select rather than a class
+     someone has to remember, because the failure is silent. */
+  .admin-os select {
+    color-scheme: dark;
+  }
+
+  .admin-os select option,
+  .admin-os select optgroup {
+    background-color: hsl(var(--ax-card));
+    color: hsl(var(--ax-ink));
+  }
+
   .ax-card-hover {
     @apply ax-card hover:border-accent hover:-translate-y-0.5;
   }

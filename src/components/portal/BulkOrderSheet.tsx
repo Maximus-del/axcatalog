@@ -814,7 +814,7 @@ export function BulkOrderSheet({
                             .filter(
                               (s) =>
                                 s !== "" &&
-                                !SIZE_ORDER.includes(s as any),
+                                !(SIZE_ORDER as readonly string[]).includes(s),
                             )
                             .sort();
                           const ordered = [...std, ...extras];

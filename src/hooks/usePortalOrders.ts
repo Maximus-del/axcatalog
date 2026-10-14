@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { DRAFT_STATUS } from "@/lib/order-status";
 
 export interface PortalOrder {
   id: string;
@@ -43,6 +44,9 @@ export function usePortalOrders(athleteId: string | null, limit = 25): State {
         .from("bulk_order_requests")
         .select("id, order_number, created_at, total_units, status")
         .eq("athlete_id", athleteId)
+        // RLS already hides drafts from a client session; this keeps the
+        // intent visible in the query and covers an operator-token read.
+        .neq("status", DRAFT_STATUS)
         .order("created_at", { ascending: false })
         .limit(limit);
       if (cancelled) return;

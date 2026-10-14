@@ -44,6 +44,7 @@ import { DesignPickerDialog } from "./DesignPickerDialog";
 import { EditLinkDialog } from "./EditLinkDialog";
 import { formatPlacement, type DesignPlacement } from "./placements";
 import { useFileDropZone } from "@/hooks/useFileDropZone";
+import { PngCreationPanel } from "@/components/admin/ecosystem/PngCreationPanel";
 
 export interface LinkRow {
   id: string; // product_designs.id
@@ -361,6 +362,8 @@ export function DesignsTab({ productId, organizationId, productTitle, onCountCha
           </div>
         </div>
       )}
+
+      <PngCreationPanel organizationId={organizationId} designName={productTitle} />
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-sm text-muted-foreground">

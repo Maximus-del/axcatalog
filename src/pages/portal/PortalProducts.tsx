@@ -1,18 +1,21 @@
-// Mobile-first. Products: My Products · AX Blanks · My Designs (section 11).
+// Mobile-first. Products: My Products · My Designs.
+//
+// There is deliberately no blanks tab. An athlete has no reason to browse our
+// garment catalogue as a catalogue — picking a garment is a STEP inside making
+// something, not a destination. The full blanks library is an operations
+// concern and stays on the admin side.
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PortalSection } from "@/components/portal/PortalSection";
 import { MyProductsGrid } from "@/components/portal/MyProductsGrid";
-import { BlanksGrid } from "@/components/portal/products/BlanksGrid";
 import { DesignsGrid } from "@/components/portal/products/DesignsGrid";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 import { cn } from "@/lib/utils";
 
-type Tab = "products" | "blanks" | "designs";
+type Tab = "products" | "designs";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "products", label: "My Products" },
-  { key: "blanks", label: "AX Blanks" },
   { key: "designs", label: "My Designs" },
 ];
 
@@ -64,21 +67,11 @@ export default function PortalProducts() {
         </PortalSection>
       )}
 
-      {tab === "blanks" && (
-        <PortalSection
-          id="sec-blanks"
-          title="AX Blanks"
-          description="Premium blank garments. Pick one, then add a design."
-        >
-          <BlanksGrid />
-        </PortalSection>
-      )}
-
       {tab === "designs" && (
         <PortalSection
           id="sec-designs"
           title="My Designs"
-          description="Designs AX has created for you. Put one on a garment."
+          description="Your artwork — what we've made for you, and anything you create yourself. Put one on a product."
         >
           <DesignsGrid />
         </PortalSection>

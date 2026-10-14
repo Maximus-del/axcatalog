@@ -16,6 +16,7 @@ import { BulkOrderSheet } from "./BulkOrderSheet";
 import { OrderDraftBar } from "./OrderDraftBar";
 import { OrderDraftProvider } from "./OrderDraftContext";
 import { PortalBottomNav } from "./PortalBottomNav";
+import { PortalDesktopNav } from "./PortalDesktopNav";
 import { PortalDataProvider, usePortalData } from "./PortalDataContext";
 
 function BulkOrderSheetBridge({
@@ -119,6 +120,8 @@ export default function PortalLayout() {
 
           <AthleteHeader onMenuClick={() => setNavOpen(true)} onBellClick={() => setNotifOpen(true)} />
           <NotificationsSheet open={notifOpen} onOpenChange={setNotifOpen} />
+
+          <PortalDesktopNav />
 
           <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-3 hidden md:flex items-center justify-end gap-3">
             <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>

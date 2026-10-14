@@ -13,6 +13,9 @@ import { SaveButton } from "@/components/fan/ui/SaveButton";
 import { AthletePhoto } from "@/components/fan/ui/AthletePhoto";
 import { ProductCard } from "@/components/fan/ProductCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FanBottomNav } from "@/components/fan/FanBottomNav";
+import { useAuth } from "@/auth/AuthProvider";
+import { cn } from "@/lib/utils";
 
 export default function ProductDetail() {
   const { id } = useParams<{ id: string }>();
@@ -27,12 +30,14 @@ export default function ProductDetail() {
     [athletes, product],
   );
 
+  const { session, hasFanProfile } = useAuth();
+  const isFan = !!session && hasFanProfile;
   const img = product ? productImageUrl(product) : null;
   const href = product ? shopLink(product.shopify_handle) : null;
   const price = product ? fmtPrice(product.price) : null;
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-16">
+    <div className={cn("min-h-screen bg-background text-foreground", isFan && "pb-16")}>
       <header className="sticky top-0 z-40 bg-[hsl(var(--dark))]/95 backdrop-blur-md border-b border-border">
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
           <Link to="/feed/shop" className="h-9 w-9 -ml-2 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground">
@@ -111,6 +116,8 @@ export default function ProductDetail() {
           </>
         )}
       </main>
+
+      {isFan && <FanBottomNav />}
     </div>
   );
 }

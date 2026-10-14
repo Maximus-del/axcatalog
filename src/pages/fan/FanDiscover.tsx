@@ -1,5 +1,11 @@
-// Discover — browse a real athlete network (Spotify/Netflix-style shelves),
-// with search and lightweight quick-filters. Not a database table.
+// Mobile-first.
+//
+// Shelf names describe what they contain. They used to claim editorial and
+// temporal meaning they did not have: "Featured" was list.slice(0, 8),
+// "Trending" was slice(8, 22) and "New to Goat Farm" was the LAST TWELVE — all
+// off a list ordered alphabetically by full_name, so "trending" meant "surname
+// starts with roughly D through K". Position and league shelves are real
+// filters and keep their names.
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { useDiscoverAthletes, useAllAthleteProducts } from "@/hooks/useDiscoverAthletes";
@@ -97,21 +103,21 @@ export default function FanDiscover() {
       ) : quick !== "All" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {group((a) => matchesQuick(a, quick)).map((a) => (
-            <div key={a.id} className="w-full"><AthleteCardCompactFull athlete={a} /></div>
+            <div key={a.id} className="w-full"><AthleteRow athlete={a} /></div>
           ))}
         </div>
       ) : (
         <>
-          <HorizontalSection title="Featured">
+          <HorizontalSection title="Athletes on AX">
             {list.slice(0, 8).map((a) => <AthleteCardFeatured key={a.id} athlete={a} />)}
           </HorizontalSection>
 
-          <HorizontalSection title="Trending">
+          <HorizontalSection title="More to follow">
             {list.slice(8, 22).map((a) => <AthleteCardCompact key={a.id} athlete={a} />)}
           </HorizontalSection>
 
           {products.length > 0 && (
-            <HorizontalSection title="Upcoming Drops" action={{ label: "Shop", to: "/feed/shop" }}>
+            <HorizontalSection title="Merch" action={{ label: "Shop", to: "/feed/shop" }}>
               {(products as PublicAthleteProduct[]).slice(0, 12).map((p) => (
                 <div key={p.id} className="w-[160px] shrink-0 snap-start"><ProductCard product={p} athleteName={nameById.get(p.athlete_id)} /></div>
               ))}
@@ -128,7 +134,7 @@ export default function FanDiscover() {
           </HorizontalSection>
 
           <Shelf title="College" items={group((a) => a.league === "NCAA")} />
-          <Shelf title="New to Goat Farm" items={list.slice(-12)} />
+          <Shelf title="Also on AX" items={list.slice(-12)} />
         </>
       )}
     </div>
@@ -145,8 +151,3 @@ function Shelf({ title, items }: { title: string; items: PublicAthlete[] }) {
 }
 
 // Full-width compact tile for the filtered grid (compact card is fixed-width).
-function AthleteCardCompactFull({ athlete }: { athlete: PublicAthlete }) {
-  return (
-    <AthleteRow athlete={athlete}><FollowButton athleteId={athlete.id} /></AthleteRow>
-  );
-}

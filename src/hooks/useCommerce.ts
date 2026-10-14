@@ -3,6 +3,11 @@ import {
   listAthleteCollections,
   listAthleteDrops,
   listDesignTemplates,
+  listDesignTemplatesFull,
+  fetchDesignTemplate,
+  fetchTemplateUsage,
+  listTemplateApplications,
+  listAthletesWithProfiles,
   fetchPreferenceProfile,
   listCollectionProducts,
   listAthleteSelectableProducts,
@@ -27,6 +32,43 @@ export function useAthleteDrops(athleteId: string | undefined) {
 
 export function useDesignTemplates() {
   return useQuery({ queryKey: ["design-templates"], queryFn: listDesignTemplates });
+}
+
+// Library view: full template records plus how many athletes use each one.
+export function useDesignTemplateLibrary(includeArchived = false) {
+  return useQuery({
+    queryKey: ["design-template-library", includeArchived],
+    queryFn: async () => {
+      const [templates, usage] = await Promise.all([listDesignTemplatesFull(includeArchived), fetchTemplateUsage()]);
+      return { templates, usage };
+    },
+  });
+}
+
+export function useDesignTemplate(id: string | undefined) {
+  return useQuery({
+    queryKey: ["design-template", id],
+    queryFn: () => fetchDesignTemplate(id!),
+    enabled: !!id,
+  });
+}
+
+export function useTemplateApplications(templateId: string | undefined) {
+  return useQuery({
+    queryKey: ["design-template-applications", "template", templateId],
+    queryFn: () => listTemplateApplications(templateId!),
+    enabled: !!templateId,
+  });
+}
+
+// Athletes + preference profiles, cached once and reused by the reverse match.
+export function useAthletesWithProfiles(enabled = true) {
+  return useQuery({
+    queryKey: ["athletes-with-profiles"],
+    queryFn: listAthletesWithProfiles,
+    enabled,
+    staleTime: 60_000,
+  });
 }
 
 export function useAthletePreferenceProfile(athleteId: string | undefined) {
