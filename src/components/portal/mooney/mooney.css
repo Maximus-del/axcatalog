@@ -68,7 +68,7 @@
 .mw-collection-link { width: 100%; min-height: 44px; border-radius: 999px; border-color: var(--mw-destination-accent); background: hsl(var(--dark) / .7); color: var(--mw-ink); padding: 8px 12px; display: flex; gap: 8px; font-size: 11px; white-space: normal; }
 .mw-collection-link:hover { background: color-mix(in srgb, var(--mw-destination-accent) 15%, var(--mw-deep)); }
 @media (min-width: 769px) {
-  .mw-hero[data-wall="true"] { padding: 0; margin-bottom: calc(80px - (800 / 1536 - (var(--bay-floor) + var(--bay-label-gap)) * 2 / 3)); }
+  .mw-hero[data-wall="true"] { padding: 0; margin-bottom: calc(80px + (var(--bay-floor) + var(--bay-label-gap)) * 2 / 3 - 52.083333%); }
   .mw-hero[data-wall="true"] .mw-locker-scene { aspect-ratio: 1536 / 800; overflow: hidden; background-image: url('/mooney/assets/locker-room.png'); background-position: top center; background-size: 100% auto; }
   .mw-hero[data-wall="true"] .mw-locker-scene::after { content: ''; position: absolute; inset: 88% 0 0; background: linear-gradient(to bottom, transparent, var(--mw-deep)); pointer-events: none; }
   .mw-hero[data-wall="true"] .mw-scene-layer { position: absolute; inset: 0 0 auto 0; aspect-ratio: 3 / 2; }
