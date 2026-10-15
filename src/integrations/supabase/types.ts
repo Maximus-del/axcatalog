@@ -14,6 +14,18 @@ export type Database = {
   }
   public: {
     Tables: {
+      _ax_write_probe: {
+        Row: {
+          id: number | null
+        }
+        Insert: {
+          id?: number | null
+        }
+        Update: {
+          id?: number | null
+        }
+        Relationships: []
+      }
       affiliate_payouts: {
         Row: {
           affiliate_id: string
@@ -4688,6 +4700,63 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_idempotency_keys: {
+        Row: {
+          created_at: string
+          key: string
+          operation: string
+          request_hash: string
+          result: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          key: string
+          operation: string
+          request_hash: string
+          result?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          key?: string
+          operation?: string
+          request_hash?: string
+          result?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      portal_message_attachments: {
+        Row: {
+          message_id: string
+          upload_id: string
+        }
+        Insert: {
+          message_id: string
+          upload_id: string
+        }
+        Update: {
+          message_id?: string
+          upload_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_message_attachments_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "portal_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_message_attachments_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "portal_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_messages: {
         Row: {
           body: string
@@ -4740,15 +4809,119 @@ export type Database = {
           },
         ]
       }
+      portal_project_concepts: {
+        Row: {
+          concept_key: string
+          id: string
+          mockup_id: string | null
+          project_id: string
+          shared_at: string
+          shared_by: string | null
+          storage_bucket: string
+          storage_path: string
+          superseded_at: string | null
+          title: string | null
+          version: number
+        }
+        Insert: {
+          concept_key?: string
+          id?: string
+          mockup_id?: string | null
+          project_id: string
+          shared_at?: string
+          shared_by?: string | null
+          storage_bucket: string
+          storage_path: string
+          superseded_at?: string | null
+          title?: string | null
+          version?: number
+        }
+        Update: {
+          concept_key?: string
+          id?: string
+          mockup_id?: string | null
+          project_id?: string
+          shared_at?: string
+          shared_by?: string | null
+          storage_bucket?: string
+          storage_path?: string
+          superseded_at?: string | null
+          title?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_project_concepts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "portal_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_project_decisions: {
+        Row: {
+          concept_id: string
+          concept_version: number
+          decided_at: string
+          decided_by: string
+          decision: string
+          feedback: string | null
+          id: string
+          project_id: string
+          project_version_before: number
+        }
+        Insert: {
+          concept_id: string
+          concept_version: number
+          decided_at?: string
+          decided_by: string
+          decision: string
+          feedback?: string | null
+          id?: string
+          project_id: string
+          project_version_before: number
+        }
+        Update: {
+          concept_id?: string
+          concept_version?: number
+          decided_at?: string
+          decided_by?: string
+          decision?: string
+          feedback?: string | null
+          id?: string
+          project_id?: string
+          project_version_before?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_project_decisions_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "portal_project_concepts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_project_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "portal_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_threads: {
         Row: {
           admin_unread: boolean
           athlete_id: string
+          brief: Json | null
           category: string
+          collection_id: string | null
           created_at: string
           created_by: string | null
           created_by_role: string
           id: string
+          kind: string | null
           last_message_at: string
           last_message_role: string | null
           organization_id: string
@@ -4756,15 +4929,19 @@ export type Database = {
           status: string
           subject: string
           updated_at: string
+          version: number
         }
         Insert: {
           admin_unread?: boolean
           athlete_id: string
+          brief?: Json | null
           category?: string
+          collection_id?: string | null
           created_at?: string
           created_by?: string | null
           created_by_role?: string
           id?: string
+          kind?: string | null
           last_message_at?: string
           last_message_role?: string | null
           organization_id: string
@@ -4772,15 +4949,19 @@ export type Database = {
           status?: string
           subject: string
           updated_at?: string
+          version?: number
         }
         Update: {
           admin_unread?: boolean
           athlete_id?: string
+          brief?: Json | null
           category?: string
+          collection_id?: string | null
           created_at?: string
           created_by?: string | null
           created_by_role?: string
           id?: string
+          kind?: string | null
           last_message_at?: string
           last_message_role?: string | null
           organization_id?: string
@@ -4788,6 +4969,7 @@ export type Database = {
           status?: string
           subject?: string
           updated_at?: string
+          version?: number
         }
         Relationships: [
           {
@@ -4819,6 +5001,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "portal_threads_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "collections"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "portal_threads_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -4830,6 +5019,99 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations_safe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_uploads: {
+        Row: {
+          athlete_id: string
+          bucket: string
+          created_at: string
+          declared_mime: string
+          declared_size: number
+          finalized_at: string | null
+          id: string
+          name: string
+          path: string
+          project_id: string | null
+          purpose: string
+          reject_reason: string | null
+          status: string
+          uploaded_by: string
+          verified_mime: string | null
+          verified_size: number | null
+        }
+        Insert: {
+          athlete_id: string
+          bucket?: string
+          created_at?: string
+          declared_mime: string
+          declared_size: number
+          finalized_at?: string | null
+          id?: string
+          name: string
+          path: string
+          project_id?: string | null
+          purpose: string
+          reject_reason?: string | null
+          status?: string
+          uploaded_by: string
+          verified_mime?: string | null
+          verified_size?: number | null
+        }
+        Update: {
+          athlete_id?: string
+          bucket?: string
+          created_at?: string
+          declared_mime?: string
+          declared_size?: number
+          finalized_at?: string | null
+          id?: string
+          name?: string
+          path?: string
+          project_id?: string | null
+          purpose?: string
+          reject_reason?: string | null
+          status?: string
+          uploaded_by?: string
+          verified_mime?: string | null
+          verified_size?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_uploads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_monthly"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "portal_uploads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athlete_revenue_summary"
+            referencedColumns: ["athlete_id"]
+          },
+          {
+            foreignKeyName: "portal_uploads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_uploads_athlete_id_fkey"
+            columns: ["athlete_id"]
+            isOneToOne: false
+            referencedRelation: "public_athletes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_uploads_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "portal_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -8975,6 +9257,7 @@ export type Database = {
         Returns: boolean
       }
       current_user_is_admin: { Args: never; Returns: boolean }
+      current_user_is_operator: { Args: never; Returns: boolean }
       current_user_is_org_member: {
         Args: { _org_id: string }
         Returns: boolean
@@ -9005,6 +9288,249 @@ export type Database = {
           p_tier: string
         }
         Returns: string
+      }
+      portal_authorize_file: {
+        Args: { _id: string; _kind: string }
+        Returns: {
+          bucket: string
+          name: string
+          path: string
+        }[]
+      }
+      portal_begin_upload: {
+        Args: {
+          _athlete_id: string
+          _mime: string
+          _name: string
+          _project_id?: string
+          _purpose: string
+          _size: number
+        }
+        Returns: Json
+      }
+      portal_client_write_guard: { Args: never; Returns: undefined }
+      portal_create_drop: {
+        Args: {
+          _athlete_id: string
+          _destination_id?: string
+          _idempotency_key: string
+          _scheduled_local?: string
+          _time_zone?: string
+          _title: string
+        }
+        Returns: Json
+      }
+      portal_create_project: {
+        Args: {
+          _athlete_id: string
+          _destination_id?: string
+          _details?: string
+          _idea: string
+          _idempotency_key: string
+          _inspiration_upload_ids?: string[]
+          _kind: string
+          _title: string
+          _vibes?: string[]
+        }
+        Returns: Json
+      }
+      portal_decide_concept: {
+        Args: {
+          _athlete_id: string
+          _concept_id: string
+          _concept_version: number
+          _decision: string
+          _expected_project_version: number
+          _feedback?: string
+          _project_id: string
+        }
+        Returns: Json
+      }
+      portal_decide_product: {
+        Args: {
+          _athlete_id: string
+          _decision: string
+          _expected_updated_at?: string
+          _note?: string
+          _product_id: string
+        }
+        Returns: Json
+      }
+      portal_drop_json: {
+        Args: { d: Database["public"]["Tables"]["drops"]["Row"] }
+        Returns: Json
+      }
+      portal_finalize_upload: {
+        Args: {
+          _upload_id: string
+          _user_id: string
+          _verified_mime: string
+          _verified_size: number
+        }
+        Returns: Json
+      }
+      portal_general_thread: { Args: { _aid: string }; Returns: string }
+      portal_get_profile: { Args: { _athlete_id: string }; Returns: Json }
+      portal_get_project: {
+        Args: { _athlete_id: string; _project_id: string }
+        Returns: Json
+      }
+      portal_idem_claim: {
+        Args: { _hash: string; _key: string; _operation: string }
+        Returns: Json
+      }
+      portal_idem_store: {
+        Args: { _key: string; _operation: string; _result: Json }
+        Returns: undefined
+      }
+      portal_list_assets: {
+        Args: {
+          _athlete_id: string
+          _collection?: string
+          _cursor?: string
+          _kind?: string
+          _limit?: number
+        }
+        Returns: Json
+      }
+      portal_list_drops: {
+        Args: {
+          _athlete_id: string
+          _cursor?: string
+          _limit?: number
+          _status?: string
+        }
+        Returns: Json
+      }
+      portal_list_messages: {
+        Args: {
+          _athlete_id: string
+          _cursor?: string
+          _limit?: number
+          _project_id?: string
+        }
+        Returns: Json
+      }
+      portal_list_projects: {
+        Args: {
+          _athlete_id: string
+          _cursor?: string
+          _limit?: number
+          _status?: string
+        }
+        Returns: Json
+      }
+      portal_local_to_utc: {
+        Args: { _local: string; _time_zone: string }
+        Returns: string
+      }
+      portal_post_message: {
+        Args: {
+          _athlete_id: string
+          _attachment_ids?: string[]
+          _body: string
+          _idempotency_key?: string
+          _project_id: string
+        }
+        Returns: Json
+      }
+      portal_project_json: {
+        Args: { _t: Database["public"]["Tables"]["portal_threads"]["Row"] }
+        Returns: Json
+      }
+      portal_project_row: {
+        Args: { _aid: string; _lock?: boolean; _project_id: string }
+        Returns: {
+          admin_unread: boolean
+          athlete_id: string
+          brief: Json | null
+          category: string
+          collection_id: string | null
+          created_at: string
+          created_by: string | null
+          created_by_role: string
+          id: string
+          kind: string | null
+          last_message_at: string
+          last_message_role: string | null
+          organization_id: string
+          portal_unread: boolean
+          status: string
+          subject: string
+          updated_at: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "portal_threads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_project_status: {
+        Args: { _t: Database["public"]["Tables"]["portal_threads"]["Row"] }
+        Returns: string
+      }
+      portal_quote_order: {
+        Args: {
+          _athlete_id: string
+          _items: Json
+          _turnaround?: string
+          _units_override?: number
+        }
+        Returns: Json
+      }
+      portal_revenue_summary: {
+        Args: {
+          _athlete_id: string
+          _from?: string
+          _time_zone?: string
+          _to?: string
+        }
+        Returns: Json
+      }
+      portal_scope_athlete: { Args: { _athlete_id: string }; Returns: string }
+      portal_share_concept: {
+        Args: {
+          _mockup_id?: string
+          _project_id: string
+          _replaces_concept_id?: string
+          _storage_bucket: string
+          _storage_path: string
+          _title?: string
+        }
+        Returns: Json
+      }
+      portal_sheet_unit_price: {
+        Args: { _organization_id: string; _product_id: string }
+        Returns: Record<string, unknown>
+      }
+      portal_submit_order_request: {
+        Args: {
+          _athlete_id: string
+          _credit?: number
+          _expected_subtotal?: number
+          _idempotency_key: string
+          _items: Json
+          _notes?: string
+          _package?: string
+          _turnaround?: string
+          _units_override?: number
+        }
+        Returns: Json
+      }
+      portal_update_drop: {
+        Args: {
+          _athlete_id: string
+          _change: Json
+          _drop_id: string
+          _expected_version: string
+        }
+        Returns: Json
+      }
+      portal_update_profile: {
+        Args: { _athlete_id: string; _expected_version: string; _patch: Json }
+        Returns: Json
       }
       quote_blank: {
         Args: { p_blank_id: string; p_quantity: number; p_tier?: string }
@@ -9087,6 +9613,11 @@ export type Database = {
         }
         Returns: undefined
       }
+      viewer_athlete_ids: { Args: never; Returns: string[] }
+      viewer_blank_ids: { Args: never; Returns: string[] }
+      viewer_collection_ids: { Args: never; Returns: string[] }
+      viewer_product_ids: { Args: never; Returns: string[] }
+      viewer_team_ids: { Args: never; Returns: string[] }
       void_affiliate_sale: { Args: { _sale_id: string }; Returns: undefined }
     }
     Enums: {
