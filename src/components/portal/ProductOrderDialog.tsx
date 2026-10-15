@@ -3,6 +3,8 @@
 // Bulk order dialog for a single product. Extracted from the portal
 // ProductCard so the same flow is reused on the product detail page.
 import { useEffect, useMemo, useState } from "react";
+import { submitPortalOrder, type PortalOrderItem } from "@/lib/portal-commerce";
+import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -18,7 +20,6 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
@@ -33,11 +34,6 @@ interface Props {
   onOpenChange: (v: boolean) => void;
 }
 
-function generateOrderNumber(): string {
-  const year = new Date().getFullYear();
-  const rand = Math.floor(Math.random() * 900 + 100);
-  return `BR-${year}-${rand}`;
-}
 
 export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   // qtys keyed by `${color}|${size}` — color is "" for products without colorways.
@@ -45,6 +41,8 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const [autoDistribute, setAutoDistribute] = useState(false);
   const [autoTotal, setAutoTotal] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  // One key per checkout attempt, kept across retries and double-clicks.
+  const [orderKey, setOrderKey] = useState(() => newIdempotencyKey());
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const { user } = useAuth();
   const { athlete, isImpersonating } = useCurrentAthlete();
@@ -212,51 +210,36 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     }
     setSubmitting(true);
     try {
-      const orderNumber = generateOrderNumber();
-      const { data: orderRow, error: orderErr } = await supabase
-        .from("bulk_order_requests")
-        .insert({
-          organization_id: athlete.organization_id,
-          athlete_id: athlete.id,
-          requested_by: user.id,
-          status: "submitted",
-          order_number: orderNumber,
-        })
-        .select("id, order_number")
-        .single();
-      if (orderErr || !orderRow) throw orderErr ?? new Error("Insert failed");
-
-      const items = Object.entries(qtys)
+      // The server prices the order (bulk-sheet rules) and checks stock; the
+      // unit price on this dialog is a display estimate.
+      const items: PortalOrderItem[] = Object.entries(qtys)
         .filter(([, qty]) => qty > 0)
         .map(([key, qty]) => {
           const [color, size] = key.split("|");
-          const variant = hasVariants ? variantByCell.get(cellKey(color, size)) : undefined;
-          const variantPrice = variant?.price ?? null;
-          const notes = variant
-            ? JSON.stringify({
-                shopify_variant_id: variant.shopifyVariantId,
-                sku: variant.sku ?? null,
-              })
-            : null;
-          return {
-            order_request_id: orderRow.id,
-            product_id: product.id,
-            product_name_snapshot: product.title,
-            size,
-            color: color || null,
-            quantity: qty,
-            unit_wholesale_price: unitWholesale,
-            unit_retail_price: variantPrice ?? product.price,
-            notes,
-          };
+          return { product_id: product.id, product_name: product.title, size, quantity: qty, color: color || null };
         });
-
-      if (items.length) {
-        const { error: itemsErr } = await supabase.from("bulk_order_items").insert(items);
-        if (itemsErr) throw itemsErr;
+      const res = await submitPortalOrder({
+        organizationId: athlete.organization_id,
+        athleteId: athlete.id,
+        userId: user.id,
+        items,
+        summary: `Single product order · ${product.title}`,
+        creditToApply: 0,
+        amountDue: 0,
+        idempotencyKey: orderKey,
+        viewingAs: isImpersonating,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Submit failed");
+        return;
       }
-
-      toast.success(`Order ${orderRow.order_number ?? ""} submitted — we'll be in touch`);
+      const total = res.subtotal != null ? ` · $${res.subtotal.toFixed(2)}` : "";
+      toast.success(
+        res.replayed
+          ? `Order ${res.orderNumber ?? ""} was already submitted`
+          : `Order ${res.orderNumber ?? ""} submitted${total} — we'll be in touch`,
+      );
+      setOrderKey(newIdempotencyKey());
       setQtys({});
       setAutoTotal(0);
       setAutoDistribute(false);

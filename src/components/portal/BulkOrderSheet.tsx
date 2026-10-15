@@ -17,6 +17,8 @@ import { useAuth } from "@/auth/AuthProvider";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
 import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { submitPortalOrder, type PortalOrderItem } from "@/lib/portal-commerce";
+import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { ProductImageLightbox } from "./ProductImageLightbox";
 import type { VolumeTier } from "@/hooks/usePortalPricing";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
@@ -51,11 +53,6 @@ interface Props {
   onBlockedSubmit?: () => void;
 }
 
-function generateOrderNumber(): string {
-  const year = new Date().getFullYear();
-  const rand = Math.floor(Math.random() * 900 + 100);
-  return `BR-${year}-${rand}`;
-}
 
 function isOneSize(p: PortalProduct): boolean {
   // Heuristic: hat/beanie product types use a single One Size column.
@@ -294,6 +291,9 @@ export function BulkOrderSheet({
   const [autoTotal, setAutoTotal] = useState<Record<string, number>>({});
   const { wallet, refetch: refetchWallet } = useAthleteCredit(athleteId);
   const [creditInput, setCreditInput] = useState<string>("");
+  // One key per checkout attempt, kept across retries and double-clicks;
+  // replaced only after a successful submit.
+  const [orderKey, setOrderKey] = useState(() => newIdempotencyKey());
 
   const visibleProducts = useMemo(
     () => products.filter((p) => !isExcluded(p.title)),
@@ -427,116 +427,54 @@ export function BulkOrderSheet({
     }
     setSubmitting(true);
     try {
-      const orderNumber = generateOrderNumber();
-      // 1) Insert order request
-      const { data: orderRow, error: orderErr } = await supabase
-        .from("bulk_order_requests")
-        .insert({
-          organization_id: organizationId,
-          athlete_id: athleteId,
-          requested_by: user.id,
-          status: "submitted",
-          order_number: orderNumber,
-          // total_units recalculated by trigger after items insert
-        })
-        .select("id, order_number")
-        .single();
-
-      if (orderErr || !orderRow) throw orderErr ?? new Error("Insert failed");
-
-      // 2) Build items from draft; attach variant identifiers in notes
-      //    so downstream sync can resolve the exact Shopify variant.
-      const items: Array<{
-        order_request_id: string;
-        product_id: string;
-        product_name_snapshot: string;
-        size: string;
-        quantity: number;
-        color?: string | null;
-        notes?: string | null;
-        unit_retail_price?: number | null;
-      }> = [];
-
+      // What, not what it costs: the server prices it (bulk-sheet rules), checks
+      // stock, applies the credit and records the amount due in one transaction.
+      const items: PortalOrderItem[] = [];
       const productById = new Map(products.map((p) => [p.id, p]));
       for (const [productId, byColor] of Object.entries(draft)) {
         const p = productById.get(productId);
         if (!p) continue;
-        const hasVariants =
-          (p.variants?.length ?? 0) > 0 &&
-          p.variants.some(
-            (v) => (v.color ?? "") !== "" || (v.size ?? "") !== "",
-          );
-        const lookup = new Map<string, (typeof p.variants)[number]>();
-        if (hasVariants) {
-          for (const v of p.variants) {
-            lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
-          }
-        }
-        // Single "Default Title" variant: no real color/size dimensions, but
-        // we still want the Shopify variant id attached to every line item.
-        const defaultVariant =
-          !hasVariants && (p.variants?.length ?? 0) === 1
-            ? p.variants[0]
-            : null;
         for (const [color, sizes] of Object.entries(byColor)) {
           for (const [size, qty] of Object.entries(sizes)) {
             if (qty > 0) {
-              const variant = hasVariants
-                ? lookup.get(`${color ?? ""}|${size}`)
-                : defaultVariant ?? undefined;
-              const notes = variant
-                ? JSON.stringify({
-                    shopify_variant_id: variant.shopifyVariantId,
-                    sku: variant.sku ?? null,
-                  })
-                : null;
               items.push({
-                order_request_id: orderRow.id,
                 product_id: productId,
-                product_name_snapshot: p.title,
+                product_name: p.title,
                 size,
                 quantity: qty,
                 color: color || null,
-                notes,
-                unit_retail_price: variant?.price ?? p.price ?? null,
               });
             }
           }
         }
       }
 
-      if (items.length) {
-        const { error: itemsErr } = await supabase.from("bulk_order_items").insert(items);
-        if (itemsErr) throw itemsErr;
+      const res = await submitPortalOrder({
+        organizationId,
+        athleteId,
+        userId: user.id,
+        items,
+        summary: "Bulk order sheet",
+        creditToApply,
+        amountDue,
+        idempotencyKey: orderKey,
+        viewingAs: impersonating,
+        screenSubtotal: Math.round(orderSubtotal * 100) / 100,
+      });
+      if (!res.ok) {
+        toast.error(res.error ?? "Submit failed");
+        return;
       }
+      if ((res.creditApplied ?? creditToApply) > 0) await refetchWallet();
 
-      // Apply credit if user opted in
-      if (creditToApply > 0) {
-        const { error: creditErr } = await supabase.rpc("apply_credit_to_order", {
-          _order_id: orderRow.id,
-          _amount: creditToApply,
-        });
-        if (creditErr) {
-          toast.error(`Credit not applied: ${creditErr.message}`);
-        } else {
-          await refetchWallet();
-        }
-      }
-
-      const paymentMethod =
-        creditToApply <= 0
-          ? "invoice"
-          : amountDue <= 0.01
-            ? "credit"
-            : "split";
-      await supabase
-        .from("bulk_order_requests")
-        .update({ payment_method: paymentMethod, amount_due: amountDue })
-        .eq("id", orderRow.id);
-
-      toast.success(`Order ${orderRow.order_number ?? ""} submitted — we'll be in touch`);
+      toast.success(
+        res.replayed
+          ? `Order ${res.orderNumber ?? ""} was already submitted`
+          : `Order ${res.orderNumber ?? ""} submitted — we'll be in touch`,
+      );
       clear();
       setCreditInput("");
+      setOrderKey(newIdempotencyKey());
       onOpenChange(false);
       onSubmitted?.();
     } catch (err) {

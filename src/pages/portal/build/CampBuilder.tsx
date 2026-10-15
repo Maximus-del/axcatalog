@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, CheckCircle2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { usePortalData } from "@/components/portal/PortalDataContext";
+import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { useAuth } from "@/auth/AuthProvider";
 import { CAMP_TIERS, tierForQty, submitPortalOrder } from "@/lib/portal-commerce";
 import { cn } from "@/lib/utils";
@@ -21,7 +22,9 @@ const BENEFITS = [
 
 export default function CampBuilder() {
   const navigate = useNavigate();
-  const { products, athlete } = usePortalData();
+  const { products, athlete, isImpersonating } = usePortalData();
+  // One key per checkout: a double-tap or retry returns the same order.
+  const [orderKey] = useState(() => newIdempotencyKey());
   const { user } = useAuth();
 
   const [qty, setQty] = useState<number>(50);
@@ -55,6 +58,9 @@ export default function CampBuilder() {
       .join(" · ");
 
     const res = await submitPortalOrder({
+      package: "camp",
+      idempotencyKey: orderKey,
+      viewingAs: isImpersonating,
       organizationId: athlete.organization_id,
       athleteId: athlete.id,
       userId: user.id,

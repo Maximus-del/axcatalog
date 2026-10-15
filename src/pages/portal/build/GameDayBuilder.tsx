@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Check, Minus, Plus, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { usePortalData } from "@/components/portal/PortalDataContext";
+import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import { useAuth } from "@/auth/AuthProvider";
 import { CheckoutBar } from "@/components/portal/builder/CheckoutBar";
@@ -26,7 +27,9 @@ function unitPrice(p: PortalProduct): number {
 
 export default function GameDayBuilder() {
   const navigate = useNavigate();
-  const { products, athlete } = usePortalData();
+  const { products, athlete, isImpersonating } = usePortalData();
+  // One key per checkout: a double-tap or retry returns the same order.
+  const [orderKey] = useState(() => newIdempotencyKey());
   const { wallet, refetch: refetchCredit } = useAthleteCredit(athlete.id);
   const { user } = useAuth();
 
@@ -88,6 +91,10 @@ export default function GameDayBuilder() {
     const summary = `Game Day · ${product.title}${color ? ` · ${color}` : ""} · ${personalization.join(" ") || "no personalization"} · ${turn.label} (${turn.window})`;
 
     const res = await submitPortalOrder({
+      package: "game_day",
+      idempotencyKey: orderKey,
+      viewingAs: isImpersonating,
+      turnaround: turn.key === "rush" ? "rush" : "standard",
       organizationId: athlete.organization_id,
       athleteId: athlete.id,
       userId: user.id,
@@ -101,19 +108,22 @@ export default function GameDayBuilder() {
       toast.error(res.error ?? "Could not submit order.");
       return;
     }
-    if (math.creditApplied > 0) void refetchCredit();
-    // INTEGRATION POINT: if a checkout URL exists, redirect to pay math.amountDue.
+    // The server's numbers, not the screen's: it priced the order and applied the credit.
+    const amountDue = res.amountDue ?? math.amountDue;
+    const creditApplied = res.creditApplied ?? math.creditApplied;
+    if (creditApplied > 0) void refetchCredit();
+    // INTEGRATION POINT: if a checkout URL exists, redirect to pay amountDue.
     const url = buildExternalCheckoutHandoff({
       orderId: res.orderId!,
       orderNumber: res.orderNumber!,
-      amountDue: math.amountDue,
-      creditApplied: math.creditApplied,
+      amountDue,
+      creditApplied,
     });
     if (url) {
       window.location.href = url;
       return;
     }
-    setDone({ orderNumber: res.orderNumber!, amountDue: math.amountDue });
+    setDone({ orderNumber: res.orderNumber!, amountDue });
   }
 
   if (done) {

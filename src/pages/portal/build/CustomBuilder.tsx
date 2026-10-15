@@ -6,6 +6,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Shirt, Palette, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { usePortalData } from "@/components/portal/PortalDataContext";
+import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { usePortalBlanks } from "@/hooks/usePortalBlanks";
 import { usePortalDesigns } from "@/hooks/usePortalDesigns";
 import { CLIENT_PREVIEW_BUCKET } from "@/lib/portal/client-designs";
@@ -25,7 +26,9 @@ const PLACEMENT_POS: Record<string, React.CSSProperties> = {
 export default function CustomBuilder() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { athlete } = usePortalData();
+  const { athlete, isImpersonating } = usePortalData();
+  // One key per checkout: a double-tap or retry returns the same order.
+  const [orderKey] = useState(() => newIdempotencyKey());
   const { user } = useAuth();
   const { blanks } = usePortalBlanks();
   const { designs } = usePortalDesigns(athlete.id);
@@ -58,6 +61,9 @@ export default function CustomBuilder() {
     setSubmitting(true);
     const summary = `Custom piece · ${blank.name}${color ? ` (${color.name})` : ""} · design "${design.title ?? "Untitled"}" · ${place.surface} ${place.label} · qty ${qty}${note ? ` · ${note}` : ""}`;
     const res = await submitPortalOrder({
+      package: "custom",
+      idempotencyKey: orderKey,
+      viewingAs: isImpersonating,
       organizationId: athlete.organization_id,
       athleteId: athlete.id,
       userId: user.id,

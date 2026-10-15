@@ -21,5 +21,10 @@ done
 su postgres -c "psql -X -d $db -At -F ' | ' -c \"select case when ok then 'PASS' else 'FAIL' end, name, coalesce(detail,'') from t.results order by ok, name\""
 fails=$(su postgres -c "psql -X -d $db -At -c 'select count(*) from t.results where not ok'")
 total=$(su postgres -c "psql -X -d $db -At -c 'select count(*) from t.results'")
-echo "---- $total checks, $fails failed"
-[ "$fails" = "0" ]
+written=0
+for f in $(ls "$here"/stage*.test.sql | sort); do
+  written=$((written + $(grep -c 't.check(' "$f")))
+  case "$f" in *"$1"*) break;; esac
+done
+echo "---- $total checks ran of $written written, $fails failed"
+[ "$fails" = "0" ] && [ "$total" = "$written" ]
