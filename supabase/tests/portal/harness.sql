@@ -56,7 +56,7 @@ $$;
 
 create table public.products (id uuid primary key, organization_id uuid, title text, status text default 'published', price numeric, metadata jsonb default '{}');
 create table public.product_athletes (product_id uuid, athlete_id uuid, primary key (product_id, athlete_id));
-create table public.product_images (id uuid primary key default gen_random_uuid(), product_id uuid, storage_bucket text, storage_path text, is_primary boolean, sort_order int, metadata jsonb default '{}');
+create table public.product_images (id uuid primary key default gen_random_uuid(), product_id uuid, storage_bucket text, storage_path text, is_primary boolean, sort_order int, metadata jsonb default '{}', created_at timestamptz default now());
 
 create function public.viewer_athlete_ids() returns setof uuid language sql stable security definer set search_path = public as $$
   select athlete_id from user_athlete_links where user_id = auth.uid()

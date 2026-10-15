@@ -25,11 +25,14 @@ animation, icons and images inside `src/components/portal/**` and
    database function, storage policy or edge function. Never edit
    `supabase/**`.
 2. Never add a new `supabase.from(...)`, `.rpc(...)` or `storage` call in portal
-   code. Use the data already provided by `usePortalData()`,
-   `useCurrentAthlete()` and the existing hooks in `src/hooks` and
-   `src/lib/portal`. If the data you need is not there, say so — do not query
-   for it. A query the database refuses returns an **empty list, not an error**,
-   so it looks like "no data" rather than a mistake.
+   code. Get data and actions from the hooks in `src/hooks/usePortalApi.ts`
+   (usePortalSummary, usePortalDestinations, usePortalCatalog, usePortalQuote,
+   usePortalSubmitOrder, usePortalProjects, usePortalMessages, usePortalUpload,
+   usePortalAssets, usePortalDrops, usePortalAnalytics, usePortalProfile…) and
+   from `usePortalData()`. Types are in `src/lib/portal/api/contract.ts`; the
+   full map is `docs/PORTAL_ADAPTER.md`. If the data you need is not there, say
+   so — do not query for it. A query the database refuses returns an **empty
+   list, not an error**, so it looks like "no data" rather than a mistake.
 3. Never edit `src/lib/portal/*.test.ts`, `src/lib/portal/client-designs.ts`,
    `src/integrations/supabase/client.ts`, `src/auth/**`, or anything under
    `src/pages/admin-v2/**`, `src/components/admin-v2/**`, `src/lib/v2/**`.
@@ -50,6 +53,11 @@ animation, icons and images inside `src/components/portal/**` and
    `src/lib/portal/entity-voice.ts`, never by joining first and last name.
    Not every client is a player — some are schools and organisations.
 7. Mobile first. Check every change at 375px wide.
+8. Money is `{amountMinor, currency}` — format with `formatMoney`. `null` means
+   unknown (show "—"), never zero. Per-era revenue is always null today: show
+   "Revenue not attributed", never split a total.
+9. When `usePortalScope().viewingAs` is true (AX viewing as a client), every
+   write is refused by the server. Disable write buttons and say why.
 
 ---
 

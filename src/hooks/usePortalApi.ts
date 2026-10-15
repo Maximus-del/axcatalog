@@ -21,7 +21,16 @@ import {
   type OrderRequestInput,
   type Turnaround,
 } from "@/lib/portal/api/orders";
-import type { Product, Project } from "@/lib/portal/api/contract";
+import type { MediaAsset, Product, Project } from "@/lib/portal/api/contract";
+import {
+  createDrop,
+  fetchAnalytics,
+  getProfile,
+  listAssets,
+  listDrops,
+  updateDrop,
+  updateProfile,
+} from "@/lib/portal/api/brand";
 import {
   createProject,
   decideConcept,
@@ -213,5 +222,71 @@ export function usePortalUpload() {
   return useMutation({
     mutationFn: (input: { file: File; purpose: "inspiration" | "attachment"; projectId?: string | null }) =>
       uploadFile(scope, input.file, input.purpose, input.projectId ?? null),
+  });
+}
+
+/** Content library: product photos, AX social assets, published posts. */
+export function usePortalAssets(opts: { kind?: MediaAsset["kind"] | null; collection?: string | null } = {}) {
+  const scope = usePortalScope();
+  return useQuery({
+    queryKey: keyFor(scope, "assets", opts.kind ?? null, opts.collection ?? null),
+    queryFn: () => listAssets(scope, opts),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function usePortalDrops() {
+  const scope = usePortalScope();
+  return useQuery({ queryKey: keyFor(scope, "drops"), queryFn: () => listDrops(scope), staleTime: 60_000 });
+}
+
+export function usePortalCreateDrop() {
+  const scope = usePortalScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof createDrop>[1]) => createDrop(scope, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keyFor(scope, "drops") }),
+  });
+}
+
+/** Edit a draft or send it for review. A 409 means it changed: refetch, don't retry. */
+export function usePortalUpdateDrop() {
+  const scope = usePortalScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof updateDrop>[1]) => updateDrop(scope, input),
+    onSettled: () => void qc.invalidateQueries({ queryKey: keyFor(scope, "drops") }),
+  });
+}
+
+/** Brand HQ reporting for a period (defaults to the last 12 months in the viewer's zone). */
+export function usePortalAnalytics(months = 12) {
+  const scope = usePortalScope();
+  const p = useMemo(() => lastMonths(months, viewerTimeZone()), [months]);
+  return useQuery({
+    queryKey: keyFor(scope, "analytics", p.from, p.to, p.timeZone),
+    queryFn: () => fetchAnalytics(scope, p),
+    staleTime: 60_000,
+  });
+}
+
+export function usePortalProfile() {
+  const scope = usePortalScope();
+  const { sales } = usePortalData();
+  const lifetime = sales.loading ? null : sales.lifetimeRevenue;
+  return useQuery({
+    queryKey: keyFor(scope, "profile", lifetime),
+    queryFn: () => getProfile(scope, lifetime),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function usePortalUpdateProfile() {
+  const scope = usePortalScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { patch: Parameters<typeof updateProfile>[1]; expectedVersion?: string | null }) =>
+      updateProfile(scope, input.patch, input.expectedVersion ?? null),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keyFor(scope, "profile") }),
   });
 }

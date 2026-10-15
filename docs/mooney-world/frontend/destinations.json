@@ -1,0 +1,34 @@
+[
+  {
+    "id": "atlanta",
+    "label": "Atlanta",
+    "jerseyNumber": 1,
+    "accent": "#EF233C",
+    "image": "/mooney/assets/atlanta-1.png",
+    "href": "/portal/gear?collection=atlanta"
+  },
+  {
+    "id": "chicago",
+    "label": "Chicago",
+    "jerseyNumber": 11,
+    "accent": "#F58220",
+    "image": "/mooney/assets/chicago-11.png",
+    "href": "/portal/gear?collection=chicago"
+  },
+  {
+    "id": "new-york",
+    "label": "New York",
+    "jerseyNumber": 17,
+    "accent": "#2878FF",
+    "image": "/mooney/assets/new-york-17.png",
+    "href": "/portal/gear?collection=new-york"
+  },
+  {
+    "id": "moons-house",
+    "label": "Moon\u2019s House",
+    "jerseyNumber": null,
+    "accent": "#D8B878",
+    "image": "/mooney/assets/moons-house.png",
+    "href": "/portal/gear?collection=moons-house"
+  }
+]

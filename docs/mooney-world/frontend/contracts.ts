@@ -1,0 +1,13 @@
+export type DestinationId='atlanta'|'chicago'|'new-york'|'moons-house';
+export type Money={amountMinor:number;currency:string};
+export type Loadable<T>={state:'loading'}|{state:'error';message:string}|{state:'ready';data:T};
+export interface Destination{id:DestinationId;label:string;jerseyNumber:number|null;accent:string;image:string;href:string}
+export interface Product{id:string;destinationIds:DestinationId[];title:string;unitPrice:Money|null;frontImage:string|null;backImage:string|null;publicUrl:string|null;hidden:boolean;orderable:boolean}
+export interface Project{id:string;title:string;destinationId:DestinationId|null;status:'requested'|'in_progress'|'feedback'|'approved'|'archived';version:number;concepts:{id:string;imageUrl:string;version:number}[];updatedAt:string}
+export interface Message{id:string;projectId:string|null;body:string;authorLabel:string;createdAt:string;attachments:{id:string;name:string;downloadUrl:string}[]}
+export interface MediaAsset{id:string;title:string;kind:'photo'|'video'|'graphic'|'product';thumbnailUrl:string|null;downloadUrl:string|null;productId:string|null;caption:string|null;approved:boolean}
+export interface Drop{id:string;title:string;status:'draft'|'review'|'scheduled'|'live';scheduledAt:string|null;timeZone:string;destinationId:DestinationId|null}
+export interface Order{id:string;number:string;createdAt:string;units:number;status:string;total:Money|null;destinationId:DestinationId|null}
+export interface Summary{creditBalance:Money|null;lifetimeRevenue:Money|null;ordersCount:number|null;liveProductsCount:number|null;attributedRevenue:Money|null;period:{from:string;to:string;timeZone:string};asOf:string;revenueBasis:'gross'|'net'|'athlete_share';followers:number|null;accessMembers:number|null;vipMembers:number|null}
+export interface Page<T>{items:T[];nextCursor:string|null}
+export interface ApiError{code:string;message:string;requestId:string;fieldErrors?:Record<string,string>}
