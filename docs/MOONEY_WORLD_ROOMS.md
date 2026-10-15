@@ -49,15 +49,20 @@ screen. Data comes only from the hooks in `src/hooks/usePortalApi.ts`.
 
 ## Other rooms
 
-- **My Gear** (page `PortalProducts.tsx`): destination chips (All plus each
-  destination with accent dot and jersey number) filter
-  `usePortalCatalog({ collection })`; My Products / My Designs (`DesignsGrid`)
-  tabs; product cards with front/back toggle, unit price, Copy link (only
-  with `publicUrl`), View, and Order (disabled unless `orderable`); Bulk order
-  sheet (`openOrderSheet()`); Hidden (n) to hide or unhide. Side rail: the
-  active destination figure, Order for your crew (Game Day, Camp and VIP lead
-  to the existing builders), AX credit with Use credit. Hero: "Your gear.
-  Your legacy."
+- **My Gear** (page `PortalProducts.tsx`): header "Your Live Product Lineup"
+  with the live count. Tabs **Live** / **Archive** come from
+  `usePortalCatalog({ collection, lifecycle: "live" | "archive", hidden: "include" })`,
+  and the tab counts from its `liveCount` / `archiveCount`. Live means on the
+  website; Archive means AX took it off the website but it is still orderable
+  (say "Reprinted from the design file"). The client does not hide products in
+  this shell: no Hide or Hidden (n) controls. Destination chips (All plus each
+  destination with an accent dot and jersey number) filter both tabs.
+  Product cards have a front/back toggle, unit price, Copy link (Live only,
+  when `publicUrl` exists), View and Order (`ProductOrderDialog`; for Archive
+  the product comes from `usePortalData().archivedProducts`). Include the Bulk
+  order sheet (`openOrderSheet()`). Side rail: the active destination figure,
+  Order for your crew (Game Day, Camp and VIP lead to the existing builders),
+  and AX credit with Use credit.
 - **Creative Studio** (`PortalStudio.tsx`; `PortalMockups.tsx` is its Made for
   you tab): Projects / Made for you / New request. Project list with
   thumbnail, title, status, date and unread dot. The selected project shows
@@ -75,12 +80,17 @@ screen. Data comes only from the hooks in `src/hooks/usePortalApi.ts`.
   Save draft or Send to AX for review), plus a Draft → Review → Scheduled →
   Live stepper and This week's plays. Hero: "Ready for the spotlight."
 - **Brand HQ** (`PortalAnalytics.tsx`, `PortalProfile.tsx`, `PortalEra.tsx`):
-  4 KPI tiles; an attributed revenue chart (12 months, gross, "Updated" from
-  `asOf`, or "Revenue not attributed"); recent orders
-  (`usePortalOrderHistory`); top products; Your journey era cards, each
-  showing "Revenue not attributed"; community (followers, access, VIP);
+  the numbers live here. KPI tiles are AX credit, Lifetime gross revenue and
+  Orders (`usePortalSummary`). Then come an attributed revenue chart (12
+  months, gross, "Updated" from `asOf`, or "Revenue not attributed"), recent
+  orders (`usePortalOrderHistory`), top products, Your journey era cards (each
+  showing "Revenue not attributed"), community (followers, access, VIP), and a
   profile with level progress, the approved referral code with Copy, and Edit
   profile (bio and an https website only). Hero: "Your brand. The big
   picture."
+
+The Locker Room has **no KPI row**. Numbers live in Brand HQ, and the live
+product count lives in My Gear's header. Below the locker wall come only
+Quick Plays and Your Next Move.
 
 Build one room per prompt. Check it at 375, 768, 1024 and 1440px, then stop.

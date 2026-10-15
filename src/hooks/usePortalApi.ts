@@ -86,12 +86,16 @@ export function usePortalDestinations() {
 
 /**
  * My Gear: the athlete's products in the contract shape, with the
- * destinations each belongs to. `collection` is a destination id from
+ * destinations each belongs to. `lifecycle` picks the tab: "live" (default —
+ * on the website), "archive" (off the website, still orderable) or "all". `collection` is a destination id from
  * usePortalDestinations (e.g. "atlanta"); "all" or empty means every product.
  */
-export function usePortalCatalog(opts: { collection?: string | null; hidden?: "exclude" | "only" | "include" } = {}) {
+export function usePortalCatalog(
+  opts: { collection?: string | null; hidden?: "exclude" | "only" | "include"; lifecycle?: "live" | "archive" | "all" } = {},
+) {
   const scope = usePortalScope();
-  const { products, productsLoading, hidden } = usePortalData();
+  const { products: liveProducts, archivedProducts, productsLoading, hidden } = usePortalData();
+  const products = useMemo(() => [...liveProducts, ...archivedProducts], [liveProducts, archivedProducts]);
   const destinations = usePortalDestinations();
   const links = useQuery({
     queryKey: keyFor(scope, "product-destinations", (destinations.data ?? []).map((d) => d.collectionId).join(",")),
@@ -104,10 +108,17 @@ export function usePortalCatalog(opts: { collection?: string | null; hidden?: "e
       products.map((p) => toContractProduct(p, links.data?.get(p.id) ?? [], hidden.hiddenIds.has(p.id))),
     [products, links.data, hidden.hiddenIds],
   );
-  const items = useMemo(() => filterProducts(all, opts), [all, opts.collection, opts.hidden]); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = useMemo(() => filterProducts(all, opts), [all, opts.collection, opts.hidden, opts.lifecycle]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Counts for the Live / Archive tabs, within the chosen collection.
+  const inCollection = useMemo(
+    () => filterProducts(all, { collection: opts.collection, hidden: opts.hidden, lifecycle: "all" }),
+    [all, opts.collection, opts.hidden],
+  );
   return {
     items,
     all,
+    liveCount: inCollection.filter((p) => p.lifecycle === "live").length,
+    archiveCount: inCollection.filter((p) => p.lifecycle === "archive").length,
     hiddenCount: all.filter((p) => p.hidden).length,
     loading: productsLoading || destinations.isLoading || links.isLoading,
     hide: hidden.hide,

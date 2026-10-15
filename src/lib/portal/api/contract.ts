@@ -53,6 +53,12 @@ export interface Product {
   backImage: string | null;
   publicUrl: string | null;
   hidden: boolean;
+  /**
+   * [ADDED] "live" = on the website (published or internal); "archive" = taken
+   * off the website by AX but still orderable — AX reprints it from the design
+   * file. Decided by the store status AX sets, never by the client.
+   */
+  lifecycle: "live" | "archive";
   orderable: boolean;
 }
 

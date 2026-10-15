@@ -3,6 +3,7 @@ import { formatMoney, money, sumMoney, toApiError, toMinor } from "./money";
 import { lastMonths, monthKeys, zonedMidnightUtc } from "./period";
 import { parseRevenue, summaryFrom } from "./summary";
 import { destinationHref, toDestination, type CollectionRow } from "./destinations";
+import { filterProducts, isOrderable, toContractProduct } from "./products";
 
 describe("money", () => {
   it("converts decimal strings without float drift", () => {
@@ -199,5 +200,33 @@ describe("destinations", () => {
 
   it("encodes the key in the href", () => {
     expect(destinationHref("moon's house")).toBe("/portal/gear?collection=moon's%20house");
+  });
+});
+
+describe("live vs archive", () => {
+  const base = {
+    id: "p", title: "Tee", slug: "tee", status: "published", product_type: "tee", shopify_handle: null, blank_id: null,
+    primary_image_url: null, images: [], price: null, wholesale_price: null, athlete_unit_price: null,
+    variants: [{ id: "v", color: "Black", size: "L", available: false }], sizes: [], colors: [], created_at: "",
+  } as unknown as Parameters<typeof toContractProduct>[0];
+
+  it("labels by store status, never by the client's hide", () => {
+    expect(toContractProduct(base, [], false).lifecycle).toBe("live");
+    expect(toContractProduct({ ...base, status: "archived" }, [], true).lifecycle).toBe("archive");
+    expect(toContractProduct({ ...base, status: "internal" }, [], false).lifecycle).toBe("live");
+  });
+
+  it("keeps archived products orderable even when Shopify says sold out", () => {
+    expect(isOrderable({ ...base, status: "published" })).toBe(false);
+    expect(isOrderable({ ...base, status: "archived" })).toBe(true);
+    expect(isOrderable({ ...base, status: "draft" })).toBe(false);
+  });
+
+  it("filters the Live and Archive tabs, live by default", () => {
+    const live = toContractProduct(base, ["atlanta"], false);
+    const arch = toContractProduct({ ...base, id: "a", status: "archived" }, ["atlanta"], false);
+    expect(filterProducts([live, arch]).map((p) => p.id)).toEqual(["p"]);
+    expect(filterProducts([live, arch], { lifecycle: "archive" }).map((p) => p.id)).toEqual(["a"]);
+    expect(filterProducts([live, arch], { lifecycle: "all", collection: "atlanta" })).toHaveLength(2);
   });
 });

@@ -51,6 +51,9 @@ export function frontBack(p: Pick<PortalProduct, "images" | "primary_image_url">
 }
 
 export function isOrderable(p: Pick<PortalProduct, "status" | "variants">): boolean {
+  // Archived: off the website, so Shopify stock no longer applies — AX reprints
+  // it from the design file (portal_quote_order treats it the same way).
+  if (p.status === "archived") return true;
   if (p.status !== "published" && p.status !== "internal") return false;
   const real = (p.variants ?? []).filter((v) => (v.color ?? "") !== "" || (v.size ?? "") !== "");
   // No real variants → made to order, as the bulk sheet treats it.
@@ -78,6 +81,7 @@ export function toContractProduct(
     backImage: back,
     publicUrl: publicUrlOf(p),
     hidden,
+    lifecycle: p.status === "archived" ? "archive" : "live",
     orderable: isOrderable(p),
   };
 }
@@ -109,10 +113,12 @@ export async function fetchProductDestinations(
 /** Filter for /portal/gear?collection=…&hidden=… */
 export function filterProducts(
   products: Product[],
-  opts: { collection?: string | null; hidden?: "exclude" | "only" | "include" } = {},
+  opts: { collection?: string | null; hidden?: "exclude" | "only" | "include"; lifecycle?: "live" | "archive" | "all" } = {},
 ): Product[] {
   const hidden = opts.hidden ?? "exclude";
+  const lifecycle = opts.lifecycle ?? "live";
   return products.filter((p) => {
+    if (lifecycle !== "all" && p.lifecycle !== lifecycle) return false;
     if (opts.collection && opts.collection !== "all" && !p.destinationIds.includes(opts.collection)) return false;
     if (hidden === "exclude" && p.hidden) return false;
     if (hidden === "only" && !p.hidden) return false;

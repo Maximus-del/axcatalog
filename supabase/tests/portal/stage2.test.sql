@@ -55,8 +55,8 @@ select t.check('quote: contains no cost or margin',
 -- ---------------------------------------------------------------- validation
 select t.check('quote: another athlete''s product is "Not available" (422)',
   t.sqlstate_of($$select public.portal_quote_order('00000000-0000-0000-0000-00000000000d', '[{"productId":"00000000-0000-0000-0000-0000000001c1","quantity":1}]')$$) like 'P0422%Not available%');
-select t.check('quote: archived product refused',
-  t.sqlstate_of($$select public.portal_quote_order('00000000-0000-0000-0000-00000000000d', '[{"productId":"00000000-0000-0000-0000-0000000004d1","quantity":1}]')$$) like 'P0422%No longer available%');
+select t.check('quote: draft product refused',
+  t.sqlstate_of($$select public.portal_quote_order('00000000-0000-0000-0000-00000000000d', '[{"productId":"00000000-0000-0000-0000-0000000006d1","quantity":1}]')$$) like 'P0422%No longer available%');
 select t.check('quote: quantity 0 / 501 / "abc" refused with field errors',
   t.sqlstate_of($$select public.portal_quote_order('00000000-0000-0000-0000-00000000000d', '[{"productId":"00000000-0000-0000-0000-0000000001d1","quantity":0},{"productId":"00000000-0000-0000-0000-0000000001d1","quantity":501},{"productId":"00000000-0000-0000-0000-0000000001d1","quantity":"abc"}]')$$)
   like '%items[0].quantity%items[1].quantity%items[2].quantity%');
@@ -126,7 +126,7 @@ select t.check('camp: units-only request recorded', (select total_units = 75 and
 
 -- failure leaves nothing behind
 select t.check('bad line: whole order refused, nothing written',
-  t.raises($$select public.portal_submit_order_request('00000000-0000-0000-0000-00000000000d', '11111111-0000-0000-0000-000000000005', '[{"productId":"00000000-0000-0000-0000-0000000002d1","quantity":1},{"productId":"00000000-0000-0000-0000-0000000004d1","quantity":1}]')$$, 'P0422')
+  t.raises($$select public.portal_submit_order_request('00000000-0000-0000-0000-00000000000d', '11111111-0000-0000-0000-000000000005', '[{"productId":"00000000-0000-0000-0000-0000000002d1","quantity":1},{"productId":"00000000-0000-0000-0000-0000000006d1","quantity":1}]')$$, 'P0422')
   and (select count(*) from bulk_order_requests where athlete_id = :M) = 4);
 
 -- ---------------------------------------------------------------- refund hole closed

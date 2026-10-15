@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PortalImage {
@@ -57,7 +57,13 @@ export interface PortalProduct {
 }
 
 interface State {
+  /** Live and internal products — what every existing portal screen shows. */
   products: PortalProduct[];
+  /**
+   * Archived: off the website but still orderable (AX reprints from the design
+   * file). Only the Locker Room shell's Archive tab shows these.
+   */
+  archived: PortalProduct[];
   loading: boolean;
   error: string | null;
   refetch: () => void;
@@ -65,7 +71,8 @@ interface State {
 
 /**
  * Products linked to an athlete via product_athletes.
- * Filters to status in ('published','internal'). Includes primary image
+ * Loads status in ('published','internal','archived'); archived ones come
+ * back separately so no existing screen starts showing them. Includes primary image
  * (public URL) and the blank's available sizes for inline ordering.
  */
 export function usePortalProducts(athleteId: string | null): State {
@@ -104,7 +111,7 @@ export function usePortalProducts(athleteId: string | null): State {
            )`,
         )
         .eq("athlete_id", athleteId)
-        .in("product.status", ["published", "internal"]);
+        .in("product.status", ["published", "internal", "archived"]);
 
       if (cancelled) return;
       if (err) {
@@ -361,5 +368,12 @@ export function usePortalProducts(athleteId: string | null): State {
     };
   }, [athleteId, tick]);
 
-  return { products, loading, error, refetch };
+  const split = useMemo(
+    () => ({
+      live: products.filter((p) => p.status !== "archived"),
+      archived: products.filter((p) => p.status === "archived"),
+    }),
+    [products],
+  );
+  return { products: split.live, archived: split.archived, loading, error, refetch };
 }

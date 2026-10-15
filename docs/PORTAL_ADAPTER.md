@@ -23,7 +23,7 @@ browser sends alone, or the `portal-files` edge function.
 |---|---|---|---|
 | `GET /summary` | `usePortalSummary(period?)` | `portal_revenue_summary`, `athlete_credit_wallets`, `athlete_access_summary` | Lifetime and period are separate scopes — never reconcile them. `revenueBasis: "gross"`. `asOf` = last Shopify import. |
 | `GET /collections` | `usePortalDestinations()` | `collections` (RLS) + `collection_products` | One destination per active collection; art/label/jersey/accent from `collections.metadata.portal_destination`. |
-| `GET /products?collection=&hidden=` | `usePortalCatalog({collection, hidden})` | existing product load + `collection_products` | `unitPrice` = bulk-sheet price (display). Front/back from images. `publicUrl` only when a Shopify handle exists. |
+| `GET /products?collection=&hidden=` | `usePortalCatalog({collection, hidden, lifecycle})` | existing product load + `collection_products` | `unitPrice` = bulk-sheet price (display). Front/back from images. `publicUrl` only when a Shopify handle exists. `lifecycle`: `"live"` (default, on the website) / `"archive"` (off the website, still orderable as made to order) / `"all"`; `liveCount` / `archiveCount` for tabs. Collections are tagged by AX in V2 → product → Collections. |
 | `GET /products/:id` | `usePortalData().products` | existing | Variants/sizes from the Shopify-synced `product_variants`. |
 | *(quote)* | `usePortalQuote(items, {turnaround})` | `portal_quote_order` | **Show this price.** Server rules; field errors per line. |
 | `POST /order-requests` | `usePortalSubmitOrder()` | `portal_submit_order_request` | One transaction. Idempotency key required. 409 if the price changed (carries the new quote). |

@@ -19,6 +19,8 @@ interface PortalDataValue {
   stats: ReturnType<typeof usePortalStats>;
   sales: ReturnType<typeof usePortalSales>;
   products: ReturnType<typeof usePortalProducts>["products"];
+  /** Archived products: off the website, still orderable. Only the Archive tab shows them. */
+  archivedProducts: ReturnType<typeof usePortalProducts>["archived"];
   productsLoading: boolean;
   refetchProducts: () => void;
   orders: ReturnType<typeof usePortalOrders>["orders"];
@@ -54,7 +56,7 @@ export function PortalDataProvider({
 }: ProviderProps) {
   const stats = usePortalStats(athlete.id);
   const sales = usePortalSales(athlete.organization_id ?? null, athlete.id);
-  const { products, loading: productsLoading, refetch: refetchProducts } =
+  const { products, archived: archivedProducts, loading: productsLoading, refetch: refetchProducts } =
     usePortalProducts(athlete.id);
   const { orders, loading: ordersLoading, refetch: refetchOrders } = usePortalOrders(athlete.id);
   const hidden = usePortalHiddenProducts(athlete.id);
@@ -86,6 +88,7 @@ export function PortalDataProvider({
     stats,
     sales,
     products,
+    archivedProducts,
     productsLoading,
     refetchProducts: useCallback(() => refetchProducts(), [refetchProducts]),
     orders,

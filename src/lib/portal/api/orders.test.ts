@@ -73,7 +73,9 @@ describe("product shape", () => {
   it("orderable: made-to-order with no variants, not when every real variant is out", () => {
     expect(isOrderable({ status: "published", variants: [] })).toBe(true);
     expect(isOrderable({ status: "published", variants: [{ color: "Black", size: "M", available: false }] as never })).toBe(false);
-    expect(isOrderable({ status: "archived", variants: [] } as never)).toBe(false);
+    // Archived: off the website but reprinted from the design file (Live vs Archive, 2026-10-15).
+    expect(isOrderable({ status: "archived", variants: [] } as never)).toBe(true);
+    expect(isOrderable({ status: "draft", variants: [] } as never)).toBe(false);
   });
   it("public link only from a real Shopify handle", () => {
     expect(publicUrlOf({ shopify_handle: "the-1-hoodie" })).toBe("https://www.athletexclusive.com/products/the-1-hoodie");
@@ -81,9 +83,9 @@ describe("product shape", () => {
   });
   it("filters by destination and hidden", () => {
     const ps = [
-      { id: "1", destinationIds: ["atlanta"], hidden: false },
-      { id: "2", destinationIds: ["chicago"], hidden: true },
-      { id: "3", destinationIds: [], hidden: false },
+      { id: "1", destinationIds: ["atlanta"], hidden: false, lifecycle: "live" },
+      { id: "2", destinationIds: ["chicago"], hidden: true, lifecycle: "live" },
+      { id: "3", destinationIds: [], hidden: false, lifecycle: "live" },
     ] as never[];
     expect(filterProducts(ps, { collection: "atlanta" }).map((p: { id: string }) => p.id)).toEqual(["1"]);
     expect(filterProducts(ps).map((p: { id: string }) => p.id)).toEqual(["1", "3"]);

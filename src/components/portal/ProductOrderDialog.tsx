@@ -126,6 +126,9 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const isCellAvailable = (color: string, size: string): boolean => {
     if (!hasVariants) return true;
     const v = variantByCell.get(cellKey(color, size));
+    // Archived products are reprinted from the design file: Shopify stock no
+    // longer applies, only whether the colour/size combination exists.
+    if (product.status === "archived") return !!v;
     return !!v && v.available === true;
   };
 

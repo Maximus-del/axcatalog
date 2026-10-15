@@ -7,6 +7,7 @@ import { entityHref, entityLibraryHref } from "@/lib/v2/entity-nav";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { shopLink } from "@/lib/ecosystem/image";
 import { AssetImage, Card, Chip, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import ProductCollectionsCard from "@/components/admin-v2/ProductCollectionsCard";
 
 // A PRODUCT, INSIDE V2.
 //
@@ -198,7 +199,14 @@ export default function V2ProductDetail() {
             )}
           </Card>
 
-          {(data.entities.length > 0 || data.collections.length > 0) && (
+          <ProductCollectionsCard
+            productId={data.id}
+            entityIds={data.entities.map((e) => e.id)}
+            currentIds={data.collections.map((c) => c.id)}
+            status={data.status}
+          />
+
+          {data.entities.length > 0 && (
             <Card>
               <h3 className="text-[13px] font-semibold">Linked to</h3>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -210,11 +218,6 @@ export default function V2ProductDetail() {
                   >
                     {e.name}
                   </Link>
-                ))}
-                {data.collections.map((c) => (
-                  <Chip key={c.id} tone="var(--ax-violet)">
-                    {c.name}
-                  </Chip>
                 ))}
               </div>
             </Card>
