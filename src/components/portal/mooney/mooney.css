@@ -38,7 +38,7 @@
 .mw-identity strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
 .mw-identity small { color: var(--mw-quiet); font-size: 11px; }
 .mw-main { min-width: 0; }
-.mw-room-ground { min-height: calc(100dvh - 64px); background-image: linear-gradient(to bottom, transparent, hsl(var(--dark) / .85)), url('/mooney/assets/locker-room.png'); background-size: 100% 100%, 100% auto; background-position: center top; background-repeat: no-repeat, repeat-y; }
+.mw-room-ground { min-height: calc(100dvh - 64px); background-color: var(--mw-deep); background-image: linear-gradient(to bottom, hsl(var(--dark) / .25), hsl(var(--dark) / .85)), url('/mooney/assets/locker-room.png'); background-size: 100% 100%, cover; background-position: center, center bottom; background-attachment: scroll, fixed; background-repeat: no-repeat; }
 .mw-topbar { display: flex; align-items: center; gap: 12px; padding: 8px 20px; min-height: 64px; background: var(--mw-deep); border-bottom: 1px solid var(--mw-line); }
 .mw-topbar h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; }
 .mw-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
@@ -69,7 +69,7 @@
 .mw-collection-link:hover { background: color-mix(in srgb, var(--mw-destination-accent) 15%, var(--mw-deep)); }
 @media (min-width: 769px) {
   .mw-hero[data-wall="true"] { padding: 0 0 116px; }
-  .mw-hero[data-wall="true"] .mw-locker-scene { aspect-ratio: 3 / 2; background: url('/mooney/assets/locker-room.png') center / cover; }
+  .mw-hero[data-wall="true"] .mw-locker-scene { aspect-ratio: 3 / 2; background-image: linear-gradient(to bottom, transparent 62%, hsl(var(--dark) / .7)), url('/mooney/assets/locker-room.png'); background-position: center; background-size: cover; }
   .mw-hero[data-wall="true"] .mw-scene-heading { position: absolute; top: 3%; left: 3%; right: 3%; z-index: 2; }
   .mw-hero[data-wall="true"] .mw-heading { font-size: 24px; }
   .mw-hero[data-wall="true"] .mw-lockers { position: absolute; inset: 0; display: block; }
