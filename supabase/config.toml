@@ -33,3 +33,6 @@ verify_jwt = true
 # photography on, so there is nothing behind it to protect.
 [functions.image-proxy]
 verify_jwt = false
+
+[functions.portal-files]
+verify_jwt = true
