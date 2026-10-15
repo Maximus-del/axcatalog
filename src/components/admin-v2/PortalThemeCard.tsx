@@ -60,7 +60,7 @@ export default function PortalThemeCard({ entityId, entityName }: Props) {
   }
 
   function apply(theme: PortalTheme) {
-    setDraft({ ...theme, titleCard: draft.titleCard });
+    setDraft({ ...theme, titleCard: draft.titleCard, layout: draft.layout, brand: draft.brand });
     setTyped({ accent: theme.accent, header: theme.header, background: theme.background, title: theme.title });
   }
 
@@ -163,6 +163,46 @@ export default function PortalThemeCard({ entityId, entityName }: Props) {
                   </span>
                 </label>
               ))}
+            </div>
+
+            {/* Shell */}
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[hsl(var(--ax-faint))]">
+                Portal style <span className="normal-case tracking-normal">— Locker Room is the cinematic shell; same data, same permissions</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Portal style">
+                {(
+                  [
+                    ["classic", "Classic"],
+                    ["world", "Locker Room"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={draft.layout === value}
+                    onClick={() => setDraft((d) => ({ ...d, layout: value }))}
+                    className={`rounded-full border px-3.5 py-1.5 text-[12px] ${
+                      draft.layout === value
+                        ? "border-[hsl(var(--ax-accent))] text-[hsl(var(--ax-accent))]"
+                        : "border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {draft.layout === "world" && (
+                <input
+                  type="text"
+                  maxLength={32}
+                  value={draft.brand}
+                  onChange={(e) => setDraft((d) => ({ ...d, brand: e.target.value }))}
+                  placeholder="World name — e.g. Mooney World"
+                  className="mt-2 w-full rounded-lg border border-[hsl(var(--ax-border))] bg-transparent px-3 py-2 text-[13px] outline-none focus:border-[hsl(var(--ax-accent))]"
+                />
+              )}
             </div>
 
             {/* Title card */}

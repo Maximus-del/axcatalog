@@ -29,6 +29,7 @@ import FanNotifications from "./pages/fan/FanNotifications";
 import FanOnboarding from "./pages/fan/FanOnboarding";
 import AthletePublicProfile from "./pages/fan/AthletePublicProfile";
 import FanProductDetail from "./pages/fan/ProductDetail";
+import { RedirectKeepSearch } from "@/components/portal/RedirectKeepSearch";
 
 // Lazy: internal surfaces (admin, portal, affiliate, catalog) are code-split so
 // fans never download them. Only these bundles change on the respective routes.
@@ -263,6 +264,9 @@ const App = () => (
               <Route path="/portal" element={<RequirePortal><PortalLayout /></RequirePortal>}>
                 <Route index element={<PortalHome />} />
                 <Route path="products" element={<PortalProducts />} />
+                {/* The Mooney World addresses from the design pack. */}
+                <Route path="gear" element={<RedirectKeepSearch to="/portal/products" />} />
+                <Route path="brand" element={<RedirectKeepSearch to="/portal/analytics" />} />
                 <Route path="mockups" element={<PortalMockups />} />
                 <Route path="analytics" element={<PortalAnalytics />} />
                 <Route path="content" element={<PortalContent />} />

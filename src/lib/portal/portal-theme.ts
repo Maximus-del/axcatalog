@@ -34,7 +34,18 @@ export interface PortalTheme {
   /** The client's name in the header and the title card headline. Hex. */
   title: string;
   titleCard: PortalTitleCard;
+  /**
+   * Which portal shell this client gets. "classic" is the original portal;
+   * "world" is the cinematic locker-room shell (Mooney World) built on the
+   * same data. Switched per client from V2, so one client can move to the new
+   * look without changing anyone else's portal.
+   */
+  layout: PortalLayoutKind;
+  /** The world's name in the sidebar logo, e.g. "Mooney World". Empty → the client's last name + " World". */
+  brand: string;
 }
+
+export type PortalLayoutKind = "classic" | "world";
 
 /** What the portal looked like before themes existed — so "no theme" changes nothing. */
 export const DEFAULT_PORTAL_THEME: PortalTheme = {
@@ -43,6 +54,8 @@ export const DEFAULT_PORTAL_THEME: PortalTheme = {
   background: "#1a1a1a",
   title: "#ffffff",
   titleCard: { eyebrow: "", headline: "", subline: "" },
+  layout: "classic",
+  brand: "",
 };
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -88,6 +101,8 @@ export function parsePortalTheme(raw: unknown): PortalTheme {
       headline: cleanText(card.headline),
       subline: cleanText(card.subline),
     },
+    layout: src.layout === "world" ? "world" : "classic",
+    brand: cleanText(src.brand).slice(0, 32),
   };
 }
 

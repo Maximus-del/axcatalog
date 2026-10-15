@@ -1,7 +1,9 @@
 // Mobile-first. Test at 375px before merging.
 import { useCallback, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
-import { RefreshCw } from "lucide-react";
+import { LogOut, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/auth/AuthProvider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { useApplyPortalTheme } from "@/hooks/useApplyPortalTheme";
@@ -13,6 +15,12 @@ import { OrderDraftBar } from "./OrderDraftBar";
 import { OrderDraftProvider } from "./OrderDraftContext";
 import { PortalDataProvider, usePortalData } from "./PortalDataContext";
 import { MooneyShell } from "./mooney/MooneyShell";
+import { PortalNavDrawer } from "./PortalNavDrawer";
+import { AthleteHeader } from "./home/AthleteHeader";
+import { NotificationsSheet } from "./NotificationsSheet";
+import { PortalBottomNav } from "./PortalBottomNav";
+import { PortalDesktopNav } from "./PortalDesktopNav";
+import { PortalLayoutKindProvider, useResolvedLayout } from "./PortalLayoutKind";
 import { entityVoice } from "@/lib/portal/entity-voice";
 
 function BulkOrderSheetBridge({
@@ -46,6 +54,12 @@ export default function PortalLayout() {
   // The client's look, set by AX in V2. Called before any early return so the
   // hook order is stable; null until the athlete row arrives.
   useApplyPortalTheme(athlete?.portal_theme ?? null);
+  // World (Locker Room) shell or classic: the client's theme decides, so the
+  // Mooney World redesign only reaches clients AX has switched over.
+  const layout = useResolvedLayout(athlete?.portal_theme ?? null);
+  const { user, signOut } = useAuth();
+  const [navOpen, setNavOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const [guardOpen, setGuardOpen] = useState(false);
@@ -112,9 +126,31 @@ export default function PortalLayout() {
             />
           )}
 
-          <MooneyShell>
-            <Outlet />
-          </MooneyShell>
+          <PortalLayoutKindProvider value={layout}>
+            {layout === "world" ? (
+              <MooneyShell>
+                <Outlet />
+              </MooneyShell>
+            ) : (
+              <>
+                <PortalNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
+                <AthleteHeader onMenuClick={() => setNavOpen(true)} onBellClick={() => setNotifOpen(true)} />
+                <NotificationsSheet open={notifOpen} onOpenChange={setNotifOpen} />
+                <PortalDesktopNav />
+                <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-3 hidden md:flex items-center justify-end gap-3">
+                  <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>
+                  <Button variant="ghost" size="sm" onClick={signOut} className="text-muted-foreground hover:text-accent h-9 tap-target">
+                    <LogOut className="h-4 w-4 mr-1.5" />
+                    <span className="hidden sm:inline">Sign out</span>
+                  </Button>
+                </div>
+                <div className="pb-bottom-nav md:pb-0">
+                  <Outlet />
+                </div>
+                <PortalBottomNav />
+              </>
+            )}
+          </PortalLayoutKindProvider>
 
           <BulkOrderSheetBridge open={orderSheetOpen} onOpenChange={setOrderSheetOpen} />
           <OrderDraftBarBridge onOpen={() => setOrderSheetOpen(true)} />

@@ -6,6 +6,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { useAuth } from "@/auth/AuthProvider";
 import { usePortalData } from "../PortalDataContext";
 import { entityVoice } from "@/lib/portal/entity-voice";
+import { brandLines, worldBrand } from "@/lib/portal/world";
 import { usePortalProfile } from "@/hooks/usePortalApi";
 import { AXTeamDrawer } from "./AXTeamDrawer";
 import { activePortalPage, mooneyNavigation, portalLink } from "./navigation";
@@ -17,6 +18,9 @@ export function MooneyShell({ children }: { children: ReactNode }) {
   const [teamOpen, setTeamOpen] = useState(false);
   const { athlete } = usePortalData();
   const voice = entityVoice(athlete);
+  // The wordmark is this client's world, from their portal theme — never another client's name.
+  const brand = worldBrand(athlete.portal_theme, athlete.last_name, voice.name);
+  const [brandTop, brandBottom] = brandLines(brand);
   const profile = usePortalProfile();
   const { signOut } = useAuth();
   const location = useLocation();
@@ -33,7 +37,7 @@ export function MooneyShell({ children }: { children: ReactNode }) {
 
   return <div className="mw-shell"><div className="mw-frame" data-collapsed={collapsed}>
     <aside className={`mw-sidebar ${collapsed ? "mw-collapsed" : ""}`}>
-      <Link className="mw-wordmark" to={portalLink("/portal", location.search)} aria-label="Mooney World Locker Room"><Moon /><strong>Mooney<span>World</span></strong></Link>
+      <Link className="mw-wordmark" to={portalLink("/portal", location.search)} aria-label={`${brand} Locker Room`}><Moon /><strong>{brandTop}{brandBottom && <span>{brandBottom}</span>}</strong></Link>
       {navigation()}
       <div className="mw-sidebar-footer">{teamButton}<Link className="mw-identity" to={portalLink("/portal/profile", location.search)} title={voice.name}>{portrait}<div><strong>{voice.name}</strong><small>{voice.subtitle}</small></div></Link></div>
     </aside>
@@ -47,7 +51,7 @@ export function MooneyShell({ children }: { children: ReactNode }) {
       {children}
     </div>
   </div>
-  <Sheet open={navOpen} onOpenChange={setNavOpen}><SheetContent side="left" className="mw-drawer w-[min(320px,90vw)] sm:max-w-[320px]"><SheetHeader className="text-left"><SheetTitle className="flex items-center gap-2"><Moon className="text-accent" />Mooney World</SheetTitle><SheetDescription>{voice.name}</SheetDescription></SheetHeader>{navigation()}<div className="mt-auto">{teamButton}<Button variant="ghost" asChild className="w-full mt-3 min-h-11"><Link to={portalLink("/portal/profile", location.search)} onClick={() => setNavOpen(false)}><UserRound />Your profile</Link></Button></div></SheetContent></Sheet>
+  <Sheet open={navOpen} onOpenChange={setNavOpen}><SheetContent side="left" className="mw-drawer w-[min(320px,90vw)] sm:max-w-[320px]"><SheetHeader className="text-left"><SheetTitle className="flex items-center gap-2"><Moon className="text-accent" />{brand}</SheetTitle><SheetDescription>{voice.name}</SheetDescription></SheetHeader>{navigation()}<div className="mt-auto">{teamButton}<Button variant="ghost" asChild className="w-full mt-3 min-h-11"><Link to={portalLink("/portal/profile", location.search)} onClick={() => setNavOpen(false)}><UserRound />Your profile</Link></Button></div></SheetContent></Sheet>
   <AXTeamDrawer open={teamOpen} onOpenChange={setTeamOpen} />
   </div>;
 }

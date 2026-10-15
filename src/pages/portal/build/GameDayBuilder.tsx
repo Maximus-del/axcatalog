@@ -6,6 +6,8 @@ import { ArrowLeft, Check, Minus, Plus, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 import { newIdempotencyKey } from "@/lib/portal/api/orders";
+import { sheetUnitPrice } from "@/lib/portal/api/products";
+import { usePortalQuote } from "@/hooks/usePortalApi";
 import { useAthleteCredit } from "@/hooks/useAthleteCredit";
 import { useAuth } from "@/auth/AuthProvider";
 import { CheckoutBar } from "@/components/portal/builder/CheckoutBar";
@@ -21,8 +23,13 @@ import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { entityVoice } from "@/lib/portal/entity-voice";
 
+/**
+ * The bulk-sheet price — the one the server charges (portal_sheet_unit_price).
+ * This used to read athlete_unit_price ?? price, so the screen could show one
+ * number and the order land at another.
+ */
 function unitPrice(p: PortalProduct): number {
-  return p.athlete_unit_price ?? p.price ?? p.wholesale_price ?? 35;
+  return sheetUnitPrice(p).athleteUnit;
 }
 
 export default function GameDayBuilder() {
@@ -48,10 +55,23 @@ export default function GameDayBuilder() {
   const turn = TURNAROUND_OPTIONS.find((t) => t.key === turnaround) ?? TURNAROUND_OPTIONS[0];
 
   const totalUnits = useMemo(() => Object.values(qtys).reduce((a, b) => a + b, 0), [qtys]);
-  const subtotal = useMemo(() => {
+  const estimate = useMemo(() => {
     if (!product) return 0;
     return totalUnits * unitPrice(product) + (totalUnits > 0 ? turn.surcharge : 0);
   }, [product, totalUnits, turn]);
+  // The server's quote (volume tiers, rush, stock) when it answers; the sheet
+  // estimate until then, or if the quote function is not deployed yet.
+  const quoteLines = useMemo(
+    () =>
+      product
+        ? Object.entries(qtys)
+            .filter(([, q]) => q > 0)
+            .map(([size, quantity]) => ({ productId: product.id, size, color, quantity }))
+        : [],
+    [product, qtys, color],
+  );
+  const quote = usePortalQuote(quoteLines, { turnaround: turn.key === "rush" ? "rush" : "standard" });
+  const subtotal = quote.data && quoteLines.length > 0 ? quote.data.subtotalDollars : estimate;
 
   const creditAvailable = wallet?.balance ?? 0;
   const math = computeCredit(subtotal, creditAvailable, applyCredit);
@@ -93,6 +113,7 @@ export default function GameDayBuilder() {
     const res = await submitPortalOrder({
       package: "game_day",
       idempotencyKey: orderKey,
+      screenSubtotal: subtotal,
       viewingAs: isImpersonating,
       turnaround: turn.key === "rush" ? "rush" : "standard",
       organizationId: athlete.organization_id,
