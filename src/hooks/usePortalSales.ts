@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { monthlyRevenue, type RevenuePoint } from "@/lib/portal/revenue-series";
+import { fetchRevenue } from "@/lib/portal/api/summary";
+import { lastMonths } from "@/lib/portal/api/period";
 
 export interface ProductSales {
   quantity: number;
@@ -17,10 +19,20 @@ export interface PortalSales {
 }
 
 /**
- * Aggregates attributed-revenue stats for an org from order_line_items.
- * Excludes test orders. Refunds (negative line_totals) net out.
+ * Attributed-revenue stats for the portal header, profile and analytics.
+ *
+ * SERVER FIRST. portal_revenue_summary() aggregates server-side for the
+ * scoped athlete. Reading order_line_items directly only ever worked for AX
+ * accounts: the client policy on those rows requires a product link that none
+ * of the imported Shopify lines carry, so a real client login read $0 and 0
+ * orders while "View as" showed the true figures. Falls back to the direct read
+ * only while that function is not deployed.
+ *
+ * Basis: GROSS — line totals before refunds and cancellations (decided
+ * 2026-10-15: label it honestly rather than change it). Refund-flagged orders
+ * are included, as they always were; the import does not store them negative.
  */
-export function usePortalSales(organizationId: string | null): PortalSales {
+export function usePortalSales(organizationId: string | null, athleteId?: string | null): PortalSales {
   const [state, setState] = useState<PortalSales>({
     lifetimeRevenue: 0,
     totalOrders: 0,
@@ -38,6 +50,33 @@ export function usePortalSales(organizationId: string | null): PortalSales {
     setState((s) => ({ ...s, loading: true }));
 
     void (async () => {
+      if (athleteId) {
+        try {
+          const period = lastMonths(12, "UTC");
+          const report = await fetchRevenue(
+            { athleteId, organizationId, viewingAs: false },
+            period,
+          );
+          if (report) {
+            if (cancelled) return;
+            const toNum = (m: { amountMinor: number } | null | undefined) => (m ? m.amountMinor / 100 : 0);
+            setState({
+              lifetimeRevenue: report.attributable ? toNum(report.lifetime?.gross) : 0,
+              totalOrders: report.attributable ? (report.lifetime?.orders ?? 0) : 0,
+              // Shopify lines carry no product_id, so per-product revenue by id is
+              // empty either way; top sellers by title are on usePortalRevenue.
+              byProduct: new Map(),
+              monthly: monthlyRevenue(
+                report.monthly.map((m) => ({ orderDate: `${m.month}-15T00:00:00Z`, lineTotal: toNum(m.gross) })),
+              ),
+              loading: false,
+            });
+            return;
+          }
+        } catch {
+          // fall through to the direct read
+        }
+      }
       // Page through all line items attributed to this org.
       // Join orders to filter out test orders.
       const pageSize = 1000;
@@ -93,7 +132,7 @@ export function usePortalSales(organizationId: string | null): PortalSales {
     return () => {
       cancelled = true;
     };
-  }, [organizationId]);
+  }, [organizationId, athleteId]);
 
   return state;
 }

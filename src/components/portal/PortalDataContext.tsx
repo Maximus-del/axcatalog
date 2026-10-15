@@ -53,7 +53,7 @@ export function PortalDataProvider({
   openGuard,
 }: ProviderProps) {
   const stats = usePortalStats(athlete.id);
-  const sales = usePortalSales(athlete.organization_id ?? null);
+  const sales = usePortalSales(athlete.organization_id ?? null, athlete.id);
   const { products, loading: productsLoading, refetch: refetchProducts } =
     usePortalProducts(athlete.id);
   const { orders, loading: ordersLoading, refetch: refetchOrders } = usePortalOrders(athlete.id);

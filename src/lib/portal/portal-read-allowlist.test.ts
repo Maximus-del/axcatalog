@@ -65,6 +65,13 @@ const ALLOWED: Record<string, string> = {
   product_variants: "client reads own product variants — product_id in viewer_product_ids()",
   collections: "client reads own collections — id in viewer_collection_ids()",
   product_collections: "client reads own product collections — product_id in viewer_product_ids()",
+  // Added 2026-10-15 (collections fix, run by hand): the table the app actually writes.
+  collection_products:
+    "client reads own collection products — collection_id in viewer_collection_ids() AND product_id in viewer_product_ids()",
+  // Added 2026-10-15 (portal stage 1). Read today only as an embedded select
+  // from usePortalProducts, which this regex does not see; listed so a direct
+  // read is already accounted for.
+  product_images: "client reads own product images — product_id in viewer_product_ids()",
   blanks: "client reads sellable blanks — viewer_blank_ids() excludes internal_only",
   blank_sizes: "client reads sellable blank sizes — blank_id in viewer_blank_ids()",
   blank_colors: "client reads sellable blank colors — blank_id in viewer_blank_ids()",
