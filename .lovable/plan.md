@@ -1,58 +1,47 @@
-# Sidebar Feature Buildout — Phased Plan
+# Mooney World — Locker Room first
 
-This is a large scope. I'll ship it in **8 sequential phases**, one per turn, so each can be verified in the preview before the next. Nothing goes out in a single mega-commit.
+## Scope
+Redesign `/portal` to match the Locker Room reference. Apply the five-item navigation and global AX Team drawer across the portal, as requested. Stop after this screen; leave the other four screens’ content unchanged until their individual redesigns.
 
-## Phase 0 — Foundational migration
-One migration file that creates every new table used across the features, in dependency order:
-- `tasks`, `task_activity`
-- `design_associations` (join table; backfill from `designs.athlete_id`; keep column for BC)
-- `asset_folders`, `brand_assets`
-- `mockups` (new table; extends existing `mockups` bucket)
-- `fulfillment_materials`
-- Columns on `blank_colors` / `blank_sizes`: `easy_scan_barcode`, `easy_scan_url`, `current_stock`
-- View `blank_variant_barcodes`
-- New storage buckets: `brand-assets` (private)
-- All tables: GRANTs to authenticated + service_role, RLS enabled, org-scoped policies via `is_org_accessible(organization_id)`, `updated_at` triggers where applicable.
+## Shared navigation
+- Cinematic dark sidebar, Mooney World branding, and client identity resolved through `entityVoice(athlete)`.
+- Exactly five primary entries: Locker Room, My Gear, Creative Studio, Content & Drops, Brand HQ. Keep other existing tools accessible contextually, not as extra primary items.
+- Collapsible desktop sidebar with an always-visible toggle; mobile navigation drawer and compact header. Retain sign-out and existing order-sheet access.
+- Keep the View-as banner visible above the shell. Preserve `?as=` and relevant filters in all links.
+- Link to existing pages in this first pass; do not redesign their content.
 
-## Phase 1 — Tasks
-- Routes: `/admin/tasks` (list + kanban toggle), task detail drawer.
-- Filters panel, `+ New Task` modal, drag between kanban columns updates `status`, bulk actions.
-- Extend homepage "Today's Priorities" to read from `tasks` (due today OR priority=1 OR in_progress).
+## Locker Room home
+- Reference-matched welcome heading and supporting line, using the resolved client name, never a hard-coded athlete name.
+- Full-width collectible wall using the existing locker-room and locker-bay artwork. Contain and bottom-align figures, preserve their built-in platforms, and accommodate wider artwork without hard-coded city checks.
+- Render destinations exclusively from `usePortalDestinations()`: live ordering, labels, jersey numbers, accents, artwork and collections. Missing/broken artwork receives a neutral fallback, not an invented collectible.
+- Four live summary tiles from `usePortalSummary()`: AX Credit, lifetime gross revenue, orders, live products. Use `formatMoney`; unknowns display `—`. Never calculate credit or substitute screenshot numbers.
+- Quick Plays: Order gear opens the existing order sheet; Start a design links to Studio; Get my code reveals/copies only an approved code from `usePortalProfile()`; Download content links to the existing content page.
+- Your Next Move displays current non-archived projects and upcoming/draft drops from `usePortalProjects()` and `usePortalDrops()`. Independent loading, retry, error and empty states; no fabricated projects or dates.
+- Read-only previews and working links only: no new checkout, approval or drop-planning forms in this pass. Any order pricing remains the existing server quote, never browser calculations.
 
-## Phase 2 — Fulfillment 6A: Blanks Master Catalog
-- New route `/admin/fulfillment` with sub-tabs `Blanks` / `Materials`.
-- Blanks tab: expandable list of blanks → variants (color/size) with barcode column, per-row "Generate Label" (browser print of a barcode via JsBarcode), "Print Full Binder" (client-side PDF via jsPDF).
-- Sidebar "Fulfillment" points here; "Blanks" stays under Operations for the existing detail editor.
+## Global AX Team drawer
+- Open the general conversation from desktop navigation or the mobile header on any portal page.
+- Show real messages, author labels, timestamps and available attachments with `usePortalMessages(null)`.
+- Send with `usePortalPostMessage()`; attach files through `usePortalUpload()` and existing file validation. Preserve drafts on errors, prevent duplicate sends, reuse an idempotency key when retrying.
+- Disable sending/uploading in View-as mode and explain why. Keep reading and navigation available.
+- Refetch expiring signed attachment/concept URLs rather than persist them; handle unavailable previews gracefully.
 
-## Phase 3 — Teams
-- Route `/admin/teams` — grid of orgs/teams from existing `teams` table, entity-type badges, athletes/products counts.
-- `+ Add Organization` modal, click-through detail drawer with Athletes / Products / Designs / History tabs. Terminology switches on `entity_type`.
+## Technical boundaries
+- All implementation changes stay under `src/components/portal/**` and `src/pages/portal/**`, including a portal-local scoped stylesheet. Do not edit global CSS, routing, hooks, libraries, protected tests, authentication or admin files.
+- Use the existing hooks and real contract; projects, drops and messages return paged results and must be read through `data.items`.
+- Map presentation roles to existing client accent, dark, title, background, card, border and muted tokens. Live destination accents feed a dedicated glow variable, without overwriting the client’s `--accent`. No copied starter brand palette or fixed destination colours.
+- Reuse existing design-system controls, keyboard focus states and minimum 44px touch targets. Restrained light/lift motion only; respect reduced motion.
+- No adapter, custom data fetching, Supabase calls, backend modifications, security changes or new dependencies. Per-city revenue, wherever displayed, reads “Revenue not attributed”.
 
-## Phase 4 — Designs admin
-- Route `/admin/designs` refactor: grid with association badges, filter sidebar (athlete/team/brand/status), upload modal writing to `design_associations`, bulk selection.
-- Detail view already exists — add associations editor and "Used on products" list.
+## Confirmed limitations
+- **New addresses and redirects:** `App.tsx` registers products, analytics and profile, but not `/portal/gear` or `/portal/brand`. It is outside the allowed editing area. Keep current addresses working; translate destination gear links to the existing products address while retaining the collection filter. New aliases and consolidated redirects require the separately maintained routing work and are deferred, not silently added.
+- **Global unread/search:** the hooks do not expose a global unread count or global search. Do not invent notification dots/counts or add a nonfunctional search field.
+- **Referral:** an approved code can be supplied, but working checkout redemption/referral URLs are unavailable. No fabricated link or referral-setup action.
+- **Preview blocker:** the latest build diagnostic reports a missing `IntersectionObserver.scrollMargin` member in `src/test/setup.ts`, outside the permitted files. Do not change it; report it if it still blocks validation for its maintainer to resolve.
+- **Authenticated verification:** this project reports externally managed authentication, so automatic authenticated checks are unavailable. Do not request credentials. Report signed-in data and message-send checks as unverified unless an authorized session is available through the app’s normal flow.
 
-## Phase 5 — Fulfillment 6B: Materials
-- Materials tab on `/admin/fulfillment`. Grid of material cards, filter/search, add/edit modal (photo + artwork uploads to `brand-assets` bucket under `materials/`), detail view with Reorder button, order-history log, "Add to next order" → creates a Task.
-
-## Phase 6 — Brand Assets
-- Route `/admin/brand-assets`. Folder tree (`asset_folders`) + file grid (`brand_assets`). Seed suggested folders on first visit per org. Upload dialog with `asset_type`, version_number, is_primary. Palette assets render as swatches with copy-hex buttons.
-
-## Phase 7 — Mockups
-- Route `/admin/mockups`. Folder tree + grid. Metadata form with shot_type/drop/photographer/status. Link to product/design/blank/athlete/team. "Send to Shopify" wired to existing `shopify-sync-product-images` (or a new small function) — will confirm scope before wiring push.
-
----
-
-## Technical notes
-- All new tables org-scoped via `current_user_org_id()` + `is_org_accessible()` (patterns already in project).
-- Storage: new `brand-assets` bucket (private). Reuse existing `mockups` bucket for Phase 7.
-- PDF/barcodes: `jspdf` + `jsbarcode` (client-side only, no server work).
-- UI reuses `ax-card`, `ax-section-header`, existing shadcn primitives, `ProductImage`, `useFileDropZone`, `useSignedUrl`.
-- Mobile: kanban horizontal-scroll on <md; grids collapse to 1–2 cols.
-
-## Out of scope (per your list)
-Sticker Mule API, recurring tasks/subtasks/notifications, real-time Easy Scan sync, cross-section bulk ops, fancy label layout.
-
----
-
-**Confirm and I'll start with Phase 0 (the migration).** Each subsequent phase ships in its own turn so you can review the preview between steps.
+## Acceptance and stopping point
+- Check 375px (project rule), 390, 768, 1024 and 1440px: no sideways page scrolling, overlapping controls, clipped names or stretched artwork. Two destination columns where readable, one where necessary, four on sufficiently wide desktop screens.
+- Verify sidebar collapse/reopen, mobile drawer, active navigation, preserved View-as context, destination links, order-sheet opening, approved-code copying, AX Team drawer and reduced motion wherever the current preview permits.
+- With an authorized client session, check live destination/summary/project/drop data and confirm a sent message reads back through the drawer. Never treat signed-out, empty or demo checks as end-to-end verification.
+- Summarize the Locker Room/shared navigation delivered and missing hook data or verification blockers, then stop before the next screen.
