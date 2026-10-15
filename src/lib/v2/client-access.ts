@@ -140,6 +140,7 @@ export function useCreateClientLogin() {
     },
     onSuccess: (_res, { entityId }) => {
       void qc.invalidateQueries({ queryKey: clientAccessKey(entityId) });
+      void qc.invalidateQueries({ queryKey: ["v2", "client-login-status", entityId] });
     },
   });
 }
@@ -163,4 +164,99 @@ export function handoffText(name: string, email: string, tempPassword: string, o
     "",
     "It'll ask you to set your own password the first time.",
   ].join("\n");
+}
+
+/**
+ * Where a client signs in. Always production, never window.location.origin:
+ * every preview deployment sits behind Vercel SSO, so a link copied while an
+ * operator happens to be on a preview URL would hand the client a page they
+ * cannot open.
+ */
+export const PORTAL_ORIGIN = "https://chase-dashboard-phi.vercel.app";
+export const PORTAL_SIGN_IN_URL = `${PORTAL_ORIGIN}/login`;
+
+/** The handoff without a password — safe to copy again at any time. */
+export function signInText(name: string, email: string, origin: string = PORTAL_ORIGIN): string {
+  const first = (name ?? "").trim().split(/\s+/)[0] || "there";
+  return [`${first} — sign in to your AX portal here:`, "", `${origin}/login`, `Email: ${email}`].join("\n");
+}
+
+// ── Where a client login stands ─────────────────────────────────────────
+
+export type LoginStage = "waiting" | "needs_password" | "active";
+
+export interface ClientLoginStatus {
+  userId: string;
+  email: string | null;
+  lastSignInAt: string | null;
+  mustChangePassword: boolean;
+  stage: LoginStage;
+}
+
+/**
+ * Three states, from two facts the edge function reads out of auth.users:
+ *   never signed in                         → waiting
+ *   signed in, still on the one-time password → needs_password
+ *   set their own password                  → active
+ * A user whose password was reset after they had signed in reads
+ * needs_password, which is right: the one they had no longer works.
+ */
+export function loginStage(lastSignInAt: string | null, mustChangePassword: boolean): LoginStage {
+  if (!mustChangePassword) return "active";
+  return lastSignInAt ? "needs_password" : "waiting";
+}
+
+export const clientLoginStatusKey = (entityId: string) => ["v2", "client-login-status", entityId];
+
+async function invokeManageUsers<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await supabase.functions.invoke("admin-manage-users", { body });
+  if (error) {
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === "function") {
+      const parsed = await ctx.json().catch(() => null);
+      const msg = (parsed as { error?: string } | null)?.error;
+      if (msg) throw new Error(msg);
+    }
+    throw new Error(error.message);
+  }
+  const res = data as T & { error?: string };
+  if (res?.error) throw new Error(res.error);
+  return res;
+}
+
+export function useClientLoginStatus(entityId: string | undefined, enabled: boolean) {
+  return useQuery<ClientLoginStatus[]>({
+    queryKey: clientLoginStatusKey(entityId ?? "none"),
+    enabled: !!entityId && enabled,
+    queryFn: async () => {
+      const res = await invokeManageUsers<{
+        logins?: { user_id: string; email: string | null; last_sign_in_at: string | null; must_change_password: boolean }[];
+      }>({ action: "client_logins", athlete_id: entityId });
+      return (res.logins ?? []).map((l) => ({
+        userId: l.user_id,
+        email: l.email,
+        lastSignInAt: l.last_sign_in_at,
+        mustChangePassword: l.must_change_password,
+        stage: loginStage(l.last_sign_in_at, l.must_change_password),
+      }));
+    },
+  });
+}
+
+export function useResetClientPassword() {
+  const qc = useQueryClient();
+  return useMutation<CreatedLogin, Error, { entityId: string; userId: string; email: string }>({
+    mutationFn: async ({ entityId, userId, email }) => {
+      const res = await invokeManageUsers<{ email?: string | null; tempPassword?: string; user_id?: string }>({
+        action: "reset_client_password",
+        athlete_id: entityId,
+        user_id: userId,
+      });
+      if (!res.tempPassword) throw new Error("No new password was issued.");
+      return { email: res.email ?? email, tempPassword: res.tempPassword, userId };
+    },
+    onSuccess: (_r, { entityId }) => {
+      void qc.invalidateQueries({ queryKey: clientLoginStatusKey(entityId) });
+    },
+  });
 }

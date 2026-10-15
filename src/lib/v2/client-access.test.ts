@@ -77,3 +77,28 @@ describe("handoffText", () => {
     expect(out.length).toBeLessThan(260);
   });
 });
+
+import { PORTAL_SIGN_IN_URL, loginStage, signInText } from "./client-access";
+
+describe("loginStage", () => {
+  it("reads the three states from the two facts auth.users holds", () => {
+    expect(loginStage(null, true)).toBe("waiting");
+    expect(loginStage("2026-10-15T05:00:00Z", true)).toBe("needs_password");
+    expect(loginStage("2026-10-15T05:00:00Z", false)).toBe("active");
+  });
+
+  it("a reset after they had signed in puts them back on the one-time password", () => {
+    expect(loginStage("2026-10-01T00:00:00Z", true)).toBe("needs_password");
+  });
+});
+
+describe("signInText", () => {
+  it("points at production, never a preview, and carries no password", () => {
+    const out = signInText("Darnell Mooney", "d@m.com");
+    expect(PORTAL_SIGN_IN_URL).toBe("https://chase-dashboard-phi.vercel.app/login");
+    expect(out).toContain(PORTAL_SIGN_IN_URL);
+    expect(out).toContain("d@m.com");
+    expect(out.toLowerCase()).not.toContain("password");
+    expect(out.startsWith("Darnell —")).toBe(true);
+  });
+});

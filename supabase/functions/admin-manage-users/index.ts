@@ -10,14 +10,30 @@ const cors = {
 };
 const jsonHeaders = { ...cors, 'Content-Type': 'application/json' };
 
+// Cryptographic, and free of look-alike characters (0/O, 1/l/I) because it
+// gets read off a phone and typed by hand. ~52 bits: one-time, and the
+// account forces a change on first sign-in.
+const PW_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 function tempPassword() {
-  const n = Math.floor(1000 + Math.random() * 9000);
-  const s = Math.random().toString(36).slice(2, 6);
-  return `AX-${n}-${s}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(10));
+  const chars = Array.from(bytes, (b) => PW_ALPHABET[b % PW_ALPHABET.length]).join('');
+  return `AX-${chars.slice(0, 5)}-${chars.slice(5)}`;
 }
 
 function json(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), { status, headers: jsonHeaders });
+}
+
+/** Users linked to this athlete whose profile role is 'client'. Operators linked for testing are excluded. */
+// deno-lint-ignore no-explicit-any
+async function linkedClientIds(admin: any, athleteId: string): Promise<string[]> {
+  const { data: links } = await admin.from('user_athlete_links').select('user_id').eq('athlete_id', athleteId);
+  const ids = (links ?? []).map((l: { user_id: string }) => l.user_id);
+  if (ids.length === 0) return [];
+  const { data: profiles } = await admin.from('user_profiles').select('id, role').in('id', ids);
+  return (profiles ?? [])
+    .filter((p: { role: string }) => p.role === CLIENT_ROLE)
+    .map((p: { id: string }) => p.id);
 }
 
 Deno.serve(async (req) => {
@@ -177,6 +193,66 @@ Deno.serve(async (req) => {
       }
 
       return json({ email, tempPassword: password, user_id: userId, athlete_id: athleteId });
+    }
+
+    // ── CLIENT LOGINS FOR ONE ENTITY: WHO, AND HOW FAR THEY GOT ──────────
+    //
+    // The portal card needs to say "waiting for first sign-in" vs "password
+    // set", and both facts live in auth.users, which no browser session can
+    // read. Same gate as create_client: the athlete must be visible to the
+    // CALLER, so an operator only ever sees logins for entities they could see
+    // anyway. Returns no password — none is stored to return.
+    if (action === 'client_logins') {
+      const athleteId = String(body.athlete_id ?? '').trim();
+      if (!athleteId) return json({ error: 'athlete_id is required' }, 400);
+      const { data: athlete, error: aErr } = await asCaller
+        .from('athletes').select('id').eq('id', athleteId).maybeSingle();
+      if (aErr) return json({ error: aErr.message }, 400);
+      if (!athlete) return json({ error: 'That entity does not exist, or you cannot access it.' }, 404);
+
+      const clients = await linkedClientIds(admin, athleteId);
+      const logins = [];
+      for (const id of clients) {
+        const { data: u } = await admin.auth.admin.getUserById(id);
+        if (!u?.user) continue;
+        logins.push({
+          user_id: id,
+          email: u.user.email ?? null,
+          last_sign_in_at: u.user.last_sign_in_at ?? null,
+          must_change_password: u.user.user_metadata?.must_change_password === true,
+        });
+      }
+      return json({ logins });
+    }
+
+    // ── A NEW ONE-TIME PASSWORD FOR A CLIENT ────────────────────────────
+    //
+    // Unlike 'reset_password' below, this cannot be pointed at an operator or
+    // at someone in another org: the athlete must be visible to the caller,
+    // and the target must be a role-'client' user linked to that athlete.
+    // The old password stops working immediately.
+    if (action === 'reset_client_password') {
+      const athleteId = String(body.athlete_id ?? '').trim();
+      const userId = String(body.user_id ?? '').trim();
+      if (!athleteId || !userId) return json({ error: 'athlete_id and user_id are required' }, 400);
+      const { data: athlete, error: aErr } = await asCaller
+        .from('athletes').select('id').eq('id', athleteId).maybeSingle();
+      if (aErr) return json({ error: aErr.message }, 400);
+      if (!athlete) return json({ error: 'That entity does not exist, or you cannot access it.' }, 404);
+
+      const clients = await linkedClientIds(admin, athleteId);
+      if (!clients.includes(userId)) {
+        return json({ error: 'That login is not a client of this entity.' }, 403);
+      }
+
+      const { data: existing } = await admin.auth.admin.getUserById(userId);
+      const password = tempPassword();
+      const { error } = await admin.auth.admin.updateUserById(userId, {
+        password,
+        user_metadata: { ...(existing?.user?.user_metadata ?? {}), must_change_password: true },
+      });
+      if (error) return json({ error: error.message }, 400);
+      return json({ email: existing?.user?.email ?? null, tempPassword: password, user_id: userId });
     }
 
     if (action === 'reset_password') {
