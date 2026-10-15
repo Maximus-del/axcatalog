@@ -55,8 +55,14 @@ export function AthleteHeader({ onMenuClick, onBellClick, trendPct = null }: Pro
 
           <div className="flex-1 min-w-0">
             <h1
-              className="font-bold text-foreground truncate leading-tight"
-              style={{ fontSize: "19px", letterSpacing: "0.01em" }}
+              className="font-bold truncate leading-tight"
+              // --portal-title is set per client by the portal theme; it falls
+              // back to the normal foreground when no theme is applied.
+              style={{
+                fontSize: "19px",
+                letterSpacing: "0.01em",
+                color: "hsl(var(--portal-title, var(--foreground)))",
+              }}
               title={fullName}
             >
               {fullName}

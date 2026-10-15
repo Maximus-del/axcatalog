@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
+import { useApplyPortalTheme } from "@/hooks/useApplyPortalTheme";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { ImpersonationGuardModal } from "./ImpersonationGuardModal";
@@ -48,6 +49,9 @@ function OrderDraftBarBridge({ onOpen }: { onOpen: () => void }) {
 export default function PortalLayout() {
   const { user, signOut } = useAuth();
   const { athlete, loading, isImpersonating, noAccess } = useCurrentAthlete();
+  // The client's look, set by AX in V2. Called before any early return so the
+  // hook order is stable; null until the athlete row arrives.
+  useApplyPortalTheme(athlete?.portal_theme ?? null);
 
   const [navOpen, setNavOpen] = useState(false);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);

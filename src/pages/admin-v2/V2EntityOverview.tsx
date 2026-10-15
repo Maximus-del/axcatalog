@@ -18,6 +18,7 @@ import {
 import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import DropZone, { DropTrigger } from "@/components/admin-v2/DropZone";
 import ClientAccessCard from "@/components/admin-v2/ClientAccessCard";
+import PortalThemeCard from "@/components/admin-v2/PortalThemeCard";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
@@ -219,6 +220,8 @@ export default function V2EntityOverview() {
         months the honest answer for every entity was "no" and nothing said so.
       */}
       <ClientAccessCard entityId={entity.id} entityName={entity.name} />
+      {/* What their portal looks like — set here, seen there. */}
+      <PortalThemeCard entityId={entity.id} entityName={entity.name} />
 
       {attention.length > 0 && (
         <div className="mb-6 grid gap-1.5">

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
+import { parsePortalTheme, type PortalTheme } from "@/lib/portal/portal-theme";
 
 export type CurrentAthlete = {
   id: string;
@@ -24,6 +25,12 @@ export type CurrentAthlete = {
   position: string | null;
   league: string | null;
   current_team_id: string | null;
+  /**
+   * How this client's portal looks, set by AX from the V2 entity page. Always
+   * a complete theme — parsePortalTheme() fills anything missing with the
+   * original AX look — so callers never null-check a colour.
+   */
+  portal_theme: PortalTheme;
 };
 
 interface State {
@@ -35,6 +42,14 @@ interface State {
   /** No athlete resolvable for this user. */
   noAccess: boolean;
 }
+
+/**
+ * Only the theme key of metadata, never the whole blob — the rest of metadata
+ * is operator configuration the portal has no use for. Typed as a plain string
+ * because the generated types cannot follow a JSON path in a select.
+ */
+const ATHLETE_COLUMNS: string =
+  "id, organization_id, display_name, first_name, last_name, full_name, slug, jersey_number, position, league, current_team_id, entity_type, roles, portal_theme:metadata->portal_theme";
 
 /**
  * Resolves the "current athlete" for the portal:
@@ -76,9 +91,7 @@ export function useCurrentAthlete(): State {
     void (async () => {
       const { data, error: err } = await supabase
         .from("athletes")
-        .select(
-          "id, organization_id, display_name, first_name, last_name, full_name, slug, jersey_number, position, league, current_team_id, entity_type, roles",
-        )
+        .select(ATHLETE_COLUMNS)
         .eq("id", targetId)
         .maybeSingle();
       if (cancelled) return;
@@ -86,7 +99,8 @@ export function useCurrentAthlete(): State {
         setError(err.message);
         setAthlete(null);
       } else {
-        setAthlete(data ?? null);
+        const row = data as unknown as (Omit<CurrentAthlete, "portal_theme"> & { portal_theme: unknown }) | null;
+        setAthlete(row ? { ...row, portal_theme: parsePortalTheme(row.portal_theme) } : null);
       }
       setLoading(false);
     })();

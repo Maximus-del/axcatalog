@@ -10,13 +10,16 @@ import { PackagesRow } from "@/components/portal/home/PackagesRow";
 import { ProductPreviewSlider } from "@/components/portal/ProductPreviewSlider";
 import { CodeVault } from "@/components/portal/CodeVault";
 import { usePortalData } from "@/components/portal/PortalDataContext";
+import { PortalTitleCard } from "@/components/portal/home/PortalTitleCard";
 
 export default function PortalHome() {
   const navigate = useNavigate();
-  const { products, productsLoading } = usePortalData();
+  const { products, productsLoading, athlete } = usePortalData();
 
   return (
     <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-5 space-y-7 pb-bottom-nav md:pb-32">
+      <PortalTitleCard theme={athlete.portal_theme} />
+
       <div className="stagger-fade" style={{ ["--i" as string]: 0 }}>
         <AxCreditCard />
       </div>
