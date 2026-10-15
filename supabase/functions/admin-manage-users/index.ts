@@ -255,25 +255,47 @@ Deno.serve(async (req) => {
       return json({ email: existing?.user?.email ?? null, tempPassword: password, user_id: userId });
     }
 
-    if (action === 'reset_password') {
-      if (!body.user_id) return json({ error: 'user_id is required' }, 400);
-      const password = tempPassword();
-      const { error } = await admin.auth.admin.updateUserById(body.user_id, {
-        password,
-        user_metadata: { must_change_password: true },
-      });
-      if (error) return json({ error: error.message }, 400);
-      return json({ tempPassword: password });
-    }
-
-    if (action === 'delete') {
-      if (!body.user_id) return json({ error: 'user_id is required' }, 400);
-      await admin
+    // ── RESET / DELETE AN AX ACCOUNT ─────────────────────────────────────
+    //
+    // These took any user id from any AX admin: an admin of one org could
+    // reset or delete a user in another, or a platform admin's account. Now:
+    //   * never yourself (use Set Password; deleting yourself locks you out)
+    //   * a platform admin's account only by another platform admin
+    //   * otherwise only users whose profile is in YOUR organisation
+    // A target outside your reach is "not found", the same as a missing one.
+    if (action === 'reset_password' || action === 'delete') {
+      const targetId = String(body.user_id ?? '').trim();
+      if (!targetId) return json({ error: 'user_id is required' }, 400);
+      const { data: me } = await asCaller.auth.getUser();
+      const { data: callerIsPlatform } = await asCaller.rpc('current_user_is_platform_admin');
+      const { data: target } = await admin
         .from('user_profiles')
-        .delete()
-        .eq('id', body.user_id)
-        .eq('organization_id', orgId);
-      const { error } = await admin.auth.admin.deleteUser(body.user_id);
+        .select('id, organization_id, is_platform_admin')
+        .eq('id', targetId)
+        .maybeSingle();
+      if (me?.user?.id === targetId) {
+        return json({ error: action === 'delete' ? 'You cannot delete your own account.' : 'Use Set Password to change your own password.' }, 400);
+      }
+      const reachable =
+        callerIsPlatform === true ||
+        (!!target && !target.is_platform_admin && target.organization_id === orgId);
+      if (!reachable) return json({ error: 'User not found.' }, 404);
+
+      if (action === 'reset_password') {
+        const { data: existing } = await admin.auth.admin.getUserById(targetId);
+        const password = tempPassword();
+        const { error } = await admin.auth.admin.updateUserById(targetId, {
+          password,
+          user_metadata: { ...(existing?.user?.user_metadata ?? {}), must_change_password: true },
+        });
+        if (error) return json({ error: error.message }, 400);
+        return json({ tempPassword: password });
+      }
+
+      // delete: the profile and athlete links go with the account.
+      await admin.from('user_athlete_links').delete().eq('user_id', targetId);
+      await admin.from('user_profiles').delete().eq('id', targetId);
+      const { error } = await admin.auth.admin.deleteUser(targetId);
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true });
     }
