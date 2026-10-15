@@ -1,4 +1,4 @@
-.mw-shell {
+.mw-shell, .mw-drawer {
   --mw-deep: hsl(var(--dark));
   --mw-surface: hsl(var(--card));
   --mw-line: hsl(var(--border));
@@ -146,4 +146,4 @@
   .mw-drawer { padding: 24px 16px; }
 }
 @media (max-width: 380px) { .mw-lockers { grid-template-columns: 1fr; } .mw-figure-stage { height: 340px; } }
-@media (prefers-reduced-motion: reduce) { .mw-shell *, .mw-drawer * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+@media (prefers-reduced-motion: reduce) { .mw-shell, .mw-shell *, .mw-drawer, .mw-drawer * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
