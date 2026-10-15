@@ -1,5 +1,7 @@
 # Current task
 
+- [ ] Diagnose admin “View as Darnell” returning to login; fix only if within portal presentation scope.
+
 - [x] Locker Room presentation with existing artwork and live-hook destinations, summary, projects and drops.
 - [x] Five-item shared navigation and global AX Team drawer; preserve View-as context.
 - [x] Isolated layout checks at 375, 390, 768, 1024 and 1440px; existing adapter regression tests.
