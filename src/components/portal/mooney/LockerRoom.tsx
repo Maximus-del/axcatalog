@@ -87,6 +87,7 @@ export function LockerRoom() {
   return <main>
     <section className="mw-hero" data-wall={destinations.data?.length === 4} aria-labelledby="locker-room-heading">
       <div className="mw-locker-scene">
+      <div className="mw-scene-layer">
       <div className="mw-scene-heading">
       <h1 id="locker-room-heading" className="mw-heading">Welcome to your Locker Room, {voice.name}.</h1>
       <p className="mw-tagline">Same game. Bigger moves.</p>
@@ -95,6 +96,7 @@ export function LockerRoom() {
       {destinations.isError && <RetryState error={destinations.error} retry={() => void destinations.refetch()} />}
       {destinations.isSuccess && destinations.data.length === 0 && <div className="mw-state"><Package className="mx-auto h-8 w-8 mb-3" /><p>No collections available yet.</p></div>}
       {destinations.data && destinations.data.length > 0 && <div className="mw-lockers" aria-label="Your collections">{destinations.data.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} />)}</div>}
+      </div>
       </div>
     </section>
     <div className="mw-content">
