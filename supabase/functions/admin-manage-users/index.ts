@@ -167,7 +167,11 @@ Deno.serve(async (req) => {
         .from('user_athlete_links')
         .insert({ user_id: userId, athlete_id: athleteId });
       if (lErr) {
-        await admin.from('user_profiles').delete().eq('id', userId).catch(() => {});
+        // Note: a PostgREST builder is a thenable, not a Promise — it has no
+        // .catch(). It also never throws; a failure arrives in .error. So this
+        // is awaited plainly, and its result ignored on purpose: we are already
+        // in a failure path and the auth user is about to go regardless.
+        await admin.from('user_profiles').delete().eq('id', userId);
         await admin.auth.admin.deleteUser(userId).catch(() => {});
         return json({ error: lErr.message }, 400);
       }
