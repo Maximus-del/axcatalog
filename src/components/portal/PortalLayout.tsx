@@ -1,24 +1,19 @@
 // Mobile-first. Test at 375px before merging.
 import { useCallback, useState } from "react";
 import { Navigate, Outlet } from "react-router-dom";
-import { LogOut, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { useApplyPortalTheme } from "@/hooks/useApplyPortalTheme";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { ImpersonationGuardModal } from "./ImpersonationGuardModal";
-import { PortalNavDrawer } from "./PortalNavDrawer";
-import { AthleteHeader } from "./home/AthleteHeader";
-import { NotificationsSheet } from "./NotificationsSheet";
 import { BulkOrderSheet } from "./BulkOrderSheet";
 import { OrderDraftBar } from "./OrderDraftBar";
 import { OrderDraftProvider } from "./OrderDraftContext";
-import { PortalBottomNav } from "./PortalBottomNav";
-import { PortalDesktopNav } from "./PortalDesktopNav";
 import { PortalDataProvider, usePortalData } from "./PortalDataContext";
+import { MooneyShell } from "./mooney/MooneyShell";
+import { entityVoice } from "@/lib/portal/entity-voice";
 
 function BulkOrderSheetBridge({
   open,
@@ -47,16 +42,13 @@ function OrderDraftBarBridge({ onOpen }: { onOpen: () => void }) {
 }
 
 export default function PortalLayout() {
-  const { user, signOut } = useAuth();
   const { athlete, loading, isImpersonating, noAccess } = useCurrentAthlete();
   // The client's look, set by AX in V2. Called before any early return so the
   // hook order is stable; null until the athlete row arrives.
   useApplyPortalTheme(athlete?.portal_theme ?? null);
 
-  const [navOpen, setNavOpen] = useState(false);
   const [orderSheetOpen, setOrderSheetOpen] = useState(false);
   const [guardOpen, setGuardOpen] = useState(false);
-  const [notifOpen, setNotifOpen] = useState(false);
 
   // Pull-to-refresh: trigger a window reload of the data hooks via a key.
   // We delegate the actual refetch to child pages by emitting a custom event.
@@ -114,41 +106,20 @@ export default function PortalLayout() {
             <ImpersonationBanner
               athleteId={athlete.id}
               athleteName={
-                athlete.full_name || `${athlete.first_name} ${athlete.last_name}`
+                entityVoice(athlete).name
               }
               teamName={null}
             />
           )}
 
-          <PortalNavDrawer open={navOpen} onClose={() => setNavOpen(false)} />
-
-          <AthleteHeader onMenuClick={() => setNavOpen(true)} onBellClick={() => setNotifOpen(true)} />
-          <NotificationsSheet open={notifOpen} onOpenChange={setNotifOpen} />
-
-          <PortalDesktopNav />
-
-          <div className="max-w-[1200px] mx-auto px-4 sm:px-6 pt-3 hidden md:flex items-center justify-end gap-3">
-            <span className="text-xs text-muted-foreground hidden sm:block">{user?.email}</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={signOut}
-              className="text-muted-foreground hover:text-accent h-9 tap-target"
-            >
-              <LogOut className="h-4 w-4 mr-1.5" />
-              <span className="hidden sm:inline">Sign out</span>
-            </Button>
-          </div>
-
-          <div className="pb-bottom-nav md:pb-0">
+          <MooneyShell>
             <Outlet />
-          </div>
+          </MooneyShell>
 
           <BulkOrderSheetBridge open={orderSheetOpen} onOpenChange={setOrderSheetOpen} />
           <OrderDraftBarBridge onOpen={() => setOrderSheetOpen(true)} />
           <ImpersonationGuardModal open={guardOpen} onOpenChange={setGuardOpen} />
 
-          <PortalBottomNav />
         </div>
       </PortalDataProvider>
     </OrderDraftProvider>
