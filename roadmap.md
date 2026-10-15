@@ -1,6 +1,7 @@
 # Current task
 
-- [ ] Diagnose admin “View as Darnell” returning to login; fix only if within portal presentation scope.
+- [x] Diagnose admin “View as Darnell” returning to login: the admin button opens a new tab, while embedded preview sign-in can depend on the editor; portal guard already permits authenticated admins.
+- [ ] Correct the admin preview entry/sign-in handoff — blocked by separately maintained admin navigation and authentication outside portal presentation scope; live account reproduction unavailable.
 
 - [x] Locker Room presentation with existing artwork and live-hook destinations, summary, projects and drops.
 - [x] Five-item shared navigation and global AX Team drawer; preserve View-as context.
