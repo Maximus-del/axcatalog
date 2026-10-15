@@ -157,3 +157,22 @@ export const ORDER_TONE: Record<string, string> = {
 export function orderTone(status: string): string {
   return ORDER_TONE[status] ?? "--ax-faint";
 }
+
+/**
+ * A name short enough to sit inside a button.
+ *
+ * "View as Darnell" reads well. "View as Abbotsford Senior Secondary" wraps the
+ * header onto a second line, and "View as them" tells an operator with twelve
+ * tabs open nothing about which client they are about to look at. So: a
+ * person's first name, and anyone else's full name clipped — an organisation's
+ * name is not a first name, and "Dash" for "Dash Letics" would be wrong.
+ */
+export function shortLabel(name: string, entityType: string, max = 18): string {
+  const trimmed = (name ?? "").trim();
+  if (!trimmed) return "them";
+  if (entityType === "person") {
+    const first = trimmed.split(/\s+/)[0];
+    return first.length > max ? `${first.slice(0, max - 1)}…` : first;
+  }
+  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed;
+}

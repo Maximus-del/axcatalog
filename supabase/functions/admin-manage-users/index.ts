@@ -1,6 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const ADMIN_ROLE = 'admin';
+// A portal user. `app_role` has carried 'client' all along; nothing created one.
+const CLIENT_ROLE = 'client';
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -93,6 +95,84 @@ Deno.serve(async (req) => {
       }
 
       return json({ email, tempPassword: password });
+    }
+
+    // ── A LOGIN FOR A CLIENT, NOT ANOTHER OPERATOR ──────────────────────
+    //
+    // The 'create' action above hard-codes role 'admin' and files the new user
+    // into the CALLER's org with no athlete link. That is the only account this
+    // function could make, so there was no way to give an athlete access to
+    // their own portal except by making them an administrator of everything.
+    //
+    // Three differences, all of them the point:
+    //   role            'client', not 'admin'
+    //   organization_id the ATHLETE's org, not the caller's
+    //   link            a user_athlete_links row, which is what RequirePortal
+    //                   and useCurrentAthlete actually read
+    //
+    // The athlete is looked up through the CALLER's client, not the service
+    // client, so row-level security decides whether this operator may see that
+    // athlete at all. An admin of one org cannot mint a login into another's.
+    if (action === 'create_client') {
+      const email = String(body.email ?? '').trim().toLowerCase();
+      const full_name = String(body.full_name ?? '').trim();
+      const athleteId = String(body.athlete_id ?? '').trim();
+      if (!email) return json({ error: 'Email is required' }, 400);
+      if (!athleteId) return json({ error: 'athlete_id is required' }, 400);
+
+      const { data: athlete, error: aErr } = await asCaller
+        .from('athletes')
+        .select('id, organization_id, display_name, full_name')
+        .eq('id', athleteId)
+        .maybeSingle();
+      if (aErr) return json({ error: aErr.message }, 400);
+      if (!athlete) return json({ error: 'That entity does not exist, or you cannot access it.' }, 404);
+
+      const password = tempPassword();
+      const { data: created, error } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name, must_change_password: true },
+      });
+      if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (
+          msg.includes('already') ||
+          msg.includes('registered') ||
+          msg.includes('exists') ||
+          (error as any).status === 422
+        ) {
+          return json({ error: `A user with email ${email} already exists.` }, 409);
+        }
+        return json({ error: error.message }, 400);
+      }
+
+      const userId = created.user!.id;
+      // Roll the auth user back on any failure below, so the email stays usable
+      // and we never leave an account that can sign in but reaches nothing.
+      const { error: pErr } = await admin.from('user_profiles').insert({
+        id: userId,
+        organization_id: athlete.organization_id,
+        full_name: full_name || athlete.display_name || athlete.full_name || email,
+        email,
+        role: CLIENT_ROLE,
+      });
+      if (pErr) {
+        await admin.auth.admin.deleteUser(userId).catch(() => {});
+        return json({ error: pErr.message }, 400);
+      }
+
+      const { error: lErr } = await admin
+        .from('user_athlete_links')
+        .insert({ user_id: userId, athlete_id: athleteId });
+      if (lErr) {
+        await admin.from('user_profiles').delete().eq('id', userId).catch(() => {});
+        await admin.auth.admin.deleteUser(userId).catch(() => {});
+        return json({ error: lErr.message }, 400);
+      }
+
+      return json({ email, tempPassword: password, user_id: userId, athlete_id: athleteId });
     }
 
     if (action === 'reset_password') {

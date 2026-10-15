@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { identityLine, orderTone, preview, relativeTime, sinceLabel, statTiles } from "./entity-overview";
+import { identityLine, orderTone, preview, relativeTime, shortLabel, sinceLabel, statTiles } from "./entity-overview";
 import { ORDER_STATUSES, STATUS_LABEL } from "@/lib/order-status";
 
 describe("three previews and a counter", () => {
@@ -145,5 +145,29 @@ describe("order status colour", () => {
     expect(STATUS_LABEL.in_production).toBe("In Production");
     expect(STATUS_LABEL.acknowledged).toBe("Acknowledged");
     expect(STATUS_LABEL.completed).toBe("Completed");
+  });
+});
+
+describe("shortLabel", () => {
+  it("uses a person's first name", () => {
+    expect(shortLabel("Darnell Mooney", "person")).toBe("Darnell");
+  });
+
+  it("keeps an organisation's whole name — 'Dash' is not 'Dash Letics'", () => {
+    expect(shortLabel("Dash Letics", "organization")).toBe("Dash Letics");
+  });
+
+  it("clips a long organisation name rather than wrapping the header", () => {
+    expect(shortLabel("Abbotsford Senior Secondary", "school")).toBe("Abbotsford Senior…");
+    expect(shortLabel("Abbotsford Senior Secondary", "school").length).toBeLessThanOrEqual(18);
+  });
+
+  it("clips an absurd single-word first name too", () => {
+    expect(shortLabel("Bartholomewlongnamefellow Smith", "person").length).toBeLessThanOrEqual(18);
+  });
+
+  it("falls back to something printable rather than an empty button", () => {
+    expect(shortLabel("", "person")).toBe("them");
+    expect(shortLabel("   ", "organization")).toBe("them");
   });
 });

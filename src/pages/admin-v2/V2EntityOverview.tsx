@@ -8,6 +8,7 @@ import {
   MoreHorizontal,
   Palette,
   Plus,
+  Eye,
   Receipt,
   ShoppingBag,
   ShoppingCart,
@@ -16,16 +17,18 @@ import {
 } from "lucide-react";
 import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import DropZone, { DropTrigger } from "@/components/admin-v2/DropZone";
+import ClientAccessCard from "@/components/admin-v2/ClientAccessCard";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
 import { useAuth } from "@/auth/AuthProvider";
-import { entityCartHref, entityLibraryHref, type EntitySection } from "@/lib/v2/entity-nav";
+import { entityCartHref, entityLibraryHref, entityPortalHref, type EntitySection } from "@/lib/v2/entity-nav";
 import {
   identityLine,
   orderTone,
   preview,
   relativeTime,
+  shortLabel,
   sinceLabel,
   statTiles,
 } from "@/lib/v2/entity-overview";
@@ -210,6 +213,12 @@ export default function V2EntityOverview() {
           </Link>
         ))}
       </div>
+
+      {/*
+        Whether they can sign in sits above the work, not buried in a menu. For
+        months the honest answer for every entity was "no" and nothing said so.
+      */}
+      <ClientAccessCard entityId={entity.id} entityName={entity.name} />
 
       {attention.length > 0 && (
         <div className="mb-6 grid gap-1.5">
@@ -510,6 +519,30 @@ function AthleteHeader({
             <Receipt className="h-3.5 w-3.5" />
             Create Order
           </Link>
+
+          {/*
+            What the client sees, from the client's side.
+
+            Everything else on this page is the operator's view of them. This is
+            the only control that answers "is it actually any good yet", which is
+            the question you ask right before sending somebody their login. V1
+            has had this since the portal shipped; V2 had no way in at all.
+
+            New tab on purpose — the portal replaces the whole shell, and an
+            operator who loses their place in V2 for a two-second look stops
+            taking the look.
+          */}
+          <a
+            href={entityPortalHref(entity.id)}
+            target="_blank"
+            rel="noreferrer"
+            title={`Open ${entity.name}'s portal exactly as they see it`}
+            className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[13px] font-medium text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            View as {shortLabel(entity.name, entity.entityType)}
+            <ArrowUpRight className="h-3 w-3 opacity-60" />
+          </a>
 
           <div className="relative">
             <button

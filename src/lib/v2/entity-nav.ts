@@ -28,6 +28,22 @@ export function entityCartHref(entityId: string): string {
   return `/admin-v2/people/${entityId}/cart`;
 }
 
+/**
+ * The client's own portal, seen as them.
+ *
+ * `?as=<id>` is how an operator views a client portal — useCurrentAthlete
+ * honours it for admins and PortalLayout shows the impersonation banner. V1 has
+ * offered this from its athlete page since the portal shipped; V2 never did, so
+ * the only way to check what a client actually sees was to type the URL by hand.
+ *
+ * Callers open it in a NEW TAB. The portal replaces the whole shell, and an
+ * operator who loses their place in V2 for a two-second look at the client's
+ * view stops taking the look.
+ */
+export function entityPortalHref(entityId: string): string {
+  return `/portal?as=${encodeURIComponent(entityId)}`;
+}
+
 export interface LibraryTarget {
   /** Scroll to this section on arrival. */
   focus?: EntitySection;

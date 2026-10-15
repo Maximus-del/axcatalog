@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ENTITY_SECTIONS, entityCartHref, entityHref, entityLibraryHref, isEntitySection } from "./entity-nav";
+import { ENTITY_SECTIONS, entityCartHref, entityHref, entityLibraryHref, entityPortalHref, isEntitySection } from "./entity-nav";
 
 describe("an athlete's addresses", () => {
   it("keeps the overview at the bare route, so every existing link still lands", () => {
@@ -61,5 +61,20 @@ describe("landing on the right design shelf", () => {
 
   it("still carries the section it was going to anyway", () => {
     expect(entityLibraryHref("e1", { focus: "designs", shelf: "concept" })).toContain("focus=designs");
+  });
+});
+
+describe("entityPortalHref", () => {
+  it("points at the portal, as that entity", () => {
+    expect(entityPortalHref("abc-123")).toBe("/portal?as=abc-123");
+  });
+
+  it("escapes the id rather than pasting it raw into the query", () => {
+    expect(entityPortalHref("a b&c=d")).toBe("/portal?as=a%20b%26c%3Dd");
+  });
+
+  it("is the portal, never an admin route — this is the client's own view", () => {
+    expect(entityPortalHref("x").startsWith("/portal")).toBe(true);
+    expect(entityPortalHref("x")).not.toContain("/admin");
   });
 });
