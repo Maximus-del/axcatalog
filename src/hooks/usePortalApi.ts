@@ -21,7 +21,17 @@ import {
   type OrderRequestInput,
   type Turnaround,
 } from "@/lib/portal/api/orders";
-import type { Product } from "@/lib/portal/api/contract";
+import type { Product, Project } from "@/lib/portal/api/contract";
+import {
+  createProject,
+  decideConcept,
+  getProject,
+  listMessages,
+  listProjects,
+  postMessage,
+  uploadFile,
+  type NewProjectInput,
+} from "@/lib/portal/api/studio";
 
 export function usePortalScope(): PortalScope {
   const { athlete, isImpersonating } = usePortalData();
@@ -131,5 +141,77 @@ export function usePortalOrderHistory(cursor: string | null = null, limit = 24) 
     queryKey: keyFor(scope, "orders", cursor, limit),
     queryFn: () => fetchOrders(scope, cursor, limit),
     staleTime: 30_000,
+  });
+}
+
+/** Creative Studio project list. Concept image URLs inside expire in 5 minutes; refetch, don't cache. */
+export function usePortalProjects(opts: { status?: Project["status"]; cursor?: string | null } = {}) {
+  const scope = usePortalScope();
+  return useQuery({
+    queryKey: keyFor(scope, "projects", opts.status ?? null, opts.cursor ?? null),
+    queryFn: () => listProjects(scope, opts),
+    staleTime: 60_000,
+  });
+}
+
+export function usePortalProject(projectId: string | null) {
+  const scope = usePortalScope();
+  return useQuery({
+    queryKey: keyFor(scope, "project", projectId),
+    queryFn: () => getProject(scope, projectId as string),
+    enabled: !!projectId,
+    staleTime: 30_000,
+  });
+}
+
+export function usePortalCreateProject() {
+  const scope = usePortalScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewProjectInput) => createProject(scope, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keyFor(scope, "projects") }),
+  });
+}
+
+/** Approve / request changes. A 409 means the project changed: refetch and show the latest. */
+export function usePortalDecideConcept() {
+  const scope = usePortalScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof decideConcept>[1]) => decideConcept(scope, input),
+    onSettled: (_d, _e, input) => {
+      void qc.invalidateQueries({ queryKey: keyFor(scope, "project", input.projectId) });
+      void qc.invalidateQueries({ queryKey: keyFor(scope, "projects") });
+      void qc.invalidateQueries({ queryKey: keyFor(scope, "messages", input.projectId) });
+    },
+  });
+}
+
+/** Project chat (projectId) or the general AX Team thread (null). */
+export function usePortalMessages(projectId: string | null) {
+  const scope = usePortalScope();
+  return useQuery({
+    queryKey: keyFor(scope, "messages", projectId),
+    queryFn: () => listMessages(scope, { projectId }),
+    staleTime: 15_000,
+    refetchInterval: 30_000,
+  });
+}
+
+export function usePortalPostMessage() {
+  const scope = usePortalScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof postMessage>[1]) => postMessage(scope, input),
+    onSuccess: (_d, input) => void qc.invalidateQueries({ queryKey: keyFor(scope, "messages", input.projectId) }),
+  });
+}
+
+/** Private upload: returns the upload id to attach to a brief or message. */
+export function usePortalUpload() {
+  const scope = usePortalScope();
+  return useMutation({
+    mutationFn: (input: { file: File; purpose: "inspiration" | "attachment"; projectId?: string | null }) =>
+      uploadFile(scope, input.file, input.purpose, input.projectId ?? null),
   });
 }

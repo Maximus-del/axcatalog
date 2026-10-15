@@ -40,6 +40,37 @@ echo "B: first credit=$(grep -E '^[0-9.]+$' $tmp/b1.out | head -1) second credit
 okA=no; [ "$((afterA-before))" = "1" ] && grep -qx true "$tmp/a2.out" && [ "$balA" = "40.00" ] && okA=yes
 c1=$(grep -E '^[0-9.]+$' $tmp/b1.out | head -1); c2=$(grep -E '^[0-9.]+$' $tmp/b2.out | head -1)
 okB=$(awk -v a="${c1:-0}" -v b="${c2:-0}" -v bal="$balB" 'BEGIN{print (a+b<=40.0001 && bal+0>=0 && bal+0 == 40-a-b) ? "yes" : "no"}')
-echo "---- concurrency: same-key duplicate=$okA  credit race=$okB"
+okC=skip
+if [ "$(q "select to_regproc('public.portal_decide_concept') is not null;")" = "t" ]; then
+  # C: two sessions approve the same concept version at once -> exactly one wins, the other gets 409.
+  op="select set_config('request.jwt.claims','{\"sub\":\"00000000-0000-0000-0000-0000000000f1\"}',false) \\g /dev/null
+set role authenticated;"
+  cat > "$tmp/c0.sql" <<SQL
+$pre
+select public.portal_create_project($M, null, 'Race test', 'other', 'two approvals at once') ->> 'id' as id \gset
+reset role;
+$op
+select public.portal_share_concept(:'id'::uuid, 'design-previews', 'race.png', 'Race') ->> 'conceptId' as cid \gset
+select :'id' || ' ' || :'cid';
+SQL
+  read -r pid cid < <(run "$tmp/c0.sql" 2>/dev/null | tail -1)
+  ver=$(q "select version from portal_threads where id = '$pid';")
+  for n in 1 2; do
+    cat > "$tmp/c$n.sql" <<SQL
+begin;
+$pre
+select coalesce((public.portal_decide_concept($M, '$pid', '$cid', 1, $ver, 'approve') ->> 'status'), 'none');
+select pg_sleep(1.5);
+commit;
+SQL
+  done
+  run "$tmp/c1.sql" > "$tmp/c1.out" 2>&1 & sleep 0.3; run "$tmp/c2.sql" > "$tmp/c2.out" 2>&1; wait
+  wins=$(cat "$tmp/c1.out" "$tmp/c2.out" | grep -cx approved)
+  stale=$(cat "$tmp/c1.out" "$tmp/c2.out" | grep -c "changed since you opened it")
+  decisions=$(q "select count(*) from portal_project_decisions where concept_id = '$cid';")
+  echo "C: approvals that won=$wins (want 1), refused as stale=$stale (want 1), decisions stored=$decisions (want 1)"
+  okC=no; [ "$wins" = 1 ] && [ "$stale" = 1 ] && [ "$decisions" = 1 ] && okC=yes
+fi
+echo "---- concurrency: same-key duplicate=$okA  credit race=$okB  concurrent approvals=$okC"
 rm -rf "$tmp"
-[ "$okA" = yes ] && [ "$okB" = yes ]
+[ "$okA" = yes ] && [ "$okB" = yes ] && [ "$okC" != no ]

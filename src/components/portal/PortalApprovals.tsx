@@ -5,7 +5,10 @@ import { Check, X, Loader2, ImageOff } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePendingProducts } from "@/hooks/useContent";
-import { setProductApproval, type OperatorProduct } from "@/lib/ecosystem/content";
+import type { OperatorProduct } from "@/lib/ecosystem/content";
+import { decideProduct } from "@/lib/portal/api/studio";
+import { usePortalScope } from "@/hooks/usePortalApi";
+import { PortalApiError } from "@/lib/portal/api/contract";
 import { storageUrl } from "@/lib/ecosystem/image";
 
 export function PortalApprovals({ athleteId }: { athleteId: string }) {
@@ -25,6 +28,7 @@ export function PortalApprovals({ athleteId }: { athleteId: string }) {
 }
 
 function ApprovalRow({ product, onDone }: { product: OperatorProduct; onDone: () => void }) {
+  const scope = usePortalScope();
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [noting, setNoting] = useState(false);
@@ -33,8 +37,23 @@ function ApprovalRow({ product, onDone }: { product: OperatorProduct; onDone: ()
 
   async function decide(approve: boolean) {
     setBusy(approve ? "a" : "r");
-    try { await setProductApproval(product.id, approve, approve ? null : note.trim() || null); toast.success(approve ? "Approved" : "Sent back with changes"); onDone(); }
-    catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); } finally { setBusy(null); }
+    // Through the server: the old direct products update was refused by RLS
+    // for a client login and reported "Approved" while nothing changed.
+    try {
+      await decideProduct(scope, {
+        productId: product.id,
+        decision: approve ? "approve" : "reject",
+        note: approve ? null : note.trim() || null,
+      });
+      toast.success(approve ? "Approved" : "Sent back with changes");
+      onDone();
+    } catch (e) {
+      if (e instanceof PortalApiError && e.status === 409) onDone(); // already decided elsewhere: refresh
+      const field = e instanceof PortalApiError ? Object.values(e.error.fieldErrors ?? {})[0] : null;
+      toast.error(field ?? (e instanceof Error ? e.message : "Failed"));
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
