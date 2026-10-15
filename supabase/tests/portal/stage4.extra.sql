@@ -41,7 +41,7 @@ insert into content_assets (athlete_id, type, title, hero_url, status, publish_a
   ('00000000-0000-0000-0000-00000000000c', 'update', 'Coleman post', 'https://cdn.example/c.jpg', 'published', '2026-08-15');
 insert into drops (id, organization_id, athlete_id, collection_id, name, slug, status, access_date, public_date, approval_state) values
   ('00000000-0000-0000-0000-00000000d401', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-00000000000d',
-   '00000000-0000-0000-0000-0000000c0a71', 'Mooney World — Fall Drop', 'fall-drop', 'scheduled', '2026-08-16', '2026-08-18', null),
+   '00000000-0000-0000-0000-0000000c0a71', 'Mooney World — Fall Drop', 'fall-drop', 'scheduled', '2026-08-16', '2026-08-18', 'none'),
   ('00000000-0000-0000-0000-00000000d4c1', '00000000-0000-0000-0000-0000000000a2', '00000000-0000-0000-0000-00000000000c',
    null, 'Coleman drop', 'coleman-drop', 'draft', null, null, null);
 insert into affiliates (user_id, display_name, code, status, commission_percent, buyer_discount_percent) values

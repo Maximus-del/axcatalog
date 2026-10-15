@@ -523,7 +523,11 @@ begin
 
   select organization_id into _org from portal_threads where id = _tid;
   insert into portal_messages (thread_id, organization_id, sender_user_id, sender_role, body)
-  values (_tid, _org, auth.uid(), 'portal', coalesce(trim(_body), '')) returning id into _mid;
+  -- portal_messages requires a non-blank body; a files-only message says so.
+  values (_tid, _org, auth.uid(), 'portal',
+          coalesce(nullif(trim(_body), ''),
+                   'Shared ' || cardinality(_attachment_ids) || case when cardinality(_attachment_ids) = 1 then ' file' else ' files' end))
+  returning id into _mid;
   insert into portal_message_attachments (message_id, upload_id) select _mid, unnest(coalesce(_attachment_ids, '{}'));
   if _project_id is not null then
     update portal_uploads set project_id = _project_id where id = any(coalesce(_attachment_ids, '{}')) and project_id is null;

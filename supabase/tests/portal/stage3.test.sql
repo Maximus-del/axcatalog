@@ -124,6 +124,14 @@ select t.check('messages: inspiration attachment shown on the project''s first m
   exists (select 1 from jsonb_array_elements(public.portal_list_messages(:M, t.get('p1')::uuid) -> 'items') m, jsonb_array_elements(m -> 'attachments') a where a ->> 'name' = 'giants ref.png'));
 select t.check('messages: a pending upload cannot be attached',
   t.raises(format('select public.portal_post_message(%L, null, %L, array[%L::uuid])', '00000000-0000-0000-0000-00000000000d', 'see file', t.get('up_pending')), 'P0422'));
+select t.put('up_att', public.portal_begin_upload(:M, 'attachment', 'tag.png', 'image/png', 64) ->> 'uploadId');
+select t.reset();
+set role service_role;
+select public.portal_finalize_upload(t.get('up_att')::uuid, '00000000-0000-0000-0000-0000000000d1', 'image/png', 64);
+reset role;
+select t.as_user('00000000-0000-0000-0000-0000000000d1');
+select t.check('messages: a files-only message gets a readable body (body may not be blank)',
+  t.peek(format('select body from portal_messages where id = %L', public.portal_post_message(:M, null, '   ', array[t.get('up_att')::uuid]) ->> 'id')) = 'Shared 1 file');
 select t.check('messages: paging returns a cursor',
   (public.portal_list_messages(:M, null, null, 1) ->> 'nextCursor') is not null);
 

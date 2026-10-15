@@ -126,7 +126,7 @@ order is safe either way, but the new behaviour only exists after the SQL.
 
 ## Tests
 
-- `supabase/tests/portal/run.sh stage4` — 169 checks against a local Postgres
+- `supabase/tests/portal/run.sh stage4` — 170 checks against a local Postgres
   stand-in of the relevant schema: two athletes, a shared org, operator scope
   in and out of org, an outsider, anon, timezone and DST boundaries, stale
   versions, idempotent replays, refunds, margins, uploads.
