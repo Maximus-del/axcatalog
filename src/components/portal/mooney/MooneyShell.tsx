@@ -48,7 +48,7 @@ export function MooneyShell({ children }: { children: ReactNode }) {
         <h2>{active.label}</h2>
         <div className="mw-topbar-actions"><Button variant="ghost" size="icon" className="mw-icon" aria-label="Open AX Team messages" title="AX Team messages" onClick={openTeam}><MessageCircle /></Button><Button variant="ghost" size="icon" className="mw-icon" title="Your profile" aria-label="Your profile" asChild><Link to={portalLink("/portal/profile", location.search)}><UserRound /></Link></Button><Button variant="ghost" size="icon" className="mw-icon" title="Sign out" aria-label="Sign out" onClick={signOut}><LogOut /></Button><span className="mw-topbar-avatar">{portrait}</span></div>
       </header>
-      {children}
+      <div className="mw-room-ground">{children}</div>
     </div>
   </div>
   <Sheet open={navOpen} onOpenChange={setNavOpen}><SheetContent side="left" className="mw-drawer w-[min(320px,90vw)] sm:max-w-[320px]"><SheetHeader className="text-left"><SheetTitle className="flex items-center gap-2"><Moon className="text-accent" />{brand}</SheetTitle><SheetDescription>{voice.name}</SheetDescription></SheetHeader>{navigation()}<div className="mt-auto">{teamButton}<Button variant="ghost" asChild className="w-full mt-3 min-h-11"><Link to={portalLink("/portal/profile", location.search)} onClick={() => setNavOpen(false)}><UserRound />Your profile</Link></Button></div></SheetContent></Sheet>

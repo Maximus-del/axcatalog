@@ -1,5 +1,9 @@
 # Current task
 
+- [x] Match the supplied Locker Room composition using existing assets: one desktop wall, aligned cutouts, separate collection captions, mobile bay fallback, and shared glass-panel ground.
+- [x] Isolated visual and interaction checks at 375, 390, 768, 1024 and 1440px; 16 navigation tests passed.
+- [x] Latest full project validation reports build OK.
+
 - [x] Diagnose admin “View as Darnell” returning to login: the admin button opens a new tab, while embedded preview sign-in can depend on the editor; portal guard already permits authenticated admins.
 - [ ] Correct the admin preview entry/sign-in handoff — blocked by separately maintained admin navigation and authentication outside portal presentation scope; live account reproduction unavailable.
 

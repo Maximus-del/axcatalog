@@ -20,12 +20,14 @@ function DestinationDisplay({ destination, onOpen, priority }: { destination: De
   const [wide, setWide] = useState(false);
   useEffect(() => { setFailed(false); setWide(false); }, [destination.image]);
   return <article className="mw-destination" style={{ "--mw-destination-accent": destination.accent } as CSSProperties}>
-    <div className="mw-figure-stage" data-wide={wide}>
+    <Button variant="ghost" className="mw-figure-stage" data-wide={wide} onClick={onOpen} aria-label={`Open ${destination.label} collection`}>
       {destination.image && !failed ? <img className="mw-figure" src={destination.image} alt={`${destination.label} collectible`} loading={priority ? "eager" : "lazy"} onError={() => setFailed(true)} onLoad={(event) => { const image = event.currentTarget; setWide(image.naturalWidth > image.naturalHeight); }} /> : <div className="mw-figure-placeholder"><ImageOff className="h-8 w-8" /><span className="text-xs">Artwork unavailable</span></div>}
-    </div>
+    </Button>
+    <div className="mw-destination-caption">
     <h2>{destination.label}</h2>
-    <p className="mw-destination-meta">{destination.jerseyNumber !== null ? `#${destination.jerseyNumber}` : destination.teamName ?? ""}</p>
+    <p className="mw-destination-meta">{destination.jerseyNumber !== null ? `#${destination.jerseyNumber}` : ""}</p>
     <Button variant="outline" className="mw-collection-link" onClick={onOpen} aria-label={`Open ${destination.label} collection`}>Open collection<ArrowRight /></Button>
+    </div>
   </article>;
 }
 
@@ -83,13 +85,17 @@ export function LockerRoom() {
   ];
 
   return <main>
-    <section className="mw-hero" aria-labelledby="locker-room-heading">
+    <section className="mw-hero" data-wall={destinations.data?.length === 4} aria-labelledby="locker-room-heading">
+      <div className="mw-locker-scene">
+      <div className="mw-scene-heading">
       <h1 id="locker-room-heading" className="mw-heading">Welcome to your Locker Room, {voice.name}.</h1>
       <p className="mw-tagline">Same game. Bigger moves.</p>
+      </div>
       {destinations.isLoading && <div className="mw-lockers" role="status" aria-label="Loading collections">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-[360px] rounded-md" />)}</div>}
       {destinations.isError && <RetryState error={destinations.error} retry={() => void destinations.refetch()} />}
       {destinations.isSuccess && destinations.data.length === 0 && <div className="mw-state"><Package className="mx-auto h-8 w-8 mb-3" /><p>No collections available yet.</p></div>}
       {destinations.data && destinations.data.length > 0 && <div className="mw-lockers" aria-label="Your collections">{destinations.data.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} />)}</div>}
+      </div>
     </section>
     <div className="mw-content">
       {summary.isError ? <RetryState error={summary.error} retry={() => void summary.refetch()} /> : <section className="mw-kpis" aria-label="Your summary">{statistics.map((stat, index) => <article key={stat.label} className="mw-stat"><span className="mw-stat-icon"><stat.icon className="h-5 w-5" /></span><div className="mw-stat-copy"><span className="mw-stat-label">{stat.label}</span>{summary.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : <strong className="mw-stat-value">{stat.value}</strong>}</div>{index === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs}>Use credit<ArrowRight /></Button>}</article>)}</section>}
