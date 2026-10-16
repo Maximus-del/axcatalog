@@ -9356,6 +9356,14 @@ export type Database = {
         }
         Returns: Json
       }
+      portal_drive_record: {
+        Args: { _product_id: string; _result: Json }
+        Returns: undefined
+      }
+      portal_drive_targets: {
+        Args: { _athlete_id: string; _force?: boolean; _product_id?: string }
+        Returns: Json
+      }
       portal_drop_json: {
         Args: { d: Database["public"]["Tables"]["drops"]["Row"] }
         Returns: Json
@@ -9437,6 +9445,10 @@ export type Database = {
       }
       portal_ops_set_closed: {
         Args: { _closed: boolean; _thread_id: string }
+        Returns: Json
+      }
+      portal_ops_set_drive_sources: {
+        Args: { _product_id: string; _sources: Json }
         Returns: Json
       }
       portal_ops_thread: { Args: { _thread_id: string }; Returns: Json }
