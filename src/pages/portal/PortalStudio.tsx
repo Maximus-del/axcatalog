@@ -21,8 +21,14 @@ import { usePortalData } from "@/components/portal/PortalDataContext";
 import { STUDIO_CATEGORIES, STUDIO_VIBES, threadToProject, PROJECT_STAGES, type Project } from "@/lib/portal-studio";
 import { categoryLabel, threadTimeAgo, type PortalThread } from "@/lib/portal-messaging";
 import { cn } from "@/lib/utils";
+import { usePortalLayoutKind } from "@/components/portal/PortalLayoutKind";
+import { CreativeStudio } from "@/components/portal/mooney/CreativeStudio";
 
 export default function PortalStudio() {
+  return usePortalLayoutKind() === "world" ? <CreativeStudio /> : <PortalStudioClassic />;
+}
+
+function PortalStudioClassic() {
   const navigate = useNavigate();
   const { athlete } = usePortalData();
   const { user } = useAuth();

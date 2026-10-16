@@ -17,6 +17,7 @@ if (typeof window !== "undefined") {
     class NoopIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = "";
+      readonly scrollMargin = "";
       readonly thresholds: ReadonlyArray<number> = [];
       observe() {}
       unobserve() {}
