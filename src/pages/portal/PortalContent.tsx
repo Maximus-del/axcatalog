@@ -2,7 +2,14 @@
 import { PortalSection } from "@/components/portal/PortalSection";
 import { ContentLibrary } from "@/components/portal/content/ContentLibrary";
 
+import { usePortalLayoutKind } from "@/components/portal/PortalLayoutKind";
+import { ContentDrops } from "@/components/portal/mooney/ContentDrops";
+
 export default function PortalContent() {
+  return usePortalLayoutKind() === "world" ? <ContentDrops /> : <PortalContentClassic />;
+}
+
+function PortalContentClassic() {
   return (
     <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-5 pb-bottom-nav md:pb-32">
       <PortalSection
