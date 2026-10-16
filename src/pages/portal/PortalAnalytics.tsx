@@ -6,7 +6,14 @@ import { SuperfansCard } from "@/components/portal/home/SuperfansCard";
 import { FanbaseMap } from "@/components/portal/home/FanbaseMap";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 
+import { usePortalLayoutKind } from "@/components/portal/PortalLayoutKind";
+import { BrandHQ } from "@/components/portal/mooney/BrandHQ";
+
 export default function PortalAnalytics() {
+  return usePortalLayoutKind() === "world" ? <BrandHQ /> : <PortalAnalyticsClassic />;
+}
+
+function PortalAnalyticsClassic() {
   const { products, productsLoading, sales, orders, ordersLoading } = usePortalData();
   return (
     <main className="max-w-[1200px] mx-auto px-4 sm:px-6 py-4 sm:py-6 pb-bottom-nav md:pb-32">
