@@ -61,3 +61,12 @@ export default function Harness() {
     </div>
   );
 }
+
+const rootEl = document.getElementById("root");
+if (rootEl) {
+  createRoot(rootEl).render(
+    <StrictMode>
+      <Harness />
+    </StrictMode>,
+  );
+}
