@@ -36,3 +36,6 @@ verify_jwt = false
 
 [functions.portal-files]
 verify_jwt = true
+
+[functions.drive-sync-product-images]
+verify_jwt = true

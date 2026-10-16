@@ -3,17 +3,20 @@
 // One screen per client: Live / Archive / Not shown, tag collections (their
 // lockers), and choose the portal's Front and Back picture — which can differ
 // from the website's first two photos — or add new pictures.
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowUpRight, Check, ImagePlus, Images, Loader2, Plus, Trash2, X } from "lucide-react";
+import { ArrowUpRight, Check, FolderOpen, ImagePlus, Images, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Chip, EmptyState, ErrorState, PageHeader, Skeleton, TabBar } from "@/components/admin-v2/primitives";
 import { useEntityWorkspace } from "@/lib/v2/data";
 import { useSetProductCollection } from "@/lib/v2/product-collections";
 import type { CollectionOption } from "@/lib/v2/product-collections";
 import {
   imageProblem,
+  parseDriveFolderId,
   useAddToLineup,
+  useDriveSync,
+  useSetDriveSources,
   useAddableProducts,
   useClientCollections,
   useClientLineup,
@@ -70,6 +73,110 @@ function Thumb({ img, label }: { img: LineupImage | null; label: string }) {
   );
 }
 
+/* ------------------------------------------------------------------ drive */
+function syncedLabel(iso: string | null): string {
+  if (!iso) return "Not synced yet";
+  const mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (mins < 1) return "Synced just now";
+  if (mins < 60) return `Synced ${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  return hrs < 24 ? `Synced ${hrs} h ago` : `Synced ${new Date(iso).toLocaleDateString()}`;
+}
+
+function DriveSection({ athleteId, product }: { athleteId: string; product: LineupProduct }) {
+  const setSources = useSetDriveSources(athleteId);
+  const sync = useDriveSync(athleteId);
+  const [link, setLink] = useState("");
+  const [label, setLabel] = useState("");
+  const sources = product.drive?.sources ?? [];
+  const busy = setSources.isPending || sync.isPending;
+
+  function runSync() {
+    sync.mutate(
+      { productId: product.id, force: true },
+      {
+        onSuccess: (r) => {
+          if (!r.configured) return void toast.error("Drive isn't connected yet. Add the Google service account secret in Supabase.");
+          const res = r.results?.[0];
+          if (res?.error) return void toast.error(res.error);
+          toast.success(res ? `Synced — ${res.shown ?? 0} picture${res.shown === 1 ? "" : "s"} from Drive` : "Up to date");
+        },
+        onError: (e) => toast.error(e.message),
+      },
+    );
+  }
+
+  function save(next: typeof sources, then?: () => void) {
+    setSources.mutate(
+      { productId: product.id, sources: next },
+      {
+        onSuccess: () => {
+          then?.();
+          if (next.length) runSync();
+          else toast.success("Drive unlinked — the client sees the other pictures again");
+        },
+        onError: (e) => toast.error(e.message),
+      },
+    );
+  }
+
+  function add() {
+    const id = parseDriveFolderId(link);
+    if (!id) return void toast.error("Paste a Drive folder link");
+    if (sources.some((s) => s.id === id)) return void toast.error("That folder is already linked");
+    save([...sources, { id, label: label.trim() || null }], () => {
+      setLink("");
+      setLabel("");
+    });
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-[hsl(var(--ax-line))] p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <FolderOpen className="h-4 w-4 text-[hsl(var(--ax-accent))]" />
+        <span className="flex-1 text-[13px] font-semibold">Pictures from Drive</span>
+        {sources.length > 0 && (
+          <button type="button" className={btn} disabled={busy} onClick={runSync}>
+            {sync.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Sync now
+          </button>
+        )}
+      </div>
+      {sources.length > 0 ? (
+        <>
+          <ul className="space-y-1">
+            {sources.map((s, i) => (
+              <li key={s.id} className="flex items-center gap-2 text-[12px]">
+                <span className="w-4 text-[hsl(var(--ax-faint))]">{i + 1}</span>
+                <a className="min-w-0 flex-1 truncate hover:text-[hsl(var(--ax-accent))]" href={`https://drive.google.com/drive/folders/${s.id}`} target="_blank" rel="noreferrer">
+                  {s.label || s.id}
+                </a>
+                <button type="button" className={btn} disabled={busy} aria-label="Unlink folder" onClick={() => save(sources.filter((x) => x.id !== s.id))}>
+                  <X className="h-3 w-3" />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className={`mt-2 text-[11px] ${product.drive?.error ? "text-[hsl(var(--ax-red))]" : "text-[hsl(var(--ax-faint))]"}`}>
+            {product.drive?.error ?? `${syncedLabel(product.drive?.syncedAt ?? null)}${product.drive?.shown != null ? ` · ${product.drive.shown} shown` : ""}`}
+          </p>
+          <p className="mt-1 text-[11px] text-[hsl(var(--ax-faint))]">
+            The client sees only these. Files named PREVIEW, FLAT or MODEL show; PRINT and MASTER files never do. Folders higher in the list come first.
+          </p>
+        </>
+      ) : (
+        <p className="mb-2 text-[12px] text-[hsl(var(--ax-secondary))]">Link Drive folders and the portal shows what&apos;s in them — change a file in Drive and the client&apos;s My Gear follows.</p>
+      )}
+      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_160px_auto]">
+        <input className={inputCls} value={link} onChange={(e) => setLink(e.target.value)} placeholder="Paste a Drive folder link" aria-label="Drive folder link" />
+        <input className={inputCls} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" aria-label="Folder label" />
+        <button type="button" className={btnPrimary} disabled={busy || !link.trim()} onClick={add}>
+          <Plus className="h-3.5 w-3.5" /> Link folder
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* --------------------------------------------------------------- pictures */
 function PicturesModal({ athleteId, product, onClose }: { athleteId: string; product: LineupProduct; onClose: () => void }) {
   const setSide = useSetPortalSide(athleteId);
@@ -90,6 +197,7 @@ function PicturesModal({ athleteId, product, onClose }: { athleteId: string; pro
       <p className="mb-3 text-[12px] text-[hsl(var(--ax-secondary))]">
         Choose what the client sees as Front and Back in My Gear. This doesn&apos;t change the website. Without a choice, the portal uses the first two photos.
       </p>
+      <DriveSection athleteId={athleteId} product={product} />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {product.images.map((img) => {
           const isFront = product.front?.id === img.id;
@@ -101,8 +209,14 @@ function PicturesModal({ athleteId, product, onClose }: { athleteId: string; pro
                 <div className="absolute left-1.5 top-1.5 flex gap-1">
                   {isFront && <Chip tone="var(--ax-accent)">Front</Chip>}
                   {isBack && <Chip tone="var(--ax-blue)">Back</Chip>}
+                  {img.fromDrive && <Chip>Drive</Chip>}
                 </div>
               </div>
+              {img.driveName && (
+                <div className="truncate px-2 pt-1.5 text-[10.5px] text-[hsl(var(--ax-faint))]" title={img.driveName}>
+                  {product.drive?.sources.find((src) => src.id === img.driveFolderId)?.label || img.driveName}
+                </div>
+              )}
               <div className="flex flex-wrap gap-1 p-2">
                 <button type="button" className={btn} disabled={busy} aria-pressed={img.portalView === "front"} onClick={() => choose(img, "front")}>
                   {img.portalView === "front" && <Check className="h-3 w-3" />} Front
@@ -146,7 +260,11 @@ function PicturesModal({ athleteId, product, onClose }: { athleteId: string; pro
           />
         </label>
       </div>
-      <p className="mt-3 text-[11px] text-[hsl(var(--ax-faint))]">Pictures added here stay in AX and survive Shopify syncs. Website photos can only be changed in Shopify.</p>
+      <p className="mt-3 text-[11px] text-[hsl(var(--ax-faint))]">
+        {product.drive
+          ? "Drive is this product's picture source, so pictures added here stay hidden from the client. Add them to the Drive folder instead."
+          : "Pictures added here stay in AX and survive Shopify syncs. Website photos can only be changed in Shopify."}
+      </p>
     </Modal>
   );
 }
@@ -221,6 +339,7 @@ function LineupCard({ product, collections, onPictures }: { product: LineupProdu
         <Link to={`/admin-v2/products/${product.id}`} className="min-w-0 flex-1 text-[13px] font-semibold hover:text-[hsl(var(--ax-accent))]">
           {product.title}
         </Link>
+        {product.drive && <Chip tone={product.drive.error ? "var(--ax-red)" : undefined}>Drive</Chip>}
         <button type="button" className={btn} onClick={onPictures}>
           <Images className="h-3.5 w-3.5" /> Pictures
         </button>
@@ -270,6 +389,14 @@ export default function V2Lineup() {
   const [coll, setColl] = useState<string>("all");
   const [pictures, setPictures] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const driveSync = useDriveSync(athleteId);
+  const syncOnOpen = driveSync.mutate;
+
+  // Pull the latest from Drive when the lineup opens (the server skips
+  // products synced in the last few minutes).
+  useEffect(() => {
+    if (athleteId) syncOnOpen({});
+  }, [athleteId, syncOnOpen]);
 
   const all = lineup.data ?? [];
   const counts = useMemo(() => ({ live: all.filter((p) => p.lifecycle === "live").length, archive: all.filter((p) => p.lifecycle === "archive").length, hidden: all.filter((p) => p.lifecycle === "hidden").length }), [all]);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { preferDrive } from "../../supabase/functions/_shared/drive-product-images";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface PortalImage {
@@ -262,9 +263,11 @@ export function usePortalProducts(athleteId: string | null): State {
             Number(b.is_primary) - Number(a.is_primary) ||
             (a.sort_order ?? 0) - (b.sort_order ?? 0),
         );
-        const images: PortalImage[] = sortedImgs
+        // Drive-library pictures, when a product has them, are its pictures.
+        const images: PortalImage[] = preferDrive(
           // An image Shopify no longer has is kept for history, never shown.
-          .filter((i) => !(i.metadata as Record<string, unknown> | null)?.shopify_orphaned)
+          sortedImgs.filter((i) => !(i.metadata as Record<string, unknown> | null)?.shopify_orphaned),
+        )
           .map((i) => {
             const url = resolveUrl(i);
             return url

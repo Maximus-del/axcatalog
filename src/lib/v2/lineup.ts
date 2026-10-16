@@ -11,6 +11,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { must, publicUrl, str, t, type Row } from "./db";
 import { sortOptions } from "./product-collections";
+import {
+  isDriveImage,
+  parseDriveFolderId,
+  preferDrive,
+  type DriveSource,
+} from "../../../supabase/functions/_shared/drive-product-images";
+
+export { parseDriveFolderId };
 
 export type Side = "front" | "back";
 export type Lifecycle = "live" | "archive" | "hidden";
@@ -23,6 +31,12 @@ export interface LineupImage {
   portalView: Side | null;
   /** Uploaded here (not from Shopify) — the only images this tool may remove. */
   axUpload: boolean;
+  /** Mirrored from the Drive library; change it in Drive. */
+  fromDrive: boolean;
+  /** The Drive file name, for Drive pictures. */
+  driveName: string | null;
+  /** The Drive folder it came from, for Drive pictures. */
+  driveFolderId: string | null;
   bucket: string | null;
   path: string | null;
 }
@@ -37,6 +51,30 @@ export interface LineupProduct {
   front: LineupImage | null;
   back: LineupImage | null;
   collectionIds: string[];
+  /** Drive folders this product's pictures come from, and the last sync. */
+  drive: DriveLink | null;
+}
+
+export interface DriveLink {
+  sources: DriveSource[];
+  syncedAt: string | null;
+  shown: number | null;
+  error: string | null;
+}
+
+/** Pure: products.metadata.drive → DriveLink (null when no folders). */
+export function driveLinkOf(metadata: unknown): DriveLink | null {
+  const d = ((metadata ?? {}) as Row).drive as Row | undefined;
+  const sources = Array.isArray(d?.sources)
+    ? (d!.sources as Row[]).filter((s) => typeof s?.id === "string").map((s) => ({ id: String(s.id), label: str(s.label) }))
+    : [];
+  if (!sources.length) return null;
+  return {
+    sources,
+    syncedAt: str(d?.synced_at),
+    shown: typeof d?.shown === "number" ? d.shown : null,
+    error: typeof d?.error === "string" ? d.error : null,
+  };
 }
 
 /** Pure: which images the portal shows, mirroring the portal's frontBack(). */
@@ -67,6 +105,9 @@ function toImage(r: Row): LineupImage | null {
     sortOrder: Number(r.sort_order ?? 0),
     portalView: view === "front" || view === "back" ? view : null,
     axUpload: bucket === "product-images" && meta.source === "ax_portal_upload",
+    fromDrive: isDriveImage(meta),
+    driveName: isDriveImage(meta) ? str(meta.drive_name) : null,
+    driveFolderId: isDriveImage(meta) ? str(meta.drive_folder_id) : null,
     bucket,
     path,
   };
@@ -74,7 +115,8 @@ function toImage(r: Row): LineupImage | null {
 
 /** Pure: rows → lineup product. Exported for tests. */
 export function toLineupProduct(p: Row, imageRows: Row[], collectionIds: string[]): LineupProduct {
-  const images = imageRows
+  // Same rule as the portal: Drive pictures, when present, are the pictures.
+  const images = preferDrive(imageRows)
     .map(toImage)
     .filter((x): x is LineupImage => !!x)
     .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary) || a.sortOrder - b.sortOrder);
@@ -89,6 +131,7 @@ export function toLineupProduct(p: Row, imageRows: Row[], collectionIds: string[
     images,
     ...sides,
     collectionIds,
+    drive: driveLinkOf(p.metadata),
   };
 }
 
@@ -105,7 +148,7 @@ export function useClientLineup(athleteId: string | undefined) {
       const ids = ((links.data ?? []) as unknown as Row[]).map((r) => String(r.product_id));
       if (ids.length === 0) return [] as LineupProduct[];
       const [prods, imgs, colls] = await Promise.all([
-        t("products").select("id, title, status, shopify_handle").in("id", ids),
+        t("products").select("id, title, status, shopify_handle, metadata").in("id", ids),
         t("product_images").select("id, product_id, storage_bucket, storage_path, is_primary, sort_order, metadata").in("product_id", ids),
         t("collection_products").select("product_id, collection_id").in("product_id", ids),
       ]);
@@ -272,5 +315,41 @@ export function useClientCollections(athleteId: string | undefined) {
       if (res.error) throw new Error(res.error.message);
       return sortOptions(((res.data ?? []) as unknown as Row[]).filter((r) => r.status !== "archived"));
     },
+  });
+}
+
+/** Set the Drive folders a product's pictures come from (operator only). */
+export function useSetDriveSources(athleteId: string) {
+  const done = useInvalidate(athleteId);
+  return useMutation({
+    mutationFn: async ({ productId, sources }: { productId: string; sources: DriveSource[] }) => {
+      const { error } = await supabase.rpc("portal_ops_set_drive_sources" as never, { _product_id: productId, _sources: sources } as never);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: done,
+  });
+}
+
+export interface DriveSyncResult {
+  configured: boolean;
+  synced: number;
+  changed: number;
+  error?: string;
+  hint?: string;
+  results?: Array<{ productId: string; shown?: number; changed?: number; error?: string }>;
+}
+
+/** Bring pictures up to date with Drive. `force` (operators) skips the 3-minute wait. */
+export function useDriveSync(athleteId: string) {
+  const done = useInvalidate(athleteId);
+  return useMutation({
+    mutationFn: async ({ productId, force }: { productId?: string; force?: boolean } = {}): Promise<DriveSyncResult> => {
+      const { data, error } = await supabase.functions.invoke("drive-sync-product-images", {
+        body: { athlete_id: athleteId, product_id: productId ?? null, force: !!force },
+      });
+      if (error) throw new Error(error.message);
+      return data as DriveSyncResult;
+    },
+    onSuccess: done,
   });
 }

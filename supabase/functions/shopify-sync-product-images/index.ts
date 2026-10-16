@@ -151,6 +151,8 @@ async function refreshOne(
           !usedRowIds.has(r.id) &&
           r.storage_bucket === "external" &&
           !r.metadata?.shopify_image_id &&
+          // Drive-library pictures are not Shopify's to claim.
+          r.metadata?.source !== "drive" &&
           r.storage_path === img.url,
       );
       if (row) matchedBy = "url";
@@ -162,6 +164,7 @@ async function refreshOne(
           !usedRowIds.has(r.id) &&
           r.storage_bucket === "external" &&
           !r.metadata?.shopify_image_id &&
+          r.metadata?.source !== "drive" &&
           r.sort_order === img.position - 1,
       );
       if (row) matchedBy = "position";
@@ -339,7 +342,7 @@ Deno.serve(async (req) => {
       let row = (imgs ?? []).find(
         (r: any) => r.metadata?.shopify_image_id === imgId,
       ) as any;
-      if (!row) row = (imgs ?? []).find((r: any) => r.is_primary) as any;
+      if (!row) row = (imgs ?? []).find((r: any) => r.is_primary && r.metadata?.source !== "drive") as any;
 
       if (row) {
         const newMeta = {

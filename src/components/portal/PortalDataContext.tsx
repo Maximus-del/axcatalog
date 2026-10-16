@@ -81,6 +81,28 @@ export function PortalDataProvider({
     };
   }, [athlete.current_team_id]);
 
+  // Pictures come from the Drive library: ask the server to bring this
+  // client's products up to date with Drive, then reload if anything changed.
+  // The server throttles this (once every few minutes per product), and a
+  // failure just leaves the pictures as they were.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await supabase.functions.invoke("drive-sync-product-images", {
+          body: { athlete_id: athlete.id },
+        });
+        if (!cancelled && (data as { changed?: number } | null)?.changed) refetchProducts();
+      } catch {
+        // Drive sync is best effort; the portal works without it.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per athlete
+  }, [athlete.id]);
+
   const value: PortalDataValue = {
     athlete,
     isImpersonating,
