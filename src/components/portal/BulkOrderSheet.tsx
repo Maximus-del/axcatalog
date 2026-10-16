@@ -282,6 +282,7 @@ export function BulkOrderSheet({
   onSubmitted,
   impersonating,
   onBlockedSubmit,
+  world,
 }: Props) {
   const { user } = useAuth();
   const { draft, setQty, clear } = useOrderDraft();
