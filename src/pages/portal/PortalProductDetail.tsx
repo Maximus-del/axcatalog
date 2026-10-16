@@ -18,18 +18,21 @@ import { ProductImage } from "@/components/shared/ProductImage";
 import { ProductOrderDialog } from "@/components/portal/ProductOrderDialog";
 import { buildShareUrl } from "@/components/portal/ProductCard";
 import { cn } from "@/lib/utils";
+import { usePortalLayoutKind } from "@/components/portal/PortalLayoutKind";
+import { GearProductView } from "@/components/portal/mooney/GearProductView";
 
 export default function PortalProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { products, productsLoading: loading } = usePortalData();
+  const { products, archivedProducts, productsLoading: loading } = usePortalData();
+  const world = usePortalLayoutKind() === "world";
   const [orderOpen, setOrderOpen] = useState(false);
   const [heroIdx, setHeroIdx] = useState(0);
   const [description, setDescription] = useState<string | null>(null);
 
   const product: PortalProduct | undefined = useMemo(
-    () => products.find((p) => p.id === id),
-    [products, id],
+    () => products.find((p) => p.id === id) ?? (world ? archivedProducts.find((p) => p.id === id) : undefined),
+    [products, archivedProducts, world, id],
   );
 
   useEffect(() => setHeroIdx(0), [id]);
@@ -75,6 +78,8 @@ export default function PortalProductDetail() {
       </div>
     );
   }
+
+  if (world) return <GearProductView key={product.id} product={product} description={description} />;
 
   const shareUrl = buildShareUrl(product);
   const unitPrice = product.athlete_unit_price ?? product.wholesale_price ?? null;
