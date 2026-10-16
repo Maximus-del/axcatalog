@@ -51,6 +51,8 @@ interface Props {
   /** When true, the submit button is intercepted via onBlockedSubmit. */
   impersonating?: boolean;
   onBlockedSubmit?: () => void;
+  /** Locker Room (world) shell presentation. Presentation only. */
+  world?: boolean;
 }
 
 
@@ -113,6 +115,7 @@ function ProductAnalytics({
   tiers,
   totalOrderUnits,
   nextTier,
+  world,
 }: {
   product: PortalProduct;
   qty: number;
@@ -120,6 +123,7 @@ function ProductAnalytics({
   tiers: VolumeTier[];
   totalOrderUnits: number;
   nextTier: VolumeTier | null;
+  world?: boolean;
 }) {
   const { athleteUnit: base, wholesaleUnit } = productPricing(product);
   const effectiveUnit =
@@ -137,7 +141,7 @@ function ProductAnalytics({
   const sortedTiers = [...tiers].sort((a, b) => a.min_qty - b.min_qty);
 
   return (
-    <div className="flex-1 min-w-0 self-stretch rounded border border-border/60 bg-background/40 p-2.5">
+    <div className={cn("flex-1 min-w-0 self-stretch rounded border border-border/60 bg-background/40 p-2.5", world && "mw-bulk-panel")}>
       {/* Current Discount + Next Tier */}
       <div className="flex items-center gap-2 mb-2">
         <div className="flex-1 rounded bg-accent/10 border border-accent/30 px-2 py-1">
@@ -571,14 +575,22 @@ export function BulkOrderSheet({
     );
   };
 
+  // Locker Room shell: Live products first, then the Archive (reprints).
+  const rowGroups: { key: string; items: typeof visibleProducts }[] = world
+    ? [
+        { key: "live", items: visibleProducts.filter((p) => p.status !== "archived") },
+        { key: "archive", items: visibleProducts.filter((p) => p.status === "archived") },
+      ]
+    : [{ key: "all", items: visibleProducts }];
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-3xl flex flex-col p-0 bg-card border-border"
+        className={cn("w-full sm:max-w-3xl flex flex-col p-0 border-border", world ? "mw-bulk" : "bg-card")}
       >
-        <SheetHeader className="px-6 py-4 border-b border-border">
-          <SheetTitle className="text-accent uppercase tracking-[0.18em] text-sm">
+        <SheetHeader className={cn("px-6 py-4 border-b border-border", world && "mw-bulk-head")}>
+          <SheetTitle className={cn("text-accent uppercase tracking-[0.18em] text-sm", world && "mw-bulk-title")}>
             Bulk Order Sheet
           </SheetTitle>
           <SheetDescription className="text-xs text-muted-foreground">
@@ -599,7 +611,11 @@ export function BulkOrderSheet({
             </div>
           ) : (
             <ul className="divide-y divide-border/60">
-              {visibleProducts.map((p) => {
+              {rowGroups.flatMap((group) => [
+                world && group.key === "archive" && group.items.length > 0 ? (
+                  <li key="mw-archive-group" className="mw-bulk-group">Archive</li>
+                ) : null,
+                ...group.items.map((p) => {
                 // Skip single-variant "Default Title" products so the standard
                 // size grid remains usable (no real color/size dimensions).
                 const hasVariants =
@@ -706,6 +722,7 @@ export function BulkOrderSheet({
                         </span>
                       )}
                     </button>
+                    {world && p.status === "archived" && <p className="mw-bulk-archive">Reprinted from the design file</p>}
                     {hasVariants ? (
                       (() => {
                         // Group real variants by color and render each group as its
@@ -795,7 +812,7 @@ export function BulkOrderSheet({
                                 return (
                                   <div
                                     key={colorKey || "__nocolor__"}
-                                    className="rounded border border-border/60 bg-background/30 p-2.5"
+                                    className={cn("rounded border border-border/60 bg-background/30 p-2.5", world && "mw-bulk-panel")}
                                   >
                                     <div className="flex items-center gap-2 mb-2">
                                       {thumbUrl ? (
@@ -897,6 +914,7 @@ export function BulkOrderSheet({
                                 tiers={volumeTiers}
                                 totalOrderUnits={totalUnits}
                                 nextTier={nextTier}
+                                world={world}
                               />
                             </div>
                           </div>
@@ -910,7 +928,7 @@ export function BulkOrderSheet({
                           const on = autoOn[autoKey] ?? false;
                           const total = autoTotal[autoKey] ?? 0;
                           return (
-                            <div className="rounded border border-border/60 bg-background/40 p-2.5 flex-1 min-w-[240px]">
+                            <div className={cn("rounded border border-border/60 bg-background/40 p-2.5 flex-1 min-w-[240px]", world && "mw-bulk-panel")}>
                               <div className="flex items-center justify-between mb-1.5">
                                 <Label
                                   htmlFor={`auto-${autoKey}`}
@@ -983,7 +1001,7 @@ export function BulkOrderSheet({
                             </div>
                           );
                         })()}
-                        <div className="rounded border border-border/60 bg-background/40 p-2.5 flex items-center gap-2">
+                        <div className={cn("rounded border border-border/60 bg-background/40 p-2.5 flex items-center gap-2", world && "mw-bulk-panel")}>
                           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
                             {activeColor || "Color"}
                           </div>
@@ -1043,7 +1061,7 @@ export function BulkOrderSheet({
                             />
                           ))}
                         </div>
-                        <div className="rounded border border-border/60 bg-background/40 p-2.5">
+                        <div className={cn("rounded border border-border/60 bg-background/40 p-2.5", world && "mw-bulk-panel")}>
                           <div className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
                             Available Colors
                           </div>
@@ -1099,6 +1117,7 @@ export function BulkOrderSheet({
                           tiers={volumeTiers}
                           totalOrderUnits={totalUnits}
                           nextTier={nextTier}
+                          world={world}
                         />
                       </div>
                     </div>
@@ -1106,17 +1125,18 @@ export function BulkOrderSheet({
                     )}
                   </li>
                 );
-              })}
+                  })
+                ])}
             </ul>
           )}
         </div>
 
-        <div className="border-t border-border px-6 py-4 bg-[hsl(var(--dark))] space-y-3">
+        <div className={cn("border-t border-border px-6 py-4 bg-[hsl(var(--dark))] space-y-3", world && "mw-bulk-foot")}>
           {availableCredit > 0 && orderSubtotal > 0 && (
-            <div className="rounded border border-accent/30 bg-accent/5 p-3 space-y-2">
+            <div className={cn("rounded border border-accent/30 bg-accent/5 p-3 space-y-2", world && "mw-bulk-credit")}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="ax-label text-[10px]">Credit Balance</div>
+                  <div className="ax-label text-[10px]">{world ? "AX Credit" : "Credit Balance"}</div>
                   <div className="text-sm font-semibold text-accent">
                     ${availableCredit.toFixed(2)} available
                   </div>
