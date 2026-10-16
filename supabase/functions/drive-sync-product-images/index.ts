@@ -11,7 +11,7 @@
 // rows it created (metadata.source = 'drive'). If any folder cannot be read,
 // that product is left exactly as it was and the error is recorded.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { planDriveSync, type DriveFile, type DriveSource, type ExistingDriveRow } from "../_shared/drive-product-images.ts";
+import { FOLDER_MIME, colorFromFolder, planDriveSync, type DriveFile, type DriveSource, type ExistingDriveRow } from "../_shared/drive-product-images.ts";
 import { driveToken, listFolder, readServiceAccount } from "../_shared/google-drive.ts";
 
 const cors = {
@@ -63,9 +63,23 @@ Deno.serve(async (req) => {
     return json({ configured: true, error: msg }, 502);
   }
 
+  // A linked folder may hold pictures directly, or one subfolder per
+  // colorway (HOODIE / BLACK / ...). Files in a subfolder carry its color.
   const folderCache = new Map<string, Promise<DriveFile[]>>();
   const list = (id: string) => {
-    if (!folderCache.has(id)) folderCache.set(id, listFolder(token, id));
+    if (!folderCache.has(id)) {
+      folderCache.set(id, (async () => {
+        const top = await listFolder(token, id);
+        const out: DriveFile[] = top.filter((f) => f.mimeType !== FOLDER_MIME);
+        for (const sub of top.filter((f) => f.mimeType === FOLDER_MIME)) {
+          const color = colorFromFolder(sub.name);
+          for (const f of await listFolder(token, sub.id)) {
+            if (f.mimeType !== FOLDER_MIME) out.push({ ...f, color });
+          }
+        }
+        return out;
+      })());
+    }
     return folderCache.get(id)!;
   };
 

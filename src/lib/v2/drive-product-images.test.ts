@@ -7,6 +7,7 @@ import {
   planDriveSync,
   preferDrive,
   sideFromName,
+  colorFromFolder,
   type DriveFile,
 } from "../../../supabase/functions/_shared/drive-product-images";
 import { driveLinkOf, toLineupProduct } from "./lineup";
@@ -102,6 +103,25 @@ describe("planDriveSync", () => {
     ]);
     expect(plan.remove).toEqual([]);
     expect(plan.update).toEqual([]);
+  });
+});
+
+describe("colorways", () => {
+  it("orders loose files, then Black, then the other colors, and tags each picture", () => {
+    const HOODIE = "1mo1XtfdppY-7oTl5pZI1yDWhyPAahhb8";
+    const d = desiredImages([{ id: HOODIE }], {
+      [HOODIE]: [
+        { ...png("m1", "MOONEY_COMICBOOK_HOODIE_PREVIEW-FRONT_v01.png"), color: "MOCHA" },
+        { ...png("c1", "MOONEY_COMICBOOK_HOODIE_PREVIEW-FRONT_v01.png"), color: "CHARCOAL OIL WASH" },
+        { ...png("b2", "MOONEY_COMICBOOK_HOODIE_PREVIEW-BACK_v01.png"), color: "BLACK" },
+        { ...png("b1", "MOONEY_COMICBOOK_HOODIE_PREVIEW-FRONT_v01.png"), color: "BLACK" },
+      ],
+    });
+    expect(d.map((x) => x.fileId)).toEqual(["b1", "b2", "c1", "m1"]);
+    expect(d[0].isPrimary).toBe(true);
+    const plan = planDriveSync([{ id: HOODIE }], { [HOODIE]: [{ ...png("b1", "X_PREVIEW-FRONT.png"), color: "BLACK" }] }, []);
+    expect(plan.insert[0].metadata.drive_color).toBe("BLACK");
+    expect(colorFromFolder("CHARCOAL_OIL_WASH")).toBe("CHARCOAL OIL WASH");
   });
 });
 

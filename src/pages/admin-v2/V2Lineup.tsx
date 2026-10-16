@@ -160,7 +160,7 @@ function DriveSection({ athleteId, product }: { athleteId: string; product: Line
             {product.drive?.error ?? `${syncedLabel(product.drive?.syncedAt ?? null)}${product.drive?.shown != null ? ` · ${product.drive.shown} shown` : ""}`}
           </p>
           <p className="mt-1 text-[11px] text-[hsl(var(--ax-faint))]">
-            The client sees only these. Files named PREVIEW, FLAT or MODEL show; PRINT and MASTER files never do. Folders higher in the list come first.
+            The client sees only these. Link a garment folder (e.g. HOODIE) and every colorway folder inside it comes along, Black first. Files named PREVIEW, FLAT or MODEL show; PRINT and MASTER files never do.
           </p>
         </>
       ) : (
@@ -214,7 +214,7 @@ function PicturesModal({ athleteId, product, onClose }: { athleteId: string; pro
               </div>
               {img.driveName && (
                 <div className="truncate px-2 pt-1.5 text-[10.5px] text-[hsl(var(--ax-faint))]" title={img.driveName}>
-                  {product.drive?.sources.find((src) => src.id === img.driveFolderId)?.label || img.driveName}
+                  {[img.driveColor, product.drive?.sources.find((src) => src.id === img.driveFolderId)?.label || (img.driveColor ? null : img.driveName)].filter(Boolean).join(" · ")}
                 </div>
               )}
               <div className="flex flex-wrap gap-1 p-2">

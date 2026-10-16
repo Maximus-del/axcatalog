@@ -37,6 +37,8 @@ export interface LineupImage {
   driveName: string | null;
   /** The Drive folder it came from, for Drive pictures. */
   driveFolderId: string | null;
+  /** Colorway, when the picture sits in a color subfolder in Drive. */
+  driveColor: string | null;
   bucket: string | null;
   path: string | null;
 }
@@ -108,6 +110,7 @@ function toImage(r: Row): LineupImage | null {
     fromDrive: isDriveImage(meta),
     driveName: isDriveImage(meta) ? str(meta.drive_name) : null,
     driveFolderId: isDriveImage(meta) ? str(meta.drive_folder_id) : null,
+    driveColor: isDriveImage(meta) ? str(meta.drive_color) : null,
     bucket,
     path,
   };

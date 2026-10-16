@@ -34,6 +34,8 @@ export interface DriveFile {
   name: string;
   mimeType: string;
   modifiedTime: string | null;
+  /** Colorway, from the subfolder the file sits in (HOODIE / BLACK / file). */
+  color?: string | null;
 }
 
 export interface ExistingDriveRow {
@@ -48,6 +50,7 @@ export interface DesiredImage {
   fileId: string;
   folderId: string;
   name: string;
+  color: string | null;
   url: string;
   sortOrder: number;
   isPrimary: boolean;
@@ -90,6 +93,19 @@ export function sideFromName(name: string): "front" | "back" | null {
   return null;
 }
 
+export const FOLDER_MIME = "application/vnd.google-apps.folder";
+
+/** A colorway folder name → display color: "CHARCOAL_OIL_WASH" → "CHARCOAL OIL WASH". */
+export function colorFromFolder(name: string): string {
+  return name.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+/** Black leads (the base colorway), then the rest alphabetically; loose files first. */
+function colorRank(color: string | null | undefined): number {
+  if (!color) return 0;
+  return /\bBLACK\b/.test(color) ? 1 : 2;
+}
+
 /** Fronts first, then backs, then flats and the rest — within one folder. */
 function rank(name: string): number {
   const side = sideFromName(name);
@@ -116,7 +132,13 @@ export function desiredImages(sources: DriveSource[], filesByFolder: Record<stri
   for (const src of sources) {
     const files = (filesByFolder[src.id] ?? [])
       .filter(isShowcaseFile)
-      .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+      .sort(
+        (a, b) =>
+          colorRank(a.color) - colorRank(b.color) ||
+          (a.color ?? "").localeCompare(b.color ?? "") ||
+          rank(a.name) - rank(b.name) ||
+          a.name.localeCompare(b.name),
+      );
     for (const f of files) {
       if (seen.has(f.id)) continue;
       seen.add(f.id);
@@ -124,6 +146,7 @@ export function desiredImages(sources: DriveSource[], filesByFolder: Record<stri
         fileId: f.id,
         folderId: src.id,
         name: f.name,
+        color: f.color ?? null,
         url: driveImageUrl(f.id, f.modifiedTime),
         sortOrder: out.length,
         isPrimary: false,
@@ -169,6 +192,8 @@ export function planDriveSync(
       drive_name: d.name,
       drive_modified: d.modified,
     } as Record<string, unknown>;
+    if (d.color) base.drive_color = d.color;
+    else delete base.drive_color;
     if (base.portal_view !== "front" && base.portal_view !== "back") {
       delete base.portal_view;
       const side = sideFromName(d.name);
@@ -189,6 +214,7 @@ export function planDriveSync(
       !!row.is_primary !== d.isPrimary ||
       m.drive_name !== d.name ||
       m.drive_folder_id !== d.folderId ||
+      (m.drive_color ?? null) !== d.color ||
       m.portal_view !== base.portal_view;
     if (changed) plan.update.push({ id: row.id, ...fields });
   }
