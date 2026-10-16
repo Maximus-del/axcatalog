@@ -26,16 +26,19 @@ import { entityVoice } from "@/lib/portal/entity-voice";
 function BulkOrderSheetBridge({
   open,
   onOpenChange,
+  world,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  world: boolean;
 }) {
-  const { athlete, isImpersonating, products, refetchOrders, openGuard } = usePortalData();
+  const { athlete, isImpersonating, products, archivedProducts, refetchOrders, openGuard } = usePortalData();
   return (
     <BulkOrderSheet
       open={open}
       onOpenChange={onOpenChange}
-      products={products}
+      products={world ? [...products, ...archivedProducts] : products}
+      world={world}
       athleteId={athlete.id}
       organizationId={athlete.organization_id}
       onSubmitted={refetchOrders}
@@ -152,7 +155,7 @@ export default function PortalLayout() {
             )}
           </PortalLayoutKindProvider>
 
-          <BulkOrderSheetBridge open={orderSheetOpen} onOpenChange={setOrderSheetOpen} />
+          <BulkOrderSheetBridge open={orderSheetOpen} onOpenChange={setOrderSheetOpen} world={layout === "world"} />
           <OrderDraftBarBridge onOpen={() => setOrderSheetOpen(true)} />
           <ImpersonationGuardModal open={guardOpen} onOpenChange={setGuardOpen} />
 
