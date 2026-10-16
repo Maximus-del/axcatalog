@@ -11,6 +11,8 @@ import { MyProductsGrid } from "@/components/portal/MyProductsGrid";
 import { DesignsGrid } from "@/components/portal/products/DesignsGrid";
 import { usePortalData } from "@/components/portal/PortalDataContext";
 import { cn } from "@/lib/utils";
+import { MyGear } from "@/components/portal/mooney/MyGear";
+import { usePortalLayoutKind } from "@/components/portal/PortalLayoutKind";
 
 type Tab = "products" | "designs";
 
@@ -20,6 +22,10 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function PortalProducts() {
+  return usePortalLayoutKind() === "world" ? <MyGear /> : <PortalProductsClassic />;
+}
+
+function PortalProductsClassic() {
   const { products, productsLoading, hidden, openOrderSheet } = usePortalData();
   const [tab, setTab] = useState<Tab>("products");
 
