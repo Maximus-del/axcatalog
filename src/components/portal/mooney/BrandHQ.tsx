@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { ArrowRight, BarChart3, Copy, Package, Pencil, ShoppingBag, Users, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -58,13 +58,7 @@ function RevenueChart() {
           </div>)}</div>
         </div>
       </>}
-    {d && <TopProductsInline items={d.attributable ? d.topProducts : []} loading={false} />}
   </section>;
-}
-
-function TopProductsInline({ items }: { items: { title: string; units: number; gross: { amountMinor: number; currency: string } | null; imageUrl: string | null }[]; loading: boolean }) {
-  const sold = items.filter((t) => t.units > 0).sort((a, b) => b.units - a.units);
-  return <div data-top-products hidden>{sold.length}</div>;
 }
 
 function TopProducts() {
@@ -115,7 +109,7 @@ function Journey() {
   return <section className="mw-studio-panel">
     <h2 className="mw-section-title">Your journey</h2>
     {d.isLoading ? <Skeleton className="mw-studio-skeleton" /> : !(d.data ?? []).length ? <div className="mw-state"><p>No eras yet.</p></div>
-      : <div className="mw-hq-eras">{d.data!.map((x) => <article key={x.id} className="mw-hq-era" style={{ "--mw-destination-accent": x.accent } as React.CSSProperties}>
+      : <div className="mw-hq-eras">{d.data!.map((x) => <article key={x.id} className="mw-hq-era" style={{ "--mw-destination-accent": x.accent } as CSSProperties}>
         <div className="mw-hq-era-art">{x.image ? <img src={x.image} alt="" /> : <Package />}</div>
         <strong>{x.label}{x.jerseyNumber !== null ? ` #${x.jerseyNumber}` : ""}</strong>
         <span>Revenue not attributed</span>
