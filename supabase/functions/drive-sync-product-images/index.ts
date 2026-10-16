@@ -11,7 +11,7 @@
 // rows it created (metadata.source = 'drive'). If any folder cannot be read,
 // that product is left exactly as it was and the error is recorded.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { FOLDER_MIME, colorFromFolder, planDriveSync, type DriveFile, type DriveSource, type ExistingDriveRow } from "../_shared/drive-product-images.ts";
+import { FOLDER_MIME, colorFromFileName, colorFromFolder, isViewFolder, planDriveSync, type DriveFile, type DriveSource, type ExistingDriveRow } from "../_shared/drive-product-images.ts";
 import { driveToken, listFolder, readServiceAccount } from "../_shared/google-drive.ts";
 
 const cors = {
@@ -72,11 +72,15 @@ Deno.serve(async (req) => {
         const top = await listFolder(token, id);
         const out: DriveFile[] = top.filter((f) => f.mimeType !== FOLDER_MIME);
         for (const sub of top.filter((f) => f.mimeType === FOLDER_MIME)) {
-          const color = colorFromFolder(sub.name);
+          // FRONT / BACK folders hold every color; the color is in the name.
+          const byView = isViewFolder(sub.name);
+          const color = byView ? null : colorFromFolder(sub.name);
           for (const f of await listFolder(token, sub.id)) {
-            if (f.mimeType !== FOLDER_MIME) out.push({ ...f, color });
+            if (f.mimeType !== FOLDER_MIME) out.push({ ...f, color: color ?? colorFromFileName(f.name) });
           }
         }
+        // Loose files carry their color in the name too, when they follow the batch shape.
+        for (const f of out) if (f.color === undefined) f.color = colorFromFileName(f.name);
         return out;
       })());
     }

@@ -67,7 +67,9 @@ export interface DrivePlan {
 export const DRIVE_SOURCE = "drive";
 export const MAX_DRIVE_SOURCES = 12;
 
-const SHOWCASE = /(^|[_\s-])(PREVIEW|FLAT|FLATLAY|MODEL|LIFESTYLE|DETAIL)([_\s.-]|$)/i;
+// FRONT / BACK cover the batch-mockup naming already in the library
+// (ATLANTA_STRENGTH_CLUB_AXISM_7010_Black_FRONT.png).
+const SHOWCASE = /(^|[_\s-])(PREVIEW|FLAT|FLATLAY|MODEL|LIFESTYLE|DETAIL|FRONT|BACK)([_\s.-]|$)/i;
 const PRODUCTION = /(^|[_\s-])(PRINT|MASTER|LAYER|CONTACT|BOARD|NOTES)([_\s.-]|$)/i;
 
 /** Pull a Drive folder id out of a pasted link or a bare id. Null when it is neither. */
@@ -98,6 +100,39 @@ export const FOLDER_MIME = "application/vnd.google-apps.folder";
 /** A colorway folder name → display color: "CHARCOAL_OIL_WASH" → "CHARCOAL OIL WASH". */
 export function colorFromFolder(name: string): string {
   return name.replace(/[_]+/g, " ").replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+/**
+ * A view folder (FRONT, BACK, "Front PNGs", FLAT, MODEL) groups pictures by
+ * side, not by color — the colors are in the file names instead.
+ */
+export function isViewFolder(name: string): boolean {
+  return /^(FRONT|BACK|FLAT|FLATLAY|FLATS|MODEL|MODELS|SIDE|DETAIL)( ?PNGS?)?$/.test(colorFromFolder(name));
+}
+
+/**
+ * The color in a batch-mockup file name: the words between the blank's style
+ * code and the view. "Proactive_Strength_Club_7010_Smoke_Gray_FRONT.png" →
+ * "SMOKE GRAY". Null when the name does not follow that shape.
+ */
+export function colorFromFileName(name: string): string | null {
+  const tokens = name.replace(/\.[a-z0-9]+$/i, "").split(/[_\s]+/).filter(Boolean);
+  let view = -1;
+  tokens.forEach((t, i) => {
+    if (/^(FRONT|BACK)$/i.test(t)) view = i;
+  });
+  if (view < 0) return null;
+  let start = -1;
+  for (let i = view - 1; i >= 0; i--) {
+    if (/^\d{3,5}$/.test(tokens[i]) || /^\d+OZ$/i.test(tokens[i])) {
+      start = i;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  const words = tokens.slice(start + 1, view);
+  while (words.length && /\d/.test(words[words.length - 1])) words.pop();
+  return words.length ? words.join(" ").toUpperCase() : null;
 }
 
 /** Black leads (the base colorway), then the rest alphabetically; loose files first. */

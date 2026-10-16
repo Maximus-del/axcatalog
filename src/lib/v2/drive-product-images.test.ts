@@ -8,6 +8,8 @@ import {
   preferDrive,
   sideFromName,
   colorFromFolder,
+  colorFromFileName,
+  isViewFolder,
   type DriveFile,
 } from "../../../supabase/functions/_shared/drive-product-images";
 import { driveLinkOf, toLineupProduct } from "./lineup";
@@ -122,6 +124,27 @@ describe("colorways", () => {
     const plan = planDriveSync([{ id: HOODIE }], { [HOODIE]: [{ ...png("b1", "X_PREVIEW-FRONT.png"), color: "BLACK" }] }, []);
     expect(plan.insert[0].metadata.drive_color).toBe("BLACK");
     expect(colorFromFolder("CHARCOAL_OIL_WASH")).toBe("CHARCOAL OIL WASH");
+  });
+});
+
+describe("existing batch mockups", () => {
+  it("shows FRONT/BACK batch files and reads their side and color", () => {
+    const f = png("x", "ATLANTA_STRENGTH_CLUB_AXISM_7010_Black_FRONT.png");
+    expect(isShowcaseFile(f)).toBe(true);
+    expect(sideFromName(f.name)).toBe("front");
+    expect(colorFromFileName(f.name)).toBe("BLACK");
+    expect(colorFromFileName("Proactive_Strength_Club_7010_Smoke_Gray_FRONT.png")).toBe("SMOKE GRAY");
+    expect(colorFromFileName("COTTON_COLLECTIVE_7_5OZ_HEATHER_GREY_BWTOUR1_FRONT.png")).toBe("HEATHER GREY");
+    expect(colorFromFileName("MOONEY_THE1_BASE_PREVIEW-FRONT_v01.png")).toBeNull();
+    expect(isShowcaseFile(png("c", "ATLANTA_STRENGTH_CLUB_AXISM_7010_FRONT_CONTACT_SHEET.png"))).toBe(false);
+    expect(isShowcaseFile(png("p", "MOONEY_THE1_BASE_PRINT-FRONT_v01.png"))).toBe(false);
+  });
+  it("tells view folders from color folders", () => {
+    expect(isViewFolder("Front")).toBe(true);
+    expect(isViewFolder("BACK")).toBe(true);
+    expect(isViewFolder("Front PNGs")).toBe(true);
+    expect(isViewFolder("Smoke_Grey")).toBe(false);
+    expect(isViewFolder("BLACK")).toBe(false);
   });
 });
 
