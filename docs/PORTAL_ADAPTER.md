@@ -42,7 +42,7 @@ browser sends alone, or the `portal-files` edge function.
 | `GET /drops` | `usePortalDrops()` | `portal_list_drops` | `draft` / `review` / `scheduled` / `live`. |
 | `POST /drops` | `usePortalCreateDrop()` | `portal_create_drop` | Draft only. `scheduledLocal` + `timeZone` → UTC on the server. |
 | `PATCH /drops/:id` | `usePortalUpdateDrop()` | `portal_update_drop` | Own drafts only; `submitForReview`. Scheduling/live stays with AX. |
-| `GET /analytics` | `usePortalAnalytics(months)` | `portal_revenue_summary` + orders | `byDestination` values are always `null` today — see below. |
+| `GET /analytics` | `usePortalAnalytics(months)` | `portal_revenue_summary` + orders | `byDestination` values are always `null` today — see below. `topProducts[i].productId` / `imageUrl`: the client's own product with the same title, else null. |
 | `GET /profile` | `usePortalProfile()` | `portal_get_profile` | Referral code only if AX approved one; no URL yet. |
 | `PATCH /profile` | `usePortalUpdateProfile()` | `portal_update_profile` | Only `bio`, `website` (https), `notificationDefaults`. |
 | *(product approval)* | `PortalApprovals` component | `portal_decide_product` | Replaces the direct update that silently failed. |
@@ -52,6 +52,10 @@ Old routes keep working: `/portal`, `/portal/products`, `/portal/studio`,
 `/portal/messages`, `/portal/build/*`. The pack's `/portal/gear` and
 `/portal/brand` are new screens; when Lovable adds them, keep the old paths
 as redirects so existing links still land.
+
+## The AX side
+
+What clients send from the portal lands in **V2 → Client Desk** (`/admin-v2/desk`): Studio briefs (share concepts, see decisions), AX Team messages (reply as AX Team), and drops sent for review (schedule, send back with a note, mark live). Server: `portal_ops_*` (stage 7), operator-only and org-scoped.
 
 ## Contract changes from the pack (`src/lib/portal/api/contract.ts`)
 

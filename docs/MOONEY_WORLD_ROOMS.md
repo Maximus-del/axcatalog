@@ -83,7 +83,7 @@ screen. Data comes only from the hooks in `src/hooks/usePortalApi.ts`.
   the numbers live here. KPI tiles are AX credit, Lifetime gross revenue and
   Orders (`usePortalSummary`). Then come an attributed revenue chart (12
   months, gross, "Updated" from `asOf`, or "Revenue not attributed"), recent
-  orders (`usePortalOrderHistory`), top products, Your journey era cards (each
+  orders (`usePortalOrderHistory`), top products (each carries `productId` and `imageUrl` when it matches one of the client's own products, so show the photo and link it to the product, or a neutral placeholder when null), Your journey era cards (each
   showing "Revenue not attributed"), community (followers, access, VIP), and a
   profile with level progress, the approved referral code with Copy, and Edit
   profile (bio and an https website only). Hero: "Your brand. The big

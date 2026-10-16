@@ -12,7 +12,7 @@ import type { PortalScope } from "@/lib/portal/api/contract";
 import { defaultSummaryPeriod, fetchRevenue, fetchSummary } from "@/lib/portal/api/summary";
 import { fetchDestinations } from "@/lib/portal/api/destinations";
 import { lastMonths, viewerTimeZone, type Period } from "@/lib/portal/api/period";
-import { fetchProductDestinations, filterProducts, toContractProduct } from "@/lib/portal/api/products";
+import { fetchProductDestinations, filterProducts, frontBack, toContractProduct } from "@/lib/portal/api/products";
 import {
   fetchOrders,
   quoteOrder,
@@ -28,6 +28,7 @@ import {
   getProfile,
   listAssets,
   listDrops,
+  matchTopProducts,
   updateDrop,
   updateProfile,
 } from "@/lib/portal/api/brand";
@@ -273,12 +274,23 @@ export function usePortalUpdateDrop() {
 /** Brand HQ reporting for a period (defaults to the last 12 months in the viewer's zone). */
 export function usePortalAnalytics(months = 12) {
   const scope = usePortalScope();
+  const { products, archivedProducts } = usePortalData();
   const p = useMemo(() => lastMonths(months, viewerTimeZone()), [months]);
-  return useQuery({
+  const q = useQuery({
     queryKey: keyFor(scope, "analytics", p.from, p.to, p.timeZone),
     queryFn: () => fetchAnalytics(scope, p),
     staleTime: 60_000,
   });
+  // Top sellers get the client's own product photo and link, matched by title.
+  const catalog = useMemo(
+    () => [...products, ...archivedProducts].map((x) => ({ id: x.id, title: x.title, image: frontBack(x).front })),
+    [products, archivedProducts],
+  );
+  const data = useMemo(
+    () => (q.data ? { ...q.data, topProducts: matchTopProducts(q.data.topProducts, catalog) } : q.data),
+    [q.data, catalog],
+  );
+  return { ...q, data };
 }
 
 export function usePortalProfile() {

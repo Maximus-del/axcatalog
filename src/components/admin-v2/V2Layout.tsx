@@ -1,10 +1,12 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Users, Palette, ShoppingBag, Receipt, ArrowLeft, ArrowUpRight } from "lucide-react";
+import { Home, Users, Palette, ShoppingBag, Receipt, Inbox, ArrowLeft, ArrowUpRight } from "lucide-react";
+import { useDeskWaitingCount } from "@/lib/v2/desk";
 import CommandSearch from "./CommandSearch";
 
 // AX OS V2 shell.
 //
-// Deliberately five destinations: Overview, People, Creative, Commerce, Orders.
+// Deliberately six destinations: Overview, People, Creative, Commerce, Orders,
+// Client Desk (what clients sent from their portals).
 // V1's sidebar carries ~30. Anything not on this list has not earned a place
 // yet — see AX_LEGACY_FEATURE_MAP.md for what is parked and why.
 //
@@ -17,11 +19,14 @@ const NAV = [
   { to: "/admin-v2/creative", end: false, label: "Creative", icon: Palette },
   { to: "/admin-v2/commerce", end: false, label: "Commerce", icon: ShoppingBag },
   { to: "/admin-v2/orders", end: false, label: "Orders", icon: Receipt },
+  { to: "/admin-v2/desk", end: false, label: "Client Desk", icon: Inbox },
 ];
 
 export default function V2Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  // Briefs and messages from client portals that nobody at AX has answered.
+  const deskWaiting = useDeskWaitingCount();
 
   /**
    * Back to wherever you actually came from.
@@ -78,6 +83,14 @@ export default function V2Layout() {
               >
                 <Icon className="h-4 w-4" />
                 <span>{label}</span>
+                {to === "/admin-v2/desk" && deskWaiting > 0 && (
+                  <span
+                    className="rounded-full bg-[hsl(var(--ax-amber))] px-1.5 text-[10px] font-bold leading-4 text-black"
+                    aria-label={`${deskWaiting} waiting on AX`}
+                  >
+                    {deskWaiting}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>

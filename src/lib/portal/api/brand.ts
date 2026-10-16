@@ -164,8 +164,42 @@ export interface Analytics {
    * "Revenue not attributed" — never split a total across eras.
    */
   byDestination: { destinationId: string; value: Money | null }[];
-  topProducts: { title: string; units: number; gross: Money | null }[];
+  /**
+   * productId / imageUrl: the client's own product with the same title, when
+   * one exists (sales lines carry only a title). null when there is no match —
+   * show a neutral placeholder, never another product's photo.
+   */
+  topProducts: { title: string; units: number; gross: Money | null; productId: string | null; imageUrl: string | null }[];
   recentOrders: Order[];
+}
+
+/** Titles as people type them: case, curly quotes and spacing don't matter. */
+export function titleKey(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[\u2018\u2019\u201c\u201d"']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Attach the client's own product (id + image) to each top seller by title.
+ * Only an exact title match counts; ambiguous titles (two products, same
+ * name) get no picture rather than a guess.
+ */
+export function matchTopProducts<T extends { title: string }>(
+  top: T[],
+  products: { id: string; title: string; image: string | null }[],
+): (T & { productId: string | null; imageUrl: string | null })[] {
+  const byTitle = new Map<string, { id: string; image: string | null } | null>();
+  for (const p of products) {
+    const k = titleKey(p.title);
+    byTitle.set(k, byTitle.has(k) ? null : { id: p.id, image: p.image });
+  }
+  return top.map((t) => {
+    const hit = byTitle.get(titleKey(t.title)) ?? null;
+    return { ...t, productId: hit?.id ?? null, imageUrl: hit?.image ?? null };
+  });
 }
 
 export function analyticsFrom(report: RevenueReport | null, destinations: Destination[], orders: Order[], period: Period): Analytics {
@@ -178,7 +212,7 @@ export function analyticsFrom(report: RevenueReport | null, destinations: Destin
     attributedRevenue: ok ? (report?.period?.gross ?? null) : null,
     monthly: ok ? (report?.monthly ?? []).map((m) => ({ month: m.month, value: m.gross })) : [],
     byDestination: destinations.map((d) => ({ destinationId: d.id, value: null })),
-    topProducts: ok ? (report?.topProducts ?? []) : [],
+    topProducts: ok ? (report?.topProducts ?? []).map((t) => ({ ...t, productId: null, imageUrl: null })) : [],
     recentOrders: orders,
   };
 }

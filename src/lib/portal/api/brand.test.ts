@@ -6,7 +6,7 @@ vi.mock("@/integrations/supabase/client", () => ({
   },
 }));
 
-import { analyticsFrom, assetDownload, assetUrl, toDrop, toMediaAsset, toProfile } from "./brand";
+import { analyticsFrom, assetDownload, assetUrl, matchTopProducts, toDrop, toMediaAsset, toProfile } from "./brand";
 import { parseRevenue } from "./summary";
 import { lastMonths } from "./period";
 
@@ -69,5 +69,24 @@ describe("profile", () => {
   it("progression comes from the existing tier ladder when lifetime is known", () => {
     expect(toProfile({ id: "a", name: "x" }, 3000).progression?.label).toBeTruthy();
     expect(toProfile({ id: "a", name: "x" }, null).progression).toBeNull();
+  });
+});
+
+describe("top sellers get the client's own product photo", () => {
+  const catalog = [
+    { id: "p1", title: "Mooney World “WRLD” Hoodie", image: "https://img/p1.png" },
+    { id: "p2", title: "The 1 Tee", image: null },
+    { id: "p3", title: "Twin", image: "https://img/a.png" },
+    { id: "p4", title: "twin", image: "https://img/b.png" },
+  ];
+  it("matches by title ignoring case, curly quotes and spacing", () => {
+    const [a] = matchTopProducts([{ title: 'mooney world "WRLD"  hoodie', units: 3 }], catalog);
+    expect(a.productId).toBe("p1");
+    expect(a.imageUrl).toBe("https://img/p1.png");
+  });
+  it("gives no picture rather than a guess", () => {
+    const [none, twin] = matchTopProducts([{ title: "Unknown", units: 1 }, { title: "Twin", units: 1 }], catalog);
+    expect(none.productId).toBeNull();
+    expect(twin.productId).toBeNull();
   });
 });
