@@ -99,6 +99,7 @@ export function useSetProductCollection(productId: string | undefined) {
       void qc.invalidateQueries({ queryKey: ["v2", "product", productId] });
       void qc.invalidateQueries({ queryKey: ["v2", "product-collection-options", productId] });
       void qc.invalidateQueries({ queryKey: ["portal-api"] });
+      void qc.invalidateQueries({ queryKey: ["v2", "lineup"] });
     },
   });
 }

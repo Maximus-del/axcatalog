@@ -34,13 +34,17 @@ export function sheetUnitPrice(p: Pick<PortalProduct, "product_type" | "title" |
 type Img = PortalProduct["images"][number] & { metadata?: Record<string, unknown> | null };
 
 function viewOf(img: Img): string | null {
+  // AX's choice for the portal (V2 → Portal lineup) beats any older tag.
+  const chosen = (img as { portalView?: string | null }).portalView;
+  if (chosen) return chosen;
   const v = img.metadata?.view ?? img.metadata?.side ?? img.metadata?.placement;
   return typeof v === "string" ? v.toLowerCase() : null;
 }
 
 /**
- * Front and back. An image tagged metadata.view = 'front' | 'back' wins;
- * otherwise front is the primary image and back is the next one.
+ * Front and back. The image AX picked for each side wins (portalView, from
+ * metadata.portal_view); then an older metadata.view tag; otherwise front is
+ * the primary image and back is the next one.
  */
 export function frontBack(p: Pick<PortalProduct, "images" | "primary_image_url">): { front: string | null; back: string | null } {
   const imgs = (p.images ?? []) as Img[];

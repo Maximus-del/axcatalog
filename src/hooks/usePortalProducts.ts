@@ -8,6 +8,11 @@ export interface PortalImage {
   sort_order: number;
   /** Shopify image id from metadata.shopify_image_id (when present). */
   shopifyImageId: string | null;
+  /**
+   * Which side AX chose for the portal (metadata.portal_view), set in V2 →
+   * client → Portal lineup. Independent of the website's image order.
+   */
+  portalView: "front" | "back" | null;
 }
 
 export interface PortalVariant {
@@ -75,6 +80,12 @@ interface State {
  * back separately so no existing screen starts showing them. Includes primary image
  * (public URL) and the blank's available sizes for inline ordering.
  */
+/** metadata.portal_view → "front" | "back" | null. */
+export function portalViewOf(metadata: Record<string, unknown> | null | undefined): "front" | "back" | null {
+  const v = metadata?.portal_view;
+  return v === "front" || v === "back" ? v : null;
+}
+
 export function usePortalProducts(athleteId: string | null): State {
   const [products, setProducts] = useState<PortalProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -252,6 +263,8 @@ export function usePortalProducts(athleteId: string | null): State {
             (a.sort_order ?? 0) - (b.sort_order ?? 0),
         );
         const images: PortalImage[] = sortedImgs
+          // An image Shopify no longer has is kept for history, never shown.
+          .filter((i) => !(i.metadata as Record<string, unknown> | null)?.shopify_orphaned)
           .map((i) => {
             const url = resolveUrl(i);
             return url
@@ -262,6 +275,7 @@ export function usePortalProducts(athleteId: string | null): State {
                   sort_order: i.sort_order ?? 0,
                   shopifyImageId:
                     (i.metadata && (i.metadata as any).shopify_image_id) ?? null,
+                  portalView: portalViewOf(i.metadata),
                 }
               : null;
           })

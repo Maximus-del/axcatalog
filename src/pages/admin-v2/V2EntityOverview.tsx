@@ -222,6 +222,18 @@ export default function V2EntityOverview() {
       <ClientAccessCard entityId={entity.id} entityName={entity.name} />
       {/* What their portal looks like — set here, seen there. */}
       <PortalThemeCard entityId={entity.id} entityName={entity.name} />
+      <Link
+        to={`/admin-v2/people/${entity.id}/lineup`}
+        className="mb-6 flex items-center gap-3 rounded-2xl border border-[hsl(var(--ax-line))] bg-[hsl(var(--ax-card))] px-4 py-3 transition-colors hover:border-[hsl(var(--ax-accent)/0.5)]"
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-semibold">Portal lineup</span>
+          <span className="block text-[12px] text-[hsl(var(--ax-faint))]">
+            What {entity.name} sees in My Gear — add products, tag collections, pick Front / Back pictures.
+          </span>
+        </span>
+        <span className="text-[12px] text-[hsl(var(--ax-accent))]">Open →</span>
+      </Link>
 
       {attention.length > 0 && (
         <div className="mb-6 grid gap-1.5">

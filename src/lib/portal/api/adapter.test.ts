@@ -3,7 +3,7 @@ import { formatMoney, money, sumMoney, toApiError, toMinor } from "./money";
 import { lastMonths, monthKeys, zonedMidnightUtc } from "./period";
 import { parseRevenue, summaryFrom } from "./summary";
 import { destinationHref, toDestination, type CollectionRow } from "./destinations";
-import { filterProducts, isOrderable, toContractProduct } from "./products";
+import { filterProducts, frontBack, isOrderable, toContractProduct } from "./products";
 
 describe("money", () => {
   it("converts decimal strings without float drift", () => {
@@ -228,5 +228,19 @@ describe("live vs archive", () => {
     expect(filterProducts([live, arch]).map((p) => p.id)).toEqual(["p"]);
     expect(filterProducts([live, arch], { lifecycle: "archive" }).map((p) => p.id)).toEqual(["a"]);
     expect(filterProducts([live, arch], { lifecycle: "all", collection: "atlanta" })).toHaveLength(2);
+  });
+});
+
+describe("front / back chosen by AX", () => {
+  it("the portal uses AX's choice over the website's photo order", () => {
+    const fb = frontBack({
+      primary_image_url: null,
+      images: [
+        { id: "1", url: "https://a/1", is_primary: true, sort_order: 0, shopifyImageId: null, portalView: null },
+        { id: "2", url: "https://a/2", is_primary: false, sort_order: 1, shopifyImageId: null, portalView: "back" },
+        { id: "3", url: "https://a/3", is_primary: false, sort_order: 2, shopifyImageId: null, portalView: "front" },
+      ],
+    });
+    expect(fb).toEqual({ front: "https://a/3", back: "https://a/2" });
   });
 });
