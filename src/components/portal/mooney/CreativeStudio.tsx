@@ -14,7 +14,6 @@ import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { uploadProblem, type ProjectDetail, type ProjectKind } from "@/lib/portal/api/studio";
 import { PortalApiError } from "@/lib/portal/api/contract";
 import { usePortalData } from "../PortalDataContext";
-import { portalLink } from "./navigation";
 
 const KINDS: { kind: ProjectKind; label: string; icon: ReactNode }[] = [
   { kind: "new_merch", label: "New Merch", icon: <Shirt /> },
@@ -273,6 +272,5 @@ export function CreativeStudio() {
       <Brief onCreated={setCreated} />
       <aside className="mw-studio-side"><ProjectList created={created} /><HowItWorks /></aside>
     </div>}
-    <span hidden>{portalLink.name}</span>
   </main>;
 }
