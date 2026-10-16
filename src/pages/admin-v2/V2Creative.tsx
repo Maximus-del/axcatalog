@@ -1,3 +1,4 @@
+import { ProductionBrief } from "@/components/admin-v2/ProductionBrief";
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -58,7 +59,7 @@ import {
 // Every filter is in the URL, so a shelf can be sent to someone and Back
 // returns to it.
 
-const TABS = ["overview", "designs", "mockups", "assets", "templates"] as const;
+const TABS = ["overview", "designs", "mockups", "assets", "templates", "prompts"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
@@ -67,6 +68,7 @@ const TAB_LABEL: Record<Tab, string> = {
   mockups: "Mockups",
   assets: "Assets",
   templates: "Design templates",
+  prompts: "Production prompts",
 };
 
 const STAGES: ConceptStage[] = [
@@ -218,7 +220,7 @@ export default function V2Creative() {
 
       <TabBar tabs={TABS} active={tab} onSelect={goTab} label={(t) => TAB_LABEL[t]} />
 
-      {failed && tab !== "templates" && (
+      {failed && tab !== "templates" && tab !== "prompts" && (
         <div className="mb-5">
           <ErrorState error={failure} what="your creative work" onRetry={retry} />
         </div>
@@ -318,6 +320,8 @@ export default function V2Creative() {
       )}
 
       {tab === "templates" && <TemplateIndex />}
+
+      {tab === "prompts" && <ProductionBrief ownerEntityId={params.get("owner")} />}
     </>
   );
 }

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowUpRight, Check, FolderOpen, ImagePlus, Images, Loader2, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { ArrowUpRight, Check, FolderOpen, ImagePlus, Images, Loader2, Plus, RefreshCw, Trash2, WandSparkles, X } from "lucide-react";
 import { Chip, EmptyState, ErrorState, PageHeader, Skeleton, TabBar } from "@/components/admin-v2/primitives";
 import { useEntityWorkspace } from "@/lib/v2/data";
 import { useSetProductCollection } from "@/lib/v2/product-collections";
@@ -319,7 +319,11 @@ function AddProductModal({ athleteId, organizationId, linkedIds, collections, on
         <Link to={`/admin-v2/people/${athleteId}/library`} className="text-[hsl(var(--ax-accent))]">
           client&apos;s library
         </Link>{" "}
-        — configure a mockup into a product and pick the collection there.
+        — configure a mockup into a product and pick the collection there. New artwork? Start with the{" "}
+        <Link to={`/admin-v2/creative?tab=prompts&owner=${athleteId}`} className="text-[hsl(var(--ax-accent))]">
+          production brief
+        </Link>
+        .
       </p>
     </Modal>
   );
@@ -415,6 +419,9 @@ export default function V2Lineup() {
         subtitle={`What ${entity?.name ?? "the client"} sees in My Gear — collections and Front / Back pictures.`}
         actions={
           <>
+            <Link className={btn} to={`/admin-v2/creative?tab=prompts&owner=${athleteId}`} title="ChatGPT prompt + brief to package a new design for this client">
+              <WandSparkles className="h-3.5 w-3.5" /> Production brief
+            </Link>
             <a className={btn} href={`/portal/products?as=${athleteId}`} target="_blank" rel="noreferrer">
               Their My Gear <ArrowUpRight className="h-3.5 w-3.5" />
             </a>
