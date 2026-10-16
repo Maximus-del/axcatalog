@@ -14,4 +14,8 @@
 - [ ] New gear/brand aliases and old-address redirects — blocked by routing outside the permitted editing area.
 - [x] Latest preview validation reports build OK.
 
-Stop after Locker Room; other screen redesigns are not part of this task.
+## My Gear
+- [ ] Build world-only My Gear with live/archive catalog, collection chips, existing ordering and DesignsGrid; preserve classic page.
+- [ ] Verify paging, images, lifecycle and mobile layout; report authenticated verification limits.
+
+Stop after My Gear; other screen redesigns are not part of this task.
