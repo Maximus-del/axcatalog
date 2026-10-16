@@ -9424,6 +9424,69 @@ export type Database = {
         Args: { _local: string; _time_zone: string }
         Returns: string
       }
+      portal_ops_drops: { Args: { _pending_only?: boolean }; Returns: Json }
+      portal_ops_guard: { Args: never; Returns: undefined }
+      portal_ops_is_project: {
+        Args: { _t: Database["public"]["Tables"]["portal_threads"]["Row"] }
+        Returns: boolean
+      }
+      portal_ops_mark_read: { Args: { _thread_id: string }; Returns: undefined }
+      portal_ops_reply: {
+        Args: { _body: string; _idempotency_key?: string; _thread_id: string }
+        Returns: Json
+      }
+      portal_ops_set_closed: {
+        Args: { _closed: boolean; _thread_id: string }
+        Returns: Json
+      }
+      portal_ops_thread: { Args: { _thread_id: string }; Returns: Json }
+      portal_ops_thread_json: {
+        Args: { _t: Database["public"]["Tables"]["portal_threads"]["Row"] }
+        Returns: Json
+      }
+      portal_ops_thread_row: {
+        Args: { _lock?: boolean; _thread_id: string }
+        Returns: {
+          admin_unread: boolean
+          athlete_id: string
+          brief: Json | null
+          category: string
+          collection_id: string | null
+          created_at: string
+          created_by: string | null
+          created_by_role: string
+          id: string
+          kind: string | null
+          last_message_at: string
+          last_message_role: string | null
+          organization_id: string
+          portal_unread: boolean
+          status: string
+          subject: string
+          updated_at: string
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "portal_threads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      portal_ops_threads: {
+        Args: { _include_closed?: boolean; _limit?: number }
+        Returns: Json
+      }
+      portal_ops_update_drop: {
+        Args: {
+          _action: string
+          _drop_id: string
+          _note?: string
+          _scheduled_local?: string
+          _time_zone?: string
+        }
+        Returns: Json
+      }
       portal_post_message: {
         Args: {
           _athlete_id: string
