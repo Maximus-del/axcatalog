@@ -1,5 +1,6 @@
 // TEMPORARY harness — used only by the /tmp browser check, deleted afterwards.
-import { useEffect } from "react";
+import { StrictMode, useEffect } from "react";
+import { createRoot } from "react-dom/client";
 import { BulkOrderSheet } from "@/components/portal/BulkOrderSheet";
 import { OrderDraftProvider, useOrderDraft } from "@/components/portal/OrderDraftContext";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
