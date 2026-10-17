@@ -88,6 +88,7 @@ function DriveSection({ athleteId, product }: { athleteId: string; product: Line
   const sync = useDriveSync(athleteId);
   const [link, setLink] = useState("");
   const [label, setLabel] = useState("");
+  const [match, setMatch] = useState("");
   const sources = product.drive?.sources ?? [];
   const busy = setSources.isPending || sync.isPending;
 
@@ -124,9 +125,10 @@ function DriveSection({ athleteId, product }: { athleteId: string; product: Line
     const id = parseDriveFolderId(link);
     if (!id) return void toast.error("Paste a Drive folder link");
     if (sources.some((s) => s.id === id)) return void toast.error("That folder is already linked");
-    save([...sources, { id, label: label.trim() || null }], () => {
+    save([...sources, { id, label: label.trim() || null, match: match.trim().toUpperCase() || null }], () => {
       setLink("");
       setLabel("");
+      setMatch("");
     });
   }
 
@@ -150,6 +152,7 @@ function DriveSection({ athleteId, product }: { athleteId: string; product: Line
                 <a className="min-w-0 flex-1 truncate hover:text-[hsl(var(--ax-accent))]" href={`https://drive.google.com/drive/folders/${s.id}`} target="_blank" rel="noreferrer">
                   {s.label || s.id}
                 </a>
+                {s.match && <Chip title="Only files whose name contains this">only {s.match}</Chip>}
                 <button type="button" className={btn} disabled={busy} aria-label="Unlink folder" onClick={() => save(sources.filter((x) => x.id !== s.id))}>
                   <X className="h-3 w-3" />
                 </button>
@@ -166,9 +169,17 @@ function DriveSection({ athleteId, product }: { athleteId: string; product: Line
       ) : (
         <p className="mb-2 text-[12px] text-[hsl(var(--ax-secondary))]">Link Drive folders and the portal shows what&apos;s in them — change a file in Drive and the client&apos;s My Gear follows.</p>
       )}
-      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_160px_auto]">
+      <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_140px_120px_auto]">
         <input className={inputCls} value={link} onChange={(e) => setLink(e.target.value)} placeholder="Paste a Drive folder link" aria-label="Drive folder link" />
         <input className={inputCls} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (optional)" aria-label="Folder label" />
+        <input
+          className={inputCls}
+          value={match}
+          onChange={(e) => setMatch(e.target.value)}
+          placeholder="Only files with…"
+          title="When one folder holds several editions (ATL1, CHI11, NYG17), show only files whose name contains this"
+          aria-label="Only files containing"
+        />
         <button type="button" className={btnPrimary} disabled={busy || !link.trim()} onClick={add}>
           <Plus className="h-3.5 w-3.5" /> Link folder
         </button>

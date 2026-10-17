@@ -68,7 +68,7 @@ export interface DriveLink {
 export function driveLinkOf(metadata: unknown): DriveLink | null {
   const d = ((metadata ?? {}) as Row).drive as Row | undefined;
   const sources = Array.isArray(d?.sources)
-    ? (d!.sources as Row[]).filter((s) => typeof s?.id === "string").map((s) => ({ id: String(s.id), label: str(s.label) }))
+    ? (d!.sources as Row[]).filter((s) => typeof s?.id === "string").map((s) => ({ id: String(s.id), label: str(s.label), match: str(s.match) }))
     : [];
   if (!sources.length) return null;
   return {

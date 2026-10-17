@@ -10,6 +10,7 @@ import {
   colorFromFolder,
   colorFromFileName,
   isViewFolder,
+  matchesSource,
   type DriveFile,
 } from "../../../supabase/functions/_shared/drive-product-images";
 import { driveLinkOf, toLineupProduct } from "./lineup";
@@ -145,6 +146,25 @@ describe("existing batch mockups", () => {
     expect(isViewFolder("Front PNGs")).toBe(true);
     expect(isViewFolder("Smoke_Grey")).toBe(false);
     expect(isViewFolder("BLACK")).toBe(false);
+  });
+});
+
+describe("one folder, several editions", () => {
+  it("each product shows only its edition", () => {
+    const TEE = "1pXOEB1XAmvaYSyZ7_GN52skHAl6af2kU";
+    const files = {
+      [TEE]: ["ATL1", "CHI11", "NYG17"].flatMap((t) => [
+        { ...png(`${t}f`, `MW-WRLD-${t}_AXISM_7010_Black_FRONT.png`), color: "BLACK" },
+        { ...png(`${t}b`, `MW-WRLD-${t}_AXISM_7010_Black_BACK.png`), color: "BLACK" },
+      ]),
+    };
+    expect(desiredImages([{ id: TEE, match: "chi11" }], files).map((d) => d.fileId)).toEqual(["CHI11f", "CHI11b"]);
+    expect(desiredImages([{ id: TEE }], files)).toHaveLength(6);
+    // "ATL1" must not catch an ATL11 file; multi-part filters work.
+    expect(matchesSource("MW-WRLD-ATL11_AXISM_7010_Black_FRONT.png", "ATL1")).toBe(false);
+    expect(matchesSource("MW-WRLD-ATL1_AXISM_7010_Black_FRONT.png", "atl1")).toBe(true);
+    expect(matchesSource("MW-WRLD-CHI11_AXISM_7010_Black_FRONT.png", "WRLD-CHI11")).toBe(true);
+    expect(matchesSource("anything.png", "")).toBe(true);
   });
 });
 

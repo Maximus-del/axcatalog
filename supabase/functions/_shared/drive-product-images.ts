@@ -27,6 +27,22 @@ export interface DriveSource {
   id: string;
   /** Operator's note, e.g. "Shared front" or "#11 — Option B". */
   label?: string | null;
+  /**
+   * Only files whose name contains this, e.g. "CHI11" when one folder holds
+   * the ATL1 / CHI11 / NYG17 editions of a design side by side.
+   */
+  match?: string | null;
+}
+
+/**
+ * Does a file name pass a source's match filter? Whole name parts only, so
+ * "ATL1" matches MW-WRLD-ATL1_… but not an ATL11 file. Case ignored.
+ */
+export function matchesSource(name: string, match: string | null | undefined): boolean {
+  const parts = (v: string) => v.toUpperCase().replace(/\.[A-Z0-9]+$/, "").split(/[^A-Z0-9#]+/).filter(Boolean);
+  const want = parts(match ?? "");
+  if (!want.length) return true;
+  return `|${parts(name).join("|")}|`.includes(`|${want.join("|")}|`);
 }
 
 export interface DriveFile {
@@ -166,7 +182,7 @@ export function desiredImages(sources: DriveSource[], filesByFolder: Record<stri
   const out: DesiredImage[] = [];
   for (const src of sources) {
     const files = (filesByFolder[src.id] ?? [])
-      .filter(isShowcaseFile)
+      .filter((f) => isShowcaseFile(f) && matchesSource(f.name, src.match))
       .sort(
         (a, b) =>
           colorRank(a.color) - colorRank(b.color) ||
