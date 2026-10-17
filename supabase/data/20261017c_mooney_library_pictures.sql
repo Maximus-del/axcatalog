@@ -211,6 +211,10 @@ join products p on p.metadata->'library'->>'drive_folder_id' = v.folder
                and p.metadata->'library'->>'imported_by' = 'library-connect-2026-10-17'
 where not exists (select 1 from product_images i
                   where i.product_id = p.id and i.metadata->>'drive_file_id' = v.meta->>'drive_file_id');
+-- Also: archive Rise Up 1 Hoodie (file B had a typo in its id, so it stayed live)
+update products set status = 'archived', updated_at = now(),
+  metadata = metadata || jsonb_build_object('archived_note', 'Archived 2026-10-17 at Chase''s request')
+where id = '3367077b-734b-4044-a372-a8545bbe3ac8' and status = 'published';
 commit;
 
 -- Check: expect 33 products, each with 3–6 pictures
