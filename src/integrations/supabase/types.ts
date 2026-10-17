@@ -9432,6 +9432,21 @@ export type Database = {
         Args: { _local: string; _time_zone: string }
         Returns: string
       }
+      portal_ops_create_drive_product: {
+        Args: {
+          _athlete_id: string
+          _collection_ids?: string[]
+          _price: number
+          _sources: Json
+          _title: string
+          _wholesale: number
+        }
+        Returns: string
+      }
+      portal_ops_drive_scan_check: {
+        Args: { _athlete_id: string }
+        Returns: string
+      }
       portal_ops_drops: { Args: { _pending_only?: boolean }; Returns: Json }
       portal_ops_guard: { Args: never; Returns: undefined }
       portal_ops_is_project: {
