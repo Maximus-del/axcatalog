@@ -117,16 +117,16 @@ from _rows r join products p on p.slug = r.slug
 where not exists (select 1 from collection_products cp where cp.collection_id = r.coll and cp.product_id = p.id);
 
 -- 4. Repoint the 3 live combined Signature Jersey products (once) ------------
-update products set metadata = jsonb_set(metadata, '{drive}',
-    (metadata->'drive' - 'synced_at')
-    || jsonb_build_object('previous_sources', metadata->'drive'->'sources', 'sources', v.sources::jsonb), true)
+update products set metadata = jsonb_set(products.metadata, '{drive}',
+    (coalesce(products.metadata->'drive', '{}'::jsonb) - 'synced_at'::text)
+    || jsonb_build_object('previous_sources', products.metadata->'drive'->'sources', 'sources', v.sources::jsonb), true)
 from (values
  ('f8c3ddb2-e907-4949-9319-a866d23fec1f', '[{"id":"1M9subceC0TWVkuKHTJE8pSvlqOqa4I-f","label":"TEE V1 — AXISM 7010"},{"id":"11bMCAUepcYAvet5jevg6ggXXxPczFZTg","label":"HOODIE V1 — CC HOD475"}]'),
  ('cefb93f1-499f-4fac-ad3d-46357541368a', '[{"id":"1MCeLf-QMv0u2djSLPvqaOGm4bT1SU5gn","label":"TEE V1 — AXISM 7010"},{"id":"1bX8lN4U3PUmgZdRoMCujbE72yCw3F_Ff","label":"HOODIE V1 — CC HOD475"},{"id":"19FjBdurW3sbTTlRMZd1GMdolvCaRZbqV","label":"TEE V2 — AXISM 7010"},{"id":"1rHZenZ5mTK8kUbfxDR4TpBjioSYJqUlL","label":"HOODIE V2 — CC HOD475"}]'),
  ('73051e91-bf08-4918-87c1-bcfd85364e18', '[{"id":"1fa9oOGxIW1AfoOv2cjOeT2GQhQX0ED2b","label":"TEE V1 — AXISM 7010"},{"id":"101GbnxMzSJ1p2bm8I95iVj_jaUIGnjvk","label":"HOODIE V1 — CC HOD475"},{"id":"1quj62M5vsKqGAqSD0godHVA9BAfjPcqo","label":"TEE V2 — AXISM 7010"},{"id":"1CPmdZ0z9giX5SULUfW8DOWvTW5eAB4ee","label":"HOODIE V2 — CC HOD475"}]')
 ) v(id, sources)
 where products.id = v.id::uuid
-  and not (products.metadata->'drive' ? 'previous_sources');
+  and not coalesce(products.metadata->'drive', '{}'::jsonb) ? 'previous_sources';
 
 commit;
 
