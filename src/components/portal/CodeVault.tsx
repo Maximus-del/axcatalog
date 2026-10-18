@@ -25,9 +25,9 @@ export function CodeVault() {
       </div>
       <PendingPanel
         icon={<Ticket className="h-5 w-5" />}
-        title="Fan codes are on the way"
+        title="Fan codes — coming soon"
         body="Discount codes you can hand to your fans, with a running count of who used them."
-        waitingOn="Needs redemption tracking at checkout"
+        waitingOn="Coming soon"
       />
     </section>
   );

@@ -22,6 +22,7 @@ import { fmtUsd } from "@/lib/portal-config";
 import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { entityVoice } from "@/lib/portal/entity-voice";
+import { usePortalNavigate } from "@/components/portal/mooney/navigation";
 
 /**
  * The bulk-sheet price — the one the server charges (portal_sheet_unit_price).
@@ -34,6 +35,7 @@ function unitPrice(p: PortalProduct): number {
 
 export default function GameDayBuilder() {
   const navigate = useNavigate();
+  const portalNavigate = usePortalNavigate();
   const { products, athlete, isImpersonating } = usePortalData();
   // One key per checkout: a double-tap or retry returns the same order.
   const [orderKey] = useState(() => newIdempotencyKey());
@@ -159,7 +161,7 @@ export default function GameDayBuilder() {
           The AX team will confirm and follow up with payment/fulfillment.
         </p>
         <button
-          onClick={() => navigate("/portal")}
+          onClick={() => portalNavigate("/portal")}
           className="mt-6 h-11 px-6 rounded-xl bg-accent text-accent-foreground font-bold uppercase tracking-wider text-sm"
         >
           Back to Home

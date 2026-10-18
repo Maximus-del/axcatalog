@@ -454,3 +454,45 @@ div.mw-bulk[data-state] {
 .mw-pview-actions .mw-pview-order { background: var(--mw-brand); color: hsl(var(--accent-foreground)); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
 .mw-pview-note { font-size: 12px; color: hsl(var(--muted-foreground)); }
 @media (min-width: 900px) { .mw-pview { padding: 24px 32px; } .mw-pview-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; align-items: start; } .mw-pview-media, .mw-pview-info { padding: 18px; } .mw-pview-info .mw-heading { font-size: 34px; } }
+
+/* Brand HQ → Your playbook (one-pagers) */
+.mw-pb { margin-bottom: 18px; }
+.mw-pb .mw-hq-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.mw-pb-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.mw-pb-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-height: 132px; padding: 16px; text-align: left; border: 1px solid var(--mw-line); border-radius: 6px; background: hsl(var(--dark) / .35); color: var(--mw-ink); transition: border-color .15s, background .15s; }
+.mw-pb-card:hover, .mw-pb-card:focus-visible { border-color: var(--mw-brand); background: hsl(var(--accent) / .07); outline: none; }
+.mw-pb-card > svg { width: 22px; height: 22px; color: var(--mw-brand); margin-bottom: 4px; }
+.mw-pb-card strong { font-size: 14px; }
+.mw-pb-card span { font-size: 12px; color: var(--mw-quiet); line-height: 1.4; }
+.mw-pb-card em { margin-top: auto; font-style: normal; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--mw-brand); display: inline-flex; align-items: center; gap: 4px; }
+.mw-pb-card em svg { width: 12px; height: 12px; }
+.mw-pb-page { padding: 18px 0 8px; display: grid; gap: 14px; }
+.mw-pb-lede { font-size: 14px; line-height: 1.55; color: var(--mw-ink); }
+.mw-pb-block { border: 1px solid var(--mw-line); border-radius: 6px; padding: 14px; display: grid; gap: 8px; background: hsl(var(--dark) / .3); }
+.mw-pb-block h3 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--mw-brand); }
+.mw-pb-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.mw-pb-row span { color: var(--mw-quiet); overflow-wrap: anywhere; }
+.mw-pb-row b { font-weight: 600; text-align: right; white-space: nowrap; }
+.mw-pb-row[data-strong] span, .mw-pb-row[data-strong] b { color: var(--mw-ink); font-weight: 700; }
+.mw-pb-row[data-strong] b { color: var(--mw-brand); }
+.mw-pb-row code, .mw-pb-code code { font-weight: 700; letter-spacing: .06em; }
+.mw-pb-note { font-size: 12px; line-height: 1.5; color: var(--mw-quiet); }
+.mw-pb-list { display: grid; gap: 6px; padding-left: 18px; list-style: disc; font-size: 13px; color: var(--mw-ink); }
+.mw-pb-ladder { display: grid; gap: 8px; }
+.mw-pb-ladder li { border-left: 3px solid var(--mw-line); padding: 4px 0 4px 10px; display: grid; gap: 2px; }
+.mw-pb-ladder li[data-current] { border-left-color: var(--mw-brand); }
+.mw-pb-ladder li div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.mw-pb-ladder li span, .mw-pb-ladder li small { color: var(--mw-quiet); font-size: 12px; }
+.mw-pb-code { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; border: 1px dashed var(--mw-brand); border-radius: 6px; font-size: 22px; }
+.mw-pb-steps { display: grid; gap: 12px; }
+.mw-pb-steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; }
+.mw-pb-steps strong { font-size: 14px; }
+.mw-pb-steps p { font-size: 13px; color: var(--mw-quiet); margin: 2px 0 6px; line-height: 1.45; }
+.mw-pb-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--mw-brand); min-height: 32px; }
+.mw-pb-link svg { width: 12px; height: 12px; }
+.mw-pb-foot { font-size: 12px; color: var(--mw-quiet); text-align: center; padding-top: 4px; }
+.mw-hq-row.mw-hq-row-pay { grid-template-columns: 1.3fr 1.1fr .5fr .9fr 1fr 1fr; }
+@media (max-width: 640px) {
+  .mw-hq-row.mw-hq-row-pay { grid-template-columns: 1fr 1fr; row-gap: 4px; }
+  .mw-hq-row.mw-hq-row-head.mw-hq-row-pay { display: none; }
+}

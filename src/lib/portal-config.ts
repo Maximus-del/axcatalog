@@ -30,12 +30,15 @@ export interface AthleteTier {
 }
 
 // BACKEND: replace with tiers configured per-org in Supabase.
+// Perks are only things AX actually delivers today. Pricing is NOT tier-aware
+// (portal_quote_order charges every client the same sheet price + volume
+// ladder), so no tier may promise "better pricing" until it is.
 export const ATHLETE_TIERS: AthleteTier[] = [
-  { level: 1, name: "Rookie", minRevenue: 0, perks: ["Standard pricing", "$1 credit / $10 spent"] },
-  { level: 2, name: "All-Pro", minRevenue: 5000, perks: ["Better pricing", "Priority samples"] },
+  { level: 1, name: "Rookie", minRevenue: 0, perks: ["Monthly AX credit", "Volume discounts from 50 units"] },
+  { level: 2, name: "All-Pro", minRevenue: 5000, perks: ["Priority samples"] },
   { level: 3, name: "All-Star", minRevenue: 15000, perks: ["Faster turnaround", "Exclusive blanks"] },
-  { level: 4, name: "Franchise", minRevenue: 40000, perks: ["Best bulk pricing", "Dedicated support"] },
-  { level: 5, name: "Legend", minRevenue: 100000, perks: ["Top pricing", "Custom drops"] },
+  { level: 4, name: "Franchise", minRevenue: 40000, perks: ["Dedicated support"] },
+  { level: 5, name: "Legend", minRevenue: 100000, perks: ["Custom drops"] },
 ];
 
 export interface TierProgress {

@@ -54,6 +54,9 @@ describe("sheet price — must match portal_sheet_unit_price() in SQL", () => {
     [{ ...base, product_type: "apparel", title: "Comic Book Hoodie" }, 35, 48],
     [{ ...base, product_type: "accessory", title: "Moon's House Mug", athlete_unit_price: 30, price: 22 }, 30, 22],
     [{ ...base, product_type: "hat", title: "Cap" }, 18, 25],
+    // The V2 pricing sheet's price wins, and the compare price never drops below it.
+    [{ ...base, product_type: "apparel", title: "Mooney World Tee", athlete_price: 20 }, 20, 25],
+    [{ ...base, product_type: "hoodie", title: "Mooney hoodie", athlete_price: 52 }, 52, 52],
   ])("%o → %d / %d", (p, athlete, compare) => {
     expect(sheetUnitPrice(p as never)).toEqual({ athleteUnit: athlete, compareUnit: compare });
   });

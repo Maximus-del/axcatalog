@@ -9,6 +9,7 @@ import { formatMoney } from "@/lib/portal/api/money";
 import { sanitizeDescriptionHtml } from "@/lib/portal/sanitize-html";
 import { ProductOrderDialog } from "@/components/portal/ProductOrderDialog";
 import { buildShareUrl } from "@/components/portal/ProductCard";
+import { isOrderable, sheetUnitPrice } from "@/lib/portal/api/products";
 import { portalLink } from "./navigation";
 
 /** Images linked to a colour through its variants; empty when none are linked. */
@@ -19,7 +20,10 @@ export function imagesForColor(product: PortalProduct, color: string | null): Po
       .filter((v) => v.color?.toLowerCase() === color.toLowerCase() && v.shopifyImageId)
       .map((v) => v.shopifyImageId as string),
   );
-  return product.images.filter((img) => img.shopifyImageId && ids.has(img.shopifyImageId));
+  const linked = product.images.filter((img) => img.shopifyImageId && ids.has(img.shopifyImageId));
+  if (linked.length) return linked;
+  // Library products: each picture names its colourway (Drive metadata).
+  return product.images.filter((img) => img.color?.toLowerCase() === color.toLowerCase());
 }
 
 export function GearProductView({ product, description }: { product: PortalProduct; description: string | null }) {
@@ -38,7 +42,9 @@ export function GearProductView({ product, description }: { product: PortalProdu
   const front = gallery.find((i) => i.portalView === "front") ?? gallery[0];
   const back = gallery.find((i) => i.portalView === "back") ?? (gallery.length > 1 ? gallery.find((i) => i !== front) : undefined);
   const hero = idx > 0 ? gallery[idx] : side === "back" && back ? back : front;
-  const unit = product.athlete_unit_price ?? product.wholesale_price;
+  // The bulk-sheet price: what My Gear shows and what the order is charged.
+  const unit = sheetUnitPrice(product).athleteUnit;
+  const orderable = isOrderable(product);
   const shareUrl = buildShareUrl(product);
 
   const pickColor = (name: string) => { setColor((c) => (c === name ? null : name)); setIdx(0); setSide("front"); };
@@ -67,7 +73,7 @@ export function GearProductView({ product, description }: { product: PortalProdu
       </section>
       <section className="mw-pview-info">
         <h1 className="mw-heading">{product.title}</h1>
-        <p className="mw-pview-price">{formatMoney(unit != null ? { amountMinor: Math.round(unit * 100), currency: "USD" } : null, { cents: true })} <span>/ unit · MOQ 10</span></p>
+        <p className="mw-pview-price">{formatMoney(unit != null ? { amountMinor: Math.round(unit * 100), currency: "USD" } : null, { cents: true })} <span>/ unit · volume discounts from 50 units</span></p>
         {product.status === "archived" && <p className="mw-gear-archive-note">Reprinted from the design file</p>}
         {product.colors.length > 0 && <div className="mw-pview-colors">
           <h2>Color{color ? `: ${color}` : ""}</h2>
@@ -80,7 +86,7 @@ export function GearProductView({ product, description }: { product: PortalProdu
         </div>}
         {description && <div className="mw-pview-desc" dangerouslySetInnerHTML={{ __html: sanitizeDescriptionHtml(description) }} />}
         <div className="mw-pview-actions">
-          <Button className="mw-pview-order" onClick={() => setOrderOpen(true)} disabled={viewingAs}><ShoppingCart /> Order</Button>
+          <Button className="mw-pview-order" onClick={() => setOrderOpen(true)} disabled={viewingAs || !orderable} title={!orderable ? "Not available to order right now" : undefined}><ShoppingCart /> Order</Button>
           <Button variant="outline" onClick={copy}><Copy /> Copy link</Button>
           {product.shopify_handle && <Button variant="outline" asChild><a href={shareUrl} target="_blank" rel="noopener noreferrer"><ExternalLink /> View on Shopify</a></Button>}
         </div>

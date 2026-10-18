@@ -19,16 +19,23 @@ import { money } from "./money";
  * supabase/migrations/20261015150000_portal_stage2_orders.sql — a test pins
  * the two to the same cases.
  */
-export function sheetUnitPrice(p: Pick<PortalProduct, "product_type" | "title" | "athlete_unit_price" | "wholesale_price" | "price">): {
+export function sheetUnitPrice(
+  p: Pick<PortalProduct, "product_type" | "title" | "athlete_unit_price" | "wholesale_price" | "price"> & { athlete_price?: number | null },
+): {
   athleteUnit: number;
   compareUnit: number;
 } {
   const hay = `${p.product_type || ""} ${p.title || ""}`.toLowerCase();
-  if (hay.includes("hood")) return { athleteUnit: 35, compareUnit: 48 };
-  if (hay.includes("tee") || hay.includes("tshirt") || hay.includes("t-shirt") || hay.includes("shirt")) {
-    return { athleteUnit: 18, compareUnit: 25 };
+  const rule = hay.includes("hood")
+    ? { athleteUnit: 35, compareUnit: 48 }
+    : hay.includes("tee") || hay.includes("tshirt") || hay.includes("t-shirt") || hay.includes("shirt")
+      ? { athleteUnit: 18, compareUnit: 25 }
+      : { athleteUnit: p.athlete_unit_price ?? 18, compareUnit: p.wholesale_price ?? p.price ?? 25 };
+  // The price AX set in the V2 pricing sheet wins (products.athlete_price).
+  if (p.athlete_price != null) {
+    return { athleteUnit: p.athlete_price, compareUnit: Math.max(rule.compareUnit, p.athlete_price) };
   }
-  return { athleteUnit: p.athlete_unit_price ?? 18, compareUnit: p.wholesale_price ?? p.price ?? 25 };
+  return rule;
 }
 
 type Img = PortalProduct["images"][number] & { metadata?: Record<string, unknown> | null };

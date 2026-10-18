@@ -54,6 +54,23 @@ export function usePortalPricing(organizationId: string | null) {
 }
 
 /** Pick the best (largest min_qty <= qty) tier discount; 0 if none apply. */
+/**
+ * The ladder the SERVER applies when an org has no volume_discount_tiers
+ * (portal_quote_order's fallback). Kept in one place so every portal screen
+ * quotes the same discount the order is charged.
+ */
+export const PORTAL_FALLBACK_TIERS: VolumeTier[] = [
+  { min_qty: 50, discount_pct: 10 },
+  { min_qty: 100, discount_pct: 15 },
+  { min_qty: 250, discount_pct: 20 },
+  { min_qty: 500, discount_pct: 25 },
+];
+
+/** The org's tiers when configured, else the server's fallback ladder. */
+export function effectiveTiers(tiers: VolumeTier[]): VolumeTier[] {
+  return tiers.length ? tiers : PORTAL_FALLBACK_TIERS;
+}
+
 export function pickDiscount(tiers: VolumeTier[], qty: number): number {
   let pct = 0;
   for (const t of tiers) {

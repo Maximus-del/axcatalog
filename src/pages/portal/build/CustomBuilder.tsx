@@ -14,6 +14,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { useSignedUrl } from "@/lib/storage";
 import { PRINT_PLACEMENTS, submitPortalOrder } from "@/lib/portal-commerce";
 import { cn } from "@/lib/utils";
+import { usePortalNavigate } from "@/components/portal/mooney/navigation";
 
 const PLACEMENT_POS: Record<string, React.CSSProperties> = {
   front_left_chest: { top: "26%", left: "30%", width: "22%" },
@@ -25,6 +26,7 @@ const PLACEMENT_POS: Record<string, React.CSSProperties> = {
 
 export default function CustomBuilder() {
   const navigate = useNavigate();
+  const portalNavigate = usePortalNavigate();
   const [params] = useSearchParams();
   const { athlete, isImpersonating } = usePortalData();
   // One key per checkout: a double-tap or retry returns the same order.
@@ -91,7 +93,7 @@ export default function CustomBuilder() {
         <p className="text-muted-foreground mt-2">
           {done} — we'll build this piece and add it to your store.
         </p>
-        <button onClick={() => navigate("/portal/products")} className="mt-6 h-11 px-6 rounded-xl bg-accent text-accent-foreground font-bold uppercase tracking-wider text-sm">
+        <button onClick={() => portalNavigate("/portal/products")} className="mt-6 h-11 px-6 rounded-xl bg-accent text-accent-foreground font-bold uppercase tracking-wider text-sm">
           Back to Products
         </button>
       </main>
@@ -171,7 +173,7 @@ export default function CustomBuilder() {
         ) : (
           <p className="text-sm text-muted-foreground">
             No designs yet.{" "}
-            <button onClick={() => navigate("/portal/studio")} className="text-accent font-semibold">Start one →</button>
+            <button onClick={() => portalNavigate("/portal/studio")} className="text-accent font-semibold">Start one →</button>
           </p>
         )}
       </Field>

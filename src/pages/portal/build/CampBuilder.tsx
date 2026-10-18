@@ -10,6 +10,7 @@ import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { useAuth } from "@/auth/AuthProvider";
 import { CAMP_TIERS, tierForQty, submitPortalOrder } from "@/lib/portal-commerce";
 import { cn } from "@/lib/utils";
+import { usePortalNavigate } from "@/components/portal/mooney/navigation";
 
 const BENEFITS = [
   "Better per-unit pricing",
@@ -22,6 +23,7 @@ const BENEFITS = [
 
 export default function CampBuilder() {
   const navigate = useNavigate();
+  const portalNavigate = usePortalNavigate();
   const { products, athlete, isImpersonating } = usePortalData();
   // One key per checkout: a double-tap or retry returns the same order.
   const [orderKey] = useState(() => newIdempotencyKey());
@@ -42,7 +44,10 @@ export default function CampBuilder() {
   const product = products.find((p) => p.id === productId) ?? null;
 
   async function submit() {
-    if (!user) return;
+    if (!user) {
+      toast.error("Sign in to send a camp request.");
+      return;
+    }
     setSubmitting(true);
     const summary = [
       `Camp order · ~${qty} pcs (${tier.label} · ${tier.note})`,
@@ -75,8 +80,9 @@ export default function CampBuilder() {
       toast.error(res.error ?? "Could not submit camp order.");
       return;
     }
-    if (designChoice === "new") navigate("/portal/studio");
-    else setDone(res.orderNumber ?? "");
+    // Always confirm the request. A new design is noted on the order for AX;
+    // the confirmation offers Studio to send artwork ideas alongside it.
+    setDone(res.orderNumber ?? "");
   }
 
   if (done) {
@@ -90,11 +96,19 @@ export default function CampBuilder() {
           {done} — the AX team will build your camp package and send bulk pricing.
         </p>
         <button
-          onClick={() => navigate("/portal")}
+          onClick={() => portalNavigate("/portal")}
           className="mt-6 h-11 px-6 rounded-xl bg-accent text-accent-foreground font-bold uppercase tracking-wider text-sm"
         >
           Back to Home
         </button>
+        {designChoice === "new" && (
+          <button
+            onClick={() => portalNavigate("/portal/studio")}
+            className="mt-3 block mx-auto text-sm font-semibold text-accent"
+          >
+            Send design ideas in Studio →
+          </button>
+        )}
       </main>
     );
   }

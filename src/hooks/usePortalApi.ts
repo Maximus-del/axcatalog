@@ -22,6 +22,7 @@ import {
   type Turnaround,
 } from "@/lib/portal/api/orders";
 import type { MediaAsset, Product, Project } from "@/lib/portal/api/contract";
+import { fetchPlaybook } from "@/lib/portal/api/playbook";
 import {
   createDrop,
   fetchAnalytics,
@@ -311,5 +312,16 @@ export function usePortalUpdateProfile() {
     mutationFn: (input: { patch: Parameters<typeof updateProfile>[1]; expectedVersion?: string | null }) =>
       updateProfile(scope, input.patch, input.expectedVersion ?? null),
     onSuccess: () => void qc.invalidateQueries({ queryKey: keyFor(scope, "profile") }),
+  });
+}
+
+
+/** Brand HQ one-pagers: the live numbers (terms, volume breaks, bulk prices, credit, code). */
+export function usePortalPlaybook() {
+  const scope = usePortalScope();
+  return useQuery({
+    queryKey: keyFor(scope, "playbook"),
+    queryFn: () => fetchPlaybook(scope),
+    staleTime: 5 * 60_000,
   });
 }

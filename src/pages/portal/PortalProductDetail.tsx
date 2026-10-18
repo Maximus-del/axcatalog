@@ -5,7 +5,7 @@
 // athlete-tier price, Order button, Copy share link, View on Shopify.
 // No cost / margin / supplier / refresh-image actions.
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Copy, ExternalLink, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,13 @@ import { buildShareUrl } from "@/components/portal/ProductCard";
 import { cn } from "@/lib/utils";
 import { usePortalLayoutKind } from "@/components/portal/PortalLayoutKind";
 import { GearProductView } from "@/components/portal/mooney/GearProductView";
+import { portalLink, usePortalNavigate } from "@/components/portal/mooney/navigation";
 
 export default function PortalProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const portalNavigate = usePortalNavigate();
+  const location = useLocation();
   const { products, archivedProducts, productsLoading: loading } = usePortalData();
   const world = usePortalLayoutKind() === "world";
   const [orderOpen, setOrderOpen] = useState(false);
@@ -68,7 +71,7 @@ export default function PortalProductDetail() {
     return (
       <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-4 pb-bottom-nav md:pb-32">
         <Button variant="ghost" asChild className="gap-2">
-          <Link to="/portal">
+          <Link to={portalLink("/portal", location.search)}>
             <ArrowLeft className="h-4 w-4" /> Back
           </Link>
         </Button>
@@ -96,7 +99,7 @@ export default function PortalProductDetail() {
 
   return (
     <div className="p-4 lg:p-8 max-w-[1100px] mx-auto space-y-6 pb-bottom-nav md:pb-32">
-      <Button variant="ghost" onClick={() => navigate("/portal")} className="gap-2 -ml-2">
+      <Button variant="ghost" onClick={() => portalNavigate("/portal")} className="gap-2 -ml-2">
         <ArrowLeft className="h-4 w-4" /> Back
       </Button>
 

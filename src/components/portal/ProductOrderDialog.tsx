@@ -22,9 +22,14 @@ import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
-import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { effectiveTiers, pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { usePortalQuote } from "@/hooks/usePortalApi";
+import { sheetUnitPrice } from "@/lib/portal/api/products";
+import type { OrderLineInput } from "@/lib/portal/api/orders";
+import { PortalApiError } from "@/lib/portal/api/contract";
 import { distributeByCurve, useSizeDistributionCurve } from "@/hooks/useSizeDistributionCurve";
 import { MilestoneSlider } from "./MilestoneSlider";
+import { announceOrder } from "./OrderReceipt";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 
@@ -44,6 +49,9 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   // One key per checkout attempt, kept across retries and double-clicks.
   const [orderKey, setOrderKey] = useState(() => newIdempotencyKey());
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [useCredit, setUseCredit] = useState(false);
+  // Two steps: build the order, then confirm it before it is placed.
+  const [reviewing, setReviewing] = useState(false);
   const { user } = useAuth();
   const { athlete, isImpersonating } = useCurrentAthlete();
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
@@ -158,15 +166,38 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     [qtys],
   );
 
-  // Athlete-tier MOQ baseline, derived via compute_wholesale_price in the hook.
-  const unitWholesale = product.athlete_unit_price ?? product.wholesale_price ?? null;
-  const discountPct = pickDiscount(config.tiers, totalUnits);
-  const subtotal =
-    unitWholesale != null ? unitWholesale * totalUnits * (1 - discountPct / 100) : null;
-  const grossSubtotal =
-    unitWholesale != null ? unitWholesale * totalUnits : null;
+  // The bulk-sheet price — the same rule the server charges by
+  // (portal_sheet_unit_price). The live server quote below is the authority;
+  // this local figure only fills the gap while it loads.
+  const unitWholesale: number | null = sheetUnitPrice(product).athleteUnit;
+  const lines = useMemo<OrderLineInput[]>(
+    () =>
+      Object.entries(qtys)
+        .filter(([, q]) => q > 0)
+        .map(([key, quantity]) => {
+          const [color, size] = key.split("|");
+          return { productId: product.id, color: color || null, size: size || null, quantity };
+        }),
+    [qtys, product.id],
+  );
+  const quote = usePortalQuote(open ? lines : []);
+  const serverQuote = quote.data && quote.data.units === totalUnits ? quote.data : null;
+  // A stock or availability problem the server found ("Out of stock", "Only 3 left").
+  const quoteError = !quote.isError
+    ? null
+    : quote.error instanceof PortalApiError && quote.error.error.fieldErrors
+      ? Object.values(quote.error.error.fieldErrors).join(" · ")
+      : quote.error instanceof Error ? quote.error.message : "Couldn't price this order";
+  const discountPct = serverQuote ? serverQuote.discountPct : pickDiscount(effectiveTiers(config.tiers), totalUnits);
+  const grossSubtotal = unitWholesale != null ? unitWholesale * totalUnits : null;
+  const subtotal = serverQuote
+    ? serverQuote.subtotalDollars
+    : grossSubtotal != null ? grossSubtotal * (1 - discountPct / 100) : null;
   const discountAmount =
     grossSubtotal != null && subtotal != null ? grossSubtotal - subtotal : null;
+  const creditAvailable = serverQuote?.creditAvailable ? serverQuote.creditAvailable.amountMinor / 100 : 0;
+  const creditToApply = useCredit && subtotal != null ? Math.min(creditAvailable, subtotal) : 0;
+  const amountDue = subtotal != null ? Math.max(0, subtotal - creditToApply) : null;
   const breakdownRows = colorRows.flatMap((row) =>
     sizes
       .map((s) => ({
@@ -227,8 +258,10 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
         userId: user.id,
         items,
         summary: `Single product order · ${product.title}`,
-        creditToApply: 0,
-        amountDue: 0,
+        creditToApply: Math.round(creditToApply * 100) / 100,
+        amountDue: amountDue ?? 0,
+        // Pin the price the person saw; the server refuses if it moved.
+        screenSubtotal: subtotal ?? undefined,
         idempotencyKey: orderKey,
         viewingAs: isImpersonating,
       });
@@ -236,16 +269,20 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
         toast.error(res.error ?? "Submit failed");
         return;
       }
-      const total = res.subtotal != null ? ` · $${res.subtotal.toFixed(2)}` : "";
-      toast.success(
-        res.replayed
-          ? `Order ${res.orderNumber ?? ""} was already submitted`
-          : `Order ${res.orderNumber ?? ""} submitted${total} — we'll be in touch`,
-      );
+      announceOrder({
+        orderNumber: res.orderNumber ?? null,
+        units: totalUnits,
+        subtotal: res.subtotal ?? subtotal,
+        creditApplied: res.creditApplied ?? 0,
+        amountDue: res.amountDue ?? amountDue,
+        replayed: res.replayed,
+      });
+      setReviewing(false);
       setOrderKey(newIdempotencyKey());
       setQtys({});
       setAutoTotal(0);
       setAutoDistribute(false);
+      setUseCredit(false);
       onOpenChange(false);
     } catch (err) {
       console.error("Order submit error", err);
@@ -276,7 +313,7 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               {unitWholesale != null
-                ? `$${unitWholesale.toFixed(2)} / unit at your tier (MOQ 10)`
+                ? `$${unitWholesale.toFixed(2)} / unit · volume discounts from 50 units`
                 : "Pricing not set yet"}
             </DialogDescription>
           </DialogHeader>
@@ -550,25 +587,54 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
           </div>
         )}
         <div className="border-t border-border px-6 py-4 flex items-center justify-between gap-3 bg-[hsl(var(--dark))]">
-          <div>
-            <div className="ax-label">Subtotal · {totalUnits} units</div>
+          <div className="min-w-0">
+            <div className="ax-label">{useCredit && creditToApply > 0 ? "Due" : "Subtotal"} · {totalUnits} units</div>
             <div className="text-2xl font-bold text-accent leading-none mt-1">
-              {subtotal != null ? `$${subtotal.toFixed(2)}` : "—"}
+              {(useCredit ? amountDue : subtotal) != null ? `$${(useCredit ? amountDue! : subtotal!).toFixed(2)}` : "—"}
             </div>
             {discountPct > 0 && (
               <div className="text-[11px] text-accent uppercase tracking-wider mt-1">
                 {discountPct}% volume discount
               </div>
             )}
+            {creditAvailable > 0 && totalUnits > 0 && (
+              <label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Switch checked={useCredit} onCheckedChange={setUseCredit} aria-label="Use AX credit" />
+                Use AX credit (${creditAvailable.toFixed(2)} available)
+              </label>
+            )}
+            {quoteError && totalUnits > 0 && (
+              <div className="text-[11px] text-destructive mt-1" role="alert">{quoteError}</div>
+            )}
           </div>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || totalUnits === 0}
-            className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
-          >
-            {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Submit Order
-          </Button>
+          {reviewing ? (
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => setReviewing(false)} disabled={submitting}>
+                  Back
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting || totalUnits === 0 || !!quoteError}
+                  className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
+                >
+                  {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Confirm order
+                </Button>
+              </div>
+              <span className="text-[11px] text-muted-foreground text-right max-w-[220px]">
+                No payment now — AX emails you an invoice (Zelle or invoice).
+              </span>
+            </div>
+          ) : (
+            <Button
+              onClick={() => setReviewing(true)}
+              disabled={totalUnits === 0 || !!quoteError || subtotal == null}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
+            >
+              Review order
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

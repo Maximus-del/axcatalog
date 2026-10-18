@@ -16,7 +16,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
-import { pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { effectiveTiers, pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { sheetUnitPrice } from "@/lib/portal/api/products";
 import { submitPortalOrder, type PortalOrderItem } from "@/lib/portal-commerce";
 import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { ProductImageLightbox } from "./ProductImageLightbox";
@@ -27,19 +28,13 @@ import {
   useSizeDistributionCurve,
 } from "@/hooks/useSizeDistributionCurve";
 import { MilestoneSlider } from "./MilestoneSlider";
+import { announceOrder } from "./OrderReceipt";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 /** Full apparel size ladder used to order real Shopify variant sizes. */
 const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"] as const;
 const ONE_SIZE_TYPES = new Set(["hat", "beanie"]);
 
-/** Fallback volume discount tiers if the org has none configured. */
-const FALLBACK_VOLUME_TIERS: VolumeTier[] = [
-  { min_qty: 50, discount_pct: 10 },
-  { min_qty: 100, discount_pct: 15 },
-  { min_qty: 250, discount_pct: 20 },
-  { min_qty: 500, discount_pct: 25 },
-];
 
 interface Props {
   open: boolean;
@@ -87,25 +82,10 @@ function productPricing(p: PortalProduct): {
   athleteUnit: number | null;
   wholesaleUnit: number | null;
 } {
-  const hay = `${p.product_type || ""} ${p.title || ""}`.toLowerCase();
-  const isHoodie = hay.includes("hood");
-  const isTee =
-    hay.includes("tee") ||
-    hay.includes("tshirt") ||
-    hay.includes("t-shirt") ||
-    hay.includes("shirt");
-  if (isHoodie) {
-    return { athleteUnit: 35, wholesaleUnit: 48 };
-  }
-  if (isTee) {
-    return { athleteUnit: 18, wholesaleUnit: 25 };
-  }
-  // Fallback to DB-driven values when type isn't a known category.
-  // Default to t-shirt pricing if nothing is configured, so the
-  // analytics panel never goes blank.
-  const athlete = p.athlete_unit_price ?? 18;
-  const wholesale = p.wholesale_price ?? p.price ?? 25;
-  return { athleteUnit: athlete, wholesaleUnit: wholesale };
+  // One rule for the whole portal (and the server): sheetUnitPrice, which
+  // honours the price AX sets in the V2 pricing sheet.
+  const { athleteUnit, compareUnit } = sheetUnitPrice(p);
+  return { athleteUnit, wholesaleUnit: compareUnit };
 }
 
 function ProductAnalytics({
@@ -317,7 +297,7 @@ export function BulkOrderSheet({
 
   // Prefer real org volume tiers when configured; fall back to defaults silently.
   const volumeTiers = useMemo<VolumeTier[]>(
-    () => (config.tiers.length ? config.tiers : FALLBACK_VOLUME_TIERS),
+    () => effectiveTiers(config.tiers),
     [config.tiers],
   );
   const discountPct = pickDiscount(volumeTiers, totalUnits);
@@ -332,8 +312,10 @@ export function BulkOrderSheet({
     [totalUnits, volumeTiers],
   );
 
-  // Order subtotal (post-discount) across all products in the draft.
-  const orderSubtotal = useMemo(() => {
+  // Order subtotal (post-discount) across all products in the draft. Rounded
+  // per line exactly as portal_quote_order rounds, so a large order cannot
+  // drift a few cents from the server and be refused.
+  const localSubtotal = useMemo(() => {
     let sum = 0;
     const byId = new Map(products.map((p) => [p.id, p]));
     for (const [pid, byColor] of Object.entries(draft)) {
@@ -341,11 +323,19 @@ export function BulkOrderSheet({
       if (!p) continue;
       const { athleteUnit } = productPricing(p);
       if (athleteUnit == null) continue;
-      const qty = sumProduct(byColor);
-      sum += athleteUnit * qty * discountMult;
+      for (const sizes of Object.values(byColor)) {
+        for (const qty of Object.values(sizes)) {
+          if (qty > 0) sum += Math.round(athleteUnit * qty * discountMult * 100) / 100;
+        }
+      }
     }
-    return sum;
+    return Math.round(sum * 100) / 100;
   }, [draft, products, discountMult]);
+  // When the server prices the order differently it says so once; from then on
+  // this sheet shows (and submits against) the server's number for that draft.
+  const draftKey = useMemo(() => JSON.stringify(draft), [draft]);
+  const [serverPrice, setServerPrice] = useState<{ key: string; subtotal: number } | null>(null);
+  const orderSubtotal = serverPrice && serverPrice.key === draftKey ? serverPrice.subtotal : localSubtotal;
 
   const availableCredit = wallet?.balance ?? 0;
   const maxApplicable = Math.min(availableCredit, orderSubtotal);
@@ -420,7 +410,7 @@ export function BulkOrderSheet({
           for (const [size, qty] of Object.entries(sizes)) {
             if (!qty || qty <= 0) continue;
             const v = lookup.get(`${color ?? ""}|${size}`);
-            if (!v || v.available !== true) {
+            if (!v || (p.status !== "archived" && v.available !== true)) {
               toast.error(
                 `Remove out-of-stock items (${p.title} · ${color || "—"} · ${size}) before submitting`,
               );
@@ -467,16 +457,20 @@ export function BulkOrderSheet({
         screenSubtotal: Math.round(orderSubtotal * 100) / 100,
       });
       if (!res.ok) {
+        if (res.newQuote) setServerPrice({ key: draftKey, subtotal: res.newQuote.subtotalDollars });
         toast.error(res.error ?? "Submit failed");
         return;
       }
       if ((res.creditApplied ?? creditToApply) > 0) await refetchWallet();
 
-      toast.success(
-        res.replayed
-          ? `Order ${res.orderNumber ?? ""} was already submitted`
-          : `Order ${res.orderNumber ?? ""} submitted — we'll be in touch`,
-      );
+      announceOrder({
+        orderNumber: res.orderNumber ?? null,
+        units: totalUnits,
+        subtotal: res.subtotal ?? orderSubtotal,
+        creditApplied: res.creditApplied ?? 0,
+        amountDue: res.amountDue ?? null,
+        replayed: res.replayed,
+      });
       clear();
       setCreditInput("");
       setOrderKey(newIdempotencyKey());
@@ -664,6 +658,9 @@ export function BulkOrderSheet({
                 const isAvailable = (color: string, size: string): boolean => {
                   if (!hasVariants) return true;
                   const v = variantByCell.get(`${color}|${size}`);
+                  // Archived: reprinted from the design file, so Shopify stock no
+                  // longer applies (the server treats it as made to order).
+                  if (p.status === "archived") return !!v;
                   return !!v && v.available === true;
                 };
                 const productByColor = draft[p.id] ?? {};
@@ -671,16 +668,12 @@ export function BulkOrderSheet({
                 const rawColors = p.colors ?? [];
                 // When real variants exist, never inject a synthetic "Black";
                 // use exactly the colorways Shopify reports.
-                const colorList = hasVariants
+                // Without variants, use the product's own colourways (blank or
+                // library pictures); only a product with NO colour at all gets a
+                // single "Black" row, never one prepended to real colourways.
+                const colorList = hasVariants || rawColors.length
                   ? rawColors
-                  : (() => {
-                      const hasBlack = rawColors.some(
-                        (c) => c.name.trim().toLowerCase() === "black",
-                      );
-                      return hasBlack
-                        ? rawColors
-                        : [{ name: "Black", hex: "#000000" }, ...rawColors];
-                    })();
+                  : [{ name: "Black", hex: "#000000" }];
                 const activeColor =
                   selectedColor[p.id] ??
                   (hasVariants
@@ -1015,7 +1008,7 @@ export function BulkOrderSheet({
                               }
                               setRecentlyAdded(justAddedKey);
                               toast.success(
-                                `${activeColor || "Item"} added to cart`,
+                                `${activeColor || "Item"}: ${activeColorQty} units in this order`,
                               );
                               setTimeout(
                                 () =>
