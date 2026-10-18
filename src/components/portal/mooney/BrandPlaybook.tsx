@@ -53,8 +53,8 @@ function MoneyPage({ pb }: { pb: Playbook }) {
   const tee = pb.bulkSamples.find((s) => s.kind === "tee") ?? pb.bulkSamples[0];
   const share = pb.terms?.revenueSharePercent ?? null;
   const onProfit = pb.terms?.splitBasis === "profit";
-  // A gross share can be shown as dollars; a profit share depends on AX's costs, which stay private.
-  const store = onProfit ? null : storeShareExample(tee?.retail ?? null, share);
+  // On a profit split the client's cost is their own bulk price — theirs to see.
+  const store = storeShareExample(tee?.retail ?? null, share, 100, { basis: onProfit ? "profit" : "gross", clientCost: tee?.athleteUnit ?? null });
   const resale = tee ? resaleExample(tee, 50, pb.volumeBreaks) : null;
   const code = codeExample(pb.code);
   return <>
@@ -63,6 +63,12 @@ function MoneyPage({ pb }: { pb: Playbook }) {
       {tee && <Row label={tee.title} value={`${usd(tee.retail)} to the fan`} />}
       {share != null ? <>
         <Row label={onProfit ? "Your share of the profit on every store sale" : "Your share of every store sale"} value={`${share}%`} strong />
+        {store && onProfit && tee && <>
+          <Row label="A fan pays" value={usd(tee.retail)} />
+          <Row label="Your cost for that piece" value={`−${usd(tee.athleteUnit, { cents: true })}`} />
+          <Row label="Profit" value={usd(store.profitPerUnit, { cents: true })} />
+          <Row label={`You keep ${share}%`} value={usd(store.perUnit, { cents: true })} strong />
+        </>}
         {store && <Row label={`${store.units} sales at ${usd(tee?.retail)}`} value={`${usd(store.earned)} to you`} />}
       </> : <Note>Your store revenue share is set in your AX agreement. Ask the AX team and they'll add it here.</Note>}
       {pb.terms?.payoutSchedule && <Row label="Paid out" value={pb.terms.payoutSchedule} />}

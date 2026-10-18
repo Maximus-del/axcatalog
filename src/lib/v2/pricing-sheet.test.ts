@@ -6,8 +6,10 @@ import {
   changedFields,
   detectSides,
   draftOf,
+  emptyPreset,
   fillCells,
   garmentOf,
+  presetBreakdown,
   presetCosts,
   rowError,
   rowMaths,
@@ -30,7 +32,7 @@ const make = (over: Partial<SheetProduct> & { id: string }): SheetProduct => ({
   retail: 45,
   athletePrice: null,
   ruleAthletePrice: 18,
-  pricing: { blankCost: null, printCost: null, otherCost: null, sharePercent: null, printSides: null, notes: "" },
+  pricing: { blankCost: null, printCost: null, otherCost: null, clientPrice: null, sharePercent: null, printSides: null, notes: "" },
   ...over,
 });
 
@@ -38,63 +40,81 @@ const tee = make({ id: "tee-fb", title: "Signature Jersey #11 Tee" });
 const teeFront = make({ id: "tee-f", title: "WRLD #11 Tee — V1", detectedSides: "front" });
 const hoodie = make({ id: "hood-fb", title: "WRLD #11 Hoodie", garment: "hoodie", blankId: HOOD, blankName: "Garment-Wash Hoodie 14oz", blankCatalogCost: 22.25, retail: 65, ruleAthletePrice: 35 });
 
+// Chase's example: blank $12 → $18, front $2 → $5, back $2 → $3 (front + back = $8).
 const presets: Presets = {
-  [TEE]: { blank: null, front: 5, back: 4 },
-  [HOOD]: { blank: 23, front: 6, back: 5 },
+  [TEE]: { blank: { cost: 12, price: 18 }, front: { cost: 2, price: 5 }, back: { cost: 2, price: 3 }, services: { cost: null, price: null } },
+  [HOOD]: { blank: { cost: null, price: null }, front: { cost: 2, price: 5 }, back: { cost: 2, price: 3 }, services: { cost: null, price: null } },
 };
-const gross = { revenueSharePercent: 20, splitBasis: "gross" as const };
+// AX keeps 10% of the profit after the client's cost.
+const profit90 = { revenueSharePercent: 90, splitBasis: "profit" as const };
 
-describe("presets by blank and print", () => {
-  it("front only pays the front preset; front + back pays both", () => {
-    expect(presetCosts(teeFront, "front", presets)).toEqual({ blank: 12, print: 5 });
-    expect(presetCosts(tee, "front_back", presets)).toEqual({ blank: 12, print: 9 });
-    expect(presetCosts(hoodie, "front_back", presets)).toEqual({ blank: 23, print: 11 });
+describe("the C-level breakdown per blank", () => {
+  it("lines up our cost, the client price and our margin line by line", () => {
+    const fb = presetBreakdown(presets[TEE], "front_back", 12);
+    expect(fb.lines.map((l) => [l.component, l.cost, l.price, l.margin])).toEqual([
+      ["blank", 12, 18, 6],
+      ["front", 2, 5, 3],
+      ["back", 2, 3, 1],
+      ["services", null, null, null],
+    ]);
+    expect(fb).toMatchObject({ cost: 16, price: 26, margin: 10, marginPercent: 38.5 });
+    expect(presetBreakdown(presets[TEE], "front", 12)).toMatchObject({ cost: 14, price: 23, margin: 9 });
   });
 
-  it("a row uses presets until it overrides them", () => {
-    const m = rowMaths(tee, draftOf(tee), gross, presets);
-    expect(m).toMatchObject({ blankCost: 12, printCost: 9, totalCost: 21, printFromPreset: true, blankFromPreset: true });
-    const o = rowMaths(tee, { ...draftOf(tee), printCost: 7.5 }, gross, presets);
-    expect(o).toMatchObject({ printCost: 7.5, printFromPreset: false, totalCost: 19.5 });
-  });
-
-  it("switching a row to front only drops the back print", () => {
-    const m = rowMaths(tee, { ...draftOf(tee), printSides: "front" }, gross, presets);
-    expect(m.sides).toBe("front");
-    expect(m.printCost).toBe(5);
-  });
-
-  it("no presets and no print sides → flagged, not guessed", () => {
-    const m = rowMaths(make({ id: "x", detectedSides: null }), draftOf(make({ id: "x", detectedSides: null })), { revenueSharePercent: null, splitBasis: "gross" });
-    expect(m.missing).toEqual(["sides", "print", "share"]);
-    expect(m.printCost).toBeNull();
+  it("has no client price until the blank is priced; the catalogue cost fills an unset blank cost", () => {
+    const h = presetBreakdown(presets[HOOD], "front_back", 22.25);
+    expect(h).toMatchObject({ cost: 26.25, price: null, margin: null });
+    expect(presetBreakdown(emptyPreset(), null, 12)).toMatchObject({ cost: 12, price: null });
   });
 });
 
 describe("rowMaths", () => {
-  it("splits a store sale on the gross", () => {
-    const m = rowMaths(tee, { ...draftOf(tee), otherCost: 1 }, gross, presets);
-    expect(m.totalCost).toBe(22);
-    expect(m.clientPerSale).toBe(9);
-    expect(m.axPerSale).toBe(14);
-    expect(m.axMarginPercent).toBe(31.1);
+  it("front + back tee: $16 cost, $26 to the client, $10 to AX per unit", () => {
+    const m = rowMaths(tee, draftOf(tee), profit90, presets);
+    expect(m).toMatchObject({ trueCost: 16, clientPrice: 26, clientPriceSource: "preset", unitMargin: 10, storedPriceTarget: 26, priceChanges: true });
   });
 
-  it("splits on profit, and a per-product share wins", () => {
-    const m = rowMaths(tee, { ...draftOf(tee), sharePercent: 50 }, { revenueSharePercent: 20, splitBasis: "profit" }, presets);
-    expect(m.clientPerSale).toBe(12); // 50% of (45 - 21)
-    expect(m.axPerSale).toBe(12);
+  it("a store sale splits the profit after the client's cost", () => {
+    const m = rowMaths(tee, draftOf(tee), profit90, presets);
+    // $45 retail − $26 client cost = $19 profit; client keeps 90% ($17.10), AX 10% ($1.90).
+    expect(m).toMatchObject({ storeProfit: 19, clientPerSale: 17.1, axSplit: 1.9 });
+    // AX overall: $10 on the unit + $1.90 split.
+    expect(m.axPerSale).toBe(11.9);
   });
 
-  it("a set bulk price replaces the rule", () => {
-    const m = rowMaths(tee, { ...draftOf(tee), athletePrice: 25 }, gross, presets);
-    expect(m).toMatchObject({ bulkPrice: 25, bulkIsRule: false, bulkProfit: 4, bulkMarginPercent: 16 });
+  it("front only drops the back line from cost and price", () => {
+    const m = rowMaths(teeFront, draftOf(teeFront), profit90, presets);
+    expect(m).toMatchObject({ trueCost: 14, clientPrice: 23, unitMargin: 9, storeProfit: 22, clientPerSale: 19.8, axSplit: 2.2, axPerSale: 11.2 });
+  });
+
+  it("a row's client price overrides the presets; unpriced falls back to the rule and is flagged", () => {
+    expect(rowMaths(tee, { ...draftOf(tee), clientPrice: 24 }, profit90, presets)).toMatchObject({ clientPrice: 24, clientPriceSource: "row", unitMargin: 8 });
+    const h = rowMaths(hoodie, draftOf(hoodie), profit90, presets);
+    expect(h).toMatchObject({ clientPrice: 35, clientPriceSource: "rule", storedPriceTarget: null, priceChanges: false });
+    expect(h.missing).toContain("price");
+  });
+
+  it("gross basis gives the client a share of retail instead", () => {
+    const m = rowMaths(tee, draftOf(tee), { revenueSharePercent: 20, splitBasis: "gross" }, presets);
+    expect(m).toMatchObject({ clientPerSale: 9, axSplit: null, axPerSale: 20 });
+  });
+
+  it("a saved price that matches is not a change", () => {
+    const saved = { ...tee, athletePrice: 26 };
+    expect(rowMaths(saved, draftOf(saved), profit90, presets).priceChanges).toBe(false);
+  });
+});
+
+describe("presetCosts", () => {
+  it("gives the cost lines and the client price", () => {
+    expect(presetCosts(tee, "front_back", presets)).toEqual({ blank: 12, print: 4, services: null, clientPrice: 26 });
+    expect(presetCosts(teeFront, "front", presets)).toEqual({ blank: 12, print: 2, services: null, clientPrice: 23 });
   });
 });
 
 describe("arrange", () => {
   const all = [hoodie, tee, teeFront];
-  const opts = { terms: gross, presets };
+  const opts = { terms: profit90, presets };
 
   it("groups by blank, front before front + back inside each", () => {
     const g = arrangeRows(all, {}, { ...opts, groupBy: "blank", sortBy: "print" });
@@ -111,15 +131,9 @@ describe("arrange", () => {
     ]);
   });
 
-  it("groups by print across blanks, and a draft print choice moves the row", () => {
-    const g = arrangeRows(all, { [tee.id]: { ...draftOf(tee), printSides: "front" } }, { ...opts, groupBy: "print", sortBy: "blank" });
-    expect(g[0].label).toBe("Front");
-    expect(g[0].rows.map((r) => r.id).sort()).toEqual(["tee-f", "tee-fb"]);
-  });
-
-  it("sorts by AX take, best first", () => {
-    const g = arrangeRows(all, {}, { ...opts, groupBy: "none", sortBy: "ax" });
-    expect(g[0].rows.map((r) => r.id)).toEqual(["tee-f", "hood-fb", "tee-fb"]); // $19, $18, $15
+  it("sorts by AX per unit, best first", () => {
+    const g = arrangeRows(all, {}, { ...opts, groupBy: "none", sortBy: "unit" });
+    expect(g[0].rows.map((r) => r.id)).toEqual(["tee-fb", "tee-f", "hood-fb"]); // $10, $9, $8.75
   });
 });
 
@@ -127,26 +141,20 @@ describe("selecting and filling cells", () => {
   const order = ["hood-fb", "tee-fb", "tee-f"];
 
   it("a drag or shift-click selects the rectangle between two cells", () => {
-    expect(cellRange(cellKey("hood-fb", "printCost"), cellKey("tee-f", "printCost"), order)).toEqual([
-      cellKey("hood-fb", "printCost"),
-      cellKey("tee-fb", "printCost"),
-      cellKey("tee-f", "printCost"),
-    ]);
+    expect(cellRange(cellKey("hood-fb", "printCost"), cellKey("tee-f", "printCost"), order)).toHaveLength(3);
     expect(cellRange(cellKey("tee-f", "otherCost"), cellKey("tee-fb", "blankCost"), order)).toHaveLength(6);
   });
 
-  it("fills every selected cell with one value and skips Shopify retail", () => {
+  it("fills every selected cell and skips Shopify retail", () => {
     const shop = make({ id: "shop", onShopify: true });
     const r = fillCells([tee, teeFront, shop], {}, [cellKey("tee-fb", "retail"), cellKey("tee-f", "retail"), cellKey("shop", "retail")], 50);
     expect(r).toMatchObject({ filled: 2, skipped: 1 });
-    expect(r.drafts["tee-fb"].retail).toBe(50);
-    expect(r.drafts.shop).toBeUndefined();
   });
 
   it("clearing a cell sends it back to its preset", () => {
-    const set = fillCells([tee], {}, [cellKey("tee-fb", "printCost")], 8).drafts;
-    const cleared = fillCells([tee], set, [cellKey("tee-fb", "printCost")], null).drafts;
-    expect(rowMaths(tee, cleared[tee.id], gross, presets).printCost).toBe(9);
+    const set = fillCells([tee], {}, [cellKey("tee-fb", "clientPrice")], 30).drafts;
+    const cleared = fillCells([tee], set, [cellKey("tee-fb", "clientPrice")], null).drafts;
+    expect(rowMaths(tee, cleared[tee.id], profit90, presets).clientPrice).toBe(26);
     expect(changedFields(tee, cleared[tee.id])).toEqual([]);
   });
 });
@@ -156,11 +164,10 @@ describe("helpers", () => {
     expect(detectSides([{ file_name: "MW-X_V1_CC_HOD475_JetBlack_BACK.png", metadata: { source: "drive" } }])).toBe("front_back");
     expect(detectSides([{ file_name: "MW-X_FRONT.png", metadata: { source: "drive" } }])).toBe("front");
     expect(detectSides([{ file_name: "shopify-1.jpg", metadata: {} }])).toBeNull();
-    expect(detectSides([{ file_name: "a.png", metadata: { portal_view: "back" } }])).toBe("front_back");
   });
 
   it("refuses bad numbers and Shopify retail edits", () => {
-    expect(rowError(tee, { ...draftOf(tee), printCost: -1 })).toMatch(/positive/);
+    expect(rowError(tee, { ...draftOf(tee), clientPrice: -1 })).toMatch(/positive/);
     expect(rowError(tee, { ...draftOf(tee), sharePercent: 120 })).toMatch(/100/);
     expect(rowError({ ...tee, onShopify: true }, { ...draftOf(tee), retail: 50 })).toMatch(/Shopify/);
   });

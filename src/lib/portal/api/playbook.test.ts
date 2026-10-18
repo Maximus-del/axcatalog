@@ -73,7 +73,10 @@ describe("the maths matches the order sheet", () => {
 
   it("only shows a store-share example once AX sets the share", () => {
     expect(storeShareExample(45, null)).toBeNull();
-    expect(storeShareExample(45, 20, 100)).toEqual({ units: 100, gross: 4500, earned: 900, perUnit: 9 });
+    expect(storeShareExample(45, 20, 100)).toEqual({ units: 100, gross: 4500, profitPerUnit: null, earned: 900, perUnit: 9 });
+    // Profit basis: $45 − his $26 cost = $19; he keeps 90% = $17.10 a sale.
+    expect(storeShareExample(45, 90, 100, { basis: "profit", clientCost: 26 })).toEqual({ units: 100, gross: 4500, profitPerUnit: 19, perUnit: 17.1, earned: 1710 });
+    expect(storeShareExample(45, 90, 100, { basis: "profit", clientCost: null })).toBeNull();
   });
 
   it("code earnings come from the commission, fan savings from the discount", () => {
