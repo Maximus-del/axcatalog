@@ -25,7 +25,7 @@ const mk = (id: string, over: Partial<SheetProduct> = {}): SheetProduct => ({
   retail: 45,
   athletePrice: null,
   ruleAthletePrice: 18,
-  pricing: { blankCost: null, printCost: null, otherCost: null, sharePercent: null, printSides: null, notes: "" },
+  pricing: { blankCost: null, printCost: null, otherCost: null, clientPrice: null, sharePercent: null, printSides: null, notes: "" },
   ...over,
 });
 
@@ -35,8 +35,12 @@ const SHEET: PricingSheet = {
     mk("WRLD #11 Tee V1", { detectedSides: "front" }),
     mk("WRLD #11 Hoodie", { garment: "hoodie", blankId: HOOD, blankName: "Garment-Wash Hoodie 14oz", blankCatalogCost: 22.25, retail: 65, ruleAthletePrice: 35 }),
   ],
-  terms: { revenueSharePercent: 20, payoutSchedule: "", note: "", splitBasis: "gross", paymentInstructions: "" },
-  presets: { [TEE]: { blank: null, front: 5, back: 4 }, [HOOD]: { blank: null, front: null, back: null } },
+  // Chase's example: blank $12 → $18, front $2 → $5, back $2 → $3; AX keeps 10% of the profit.
+  terms: { revenueSharePercent: 90, payoutSchedule: "", note: "", splitBasis: "profit", paymentInstructions: "" },
+  presets: {
+    [TEE]: { blank: { cost: 12, price: 18 }, front: { cost: 2, price: 5 }, back: { cost: 2, price: 3 }, services: { cost: null, price: null } },
+    [HOOD]: { blank: { cost: null, price: null }, front: { cost: null, price: null }, back: { cost: null, price: null }, services: { cost: null, price: null } },
+  },
 };
 
 const saveSheet = vi.fn().mockResolvedValue(1);
@@ -88,7 +92,7 @@ afterEach(() => {
 
 const text = () => host.textContent ?? "";
 const rowOf = (title: string) => [...host.querySelectorAll("tr")].find((tr) => tr.textContent?.includes(title))!;
-/** The selectable cells of a row, in column order: blank, print, other, retail, share, bulk. */
+/** The selectable cells of a row, in column order: blank, print, services, client price, retail, share. */
 const cells = (title: string) => [...rowOf(title).querySelectorAll<HTMLElement>('[role="gridcell"]')];
 const fire = (el: EventTarget, type: string, init: MouseEventInit = {}) =>
   act(() => {
@@ -97,13 +101,20 @@ const fire = (el: EventTarget, type: string, init: MouseEventInit = {}) =>
 
 describe("pricing sheet", () => {
   it("groups by blank and costs each row from its presets", () => {
-    expect(text()).toContain("Cost presets");
-    const groups = [...host.querySelectorAll("section h2")].map((h) => h.textContent);
+    expect(text()).toContain("Unit economics");
+    const groups = [...host.querySelectorAll("section h2")].map((h) => h.textContent).filter((t) => t !== "Unit economics");
     expect(groups[0]).toContain("DRI EASE OVERSIZED TEE");
     expect(groups[1]).toContain("Garment-Wash Hoodie 14oz");
-    // Front + back tee: 5 + 4 = $9 print; front-only tee: $5.
-    expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$9.00");
-    expect(cells("WRLD #11 Tee V1")[1].textContent).toContain("$5.00");
+    // Front + back tee: $2 + $2 print, $18 + $5 + $3 = $26 to the client; front-only: $2 print, $23.
+    expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$4.00");
+    expect(cells("Signature Jersey #11 Tee")[3].textContent).toContain("$26.00");
+    expect(cells("WRLD #11 Tee V1")[1].textContent).toContain("$2.00");
+    expect(cells("WRLD #11 Tee V1")[3].textContent).toContain("$23.00");
+    // The store sale: $45 − $26 = $19 profit, client keeps 90% ($17.10), AX total $11.90.
+    expect(rowOf("Signature Jersey #11 Tee").textContent).toContain("$17.10");
+    expect(rowOf("Signature Jersey #11 Tee").textContent).toContain("$11.90");
+    // The portal still charges the rule until Save.
+    expect(text()).toContain("2 portal prices will update");
   });
 
   it("drag-selects a block, fills it with one value, and Delete puts it back on the preset", async () => {
@@ -125,11 +136,12 @@ describe("pricing sheet", () => {
     expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$7.00");
     expect(cells("WRLD #11 Tee V1")[1].textContent).toContain("$7.00");
     expect(text()).toContain("2 changes not saved");
+    expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$7.00");
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "Delete", bubbles: true }));
     });
-    expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$9.00");
+    expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$4.00");
     expect(text()).not.toContain("not saved");
   });
 
@@ -154,17 +166,26 @@ describe("pricing sheet", () => {
     const arg = saveSheet.mock.calls[0][0];
     expect(arg.changes.map((c: { product: SheetProduct }) => c.product.id).sort()).toEqual(["Signature Jersey #11 Tee", "WRLD #11 Tee V1"]);
     expect(arg.changes.every((c: { draft: { retail: number } }) => c.draft.retail === 50)).toBe(true);
+    // And the client prices the presets produce go to the portal.
+    expect(arg.prices.map((x: { athletePrice: number }) => x.athletePrice).sort()).toEqual([23, 26]);
   });
 
-  it("a preset edit re-costs every row on that blank", async () => {
-    const presetRow = [...host.querySelectorAll("tr")].find((tr) => tr.textContent?.startsWith("DRI EASE OVERSIZED TEE"))!;
-    const back = presetRow.querySelectorAll("input")[2];
+  it("a preset edit re-costs and re-prices every row on that blank", async () => {
+    const card = [...host.querySelectorAll(".ax-card")].find((c) => c.querySelector("h3")?.textContent === "DRI EASE OVERSIZED TEE")!;
+    const backRow = [...card.querySelectorAll("tr")].find((tr) => tr.textContent?.startsWith("Back print"))!;
+    const [backCost, backPrice] = backRow.querySelectorAll("input");
+    const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
     await act(async () => {
-      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-      set.call(back, "6");
-      back.dispatchEvent(new Event("input", { bubbles: true }));
+      set.call(backCost, "3");
+      backCost.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$11.00");
-    expect(cells("WRLD #11 Tee V1")[1].textContent).toContain("$5.00");
+    await act(async () => {
+      set.call(backPrice, "4");
+      backPrice.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(cells("Signature Jersey #11 Tee")[1].textContent).toContain("$5.00");
+    expect(cells("Signature Jersey #11 Tee")[3].textContent).toContain("$27.00");
+    expect(cells("WRLD #11 Tee V1")[1].textContent).toContain("$2.00");
+    expect(cells("WRLD #11 Tee V1")[3].textContent).toContain("$23.00");
   });
 });

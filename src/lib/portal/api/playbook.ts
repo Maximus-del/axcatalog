@@ -142,10 +142,26 @@ export function resaleExample(sample: BulkSample, units: number, breaks: VolumeB
 }
 
 /** What a client earns from store sales at their agreed share. Null until AX sets the share. */
-export function storeShareExample(retail: number | null, sharePercent: number | null, units = 100) {
+/**
+ * What a client earns from store sales. Gross: their share of retail. Profit:
+ * their share of (retail − their own cost per unit), which they can see — it is
+ * their bulk price, not AX's private cost. Null until AX sets the share.
+ */
+export function storeShareExample(
+  retail: number | null,
+  sharePercent: number | null,
+  units = 100,
+  opts: { basis?: "gross" | "profit"; clientCost?: number | null } = {},
+) {
   if (retail == null || sharePercent == null) return null;
+  if (opts.basis === "profit") {
+    if (opts.clientCost == null) return null;
+    const profit = cents(retail - opts.clientCost);
+    const perUnit = cents(Math.max(0, profit) * (sharePercent / 100));
+    return { units, gross: cents(retail * units), profitPerUnit: profit, perUnit, earned: cents(perUnit * units) };
+  }
   const gross = cents(retail * units);
-  return { units, gross, earned: cents(gross * (sharePercent / 100)), perUnit: cents(retail * (sharePercent / 100)) };
+  return { units, gross, profitPerUnit: null as number | null, earned: cents(gross * (sharePercent / 100)), perUnit: cents(retail * (sharePercent / 100)) };
 }
 
 /** What fans save and the client earns when fans spend `fanSpend` with the code. */
