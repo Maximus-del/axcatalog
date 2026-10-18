@@ -19,6 +19,7 @@ import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import DropZone, { DropTrigger } from "@/components/admin-v2/DropZone";
 import ClientAccessCard from "@/components/admin-v2/ClientAccessCard";
 import PortalThemeCard from "@/components/admin-v2/PortalThemeCard";
+import BrandTermsCard from "@/components/admin-v2/BrandTermsCard";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
@@ -222,6 +223,8 @@ export default function V2EntityOverview() {
       <ClientAccessCard entityId={entity.id} entityName={entity.name} />
       {/* What their portal looks like — set here, seen there. */}
       <PortalThemeCard entityId={entity.id} entityName={entity.name} />
+      {/* The split, as the client's Brand HQ one-pagers will state it. */}
+      <BrandTermsCard entityId={entity.id} entityName={entity.name} />
       <Link
         to={`/admin-v2/people/${entity.id}/lineup`}
         className="mb-6 flex items-center gap-3 rounded-2xl border border-[hsl(var(--ax-line))] bg-[hsl(var(--ax-card))] px-4 py-3 transition-colors hover:border-[hsl(var(--ax-accent)/0.5)]"

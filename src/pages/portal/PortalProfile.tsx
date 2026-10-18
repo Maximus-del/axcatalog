@@ -93,7 +93,7 @@ export default function PortalProfile() {
           <div className="h-full bg-accent transition-all" style={{ width: `${tier.progressPct}%` }} />
         </div>
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {tier.current.perks.map((perk) => (
+          {tier.current.perks.length > 0 && tier.current.perks.map((perk) => (
             <span key={perk} className="text-[10px] font-medium rounded-full bg-background/40 border border-border px-2 py-1 text-muted-foreground">
               {perk}
             </span>
@@ -163,7 +163,7 @@ export default function PortalProfile() {
         {creditLoading ? (
           <Skeleton className="h-20 w-full rounded-2xl" />
         ) : transactions.length === 0 ? (
-          <EmptyLine text="Earn $1 for every $10 you spend." />
+          <EmptyLine text="Your monthly AX credit and anything you spend show up here." />
         ) : (
           <div className="rounded-2xl border border-border bg-card divide-y divide-border">
             {transactions.slice(0, 5).map((t) => {

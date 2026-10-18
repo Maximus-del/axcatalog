@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { TrendingUp, Sparkles, Target, Users } from "lucide-react";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
+import { usePortalNavigate } from "@/components/portal/mooney/navigation";
 
 interface Rec {
   icon: typeof TrendingUp;
@@ -73,6 +74,7 @@ const TONE_ICON: Record<Rec["tone"], string> = {
 
 export function RecommendationsCarousel() {
   const navigate = useNavigate();
+  const portalNavigate = usePortalNavigate();
   const railRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
 
@@ -129,7 +131,7 @@ export function RecommendationsCarousel() {
               </div>
               <button
                 type="button"
-                onClick={() => navigate(r.to)}
+                onClick={() => portalNavigate(r.to)}
                 className="pressable mt-auto self-start text-xs font-bold uppercase tracking-[0.16em] text-accent"
               >
                 {r.cta} →

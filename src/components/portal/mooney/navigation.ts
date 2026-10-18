@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Shirt, ShoppingBag, Pencil, Images, ChartNoAxesCombined } from "lucide-react";
 
 // Current registered routes remain authoritative until the router is updated separately.
@@ -23,4 +25,11 @@ export function activePortalPage(pathname: string) {
   if (pathname.startsWith("/portal/drops")) return mooneyNavigation[3];
   if (pathname.startsWith("/portal/profile") || pathname.startsWith("/portal/era")) return mooneyNavigation[4];
   return mooneyNavigation.slice(1).find((item) => pathname.startsWith(item.path)) ?? mooneyNavigation[0];
+}
+
+/** navigate() that keeps View-as scope (?as=) on every portal address. */
+export function usePortalNavigate() {
+  const navigate = useNavigate();
+  const { search } = useLocation();
+  return useCallback((href: string) => navigate(portalLink(href, search)), [navigate, search]);
 }

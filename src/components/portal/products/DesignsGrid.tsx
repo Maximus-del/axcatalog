@@ -11,6 +11,7 @@ import { CLIENT_PREVIEW_BUCKET, shelfState, type PortalDesign } from "@/lib/port
 import { useSignedUrl } from "@/lib/storage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortalData } from "@/components/portal/PortalDataContext";
+import { usePortalNavigate } from "@/components/portal/mooney/navigation";
 
 function DesignThumb({ design }: { design: PortalDesign }) {
   const { url } = useSignedUrl(
@@ -56,6 +57,7 @@ function Panel({
 
 export function DesignsGrid() {
   const navigate = useNavigate();
+  const portalNavigate = usePortalNavigate();
   const { athlete } = usePortalData();
   const { designs } = usePortalDesigns(athlete.id);
   const state = shelfState(designs);
@@ -75,7 +77,7 @@ export function DesignsGrid() {
       <Panel
         icon={<Palette className="h-5 w-5 text-accent" />}
         title="Ready to build your first collection?"
-        action={{ label: "Start a Design →", onClick: () => navigate("/portal/studio") }}
+        action={{ label: "Start a Design →", onClick: () => portalNavigate("/portal/studio") }}
       />
     );
   }
@@ -95,7 +97,7 @@ export function DesignsGrid() {
       {(designs ?? []).map((d) => (
         <button
           key={d.id}
-          onClick={() => navigate({ pathname: "/portal/build/custom", search: `?design=${d.id}` })}
+          onClick={() => portalNavigate(`/portal/build/custom?design=${d.id}`)}
           className="pressable text-left rounded-2xl border border-border bg-card overflow-hidden hover:border-accent/40 transition-colors"
         >
           <div className="aspect-square bg-muted">

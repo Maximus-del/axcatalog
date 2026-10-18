@@ -14,6 +14,8 @@ export interface PortalImage {
    * client → Portal lineup. Independent of the website's image order.
    */
   portalView: "front" | "back" | null;
+  /** The colourway this picture shows (Drive library: metadata.drive_color), title-cased. */
+  color?: string | null;
 }
 
 export interface PortalVariant {
@@ -81,6 +83,32 @@ interface State {
  * back separately so no existing screen starts showing them. Includes primary image
  * (public URL) and the blank's available sizes for inline ordering.
  */
+/** "TOBACCO BROWN" → "Tobacco Brown". */
+const titleCase = (v: string) => v.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** The colourway one picture shows (metadata.drive_color), title-cased. */
+function imageColor(metadata: unknown): string | null {
+  const raw = (metadata as Record<string, unknown> | null | undefined)?.drive_color;
+  return typeof raw === "string" && raw.trim() ? titleCase(raw.trim()) : null;
+}
+
+/** Colourways named on the product's pictures (metadata.drive_color), in picture order. */
+export function colorsFromImages(
+  images: Array<{ sort_order?: number | null; metadata?: Record<string, unknown> | null }>,
+): Array<{ name: string; hex: string | null }> {
+  const seen = new Set<string>();
+  const out: Array<{ name: string; hex: string | null }> = [];
+  for (const img of [...images].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
+    const raw = img.metadata?.drive_color;
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const name = titleCase(raw.trim());
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, hex: null });
+  }
+  return out;
+}
+
 /** metadata.portal_view → "front" | "back" | null. */
 export function portalViewOf(metadata: Record<string, unknown> | null | undefined): "front" | "back" | null {
   const v = metadata?.portal_view;
@@ -268,7 +296,7 @@ export function usePortalProducts(athleteId: string | null): State {
           // An image Shopify no longer has is kept for history, never shown.
           sortedImgs.filter((i) => !(i.metadata as Record<string, unknown> | null)?.shopify_orphaned),
         )
-          .map((i) => {
+          .map((i): PortalImage | null => {
             const url = resolveUrl(i);
             return url
               ? {
@@ -279,6 +307,7 @@ export function usePortalProducts(athleteId: string | null): State {
                   shopifyImageId:
                     (i.metadata && (i.metadata as any).shopify_image_id) ?? null,
                   portalView: portalViewOf(i.metadata),
+                  color: imageColor(i.metadata),
                 }
               : null;
           })
@@ -334,6 +363,12 @@ export function usePortalProducts(athleteId: string | null): State {
             const blankColors = p.blank_id ? (colorsByBlank.get(p.blank_id) ?? []) : [];
             if (blankColors.length) return blankColors;
             const metaColors = Array.isArray(p.metadata?.colors) ? p.metadata.colors : [];
+            if (!metaColors.length) {
+              // Library products (Drive mockups) carry their colourway on each
+              // picture — metadata.drive_color — and have no Shopify variants yet.
+              const fromImages = colorsFromImages(p.images ?? []);
+              if (fromImages.length) return fromImages;
+            }
             return metaColors
               .map((c: any) =>
                 typeof c === "string"

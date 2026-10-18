@@ -11,6 +11,7 @@ import { formatMoney } from "@/lib/portal/api/money";
 import { PortalApiError } from "@/lib/portal/api/contract";
 import { entityVoice } from "@/lib/portal/entity-voice";
 import { usePortalData } from "../PortalDataContext";
+import { BrandPlaybook } from "./BrandPlaybook";
 
 const READ_ONLY = "View-as is read-only. Profile edits are disabled.";
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
@@ -112,7 +113,6 @@ function Journey() {
       : <div className="mw-hq-eras">{d.data!.map((x) => <article key={x.id} className="mw-hq-era" style={{ "--mw-destination-accent": x.accent } as CSSProperties}>
         <div className="mw-hq-era-art">{x.image ? <img src={x.image} alt="" /> : <Package />}</div>
         <strong>{x.label}{x.jerseyNumber !== null ? ` #${x.jerseyNumber}` : ""}</strong>
-        <span>Revenue not attributed</span>
       </article>)}</div>}
   </section>;
 }
@@ -177,6 +177,7 @@ export function BrandHQ() {
         <div className="mw-stat-copy"><span className="mw-stat-label">{st.label}</span>{s.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : <strong className="mw-stat-value">{st.value}</strong>}{st.sub && <span className="mw-studio-meta">{st.sub}</span>}</div>
         {i === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs} title={viewingAs ? "View-as is read-only." : undefined}>Use credit<ArrowRight /></Button>}
       </article>)}</section>
+    <BrandPlaybook />
     <div className="mw-hq-grid"><RevenueChart /><TopProducts /></div>
     <RecentOrders />
     <div className="mw-hq-grid mw-hq-grid-even"><Community /><Journey /></div>
