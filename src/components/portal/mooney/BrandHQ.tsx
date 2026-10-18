@@ -77,6 +77,15 @@ function TopProducts() {
   </section>;
 }
 
+/** Paid off-platform in phase 2: AX invoices, the client pays by Zelle or the invoice. */
+function paymentLabel(o: { paymentStatus?: string | null; amountDue?: { amountMinor: number } | null }): string {
+  if (o.paymentStatus === "paid") return "Paid";
+  if (o.paymentStatus === "waived") return "Covered";
+  if (o.amountDue && o.amountDue.amountMinor <= 1) return "Covered by credit";
+  if (o.paymentStatus === "invoiced") return "Invoice sent";
+  return "Invoice coming";
+}
+
 function RecentOrders() {
   const orders = usePortalOrderHistory();
   const [all, setAll] = useState(false);
@@ -88,8 +97,8 @@ function RecentOrders() {
       : items.length === 0 ? <div className="mw-state"><p>No orders yet.</p></div>
       : <>
         <div className="mw-hq-table" role="table">
-          <div role="row" className="mw-hq-row mw-hq-row-head"><span role="columnheader">Order #</span><span role="columnheader">Date</span><span role="columnheader">Units</span><span role="columnheader">Status</span></div>
-          {shown.map((o) => <div role="row" key={o.id} className="mw-hq-row"><span role="cell"><strong>{o.number}</strong></span><span role="cell">{fmtDate(o.createdAt)}</span><span role="cell">{o.units}</span><span role="cell"><span className="mw-drops-badge" data-status={o.status}>{o.status.replace(/_/g, " ")}</span></span></div>)}
+          <div role="row" className="mw-hq-row mw-hq-row-head mw-hq-row-pay"><span role="columnheader">Order #</span><span role="columnheader">Date</span><span role="columnheader">Units</span><span role="columnheader">Total</span><span role="columnheader">Status</span><span role="columnheader">Payment</span></div>
+          {shown.map((o) => <div role="row" key={o.id} className="mw-hq-row mw-hq-row-pay"><span role="cell"><strong>{o.number}</strong></span><span role="cell">{fmtDate(o.createdAt)}</span><span role="cell">{o.units}</span><span role="cell">{o.total && o.total.amountMinor > 0 ? formatMoney(o.total, { cents: true }) : "—"}</span><span role="cell"><span className="mw-drops-badge" data-status={o.status}>{o.status.replace(/_/g, " ")}</span></span><span role="cell">{paymentLabel(o)}</span></div>)}
         </div>
         {!all && items.length > 5 && <Button variant="outline" className="mw-gear-view-all" onClick={() => setAll(true)}>View all<ArrowRight /></Button>}
       </>}

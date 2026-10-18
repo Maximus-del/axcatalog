@@ -34,7 +34,15 @@ export interface BulkSample {
 }
 
 export interface Playbook {
-  terms: { revenueSharePercent: number | null; payoutSchedule: string | null; note: string | null } | null;
+  terms: {
+    revenueSharePercent: number | null;
+    payoutSchedule: string | null;
+    note: string | null;
+    /** What the share is taken from: the gross sale (default) or profit after cost. */
+    splitBasis: "gross" | "profit";
+    /** How the client pays for orders (Zelle / invoice), shown on order confirmations. */
+    paymentInstructions: string | null;
+  } | null;
   volumeBreaks: VolumeBreak[];
   rushSurcharge: number;
   bulkSamples: BulkSample[];
@@ -61,6 +69,9 @@ export function parsePlaybook(raw: unknown): Playbook {
           revenueSharePercent: num(terms.revenueSharePercent),
           payoutSchedule: typeof terms.payoutSchedule === "string" && terms.payoutSchedule.trim() ? terms.payoutSchedule : null,
           note: typeof terms.note === "string" && terms.note.trim() ? terms.note : null,
+          splitBasis: terms.splitBasis === "profit" ? "profit" : "gross",
+          paymentInstructions:
+            typeof terms.paymentInstructions === "string" && terms.paymentInstructions.trim() ? terms.paymentInstructions : null,
         }
       : null,
     volumeBreaks: ((Array.isArray(r.volumeBreaks) ? r.volumeBreaks : []) as Json[])

@@ -358,6 +358,9 @@ export interface EntityOrder {
   /** Null when the order was raised before the cart started freezing prices. */
   total: number | null;
   createdAt: string;
+  /** unpaid · invoiced · paid · waived (orders are paid off-platform in phase 2). */
+  paymentStatus: string;
+  amountDue: number | null;
 }
 
 export interface EntityOrderHistory {
@@ -389,7 +392,7 @@ export function useEntityOrders(entityId: string | undefined, limit = 6) {
     staleTime: 30_000,
     queryFn: async (): Promise<EntityOrderHistory> => {
       const res = await t("bulk_order_requests")
-        .select("id, order_number, status, total_units, wholesale_subtotal, created_at")
+        .select("id, order_number, status, total_units, wholesale_subtotal, created_at, payment_status, amount_due")
         .eq("athlete_id", entityId as string)
         .neq("status", "draft")
         .order("created_at", { ascending: false })
@@ -406,6 +409,8 @@ export function useEntityOrders(entityId: string | undefined, limit = 6) {
         // showing that as $0.00 would be a confident wrong number.
         total: Number(r.wholesale_subtotal ?? 0) > 0 ? Number(r.wholesale_subtotal) : null,
         createdAt: String(r.created_at ?? ""),
+        paymentStatus: String(r.payment_status ?? "unpaid"),
+        amountDue: r.amount_due == null ? null : Number(r.amount_due),
       }));
 
       const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();

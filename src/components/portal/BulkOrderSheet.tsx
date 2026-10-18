@@ -17,6 +17,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { useOrderDraft } from "./OrderDraftContext";
 import { effectiveTiers, pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
+import { sheetUnitPrice } from "@/lib/portal/api/products";
 import { submitPortalOrder, type PortalOrderItem } from "@/lib/portal-commerce";
 import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { ProductImageLightbox } from "./ProductImageLightbox";
@@ -27,6 +28,7 @@ import {
   useSizeDistributionCurve,
 } from "@/hooks/useSizeDistributionCurve";
 import { MilestoneSlider } from "./MilestoneSlider";
+import { announceOrder } from "./OrderReceipt";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 /** Full apparel size ladder used to order real Shopify variant sizes. */
@@ -80,25 +82,10 @@ function productPricing(p: PortalProduct): {
   athleteUnit: number | null;
   wholesaleUnit: number | null;
 } {
-  const hay = `${p.product_type || ""} ${p.title || ""}`.toLowerCase();
-  const isHoodie = hay.includes("hood");
-  const isTee =
-    hay.includes("tee") ||
-    hay.includes("tshirt") ||
-    hay.includes("t-shirt") ||
-    hay.includes("shirt");
-  if (isHoodie) {
-    return { athleteUnit: 35, wholesaleUnit: 48 };
-  }
-  if (isTee) {
-    return { athleteUnit: 18, wholesaleUnit: 25 };
-  }
-  // Fallback to DB-driven values when type isn't a known category.
-  // Default to t-shirt pricing if nothing is configured, so the
-  // analytics panel never goes blank.
-  const athlete = p.athlete_unit_price ?? 18;
-  const wholesale = p.wholesale_price ?? p.price ?? 25;
-  return { athleteUnit: athlete, wholesaleUnit: wholesale };
+  // One rule for the whole portal (and the server): sheetUnitPrice, which
+  // honours the price AX sets in the V2 pricing sheet.
+  const { athleteUnit, compareUnit } = sheetUnitPrice(p);
+  return { athleteUnit, wholesaleUnit: compareUnit };
 }
 
 function ProductAnalytics({
@@ -476,11 +463,14 @@ export function BulkOrderSheet({
       }
       if ((res.creditApplied ?? creditToApply) > 0) await refetchWallet();
 
-      toast.success(
-        res.replayed
-          ? `Order ${res.orderNumber ?? ""} was already submitted`
-          : `Order ${res.orderNumber ?? ""} submitted — we'll be in touch`,
-      );
+      announceOrder({
+        orderNumber: res.orderNumber ?? null,
+        units: totalUnits,
+        subtotal: res.subtotal ?? orderSubtotal,
+        creditApplied: res.creditApplied ?? 0,
+        amountDue: res.amountDue ?? null,
+        replayed: res.replayed,
+      });
       clear();
       setCreditInput("");
       setOrderKey(newIdempotencyKey());

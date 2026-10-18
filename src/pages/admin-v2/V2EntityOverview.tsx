@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowRight,
@@ -23,6 +24,7 @@ import BrandTermsCard from "@/components/admin-v2/BrandTermsCard";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
 import { useCart, useEntityOrders, type EntityOrder } from "@/lib/v2/cart-data";
+import { PAYMENT_LABEL, fetchInvoice, invoiceEmail, mailtoHref, useSetPaymentStatus, type PaymentStatus } from "@/lib/v2/invoices";
 import { useAuth } from "@/auth/AuthProvider";
 import { entityCartHref, entityLibraryHref, entityPortalHref, type EntitySection } from "@/lib/v2/entity-nav";
 import {
@@ -764,7 +766,7 @@ function RecentOrders({
         </p>
       ) : (
         <div className="-mx-1 overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse text-[12px]">
+          <table className="w-full min-w-[760px] border-collapse text-[12px]">
             <thead>
               <tr className="text-left text-[11px] text-[hsl(var(--ax-faint))]">
                 <th className="px-1 pb-2 font-medium">Order #</th>
@@ -772,12 +774,13 @@ function RecentOrders({
                 <th className="px-1 pb-2 font-medium">Items</th>
                 <th className="px-1 pb-2 font-medium">Total</th>
                 <th className="px-1 pb-2 font-medium">Date</th>
+                <th className="px-1 pb-2 font-medium">Payment</th>
                 <th className="w-6" />
               </tr>
             </thead>
             <tbody>
               {orders.map((o) => (
-                <OrderRowCells key={o.id} order={o} />
+                <OrderRowCells key={o.id} order={o} entityId={entityId} entityName={entityName} />
               ))}
             </tbody>
           </table>
@@ -787,7 +790,62 @@ function RecentOrders({
   );
 }
 
-function OrderRowCells({ order }: { order: EntityOrder }) {
+/**
+ * Phase 2: paid off-platform. Draft the invoice in AX's mail app from the real
+ * order lines, then record where payment stands. The client sees the same
+ * status in Brand HQ.
+ */
+function PaymentCell({ order, entityId, entityName }: { order: EntityOrder; entityId: string; entityName: string }) {
+  const setStatus = useSetPaymentStatus(entityId);
+  const [busy, setBusy] = useState(false);
+  const status = (order.paymentStatus in PAYMENT_LABEL ? order.paymentStatus : "unpaid") as PaymentStatus;
+  const covered = order.amountDue != null && order.amountDue <= 0.01;
+  const mark = (next: PaymentStatus) =>
+    setStatus.mutate({ orderId: order.id, status: next }, {
+      onSuccess: () => toast.success(`#${order.orderNumber ?? ""} · ${PAYMENT_LABEL[next]}`),
+      onError: (e) => toast.error(e.message),
+    });
+  async function emailInvoice() {
+    setBusy(true);
+    try {
+      const { to, input } = await fetchInvoice(order.id, entityId, entityName);
+      window.location.href = mailtoHref(to, invoiceEmail(input));
+      if (status === "unpaid") mark("invoiced");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't build the invoice.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  const tone = status === "paid" || status === "waived" || covered ? "--ax-accent" : status === "invoiced" ? "--ax-amber" : "--ax-faint";
+  const pill = "rounded-full border border-[hsl(var(--ax-border))] px-2 py-0.5 text-[10.5px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))] disabled:opacity-50";
+  return (
+    <td className="px-1 py-2.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] font-medium" style={{ color: `hsl(var(${tone}))` }}>
+          {covered && status === "unpaid" ? "Covered by credit" : PAYMENT_LABEL[status]}
+        </span>
+        {!covered && status !== "paid" && status !== "waived" && (
+          <button type="button" className={pill} onClick={() => void emailInvoice()} disabled={busy}>
+            {status === "invoiced" ? "Resend" : "Email invoice"}
+          </button>
+        )}
+        {status !== "paid" && !covered && (
+          <button type="button" className={pill} onClick={() => mark("paid")} disabled={setStatus.isPending}>
+            Mark paid
+          </button>
+        )}
+        {status === "paid" && (
+          <button type="button" className={pill} onClick={() => mark("unpaid")} disabled={setStatus.isPending} title="Undo">
+            Undo
+          </button>
+        )}
+      </div>
+    </td>
+  );
+}
+
+function OrderRowCells({ order, entityId, entityName }: { order: EntityOrder; entityId: string; entityName: string }) {
   const label = STATUS_LABEL[order.status as BulkOrderStatus] ?? order.status;
   const tone = orderTone(order.status);
 
@@ -823,6 +881,7 @@ function OrderRowCells({ order }: { order: EntityOrder }) {
       <td className="px-1 py-2.5 text-[hsl(var(--ax-faint))]">
         {order.createdAt ? new Date(order.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—"}
       </td>
+      <PaymentCell order={order} entityId={entityId} entityName={entityName} />
       <td className="px-1 py-2.5 text-right">
         <ChevronRight className="ml-auto h-3.5 w-3.5 text-[hsl(var(--ax-faint))]" />
       </td>

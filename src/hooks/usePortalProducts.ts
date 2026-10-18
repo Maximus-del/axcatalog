@@ -55,6 +55,11 @@ export interface PortalProduct {
    * null when the linked blank has no tier price set yet.
    */
   athlete_unit_price: number | null;
+  /**
+   * The client's bulk price as AX set it in the V2 pricing sheet
+   * (products.athlete_price). Wins over every rule; null = not set.
+   */
+  athlete_price?: number | null;
   /** Real Shopify variants when available (non-orphaned). Empty array for manual/non-Shopify products. */
   variants: PortalVariant[];
   /** Available sizes: derived from variants when present, else from linked blank. */
@@ -146,7 +151,7 @@ export function usePortalProducts(athleteId: string | null): State {
         .from("product_athletes")
         .select(
           `product:products!inner(
-             id, title, slug, status, product_type, shopify_handle, blank_id, price, wholesale_price, metadata, created_at,
+             id, title, slug, status, product_type, shopify_handle, blank_id, price, wholesale_price, athlete_price, metadata, created_at,
              images:product_images(id, storage_bucket, storage_path, is_primary, sort_order, metadata)
            )`,
         )
@@ -173,6 +178,7 @@ export function usePortalProducts(athleteId: string | null): State {
         blank_id: string | null;
         price: number | null;
         wholesale_price: number | null;
+        athlete_price?: number | null;
         metadata: Record<string, any> | null;
         created_at: string;
         images: Array<{
@@ -351,6 +357,7 @@ export function usePortalProducts(athleteId: string | null): State {
           price: p.price != null ? Number(p.price) : null,
           wholesale_price: p.wholesale_price != null ? Number(p.wholesale_price) : null,
           athlete_unit_price: null as number | null,
+          athlete_price: p.athlete_price != null ? Number(p.athlete_price) : null,
           variants,
           sizes:
             derivedSizes && derivedSizes.length

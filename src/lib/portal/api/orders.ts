@@ -211,7 +211,7 @@ export async function fetchOrders(scope: PortalScope, cursor: string | null = nu
   const size = Math.min(Math.max(limit, 1), 100);
   let q = supabase
     .from("bulk_order_requests")
-    .select("id, order_number, created_at, total_units, status, wholesale_subtotal")
+    .select("id, order_number, created_at, total_units, status, wholesale_subtotal, amount_due, payment_status")
     .eq("athlete_id", scope.athleteId)
     .neq("status", "draft")
     .order("created_at", { ascending: false })
@@ -219,7 +219,7 @@ export async function fetchOrders(scope: PortalScope, cursor: string | null = nu
   if (cursor) q = q.lt("created_at", cursor);
   const { data, error } = await q;
   if (error) throw toApiError(error);
-  const rows = (data ?? []) as Json[];
+  const rows = (data ?? []) as unknown as Json[];
   const items = rows.slice(0, size).map((r) => ({
     id: String(r.id),
     number: String(r.order_number ?? ""),
@@ -229,6 +229,8 @@ export async function fetchOrders(scope: PortalScope, cursor: string | null = nu
     total: money(r.wholesale_subtotal, "USD"),
     // Order requests are not tied to a collection today.
     destinationId: null,
+    amountDue: money(r.amount_due, "USD"),
+    paymentStatus: typeof r.payment_status === "string" ? r.payment_status : null,
   }));
   return { items, nextCursor: rows.length > size ? String(rows[size - 1].created_at) : null };
 }

@@ -29,6 +29,7 @@ import type { OrderLineInput } from "@/lib/portal/api/orders";
 import { PortalApiError } from "@/lib/portal/api/contract";
 import { distributeByCurve, useSizeDistributionCurve } from "@/hooks/useSizeDistributionCurve";
 import { MilestoneSlider } from "./MilestoneSlider";
+import { announceOrder } from "./OrderReceipt";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 
@@ -49,6 +50,8 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const [orderKey, setOrderKey] = useState(() => newIdempotencyKey());
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [useCredit, setUseCredit] = useState(false);
+  // Two steps: build the order, then confirm it before it is placed.
+  const [reviewing, setReviewing] = useState(false);
   const { user } = useAuth();
   const { athlete, isImpersonating } = useCurrentAthlete();
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
@@ -266,13 +269,15 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
         toast.error(res.error ?? "Submit failed");
         return;
       }
-      const total = res.subtotal != null ? ` · $${res.subtotal.toFixed(2)}` : "";
-      const paid = res.creditApplied ? ` ($${res.creditApplied.toFixed(2)} paid with AX credit)` : "";
-      toast.success(
-        res.replayed
-          ? `Order ${res.orderNumber ?? ""} was already submitted`
-          : `Order ${res.orderNumber ?? ""} submitted${total}${paid} — we'll be in touch`,
-      );
+      announceOrder({
+        orderNumber: res.orderNumber ?? null,
+        units: totalUnits,
+        subtotal: res.subtotal ?? subtotal,
+        creditApplied: res.creditApplied ?? 0,
+        amountDue: res.amountDue ?? amountDue,
+        replayed: res.replayed,
+      });
+      setReviewing(false);
       setOrderKey(newIdempotencyKey());
       setQtys({});
       setAutoTotal(0);
@@ -602,14 +607,34 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
               <div className="text-[11px] text-destructive mt-1" role="alert">{quoteError}</div>
             )}
           </div>
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || totalUnits === 0 || !!quoteError}
-            className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
-          >
-            {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Submit Order
-          </Button>
+          {reviewing ? (
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => setReviewing(false)} disabled={submitting}>
+                  Back
+                </Button>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={submitting || totalUnits === 0 || !!quoteError}
+                  className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
+                >
+                  {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Confirm order
+                </Button>
+              </div>
+              <span className="text-[11px] text-muted-foreground text-right max-w-[220px]">
+                No payment now — AX emails you an invoice (Zelle or invoice).
+              </span>
+            </div>
+          ) : (
+            <Button
+              onClick={() => setReviewing(true)}
+              disabled={totalUnits === 0 || !!quoteError || subtotal == null}
+              className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
+            >
+              Review order
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

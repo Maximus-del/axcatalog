@@ -109,6 +109,10 @@ export interface Order {
   status: string;
   total: Money | null;
   destinationId: DestinationId | null;
+  /** What is still owed after AX credit. */
+  amountDue?: Money | null;
+  /** unpaid · invoiced · paid · waived — set by AX (orders are paid off-platform in phase 2). */
+  paymentStatus?: string | null;
 }
 
 export type RevenueBasis = "gross" | "net" | "athlete_share";

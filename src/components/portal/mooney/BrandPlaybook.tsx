@@ -52,7 +52,9 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
 function MoneyPage({ pb }: { pb: Playbook }) {
   const tee = pb.bulkSamples.find((s) => s.kind === "tee") ?? pb.bulkSamples[0];
   const share = pb.terms?.revenueSharePercent ?? null;
-  const store = storeShareExample(tee?.retail ?? null, share);
+  const onProfit = pb.terms?.splitBasis === "profit";
+  // A gross share can be shown as dollars; a profit share depends on AX's costs, which stay private.
+  const store = onProfit ? null : storeShareExample(tee?.retail ?? null, share);
   const resale = tee ? resaleExample(tee, 50, pb.volumeBreaks) : null;
   const code = codeExample(pb.code);
   return <>
@@ -60,7 +62,7 @@ function MoneyPage({ pb }: { pb: Playbook }) {
     <Block title="1 · Fans buy on the store">
       {tee && <Row label={tee.title} value={`${usd(tee.retail)} to the fan`} />}
       {share != null ? <>
-        <Row label="Your share of every store sale" value={`${share}%`} strong />
+        <Row label={onProfit ? "Your share of the profit on every store sale" : "Your share of every store sale"} value={`${share}%`} strong />
         {store && <Row label={`${store.units} sales at ${usd(tee?.retail)}`} value={`${usd(store.earned)} to you`} />}
       </> : <Note>Your store revenue share is set in your AX agreement. Ask the AX team and they'll add it here.</Note>}
       {pb.terms?.payoutSchedule && <Row label="Paid out" value={pb.terms.payoutSchedule} />}
@@ -81,7 +83,7 @@ function MoneyPage({ pb }: { pb: Playbook }) {
         {pb.code.fanDiscountPercent != null && <Row label="Fans save" value={`${pb.code.fanDiscountPercent}%`} />}
         <Row label="You earn on those sales" value={`${pb.code.commissionPercent}%`} strong />
         <Row label={`${usd(code.fanSpend)} spent with your code`} value={`${usd(code.earned)} to you`} />
-      </> : <Note>Your personal code is being set up by AX. When it's live it shows here with what fans save and what you earn.</Note>}
+      </> : <Note>Coming soon: a personal code that gives your fans a discount and pays you on every sale they make with it.</Note>}
     </Block>
     {pb.credit && <Block title="+ AX credit">
       <Row label="Every month" value={`+${usd(pb.credit.monthly)}`} />
@@ -119,8 +121,8 @@ function CodePage({ pb }: { pb: Playbook }) {
     try { await navigator.clipboard.writeText(pb.code.code); toast.success("Code copied."); } catch { toast.error("Couldn't copy."); }
   };
   if (!pb.code) return <>
-    <p className="mw-pb-lede">A personal code gives your fans a discount and pays you on every sale they make with it.</p>
-    <Note>AX is setting up your code. It will show here, ready to copy, as soon as it's live.</Note>
+    <p className="mw-pb-lede">Coming soon: a personal code that gives your fans a discount and pays you on every sale they make with it.</p>
+    <Note>When it launches, your code shows here ready to copy, with what fans save and what you earn.</Note>
   </>;
   return <>
     <div className="mw-pb-code"><code>{pb.code.code}</code><Button variant="outline" className="mw-pill" onClick={copy}><Copy />Copy</Button></div>
@@ -201,7 +203,7 @@ export function BrandPlaybook() {
     const list: Guide[] = [
       { key: "money", title: "How your money works", icon: BadgeDollarSign, hook: d?.terms?.revenueSharePercent != null ? `${d.terms.revenueSharePercent}% of every store sale is yours` : "Store sales, bulk resale, your code and credit" },
       { key: "bulk", title: "Stock up smart", icon: Boxes, hook: tee ? `Tees from ${usd(bulkCost(tee, 250, d!.volumeBreaks).perUnit, { cents: true })} each in bulk` : "Volume discounts from 50 pieces" },
-      { key: "code", title: "Your code", icon: Ticket, hook: d?.code ? (d.code.live ? `${d.code.code} · fans save ${d.code.fanDiscountPercent ?? 0}%` : `${d.code.code} · being set up`) : "Being set up by AX" },
+      { key: "code", title: "Your code", icon: Ticket, hook: d?.code?.live ? `${d.code.code} · fans save ${d.code.fanDiscountPercent ?? 0}%` : "Coming soon" },
       { key: "promote", title: "Promote a drop", icon: Megaphone, hook: "Five steps, about ten minutes" },
     ];
     if (voice.showsAthleteTier) list.splice(1, 0, { key: "level", title: "Level up", icon: TrendingUp, hook: lifetime != null ? levelLadder(lifetime).progress?.label ?? "Your level" : "Your level" });

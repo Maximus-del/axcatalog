@@ -39,7 +39,7 @@ describe("parsePlaybook", () => {
 
   it("keeps an unset share null instead of zero", () => {
     const p = parsePlaybook({ ...LIVE, terms: { revenueSharePercent: null, payoutSchedule: "", note: null } });
-    expect(p.terms).toEqual({ revenueSharePercent: null, payoutSchedule: null, note: null });
+    expect(p.terms).toEqual({ revenueSharePercent: null, payoutSchedule: null, note: null, splitBasis: "gross", paymentInstructions: null });
   });
 
   it("survives an empty payload", () => {

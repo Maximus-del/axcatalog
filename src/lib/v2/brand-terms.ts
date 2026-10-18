@@ -14,9 +14,15 @@ export interface BrandTerms {
   payoutSchedule: string;
   /** Anything else the client should read on "How your money works". */
   note: string;
+  /** What the share is taken from: the gross sale, or the profit after cost. */
+  splitBasis: SplitBasis;
+  /** Shown on every order confirmation, e.g. "Zelle payments@… or pay the emailed invoice". */
+  paymentInstructions: string;
 }
 
-export const EMPTY_TERMS: BrandTerms = { revenueSharePercent: null, payoutSchedule: "", note: "" };
+export type SplitBasis = "gross" | "profit";
+
+export const EMPTY_TERMS: BrandTerms = { revenueSharePercent: null, payoutSchedule: "", note: "", splitBasis: "gross", paymentInstructions: "" };
 
 /** Pure: metadata.brand_terms → BrandTerms. */
 export function parseBrandTerms(raw: unknown): BrandTerms {
@@ -27,6 +33,8 @@ export function parseBrandTerms(raw: unknown): BrandTerms {
     revenueSharePercent: n != null && Number.isFinite(n) ? n : null,
     payoutSchedule: typeof r.payout_schedule === "string" ? r.payout_schedule : "",
     note: typeof r.note === "string" ? r.note : "",
+    splitBasis: r.split_basis === "profit" ? "profit" : "gross",
+    paymentInstructions: typeof r.payment_instructions === "string" ? r.payment_instructions : "",
   };
 }
 
@@ -35,13 +43,16 @@ export function brandTermsError(terms: BrandTerms): string | null {
   const p = terms.revenueSharePercent;
   if (p != null && (!Number.isFinite(p) || p < 0 || p > 100)) return "Revenue share must be between 0 and 100%.";
   if (terms.note.length > 600) return "Keep the note under 600 characters.";
+  if (terms.paymentInstructions.length > 300) return "Keep payment instructions under 300 characters.";
   return null;
 }
 
 /** Pure: merge into metadata, removing the key entirely when every field is empty. */
 export function mergeBrandTerms(metadata: unknown, terms: BrandTerms): Record<string, unknown> {
   const base = { ...((metadata && typeof metadata === "object" ? metadata : {}) as Record<string, unknown>) };
-  const empty = terms.revenueSharePercent == null && !terms.payoutSchedule.trim() && !terms.note.trim();
+  const empty =
+    terms.revenueSharePercent == null && !terms.payoutSchedule.trim() && !terms.note.trim() &&
+    !terms.paymentInstructions.trim() && terms.splitBasis === "gross";
   if (empty) {
     delete base.brand_terms;
     return base;
@@ -50,6 +61,8 @@ export function mergeBrandTerms(metadata: unknown, terms: BrandTerms): Record<st
     revenue_share_percent: terms.revenueSharePercent,
     payout_schedule: terms.payoutSchedule.trim() || null,
     note: terms.note.trim() || null,
+    split_basis: terms.splitBasis,
+    payment_instructions: terms.paymentInstructions.trim() || null,
   };
   return base;
 }

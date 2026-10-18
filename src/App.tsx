@@ -100,6 +100,7 @@ const V2Cart = lazy(() => import("./pages/admin-v2/V2Cart"));
 const V2ProductDetail = lazy(() => import("./pages/admin-v2/V2ProductDetail"));
 const V2Desk = lazy(() => import("./pages/admin-v2/V2Desk"));
 const V2Lineup = lazy(() => import("./pages/admin-v2/V2Lineup"));
+const V2PricingSheet = lazy(() => import("./pages/admin-v2/V2PricingSheet"));
 
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
@@ -249,6 +250,8 @@ const App = () => (
                 <Route path="people/:id/cart" element={<V2Cart />} />
                 {/* What the client sees in My Gear: collections and Front / Back pictures. */}
                 <Route path="people/:id/lineup" element={<V2Lineup />} />
+                {/* Cost, retail, bulk price and the split for every product of this client. */}
+                <Route path="people/:id/pricing" element={<V2PricingSheet />} />
                 <Route path="creative" element={<V2Creative />} />
                 <Route path="commerce" element={<V2Commerce />} />
                 <Route path="commerce/blanks" element={<V2Commerce />} />

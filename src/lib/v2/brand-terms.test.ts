@@ -7,15 +7,17 @@ describe("brand terms", () => {
       revenueSharePercent: 20,
       payoutSchedule: "Monthly",
       note: "",
+      splitBasis: "gross",
+      paymentInstructions: "",
     });
     expect(parseBrandTerms(undefined)).toEqual(EMPTY_TERMS);
   });
 
   it("keeps every other metadata key and removes the block when emptied", () => {
     const meta = { portal_theme: { layout: "world" }, brand_terms: { revenue_share_percent: 20 } };
-    expect(mergeBrandTerms(meta, { revenueSharePercent: 25, payoutSchedule: " Monthly ", note: "" })).toEqual({
+    expect(mergeBrandTerms(meta, { ...EMPTY_TERMS, revenueSharePercent: 25, payoutSchedule: " Monthly ", splitBasis: "profit" })).toEqual({
       portal_theme: { layout: "world" },
-      brand_terms: { revenue_share_percent: 25, payout_schedule: "Monthly", note: null },
+      brand_terms: { revenue_share_percent: 25, payout_schedule: "Monthly", note: null, split_basis: "profit", payment_instructions: null },
     });
     expect(mergeBrandTerms(meta, EMPTY_TERMS)).toEqual({ portal_theme: { layout: "world" } });
   });

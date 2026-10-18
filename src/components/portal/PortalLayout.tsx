@@ -22,6 +22,7 @@ import { PortalBottomNav } from "./PortalBottomNav";
 import { PortalDesktopNav } from "./PortalDesktopNav";
 import { PortalLayoutKindProvider, useResolvedLayout } from "./PortalLayoutKind";
 import { entityVoice } from "@/lib/portal/entity-voice";
+import { OrderReceiptHost } from "./OrderReceipt";
 
 function BulkOrderSheetBridge({
   open,
@@ -158,6 +159,8 @@ export default function PortalLayout() {
           <BulkOrderSheetBridge open={orderSheetOpen} onOpenChange={setOrderSheetOpen} world={layout === "world"} />
           <OrderDraftBarBridge onOpen={() => setOrderSheetOpen(true)} />
           <ImpersonationGuardModal open={guardOpen} onOpenChange={setGuardOpen} />
+          {/* Every order flow ends here: number, amount due, how to pay. */}
+          <OrderReceiptHost />
 
         </div>
       </PortalDataProvider>
