@@ -1,4 +1,5 @@
 import { Eye, EyeOff, Loader2, Lock } from "lucide-react";
+import { toneText } from "@/components/admin-v2/primitives";
 import {
   PREVIEW_READINESS_LABEL,
   previewReadiness,
@@ -76,7 +77,7 @@ export function VisibilityPill({
       title={title}
       aria-label={title}
       className="inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium transition-colors hover:brightness-125 disabled:opacity-70"
-      style={{ background: `hsl(${tone} / 0.14)`, color: `hsl(${tone})` }}
+      style={{ background: `hsl(${tone} / 0.14)`, color: toneText(tone) }}
     >
       <Icon className={`h-2.5 w-2.5 shrink-0 ${busy ? "animate-spin" : ""}`} aria-hidden />
       <span className="truncate">{label}</span>

@@ -10,6 +10,7 @@ import {
   Palette,
   Plus,
   Eye,
+  Pencil,
   Receipt,
   ShoppingBag,
   ShoppingCart,
@@ -41,7 +42,7 @@ import { mockupCover } from "@/lib/v2/mockup-image";
 import { STATUS_LABEL, type BulkOrderStatus } from "@/lib/order-status";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { roleLabel, typeLabel } from "@/lib/v2/entity";
-import { AssetImage, Chip, ErrorState, Skeleton, V1Link } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, ErrorState, Skeleton, V1Link, toneText } from "@/components/admin-v2/primitives";
 import type { Collection, Design, Entity, Mockup, Product } from "@/lib/v2/types";
 
 // THE ATHLETE OVERVIEW.
@@ -205,7 +206,7 @@ export default function V2EntityOverview() {
           >
             <span
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-              style={{ background: `hsl(var(${t.tone}) / 0.14)`, color: `hsl(var(${t.tone}))` }}
+              style={{ background: `hsl(var(${t.tone}) / 0.14)`, color: toneText(`var(${t.tone})`) }}
               aria-hidden
             >
               <StatIcon name={t.key} />
@@ -447,8 +448,8 @@ function AthleteHeader({
   const isAthlete = entity.roles.includes("athlete");
 
   return (
-    <div className="ax-card mb-6 p-4 sm:p-5">
-      <div className="flex flex-wrap items-start gap-4">
+    <div className="ax-card mb-6 overflow-hidden p-0" style={{ borderTop: "3px solid hsl(var(--sec, var(--ax-sec-clients)))" }}>
+      <div className="flex flex-wrap items-start gap-4 p-4 sm:p-5">
         <AssetImage
           url={entity.avatarUrl}
           alt={entity.name}
@@ -541,28 +542,18 @@ function AthleteHeader({
           </Link>
 
           {/*
-            What the client sees, from the client's side.
-
-            Everything else on this page is the operator's view of them. This is
-            the only control that answers "is it actually any good yet", which is
-            the question you ask right before sending somebody their login. V1
-            has had this since the portal shipped; V2 had no way in at all.
-
-            New tab on purpose — the portal replaces the whole shell, and an
-            operator who loses their place in V2 for a two-second look stops
-            taking the look.
+            Editing the client's record is an ADMIN action on AX's side and
+            lives in V1's person editor. It is a different thing from looking
+            at their portal, so it is a different, plainer button.
           */}
-          <a
-            href={entityPortalHref(entity.id)}
-            target="_blank"
-            rel="noreferrer"
-            title={`Open ${entity.name}'s portal exactly as they see it`}
+          <V1Link
+            to={`/admin/athletes/${entity.id}`}
+            title="Edit name, roles and organisation in the V1 person editor"
             className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[13px] font-medium text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
           >
-            <Eye className="h-3.5 w-3.5" />
-            View as {shortLabel(entity.name, entity.entityType)}
-            <ArrowUpRight className="h-3 w-3 opacity-60" />
-          </a>
+            <Pencil className="h-3.5 w-3.5" />
+            Edit client
+          </V1Link>
 
           <div className="relative">
             <button
@@ -593,6 +584,34 @@ function AthleteHeader({
             )}
           </div>
         </div>
+      </div>
+
+      {/*
+        VIEW PORTAL — the client's own portal, exactly as they see it.
+
+        Same address and the same checks as always: /portal?as=<id> opens in a
+        new tab, RequirePortal admits an admin, useCurrentAthlete honours `as`
+        for admins only, and the database's portal_scope_athlete() decides what
+        is readable. Portal writes refuse operators ("View as is read-only"), so
+        this is a look, never an impersonated edit. It is the one control on
+        the page that shows the client's side, so it gets its own row.
+      */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-[hsl(var(--ax-line))] bg-[hsl(182_60%_96%)] px-4 py-3 sm:px-5">
+        <a
+          href={entityPortalHref(entity.id)}
+          target="_blank"
+          rel="noreferrer"
+          title={`Open ${entity.name}'s portal exactly as they see it`}
+          className="flex items-center gap-2 rounded-full bg-[hsl(var(--ax-sec-clients,182_88%_27%))] px-5 py-2.5 text-[14px] font-bold text-white shadow-sm transition-[filter] hover:brightness-110"
+        >
+          <Eye className="h-4 w-4" />
+          View Portal
+          <ArrowUpRight className="h-4 w-4" />
+        </a>
+        <p className="min-w-0 flex-1 text-[12px] text-[hsl(var(--ax-secondary))]">
+          Opens {shortLabel(entity.name, entity.entityType)}’s portal in a new tab, <b className="font-semibold">read-only</b>{" "}
+          — you see what they see and cannot change anything as them. Logins are managed in Client access below.
+        </p>
       </div>
     </div>
   );
@@ -822,7 +841,7 @@ function PaymentCell({ order, entityId, entityName }: { order: EntityOrder; enti
   return (
     <td className="px-1 py-2.5">
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] font-medium" style={{ color: `hsl(var(${tone}))` }}>
+        <span className="text-[11px] font-medium" style={{ color: toneText(`var(${tone})`) }}>
           {covered && status === "unpaid" ? "Covered by credit" : PAYMENT_LABEL[status]}
         </span>
         {!covered && status !== "paid" && status !== "waived" && (
@@ -860,7 +879,7 @@ function OrderRowCells({ order, entityId, entityName }: { order: EntityOrder; en
         <span
           className="inline-flex rounded-full border px-2 py-0.5 text-[10.5px] font-medium"
           style={{
-            color: `hsl(var(${tone}))`,
+            color: toneText(`var(${tone})`),
             borderColor: `hsl(var(${tone}) / 0.35)`,
             background: `hsl(var(${tone}) / 0.12)`,
           }}

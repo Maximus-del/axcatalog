@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { toneText } from "@/components/admin-v2/primitives";
 
 // The AX creative pipeline, rendered as navigation.
 //
@@ -49,7 +50,7 @@ export default function WorkflowNav({
                 <span className="flex items-baseline gap-1.5">
                   <span
                     className="text-[19px] font-semibold leading-none tabular-nums"
-                    style={tone ? { color: `hsl(${tone})` } : undefined}
+                    style={tone ? { color: toneText(tone) } : undefined}
                   >
                     {s.count}
                   </span>
@@ -58,7 +59,7 @@ export default function WorkflowNav({
                       className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
                       style={{
                         background: `hsl(${s.flagTone ?? "var(--ax-amber)"} / 0.16)`,
-                        color: `hsl(${s.flagTone ?? "var(--ax-amber)"})`,
+                        color: toneText(s.flagTone ?? "var(--ax-amber)"),
                       }}
                     >
                       {s.flag}

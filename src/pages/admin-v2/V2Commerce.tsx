@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Link, useLocation, useSearchParams } from "react-router-dom";
-import { Camera, DollarSign, Package, Search, ShoppingBag } from "lucide-react";
+import { ArrowRight, Camera, DollarSign, Package, Search, ShoppingBag } from "lucide-react";
 import { useBlanks, useCollections, useConcepts, useProducts } from "@/lib/v2/data";
 import { productHref } from "@/lib/v2/entity-nav";
 import { AUDIENCES, fmtMoney, hasAccess, priceFor } from "@/lib/v2/pricing";
@@ -59,7 +59,19 @@ export default function V2Commerce() {
 
   return (
     <>
-      <PageHeader title="Commerce" subtitle="What AX sells, what it is built on, and how it is grouped." />
+      <PageHeader
+        eyebrow="Business"
+        title="Commerce"
+        subtitle="What AX sells, what it is built on, and how it is grouped. Shopify stays the inventory and fulfilment master."
+        actions={
+          <Link
+            to="/admin-v2/orders"
+            className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-4 py-2 text-[12px] font-semibold text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+          >
+            Orders <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        }
+      />
 
       <TabBar tabs={TABS} active={tab} onSelect={goTab} label={(t) => TAB_LABEL[t]} />
 
@@ -620,7 +632,7 @@ function ProductCard({ product }: { product: Product }) {
 
 /* ------------------------------------------------------------ collections */
 
-function CollectionGrid() {
+export function CollectionGrid() {
   const { data, isLoading, isError, error, refetch } = useCollections();
   const [params, setParams] = useSearchParams();
   const search = params.get("q") ?? "";

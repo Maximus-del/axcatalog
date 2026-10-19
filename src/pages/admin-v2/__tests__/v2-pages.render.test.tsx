@@ -326,6 +326,74 @@ vi.mock("@/lib/v2/data", () => ({
   },
 }));
 
+
+/* AX Studio OS — tasks and the Desk (client projects, requests, drops). */
+const task = {
+  id: "t1",
+  title: "Send Mooney the Giants hoodie proofs",
+  description: null,
+  status: "todo",
+  priority: 1,
+  due_date: "2026-10-19",
+  assigned_to: null,
+  completed_at: null,
+  created_at: "2026-10-01T00:00:00Z",
+  created_by: null,
+  organization_id: "o1",
+  tags: ["Mooney"],
+  updated_at: "2026-10-01T00:00:00Z",
+  assignee: null,
+};
+
+vi.mock("@/lib/v2/work", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/v2/work")>()),
+  useWorkTasks: () => query([task]),
+  useOpenTaskCount: () => 1,
+  useSetTaskStatus: () => mutation(),
+  useSaveTask: () => mutation(),
+  useDeleteTask: () => mutation(),
+  useAssignees: () => query([]),
+}));
+
+vi.mock("@/lib/v2/desk", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/v2/desk")>()),
+  useDeskThreads: () =>
+    query([
+      {
+        id: "th1",
+        athleteId: "e1",
+        clientName: "Darnell Mooney",
+        organizationId: "o1",
+        kind: "project",
+        projectKind: "custom",
+        title: "Bears #11 capsule",
+        projectStatus: "feedback",
+        closed: false,
+        waitingOnAx: true,
+        lastMessageAt: "2026-10-18T00:00:00Z",
+        lastMessageRole: "client",
+        lastMessage: "Love the second one",
+        conceptCount: 2,
+      },
+    ]),
+  useDeskWaitingCount: () => 1,
+  useDeskDrops: () =>
+    query([
+      {
+        id: "dr1",
+        title: "Giants drop",
+        status: "review",
+        scheduledAt: null,
+        timeZone: "America/New_York",
+        destinationId: null,
+        athleteId: "e1",
+        clientName: "Darnell Mooney",
+        reviewNote: null,
+      },
+    ]),
+  useDeskUpdateDrop: () => mutation(),
+}));
+
 vi.mock("@/lib/storage", () => ({ useSignedUrl: () => ({ url: null, loading: false }) }));
 
 vi.mock("@/auth/AuthProvider", () => ({ useAuth: () => ({ user: { id: "u1" } }) }));
@@ -406,6 +474,8 @@ import V2NotFound from "../V2NotFound";
 import V2EntityWorkspace from "../V2EntityWorkspace";
 import V2Cart from "../V2Cart";
 import V2EntityOverview from "../V2EntityOverview";
+import V2Work from "../V2Work";
+import V2Releases from "../V2Releases";
 import CommandSearch from "@/components/admin-v2/CommandSearch";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -450,16 +520,33 @@ function mount(ui: ReactElement, route = "/admin-v2"): HTMLElement {
 const textOf = (el: HTMLElement) => el.textContent ?? "";
 
 const PAGES: Array<{ name: string; render: () => ReactElement; route?: string; expects: RegExp }> = [
-  { name: "Overview", render: () => <V2Overview />, expects: /action required/i },
+  { name: "Today", render: () => <V2Overview />, expects: /Send Mooney the Giants hoodie proofs/ },
+  { name: "Today · projects", render: () => <V2Overview />, expects: /Bears #11 capsule/ },
+  { name: "Projects & Tasks · board", render: () => <V2Work />, route: "/admin-v2/work", expects: /Send Mooney the Giants hoodie proofs/ },
+  {
+    name: "Projects & Tasks · client projects",
+    render: () => <V2Work />,
+    route: "/admin-v2/work?tab=projects",
+    expects: /Bears #11 capsule/,
+  },
+  { name: "Releases · drops", render: () => <V2Releases />, route: "/admin-v2/releases", expects: /Giants drop/ },
+  { name: "Releases · collections", render: () => <V2Releases />, route: "/admin-v2/releases?tab=collections", expects: /Mooney World/ },
+  { name: "Releases · lineups", render: () => <V2Releases />, route: "/admin-v2/releases?tab=lineups", expects: /Darnell Mooney/ },
   { name: "People", render: () => <V2People />, expects: /darnell mooney/i },
   { name: "Orders", render: () => <V2Orders />, expects: /#1042/ },
   { name: "Commerce", render: () => <V2Commerce />, route: "/admin-v2/commerce", expects: /needs attention/i },
   { name: "Creative", render: () => <V2Creative />, route: "/admin-v2/creative", expects: /needs you/i },
   {
-    name: "Creative · Designs",
-    render: () => <V2Creative />,
-    route: "/admin-v2/creative?tab=designs",
+    name: "Library · Designs",
+    render: () => <V2Creative variant="library" />,
+    route: "/admin-v2/library?tab=designs",
     expects: /design inbox/i,
+  },
+  {
+    name: "Library · Mockups",
+    render: () => <V2Creative variant="library" />,
+    route: "/admin-v2/library",
+    expects: /Mooney World Hoodie/,
   },
   {
     name: "Creative · Assets",

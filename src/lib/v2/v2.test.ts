@@ -40,6 +40,7 @@ const concept = (over: Partial<ProductConcept> = {}): ProductConcept => ({
   zoneId: null,
   placementLabel: null,
   approvalState: "none",
+  clientVisible: false,
   imageUrl: null,
   imageBucket: null,
   imagePath: null,

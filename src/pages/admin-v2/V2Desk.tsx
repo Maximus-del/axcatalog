@@ -495,7 +495,7 @@ function DropRow({ d }: { d: DeskDrop }) {
   );
 }
 
-function DropsTab() {
+export function DropsTab() {
   const [pendingOnly, setPendingOnly] = useState(true);
   const drops = useDeskDrops(pendingOnly);
   const items = drops.data ?? [];

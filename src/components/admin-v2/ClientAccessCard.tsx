@@ -13,6 +13,7 @@
 // real case: copy the sign-in link again (no password, safe any time), or issue
 // a new one-time password, which kills the old one.
 import { useMemo, useState } from "react";
+import { toneText } from "@/components/admin-v2/primitives";
 import { Check, Copy, KeyRound, Link2, Loader2, RefreshCw, ShieldCheck, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -130,7 +131,7 @@ export default function ClientAccessCard({ entityId, entityName }: Props) {
       <div className="ax-card flex flex-wrap items-center gap-3 px-3.5 py-3">
         <span
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-          style={{ background: `hsl(var(${iconTone}) / 0.14)`, color: `hsl(var(${iconTone}))` }}
+          style={{ background: `hsl(var(${iconTone}) / 0.14)`, color: toneText(`var(${iconTone})`) }}
           aria-hidden
         >
           {signedUp ? <ShieldCheck className="h-4 w-4" /> : <KeyRound className="h-4 w-4" />}

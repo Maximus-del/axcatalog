@@ -6,7 +6,7 @@ import { useDeleteProduct, useProduct } from "@/lib/v2/data";
 import { entityHref, entityLibraryHref } from "@/lib/v2/entity-nav";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { shopLink } from "@/lib/ecosystem/image";
-import { AssetImage, Card, Chip, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Card, Chip, ErrorState, PageHeader, Skeleton, toneText } from "@/components/admin-v2/primitives";
 import ProductCollectionsCard from "@/components/admin-v2/ProductCollectionsCard";
 
 // A PRODUCT, INSIDE V2.
@@ -278,7 +278,7 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: stri
   return (
     <div className="flex items-baseline justify-between gap-3">
       <span className="text-[hsl(var(--ax-faint))]">{label}</span>
-      <span className="truncate capitalize" style={tone ? { color: `hsl(${tone})` } : undefined}>
+      <span className="truncate capitalize" style={tone ? { color: toneText(tone) } : undefined}>
         {value.replace(/_/g, " ")}
       </span>
     </div>

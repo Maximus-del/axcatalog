@@ -1,0 +1,302 @@
+/* ============================================================
+   AX Studio OS — the approved light theme for /admin-v2 ONLY.
+
+   Imported by V2Layout (a lazy chunk), so nothing here reaches
+   V1 at /admin or the client portal. It works the same way the
+   dark .admin-os block does: a token swap. Every V2 component
+   already paints with hsl(var(--ax-*)), so redefining the tokens
+   on `.admin-os.ax-studio` re-skins V2 without touching its
+   structure.
+
+   Two colour roles per signal, because one hex cannot do both
+   jobs on white:
+     --ax-<signal>        the FILL (buttons, dots, rules, tints)
+     --ax-<signal>-ink    the TEXT version, >= 4.5:1 on white
+   #03AC13 is the shamrock fill; green text uses #077a17.
+
+   Status language (always shown with a text label too):
+     red    urgent / changes requested
+     amber  review
+     blue   in progress
+     green  approved / completed
+   ============================================================ */
+
+/* Fonts (DM Sans, Manrope) are NOT @imported here. An @import that fails —
+   Google Fonts blocked or offline — makes Vite's CSS-chunk preload reject,
+   and the whole lazy V2 route then fails to load. V2Layout adds a plain
+   <link> instead; if it fails, the system fallbacks below are used. */
+
+/* Drawers and sheets in V2 wrap themselves in `.admin-os` again so they keep
+   the operator theme when rendered at the edge of the tree. Inside the studio
+   shell that inner class must get the light tokens too, not reset to dark. */
+.admin-os.ax-studio,
+.ax-studio .admin-os {
+  /* Surfaces */
+  --ax-canvas: 200 13% 96%;        /* #f4f6f7 slate workspace */
+  --ax-sidebar: 200 31% 11%;       /* #142026 navigation rail */
+  --ax-card: 0 0% 100%;            /* white cards */
+  --ax-border: 206 25% 88%;        /* #d9e2e9 */
+  --ax-line: 204 23% 92%;          /* #e6ecf0 */
+  --ax-ink: 211 37% 10%;           /* #101923 near-black titles */
+  --ax-secondary: 212 12% 42%;     /* #5f6b78  5.4:1 */
+  --ax-faint: 212 11% 47%;         /* #6b7785  4.6:1 — still readable */
+
+  /* Signals — fills */
+  --ax-accent: 125 97% 34%;        /* #03AC13 shamrock */
+  --ax-on-accent: 128 65% 10%;     /* #092b0e on shamrock, 5.1:1 */
+  --ax-amber: 44 81% 56%;          /* #e9b735 review */
+  --ax-blue: 212 59% 49%;          /* #3479c8 in progress */
+  --ax-red: 1 70% 58%;             /* #df4e4b urgent */
+  --ax-violet: 267 45% 54%;        /* #8254bd studio */
+
+  /* Signals — text on white */
+  --ax-accent-ink: 127 90% 25%;    /* #077a17 */
+  --ax-amber-ink: 41 92% 26%;      /* #805b05 */
+  --ax-blue-ink: 214 57% 41%;      /* #2d60a3 */
+  --ax-red-ink: 2 57% 43%;         /* #ae332f */
+  --ax-violet-ink: 270 40% 44%;    /* #70449f */
+
+  /* How much a tone is darkened when used as text (see toneText()). */
+  --ax-tone-ink: 62%;
+
+  /* Section identities (navigation + page eyebrows) */
+  --ax-sec-today: 125 97% 34%;     /* shamrock */
+  --ax-sec-work: 44 81% 56%;       /* yellow */
+  --ax-sec-clients: 182 88% 27%;   /* teal #087e82 */
+  --ax-sec-studio: 266 41% 50%;    /* violet #774bb4 */
+  --ax-sec-library: 211 66% 44%;   /* blue #266cba */
+  --ax-sec-releases: 11 57% 46%;   /* coral #b94b32 */
+  --ax-sec-business: 125 97% 34%;  /* shamrock */
+
+  /* shadcn tokens used by shared components inside V2 */
+  --background: var(--ax-canvas);
+  --foreground: var(--ax-ink);
+  --card: var(--ax-card);
+  --card-foreground: var(--ax-ink);
+  --popover: var(--ax-card);
+  --popover-foreground: var(--ax-ink);
+  --primary: var(--ax-accent);
+  --primary-foreground: var(--ax-on-accent);
+  --accent: var(--ax-accent);
+  --accent-foreground: var(--ax-on-accent);
+  --secondary: 204 23% 94%;
+  --secondary-foreground: var(--ax-ink);
+  --muted: 204 23% 94%;
+  --muted-foreground: var(--ax-secondary);
+  --dim: var(--ax-faint);
+  --border: var(--ax-border);
+  --input: var(--ax-border);
+  --ring: var(--ax-accent);
+  --warning: var(--ax-amber);
+
+  --shadow-soft-1: 0 1px 2px rgba(23, 42, 64, 0.04);
+  --shadow-soft-2: 0 3px 13px rgba(23, 42, 64, 0.05);
+
+  color-scheme: light;
+  color: hsl(var(--ax-ink));
+  background: hsl(var(--ax-canvas));
+  font-family: "DM Sans", "Inter", system-ui, -apple-system, sans-serif;
+}
+
+.admin-os.ax-studio select,
+.ax-studio .admin-os select {
+  color-scheme: light;
+}
+
+/* Headings: bold, near-black, Manrope. */
+.admin-os.ax-studio h1,
+.admin-os.ax-studio h2,
+.admin-os.ax-studio .ax-title {
+  font-family: "Manrope", "DM Sans", system-ui, sans-serif;
+  color: hsl(var(--ax-ink));
+  letter-spacing: -0.02em;
+}
+.admin-os.ax-studio h1 { font-weight: 800; }
+.admin-os.ax-studio h2,
+.admin-os.ax-studio h3 { font-weight: 750; }
+
+.admin-os.ax-studio .ax-card,
+.admin-os.ax-studio .ax-os-card {
+  background: hsl(var(--ax-card));
+  border: 1px solid hsl(var(--ax-border));
+  box-shadow: var(--shadow-soft-1), var(--shadow-soft-2);
+}
+.admin-os.ax-studio .ax-card-hover:hover {
+  border-color: hsl(var(--ax-border));
+  box-shadow: 0 6px 22px rgba(23, 42, 64, 0.09);
+}
+.admin-os.ax-studio .ax-label { color: hsl(var(--ax-secondary)); }
+.admin-os.ax-studio .ax-section-header { color: hsl(var(--ax-accent-ink)); }
+
+/* ---- Signal text on white -------------------------------------------
+   V2 writes signal text as Tailwind arbitrary classes. On the dark theme
+   those fills were legible as text; on white several are not (#03AC13 is
+   3.0:1, the amber 1.8:1). Re-point the TEXT uses at the ink variants and
+   leave backgrounds, borders and rules on the fills. */
+.admin-os.ax-studio [class~="text-[hsl(var(--ax-accent))]"],
+.admin-os.ax-studio [class~="hover:text-[hsl(var(--ax-accent))]"]:hover { color: hsl(var(--ax-accent-ink)); }
+.admin-os.ax-studio [class~="text-[hsl(var(--ax-amber))]"] { color: hsl(var(--ax-amber-ink)); }
+.admin-os.ax-studio [class~="text-[hsl(var(--ax-blue))]"] { color: hsl(var(--ax-blue-ink)); }
+.admin-os.ax-studio [class~="text-[hsl(var(--ax-red))]"] { color: hsl(var(--ax-red-ink)); }
+.admin-os.ax-studio [class~="text-[hsl(var(--ax-violet))]"] { color: hsl(var(--ax-violet-ink)); }
+/* Text sitting ON a solid signal fill stays dark. */
+.admin-os.ax-studio [class~="bg-[hsl(var(--ax-accent))]"] { color: hsl(var(--ax-on-accent)); }
+
+/* ---- White-alpha surfaces --------------------------------------------
+   The dark theme drew hover states and wells as white at 2–10% alpha,
+   which is invisible on a white card. Map them to the same strength of
+   slate ink. Black scrims over photography are left alone on purpose. */
+.admin-os.ax-studio .bg-white\/\[0\.015\],
+.admin-os.ax-studio .bg-white\/\[0\.02\],
+.admin-os.ax-studio .hover\:bg-white\/\[0\.02\]:hover { background-color: hsl(211 37% 10% / 0.025); }
+.admin-os.ax-studio .bg-white\/\[0\.03\],
+.admin-os.ax-studio .hover\:bg-white\/\[0\.03\]:hover,
+.admin-os.ax-studio .bg-white\/\[0\.04\],
+.admin-os.ax-studio .hover\:bg-white\/\[0\.04\]:hover { background-color: hsl(211 37% 10% / 0.035); }
+.admin-os.ax-studio .bg-white\/5,
+.admin-os.ax-studio .hover\:bg-white\/5:hover,
+.admin-os.ax-studio .bg-white\/\[0\.05\],
+.admin-os.ax-studio .hover\:bg-white\/\[0\.05\]:hover,
+.admin-os.ax-studio .bg-white\/\[0\.06\],
+.admin-os.ax-studio .hover\:bg-white\/\[0\.06\]:hover,
+.admin-os.ax-studio .bg-white\/\[0\.07\],
+.admin-os.ax-studio .bg-white\/\[0\.08\] { background-color: hsl(211 37% 10% / 0.05); }
+.admin-os.ax-studio .bg-white\/10,
+.admin-os.ax-studio .hover\:bg-white\/10:hover { background-color: hsl(211 37% 10% / 0.07); }
+.admin-os.ax-studio .border-white\/10,
+.admin-os.ax-studio .border-white\/15,
+.admin-os.ax-studio .border-white\/20 { border-color: hsl(var(--ax-border)); }
+.admin-os.ax-studio .hover\:border-white\/25:hover,
+.admin-os.ax-studio .hover\:border-white\/60:hover { border-color: hsl(212 12% 42% / 0.45); }
+.admin-os.ax-studio .hover\:text-white:hover { color: hsl(var(--ax-ink)); }
+.admin-os.ax-studio .ring-white\/20 { --tw-ring-color: hsl(var(--ax-border)); }
+
+/* ---- Shell ----------------------------------------------------------- */
+.ax-studio-rail {
+  background: hsl(var(--ax-sidebar));
+  color: #c0cdd6;
+  border-right: 1px solid #283943;
+}
+.ax-studio-rail .ax-rail-label {
+  color: #97a8b3;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.ax-studio-rail a.ax-rail-link {
+  position: relative;
+  color: #c0cdd6;
+}
+.ax-studio-rail a.ax-rail-link svg { color: hsl(var(--nav)); }
+.ax-studio-rail a.ax-rail-link:hover { background: #273a46; color: #fff; }
+.ax-studio-rail a.ax-rail-link.active {
+  color: #fff;
+  font-weight: 700;
+  background: color-mix(in srgb, hsl(var(--nav)) 16%, #192831);
+}
+.ax-studio-rail a.ax-rail-link.active::before {
+  content: "";
+  position: absolute;
+  left: -12px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: hsl(var(--nav));
+}
+.ax-studio-rail .ax-rail-count {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d2dce3;
+}
+
+/* Section eyebrow + left rule, coloured by the page's section.
+   --sec is the fill, --sec-ink the readable text version. */
+.ax-studio [data-section="today"]    { --sec: var(--ax-sec-today);    --sec-ink: var(--ax-accent-ink); }
+.ax-studio [data-section="work"]     { --sec: var(--ax-sec-work);     --sec-ink: var(--ax-amber-ink); }
+.ax-studio [data-section="clients"]  { --sec: var(--ax-sec-clients);  --sec-ink: var(--ax-sec-clients); }
+.ax-studio [data-section="studio"]   { --sec: var(--ax-sec-studio);   --sec-ink: var(--ax-sec-studio); }
+.ax-studio [data-section="library"]  { --sec: var(--ax-sec-library);  --sec-ink: var(--ax-sec-library); }
+.ax-studio [data-section="releases"] { --sec: var(--ax-sec-releases); --sec-ink: var(--ax-sec-releases); }
+.ax-studio [data-section="business"] { --sec: var(--ax-sec-business); --sec-ink: var(--ax-accent-ink); }
+.ax-studio .ax-sec-eyebrow { color: hsl(var(--sec-ink, var(--sec))); }
+.ax-studio .ax-sec-rule::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 0.85em;
+  margin-right: 9px;
+  border-radius: 3px;
+  vertical-align: -1px;
+  background: hsl(var(--sec));
+}
+
+/* Today "pulse" strip — four counts that open the work. */
+.ax-pulse {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: #fff;
+  border: 1px solid hsl(var(--ax-border));
+  border-radius: 12px;
+  overflow: hidden;
+}
+.ax-pulse > a {
+  position: relative;
+  display: block;
+  padding: 20px 21px;
+  min-height: 96px;
+  border-right: 1px solid hsl(var(--ax-line));
+  transition: background-color 0.16s;
+}
+.ax-pulse > a:last-child { border-right: 0; }
+.ax-pulse > a::after {
+  content: "";
+  position: absolute;
+  left: 21px;
+  right: 21px;
+  bottom: 0;
+  height: 2px;
+  background: hsl(var(--pulse));
+  opacity: 0.7;
+}
+.ax-pulse > a:hover { background: hsl(var(--pulse) / 0.07); }
+.ax-pulse .ax-pulse-n {
+  font-family: "Manrope", sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: hsl(var(--pulse-ink, var(--pulse)));
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .ax-pulse { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ax-pulse > a:nth-child(2) { border-right: 0; }
+  .ax-pulse > a:nth-child(-n + 2) { border-bottom: 1px solid hsl(var(--ax-line)); }
+}
+
+/* Status tags — colour AND a text label, never colour alone. */
+.ax-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.ax-tag[data-tone="red"]    { background: #fff0ee; color: #ae332f; border-color: #f0b1aa; }
+.ax-tag[data-tone="amber"]  { background: #fff6dc; color: #805b05; border-color: #e5c76f; }
+.ax-tag[data-tone="blue"]   { background: #eaf2ff; color: #2d60a3; border-color: #b0c9ed; }
+.ax-tag[data-tone="green"]  { background: #e6f8e9; color: #066b13; border-color: #80d58a; }
+.ax-tag[data-tone="violet"] { background: #f1eafb; color: #70449f; border-color: #ceb8e8; }
+.ax-tag[data-tone="slate"]  { background: #eef2f5; color: #586c7e; border-color: #c9d4de; }
+
+/* Board columns carry their stage colour on the top rule. */
+.ax-board-col { border-top: 3px solid hsl(var(--stage)); background: #edf1f5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ax-studio * { transition: none !important; animation: none !important; }
+}

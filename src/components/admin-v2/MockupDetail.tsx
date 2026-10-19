@@ -43,7 +43,7 @@ import { needsComposite } from "@/lib/v2/mockup-image";
 import { resolveBlankImage } from "@/lib/v2/blank-image";
 import { audienceForRoles, fmtMoney, priceFor } from "@/lib/v2/pricing";
 import type { Entity, Mockup } from "@/lib/v2/types";
-import { AssetImage } from "./primitives";
+import { AssetImage, toneText } from "./primitives";
 import { ApproximateBadge, GarmentFrame, PlacedOverlay } from "./GarmentPreview";
 
 // A mockup's own page: everything you can do with one, in one place.
@@ -945,7 +945,7 @@ function Row({ label, value, tone, strong }: { label: string; value: string; ton
       <span className="text-[hsl(var(--ax-faint))]">{label}</span>
       <span
         className={`tabular-nums ${strong ? "font-semibold" : ""}`}
-        style={tone ? { color: `hsl(${tone})` } : undefined}
+        style={tone ? { color: toneText(tone) } : undefined}
       >
         {value}
       </span>

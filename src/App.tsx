@@ -101,6 +101,8 @@ const V2ProductDetail = lazy(() => import("./pages/admin-v2/V2ProductDetail"));
 const V2Desk = lazy(() => import("./pages/admin-v2/V2Desk"));
 const V2Lineup = lazy(() => import("./pages/admin-v2/V2Lineup"));
 const V2PricingSheet = lazy(() => import("./pages/admin-v2/V2PricingSheet"));
+const V2Work = lazy(() => import("./pages/admin-v2/V2Work"));
+const V2Releases = lazy(() => import("./pages/admin-v2/V2Releases"));
 
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
@@ -252,7 +254,11 @@ const App = () => (
                 <Route path="people/:id/lineup" element={<V2Lineup />} />
                 {/* Cost, retail, bulk price and the split for every product of this client. */}
                 <Route path="people/:id/pricing" element={<V2PricingSheet />} />
+                {/* AX Studio OS: Projects & Tasks, Asset Library and Releases. */}
+                <Route path="work" element={<V2Work />} />
                 <Route path="creative" element={<V2Creative />} />
+                <Route path="library" element={<V2Creative variant="library" />} />
+                <Route path="releases" element={<V2Releases />} />
                 <Route path="commerce" element={<V2Commerce />} />
                 <Route path="commerce/blanks" element={<V2Commerce />} />
                 <Route path="commerce/blanks/:id" element={<V2BlankDetail />} />

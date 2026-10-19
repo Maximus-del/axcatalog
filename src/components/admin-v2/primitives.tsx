@@ -115,25 +115,18 @@ export function Section({
       <div className="mb-3 flex items-end gap-3">
         <div className="min-w-0">
           {eyebrow && (
-            <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[hsl(var(--ax-accent))]">
-              {eyebrow}
-            </div>
+            <div className="ax-sec-eyebrow text-[10px] font-bold uppercase tracking-[0.15em]">{eyebrow}</div>
           )}
-          <div className="flex items-baseline gap-3">
-            <h2
-              className={
-                rich
-                  ? "mt-1 text-[17px] font-semibold"
-                  : "text-[13px] font-semibold uppercase tracking-[0.14em] text-[hsl(var(--ax-secondary))]"
-              }
-            >
-              {title}
-            </h2>
+          <div className="flex items-baseline gap-2.5">
+            {/* Bold near-black with the section's colour rule, per the approved design. */}
+            <h2 className={`ax-sec-rule ${rich ? "mt-1 text-[17px]" : "text-[16px]"} font-bold`}>{title}</h2>
             {count != null && (
-              <span className="text-[13px] tabular-nums text-[hsl(var(--ax-faint))]">{count}</span>
+              <span className="rounded bg-[hsl(var(--ax-line))] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[hsl(var(--ax-secondary))]">
+                {count}
+              </span>
             )}
           </div>
-          {detail && <p className="text-[11px] text-[hsl(var(--ax-faint))]">{detail}</p>}
+          {detail && <p className="mt-0.5 text-[12px] text-[hsl(var(--ax-secondary))]">{detail}</p>}
         </div>
         <div className="ml-auto shrink-0">{action}</div>
       </div>
@@ -377,11 +370,15 @@ export function TabBar<T extends string>({
           type="button"
           onClick={() => onSelect(tab)}
           className={`relative shrink-0 px-4 pb-3 pt-1 text-[12px] font-semibold transition-colors ${
-            active === tab ? "text-[hsl(var(--ax-accent))]" : "text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+            active === tab
+              ? "text-[hsl(var(--sec-ink,var(--ax-accent-ink,var(--ax-accent))))]"
+              : "text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
           }`}
         >
           {label(tab)}
-          {active === tab && <span className="absolute inset-x-2 -bottom-px h-0.5 bg-[hsl(var(--ax-accent))]" />}
+          {active === tab && (
+            <span className="absolute inset-x-2 -bottom-px h-0.5 bg-[hsl(var(--sec,var(--ax-accent)))]" />
+          )}
         </button>
       ))}
     </div>
@@ -436,19 +433,58 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  eyebrow,
 }: {
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  /**
+   * The small capitals above the title. Coloured by the section the page sits
+   * in (the shell sets `data-section`), so every page carries its section's
+   * identity without each one choosing a colour.
+   */
+  eyebrow?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start gap-4">
+    <div className="mb-7 flex flex-wrap items-end gap-4">
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-[26px] font-semibold tracking-tight sm:text-[30px]">{title}</h1>
-        {subtitle && <p className="mt-1 text-[13px] text-[hsl(var(--ax-secondary))]">{subtitle}</p>}
+        {eyebrow && (
+          <div className="ax-sec-eyebrow mb-2 text-[11px] font-bold uppercase tracking-[0.13em]">{eyebrow}</div>
+        )}
+        <h1 className="truncate text-[28px] font-extrabold leading-tight tracking-tight sm:text-[32px]">{title}</h1>
+        {subtitle && <p className="mt-1.5 text-[13px] leading-relaxed text-[hsl(var(--ax-secondary))]">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
+  );
+}
+
+/**
+ * A signal colour used as TEXT.
+ *
+ * Tones arrive as fills (`var(--ax-amber)`), which are right for a dot or a
+ * 14% tint but unreadable as words on white — the amber is 1.8:1. Mixing with
+ * black by `--ax-tone-ink` brings every tone past 4.5:1 on the light theme;
+ * the dark theme never defines the variable, so it falls back to 100% and the
+ * colour is unchanged.
+ */
+export function toneText(tone: string): string {
+  return `color-mix(in srgb, hsl(${tone}) var(--ax-tone-ink, 100%), black)`;
+}
+
+/** The four status signals of the approved system, plus neutral. */
+export type StatusTone = "red" | "amber" | "blue" | "green" | "violet" | "slate";
+
+/**
+ * A status label. Colour AND words — the colour is never the only signal.
+ * red = urgent / changes requested, amber = review, blue = in progress,
+ * green = approved / completed.
+ */
+export function StatusTag({ tone, children, title }: { tone: StatusTone; children: ReactNode; title?: string }) {
+  return (
+    <span className="ax-tag" data-tone={tone} title={title}>
+      {children}
+    </span>
   );
 }
 
@@ -468,9 +504,9 @@ export function Chip({
   title?: string;
 }) {
   const style = tone
-    ? { background: `hsl(${tone} / 0.14)`, color: `hsl(${tone})` }
+    ? { background: `hsl(${tone} / 0.14)`, color: toneText(tone) }
     : active
-      ? { background: "hsl(var(--ax-accent) / 0.16)", color: "hsl(var(--ax-accent))" }
+      ? { background: "hsl(var(--ax-accent) / 0.14)", color: "hsl(var(--ax-accent-ink, var(--ax-accent)))" }
       : undefined;
   const Comp = onClick ? "button" : "span";
   return (

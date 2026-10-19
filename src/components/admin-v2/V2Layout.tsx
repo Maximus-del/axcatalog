@@ -1,116 +1,279 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, Users, Palette, ShoppingBag, Receipt, Inbox, ArrowLeft, ArrowUpRight } from "lucide-react";
+import { useEffect } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  BarChart3,
+  Images,
+  Inbox,
+  ListChecks,
+  Rocket,
+  Sparkles,
+  Sunrise,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { useDeskWaitingCount } from "@/lib/v2/desk";
+import { useOverview } from "@/lib/v2/data";
+import { useOpenTaskCount } from "@/lib/v2/work";
+import { SECTION_LABEL, STUDIO_NAV, sectionOf, type StudioSection } from "@/lib/v2/studio-nav";
+import { entityHref } from "@/lib/v2/entity-nav";
+import { tintOf } from "@/lib/v2/entity";
 import CommandSearch from "./CommandSearch";
+import "@/styles/ax-studio.css";
 
-// AX OS V2 shell.
+// AX STUDIO OS — the V2 shell.
 //
-// Deliberately six destinations: Overview, People, Creative, Commerce, Orders,
-// Client Desk (what clients sent from their portals).
-// V1's sidebar carries ~30. Anything not on this list has not earned a place
-// yet — see AX_LEGACY_FEATURE_MAP.md for what is parked and why.
+// Seven sections from the approved design: Today, Projects & Tasks, Client
+// Spaces, Creative Studio, Asset Library, Releases, Business. They are laid
+// over the routes V2 already had (see studio-nav.ts) — every older V2 address
+// still resolves and lights up the section it now belongs to.
 //
-// Reuses the existing `.admin-os` token block so V2 inherits the established
-// dark operator language without a single new CSS variable.
+// The light theme is a token swap: `.ax-studio` redefines the same --ax-*
+// variables the dark `.admin-os` block defines, in a stylesheet only this lazy
+// chunk imports. V1 at /admin keeps its own theme untouched.
 
-const NAV = [
-  { to: "/admin-v2", end: true, label: "Overview", icon: Home },
-  { to: "/admin-v2/people", end: false, label: "People", icon: Users },
-  { to: "/admin-v2/creative", end: false, label: "Creative", icon: Palette },
-  { to: "/admin-v2/commerce", end: false, label: "Commerce", icon: ShoppingBag },
-  { to: "/admin-v2/orders", end: false, label: "Orders", icon: Receipt },
-  { to: "/admin-v2/desk", end: false, label: "Client Desk", icon: Inbox },
-];
+const ICON: Record<StudioSection, LucideIcon> = {
+  today: Sunrise,
+  work: ListChecks,
+  clients: Users,
+  studio: Sparkles,
+  library: Images,
+  releases: Rocket,
+  business: BarChart3,
+};
+
+/** Navigation colours on the dark rail (lighter than the in-page section colours). */
+const NAV_COLOR: Record<StudioSection, string> = {
+  today: "125 97% 34%",
+  work: "44 86% 64%",
+  clients: "181 57% 62%",
+  studio: "266 91% 81%",
+  library: "216 91% 77%",
+  releases: "15 100% 77%",
+  business: "125 97% 34%",
+};
+
+const FONT_HREF =
+  "https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Manrope:wght@600;700;800&display=swap";
+
+/**
+ * The Studio OS typefaces, loaded as an ordinary <link> once V2 mounts.
+ * Deliberately not a CSS @import: a failed import rejects the lazy chunk's
+ * CSS preload and takes the whole V2 route down with it. A failed <link> just
+ * leaves the system font fallbacks in place.
+ */
+function useStudioFonts() {
+  useEffect(() => {
+    if (document.querySelector(`link[data-ax-studio-fonts]`)) return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = FONT_HREF;
+    link.dataset.axStudioFonts = "1";
+    document.head.appendChild(link);
+  }, []);
+}
 
 export default function V2Layout() {
+  useStudioFonts();
   const location = useLocation();
   const navigate = useNavigate();
+  const section = sectionOf(location.pathname, location.search);
+
   // Briefs and messages from client portals that nobody at AX has answered.
   const deskWaiting = useDeskWaitingCount();
+  const openTasks = useOpenTaskCount();
+  const overview = useOverview();
+  const shortcuts = (overview.data?.recentEntities ?? []).slice(0, 5);
 
-  /**
-   * Back to wherever you actually came from.
-   *
-   * Lives in the shell rather than on one page, because the need is not
-   * specific to a page — following a concept from Creative into a person's
-   * workspace, or a design into its detail, both leave you wanting the same
-   * thing. It is hidden on the Overview because that is the root: there is
-   * nothing above it inside V2, and a back arrow there would either do nothing
-   * or throw you out of the dashboard entirely.
-   */
   const isRoot = location.pathname === "/admin-v2" || location.pathname === "/admin-v2/";
 
+  const badge = (s: StudioSection): number => (s === "work" ? openTasks + deskWaiting : 0);
+
   return (
-    <div className="admin-os min-h-screen w-full bg-[hsl(var(--ax-canvas))] text-[hsl(var(--ax-ink))]">
-      <header className="sticky top-0 z-30 border-b border-[hsl(var(--ax-line))] bg-[hsl(var(--ax-sidebar))]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] items-center gap-3 px-4 py-3 sm:px-6">
-          <NavLink to="/admin-v2" className="flex shrink-0 items-center gap-2">
-            <span className="text-[15px] font-semibold tracking-tight">AX OS</span>
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-widest"
-              style={{ background: "hsl(var(--ax-accent) / 0.14)", color: "hsl(var(--ax-accent))" }}
-            >
-              V2
-            </span>
-          </NavLink>
+    <div className="admin-os ax-studio min-h-screen w-full bg-[hsl(var(--ax-canvas))] text-[hsl(var(--ax-ink))]">
+      {/* ------------------------------------------------ desktop rail */}
+      <aside className="ax-studio-rail fixed inset-y-0 left-0 z-30 hidden w-[232px] flex-col px-3 pb-4 pt-6 lg:flex">
+        <Link to="/admin-v2" className="mb-7 flex items-center gap-3 px-2.5 text-white">
+          <span className="font-['Manrope'] text-[30px] font-extrabold leading-none tracking-[-0.08em]">AX</span>
+          <span className="text-[11px] font-bold leading-tight tracking-[0.18em]">
+            STUDIO OS
+            <span className="mt-1 block text-[8px] font-medium tracking-[0.14em] text-[#97a8b3]">THE WORK, CONNECTED.</span>
+          </span>
+        </Link>
 
-          {!isRoot && (
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              aria-label="Back to the previous page"
-              title="Back"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-          )}
+        <p className="ax-rail-label mb-2 px-3">Workspace</p>
+        <nav className="flex flex-col gap-0.5" aria-label="AX Studio OS sections">
+          {STUDIO_NAV.map((item) => {
+            const Icon = ICON[item.section];
+            const count = badge(item.section);
+            const active = section === item.section;
+            return (
+              <div key={item.section}>
+                {/*
+                  A plain Link with the section computed by sectionOf(), not a
+                  NavLink: Business must light up on /orders and /products, and
+                  the Library on old /creative?tab=mockups links, which no
+                  path match can express.
+                */}
+                <Link
+                  to={item.to}
+                  className={`ax-rail-link flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-colors ${
+                    active ? "active" : ""
+                  }`}
+                  style={{ ["--nav" as string]: NAV_COLOR[item.section] }}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {count > 0 && (
+                    <span className="ax-rail-count rounded px-1.5 text-[10px] font-semibold leading-5 tabular-nums">
+                      {count}
+                    </span>
+                  )}
+                </Link>
+                {/*
+                  Client Desk is not in the prototype, but it is where portal
+                  briefs and messages land. It sits under Projects & Tasks
+                  because a client request is work someone has to pick up.
+                */}
+                {item.section === "work" && (
+                  <NavLink
+                    to="/admin-v2/desk"
+                    className={({ isActive }) =>
+                      `ml-7 mt-0.5 flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] transition-colors ${
+                        isActive ? "bg-white/10 text-white" : "text-[#a9b8c2] hover:bg-[#273a46] hover:text-white"
+                      }`
+                    }
+                  >
+                    <Inbox className="h-3.5 w-3.5" />
+                    <span className="flex-1">Client requests</span>
+                    {deskWaiting > 0 && (
+                      <span
+                        className="rounded bg-[#e9b735] px-1.5 text-[10px] font-bold leading-4 text-[#2a1f00]"
+                        aria-label={`${deskWaiting} waiting on AX`}
+                      >
+                        {deskWaiting}
+                      </span>
+                    )}
+                  </NavLink>
+                )}
+              </div>
+            );
+          })}
+        </nav>
 
-          <nav className="ml-2 flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scroll-touch">
-            {NAV.map(({ to, end, label, icon: Icon }) => (
+        {shortcuts.length > 0 && (
+          <div className="mt-7">
+            <p className="ax-rail-label mb-2 px-3">Client spaces</p>
+            {shortcuts.map((e) => (
               <NavLink
-                key={to}
-                to={to}
-                end={end}
+                key={e.id}
+                to={entityHref(e.id)}
                 className={({ isActive }) =>
-                  [
-                    "flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-medium transition-colors",
-                    isActive
-                      ? "bg-[hsl(var(--ax-accent)/0.14)] text-[hsl(var(--ax-accent))]"
-                      : "text-[hsl(var(--ax-secondary))] hover:bg-white/5 hover:text-[hsl(var(--ax-ink))]",
-                  ].join(" ")
+                  `flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12px] transition-colors ${
+                    isActive ? "bg-white/10 text-white" : "text-[#c0cdd6] hover:bg-[#23343e] hover:text-white"
+                  }`
                 }
               >
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-                {to === "/admin-v2/desk" && deskWaiting > 0 && (
-                  <span
-                    className="rounded-full bg-[hsl(var(--ax-amber))] px-1.5 text-[10px] font-bold leading-4 text-black"
-                    aria-label={`${deskWaiting} waiting on AX`}
-                  >
-                    {deskWaiting}
-                  </span>
-                )}
+                <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: tintOf(e.id) }} />
+                <span className="truncate">{e.name}</span>
               </NavLink>
             ))}
-          </nav>
+          </div>
+        )}
 
-          <CommandSearch />
-
+        <div className="mt-auto border-t border-[#2c3d47] pt-3">
           <a
             href="/admin"
-            className="hidden shrink-0 items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))] sm:flex"
+            className="flex items-center justify-between rounded-lg px-3 py-2 text-[12px] text-[#a9b8c2] transition-colors hover:bg-[#23343e] hover:text-white"
             title="V1 stays available for everything V2 has not migrated"
           >
-            V1 dashboard
-            <ArrowUpRight className="h-3.5 w-3.5" />
+            V1 dashboard <ArrowUpRight className="h-3.5 w-3.5" />
           </a>
         </div>
-      </header>
+      </aside>
 
-      <main key={location.pathname} className="animate-fade-in mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6">
-        <Outlet />
-      </main>
+      <div className="lg:pl-[232px]">
+        {/* ------------------------------------------------ top bar */}
+        <header className="sticky top-0 z-20 border-b border-[hsl(var(--ax-border))] bg-white/85 backdrop-blur">
+          <div className="flex items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+            <Link to="/admin-v2" className="flex shrink-0 items-center gap-1.5 lg:hidden">
+              <span className="font-['Manrope'] text-[20px] font-extrabold tracking-[-0.08em]">AX</span>
+              <span className="text-[10px] font-bold tracking-[0.16em] text-[hsl(var(--ax-secondary))]">STUDIO OS</span>
+            </Link>
+
+            {!isRoot && (
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                aria-label="Back to the previous page"
+                title="Back"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            )}
+
+            <div className="hidden min-w-0 flex-1 text-[12px] text-[hsl(var(--ax-secondary))] sm:block">
+              Workspace <span className="mx-2.5 text-[hsl(var(--ax-border))]">/</span>
+              <b className="font-semibold text-[hsl(var(--ax-ink))]">{SECTION_LABEL[section]}</b>
+            </div>
+            <div className="flex-1 sm:hidden" />
+
+            <CommandSearch />
+
+            <a
+              href="/admin"
+              className="hidden shrink-0 items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))] sm:flex lg:hidden"
+              title="V1 stays available for everything V2 has not migrated"
+            >
+              V1 <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
+          </div>
+
+          {/* Phones and tablets: the seven sections as a scrolling row. */}
+          <nav
+            className="flex gap-1 overflow-x-auto scroll-touch px-3 pb-2 lg:hidden"
+            aria-label="AX Studio OS sections"
+          >
+            {STUDIO_NAV.map((item) => {
+              const Icon = ICON[item.section];
+              const active = section === item.section;
+              return (
+                <Link
+                  key={item.section}
+                  to={item.to}
+                  aria-current={active ? "page" : undefined}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-colors ${
+                    active
+                      ? "bg-[hsl(var(--ax-sidebar))] text-white"
+                      : "text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" style={{ color: active ? `hsl(${NAV_COLOR[item.section]})` : undefined }} />
+                  {item.label}
+                  {badge(item.section) > 0 && (
+                    <span className="rounded bg-[hsl(var(--ax-amber))] px-1 text-[10px] font-bold leading-4 text-[#2a1f00]">
+                      {badge(item.section)}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </header>
+
+        <main
+          key={location.pathname}
+          data-section={section}
+          className={`animate-fade-in mx-auto px-4 pb-24 pt-7 sm:px-6 lg:px-8 ${
+            section === "today" ? "max-w-[1310px]" : "max-w-[1440px]"
+          }`}
+        >
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

@@ -49,7 +49,7 @@ import {
   type Lifecycle,
 } from "@/lib/v2/mockup-lifecycle";
 import type { Mockup } from "@/lib/v2/types";
-import { AssetImage, Chip, EmptyState, Skeleton, Toolbar } from "./primitives";
+import { AssetImage, Chip, EmptyState, Skeleton, Toolbar, toneText } from "./primitives";
 
 // The saved mockup library for one entity.
 //
@@ -1237,7 +1237,7 @@ function MenuItem({
         onClick();
       }}
       className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] text-[hsl(var(--ax-secondary))] transition-colors hover:bg-white/[0.06] hover:text-[hsl(var(--ax-ink))]"
-      style={tone ? { color: `hsl(${tone})` } : undefined}
+      style={tone ? { color: toneText(tone) } : undefined}
     >
       <Icon className="h-3 w-3 shrink-0" aria-hidden />
       {children}

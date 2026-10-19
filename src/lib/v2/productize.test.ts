@@ -37,6 +37,7 @@ const concept = (over: Partial<ProductConcept> = {}): ProductConcept => ({
   zoneId: "center_chest",
   placementLabel: "Center",
   approvalState: "none",
+  clientVisible: false,
   imageUrl: null,
   imageBucket: null,
   imagePath: null,

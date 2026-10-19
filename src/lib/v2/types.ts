@@ -183,6 +183,12 @@ export interface ProductConcept {
   zoneId: string | null;
   placementLabel: string | null;
   approvalState: ApprovalState;
+  /**
+   * mockups.client_visible — shown in the client's portal. Separate from
+   * approval on purpose: approving a mockup never shares it. Only reads that
+   * select the column (fetchConcepts) fill it; elsewhere it reads false.
+   */
+  clientVisible: boolean;
   imageUrl: string | null;
   imageBucket: string | null;
   imagePath: string | null;

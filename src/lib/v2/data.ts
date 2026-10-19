@@ -12,7 +12,7 @@ import { must, num, publicUrl, str, t, type Row } from "./db";
 import { displayNameOf } from "./entity";
 import { entityLibraryHref } from "./entity-nav";
 import { slugify } from "@/lib/slug";
-import { draftToRow, isConfigurable, type ConceptDraft } from "./concepts";
+import { draftToRow, isConfigurable, stageOf, type ConceptDraft } from "./concepts";
 import type { DesignGroup, OrderWrite } from "./design-groups";
 import { draftToProductRow, type ProductDraft } from "./productize";
 import { mergeZones, type PrintZoneRow } from "./placements";
@@ -356,6 +356,7 @@ function mapConcept(m: Row): ProductConcept {
     zoneId: str(m.zone_id),
     placementLabel: str(m.placement_label),
     approvalState: (str(m.approval_state) ?? "none") as ProductConcept["approvalState"],
+    clientVisible: m.client_visible === true,
     imageUrl: str(m.image_url),
     imageBucket: str(m.storage_bucket),
     imagePath: str(m.storage_path),
@@ -552,7 +553,7 @@ export function useDesigns(entityId?: string) {
 async function fetchConcepts(entityId?: string): Promise<ProductConcept[]> {
   let q = t("mockups")
     .select(
-      "id, title, athlete_id, collection_id, design_id, blank_id, v2_blank_id, product_id, color_name, surface, zone_id, placement_label, approval_state, image_url, storage_bucket, storage_path, description, created_at, kind",
+      "id, title, athlete_id, collection_id, design_id, blank_id, v2_blank_id, product_id, color_name, surface, zone_id, placement_label, approval_state, client_visible, image_url, storage_bucket, storage_path, description, created_at, kind",
     )
     .eq("kind", "concept")
     .order("created_at", { ascending: false });
@@ -1594,7 +1595,7 @@ async function fetchOverview() {
       count: awaitingApproval.length,
       label: "Mockups awaiting approval",
       detail: "Sent to the entity, no decision yet",
-      to: "/admin-v2/creative?tab=mockups&stage=awaiting_approval",
+      to: "/admin-v2/library?tab=mockups&stage=awaiting_approval",
       tone: "var(--ax-amber)",
     },
     {
@@ -1602,7 +1603,7 @@ async function fetchOverview() {
       count: readyToConfigure.length,
       label: "Mockups ready to become products",
       detail: "Design, blank, colour and placement all chosen",
-      to: "/admin-v2/creative?tab=mockups&stage=specified",
+      to: "/admin-v2/library?tab=mockups&stage=specified",
       tone: "var(--ax-blue)",
     },
     {
@@ -1645,6 +1646,18 @@ async function fetchOverview() {
     // only part of that answer that is not creative work.
     recentOrders: orders.slice(0, 6),
     openOrders: openOrders.length,
+    /**
+     * AX Studio OS "Today" counts. Both are read straight off the mockup rows:
+     * review = approval_state pending; ready for the portal = approved but
+     * client_visible still off. Approval and portal visibility stay two
+     * separate decisions — approving never shares anything.
+     */
+    review: {
+      awaitingApproval: awaitingApproval.length,
+      changesRequested: concepts.filter((c) => c.approvalState === "changes_requested").length,
+      // Same rule the Library filter applies (stage approved + portal hidden), so the count and the shelf agree.
+      approvedNotShared: concepts.filter((c) => stageOf(c) === "approved" && !c.clientVisible).length,
+    },
   };
 }
 
@@ -1960,7 +1973,7 @@ async function fetchSearch(term: string): Promise<SearchHit[]> {
       id: String(r.id),
       label: String(r.title ?? "Untitled mockup"),
       detail: str(r.color_name),
-      to: owner ? entityLibraryHref(owner, { mockup: String(r.id) }) : "/admin-v2/creative?tab=mockups",
+      to: owner ? entityLibraryHref(owner, { mockup: String(r.id) }) : "/admin-v2/library?tab=mockups",
     });
   }
 

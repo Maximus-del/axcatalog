@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toneText } from "@/components/admin-v2/primitives";
 import { Check, MoreHorizontal, Move, Plus, RotateCcw, X } from "lucide-react";
 import { resolveBlankImage } from "@/lib/v2/blank-image";
 import { GarmentFrame, PlacedOverlay } from "../GarmentPreview";
@@ -246,7 +247,7 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-[hsl(var(--ax-secondary))] hover:bg-white/5 hover:text-[hsl(var(--ax-ink))]"
-      style={tone ? { color: `hsl(${tone})` } : undefined}
+      style={tone ? { color: toneText(tone) } : undefined}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
       {children}

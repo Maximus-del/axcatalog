@@ -53,7 +53,7 @@ export default function V2Orders() {
 
   return (
     <>
-      <PageHeader title="Orders" subtitle="The 60 most recent orders, straight from the existing order records." />
+      <PageHeader eyebrow="Business" title="Orders" subtitle="The 60 most recent orders, straight from the existing order records." />
 
       <div className="mb-4 space-y-3">
         <div className="relative">

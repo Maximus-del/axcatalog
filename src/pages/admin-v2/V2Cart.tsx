@@ -7,7 +7,7 @@ import { useEntityWorkspace, useDiscountBreaks } from "@/lib/v2/data";
 import { useCart, useCartActions, useSubmitCart } from "@/lib/v2/cart-data";
 import { quoteCart } from "@/lib/v2/bulk-pricing";
 import { fmtMoney } from "@/lib/v2/pricing";
-import { AssetImage, Card, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { AssetImage, Card, EmptyState, ErrorState, PageHeader, Skeleton, toneText } from "@/components/admin-v2/primitives";
 import type { CartGroup } from "@/lib/v2/cart";
 
 // THE CART.
@@ -311,7 +311,7 @@ function Row({ label, value, tone, strong }: { label: string; value: string; ton
       <span className="text-[hsl(var(--ax-faint))]">{label}</span>
       <span
         className={`tabular-nums ${strong ? "font-semibold" : ""}`}
-        style={tone ? { color: `hsl(${tone})` } : undefined}
+        style={tone ? { color: toneText(tone) } : undefined}
       >
         {value}
       </span>

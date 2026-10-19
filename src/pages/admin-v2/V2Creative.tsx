@@ -1,6 +1,6 @@
 import { ProductionBrief } from "@/components/admin-v2/ProductionBrief";
 import { useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowUpRight,
   Clock3,
@@ -62,6 +62,23 @@ import {
 const TABS = ["overview", "designs", "mockups", "assets", "templates", "prompts"] as const;
 type Tab = (typeof TABS)[number];
 
+/*
+  AX STUDIO OS splits this page in two without splitting the code:
+
+    Creative Studio  /admin-v2/creative   making — overview, asset briefs,
+                                          production prompts, design templates
+    Asset Library    /admin-v2/library    what exists — designs (with the
+                                          inbox) and mockups (review, portal
+                                          visibility, folders)
+
+  Same shelves, same hooks, same handlers. A Creative link that asks for a
+  library shelf (old bookmarks, Overview's Action Required) is forwarded to the
+  Library with its filters intact.
+*/
+const STUDIO_TABS = ["overview", "assets", "prompts", "templates"] as const satisfies readonly Tab[];
+const LIBRARY_TABS = ["mockups", "designs"] as const satisfies readonly Tab[];
+const isLibraryTab = (t: Tab) => (LIBRARY_TABS as readonly Tab[]).includes(t);
+
 const TAB_LABEL: Record<Tab, string> = {
   overview: "Overview",
   designs: "Designs",
@@ -80,8 +97,9 @@ const STAGES: ConceptStage[] = [
   "productized",
 ];
 
-export default function V2Creative() {
+export default function V2Creative({ variant = "studio" }: { variant?: "studio" | "library" }) {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const conceptsQ = useConcepts();
   const designsQ = useDesigns();
   const entitiesQ = useEntities();
@@ -89,16 +107,20 @@ export default function V2Creative() {
   const requested = params.get("tab");
   // A stage filter arriving on its own — from Overview's Action Required — is a
   // request for the mockups shelf, whatever the tab parameter says.
-  const tab: Tab = TABS.includes(requested as Tab)
+  const asked: Tab | null = TABS.includes(requested as Tab)
     ? (requested as Tab)
     : params.get("stage")
       ? "mockups"
-      : "overview";
+      : null;
+  const tab: Tab = asked ?? (variant === "library" ? "mockups" : "overview");
+  const tabs: readonly Tab[] = variant === "library" ? LIBRARY_TABS : STUDIO_TABS;
 
   const query = params.get("q") ?? "";
   const stage = params.get("stage") ?? "all";
   const entityId = params.get("entity") ?? "all";
   const artworkOnly = params.get("artwork") === "1";
+  /** `portal=hidden`: mockups not yet visible in the client's portal. */
+  const portalHidden = params.get("portal") === "hidden";
 
   const patch = (changes: Record<string, string | null>) => {
     const next = new URLSearchParams(params);
@@ -109,7 +131,19 @@ export default function V2Creative() {
     setParams(next, { replace: true });
   };
 
-  const goTab = (next: Tab) => patch({ tab: next === "overview" ? null : next, stage: null });
+  /** Go to a shelf, crossing between Studio and Library when the shelf lives on the other side. */
+  const toShelf = (next: Tab, extra: Record<string, string | null> = {}) => {
+    const crossing = variant === "library" ? !isLibraryTab(next) : isLibraryTab(next);
+    if (!crossing) {
+      patch({ tab: next === "overview" ? null : next, stage: null, ...extra });
+      return;
+    }
+    const q = new URLSearchParams();
+    q.set("tab", next);
+    for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v);
+    navigate(`${variant === "library" ? "/admin-v2/creative" : "/admin-v2/library"}?${q.toString()}`);
+  };
+  const goTab = (next: Tab) => toShelf(next);
 
   const entityName = useMemo(
     () => new Map((entitiesQ.data ?? []).map((e) => [e.id, e.name])),
@@ -139,10 +173,11 @@ export default function V2Creative() {
         (c) =>
           matchesEntity(c.entityId) &&
           (stage === "all" || stageOf(c) === stage) &&
+          (!portalHidden || !c.clientVisible) &&
           matchesQuery(c.title, c.entityId),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [conceptsQ.data, entityId, stage, query, entityName],
+    [conceptsQ.data, entityId, stage, query, entityName, portalHidden],
   );
 
   const designs = useMemo(
@@ -194,11 +229,25 @@ export default function V2Creative() {
     </select>
   );
 
+  // A Creative address asking for a library shelf (or the reverse) moves to
+  // the right page, keeping every filter.
+  const misplaced = variant === "library" ? !isLibraryTab(tab) : isLibraryTab(tab);
+  if (misplaced) {
+    const q = new URLSearchParams(params);
+    q.set("tab", tab);
+    return <Navigate replace to={`${variant === "library" ? "/admin-v2/creative" : "/admin-v2/library"}?${q.toString()}`} />;
+  }
+
   return (
     <>
       <PageHeader
-        title="Creative"
-        subtitle="Artwork, mockups, the assets made from them, and everything waiting on a decision."
+        eyebrow={variant === "library" ? "Asset Library" : "Creative Studio"}
+        title={variant === "library" ? "Everything the studio has made." : "Your ideas have a production team."}
+        subtitle={
+          variant === "library"
+            ? "Artwork and mockups with their owners, review state and portal visibility. Approving and sharing to a portal are separate steps."
+            : "Brief it, build the production prompt, and keep the client, references and destination attached. Prompts run in ChatGPT — results come back as uploads."
+        }
         actions={
           <>
             <V1Link
@@ -218,7 +267,7 @@ export default function V2Creative() {
         }
       />
 
-      <TabBar tabs={TABS} active={tab} onSelect={goTab} label={(t) => TAB_LABEL[t]} />
+      <TabBar tabs={tabs} active={tab} onSelect={goTab} label={(t) => TAB_LABEL[t]} />
 
       {failed && tab !== "templates" && tab !== "prompts" && (
         <div className="mb-5">
@@ -234,8 +283,8 @@ export default function V2Creative() {
           designs={designsQ.data ?? []}
           entityName={entityName}
           onTab={goTab}
-          onStage={(s) => patch({ tab: "mockups", stage: s })}
-          onArtworkGap={() => patch({ tab: "designs", artwork: null })}
+          onStage={(s) => toShelf("mockups", { stage: s })}
+          onArtworkGap={() => toShelf("designs")}
         />
       )}
 
@@ -289,6 +338,13 @@ export default function V2Creative() {
                 {STAGE_LABELS[s]}
               </Chip>
             ))}
+            <Chip
+              active={portalHidden}
+              onClick={() => patch({ portal: portalHidden ? null : "hidden" })}
+              title="Mockups the client cannot see in their portal yet. Approval does not share a mockup — sharing is its own step."
+            >
+              Not in portal
+            </Chip>
           </Toolbar>
           {loading ? (
             <GridSkeleton />
