@@ -8,6 +8,7 @@ import { fmtMoney } from "@/lib/v2/pricing";
 import { shopLink } from "@/lib/ecosystem/image";
 import { AssetImage, Card, Chip, ErrorState, PageHeader, Skeleton, toneText } from "@/components/admin-v2/primitives";
 import ProductCollectionsCard from "@/components/admin-v2/ProductCollectionsCard";
+import { SIDES_LABEL, useProductPrint, useSetProductPrint, type PrintSides } from "@/lib/v2/pricing-sheet";
 
 // A PRODUCT, INSIDE V2.
 //
@@ -199,6 +200,8 @@ export default function V2ProductDetail() {
             )}
           </Card>
 
+          <PrintTypeCard productId={data.id} />
+
           <ProductCollectionsCard
             productId={data.id}
             entityIds={data.entities.map((e) => e.id)}
@@ -282,5 +285,58 @@ function Row({ label, value, tone }: { label: string; value: string; tone?: stri
         {value.replace(/_/g, " ")}
       </span>
     </div>
+  );
+}
+
+/**
+ * Front only, or front + back. Read from the product's pictures (a BACK mockup
+ * means a back print) and locked on the pricing sheet. This is the one place to
+ * tag it by hand — when the pictures can't tell, or the product changed later.
+ * The print type decides which cost and price presets the product takes.
+ */
+function PrintTypeCard({ productId }: { productId: string }) {
+  const q = useProductPrint(productId);
+  const set = useSetProductPrint(productId);
+  if (q.isLoading || q.isError || !q.data) return null;
+  const { tagged, detected } = q.data;
+  const current = tagged ?? detected;
+  const choose = (v: PrintSides | null) =>
+    set.mutate(v, {
+      onSuccess: () => toast.success(v ? `Tagged ${SIDES_LABEL[v]}` : "Reading the print type from the pictures again"),
+      onError: (e) => toast.error(e.message),
+    });
+  const pill = (active: boolean) =>
+    `rounded-full border px-3 py-1 text-[11.5px] transition-colors disabled:opacity-50 ${
+      active
+        ? "border-[hsl(var(--ax-accent))] bg-[hsl(var(--ax-accent))] font-semibold text-[hsl(var(--ax-on-accent))]"
+        : "border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"
+    }`;
+  return (
+    <Card>
+      <h3 className="text-[13px] font-semibold">Print</h3>
+      <p className="mt-1 text-[12px] text-[hsl(var(--ax-faint))]">
+        {current ? (
+          <>
+            <b className="text-[hsl(var(--ax-ink))]">{SIDES_LABEL[current]}</b>
+            {tagged ? " · tagged here" : " · read from the pictures"}
+          </>
+        ) : (
+          "The pictures don't show it. Tag it so the pricing sheet can price this product."
+        )}
+        {tagged && detected && tagged !== detected && ` (the pictures say ${SIDES_LABEL[detected]})`}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {(["front", "front_back"] as const).map((v) => (
+          <button key={v} type="button" disabled={set.isPending} className={pill(tagged === v)} onClick={() => choose(v)}>
+            {SIDES_LABEL[v]}
+          </button>
+        ))}
+        {tagged && (
+          <button type="button" disabled={set.isPending} className={pill(false)} onClick={() => choose(null)}>
+            Use the pictures
+          </button>
+        )}
+      </div>
+    </Card>
   );
 }
