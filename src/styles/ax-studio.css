@@ -297,6 +297,14 @@
 /* Board columns carry their stage colour on the top rule. */
 .ax-board-col { border-top: 3px solid hsl(var(--stage)); background: #edf1f5; }
 
+/* Page transition: each page settles in with a short fade and lift. Keyed on
+   the pathname by V2Layout, so it plays once per page, not on every render. */
+@keyframes ax-page-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.ax-studio .ax-page-in { animation: ax-page-in 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   .ax-studio * { transition: none !important; animation: none !important; }
 }

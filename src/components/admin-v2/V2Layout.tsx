@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -20,6 +20,8 @@ import { SECTION_LABEL, STUDIO_NAV, sectionOf, type StudioSection } from "@/lib/
 import { entityHref } from "@/lib/v2/entity-nav";
 import { tintOf } from "@/lib/v2/entity";
 import CommandSearch from "./CommandSearch";
+import StudioLoader from "./StudioLoader";
+import { preloadV2Pages } from "@/lib/v2/page-loaders";
 import "@/styles/ax-studio.css";
 
 // AX STUDIO OS — the V2 shell.
@@ -76,6 +78,9 @@ function useStudioFonts() {
 
 export default function V2Layout() {
   useStudioFonts();
+  // Every V2 page's code, fetched in the background once the shell is up, so
+  // moving between sections never waits on a download.
+  useEffect(() => preloadV2Pages(), []);
   const location = useLocation();
   const navigate = useNavigate();
   const section = sectionOf(location.pathname, location.search);
@@ -267,11 +272,19 @@ export default function V2Layout() {
         <main
           key={location.pathname}
           data-section={section}
-          className={`animate-fade-in mx-auto px-4 pb-24 pt-7 sm:px-6 lg:px-8 ${
+          className={`ax-page-in mx-auto px-4 pb-24 pt-7 sm:px-6 lg:px-8 ${
             section === "today" ? "max-w-[1310px]" : "max-w-[1440px]"
           }`}
         >
-          <Outlet />
+          {/*
+            The shell's own Suspense boundary. Without it a page still loading
+            fell through to the app-wide fallback, which replaced the WHOLE
+            shell — rail and header included — with V1's dark screen. Now only
+            the content area waits, on the light loader.
+          */}
+          <Suspense fallback={<StudioLoader />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

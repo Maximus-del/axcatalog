@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { RequireAdmin, RequirePortal, RequireFan, RequireAffiliate } from "@/auth/guards";
 import { LoadingScreen } from "@/components/brand/LoadingScreen";
+import { v2Pages } from "@/lib/v2/page-loaders";
 
 // Eager: entry + auth + the fan experience (the primary consumer surface).
 import RootRedirect from "./pages/RootRedirect";
@@ -87,22 +88,22 @@ const AdminInbox = lazy(() => import("./pages/admin/AdminInbox"));
 
 // AX OS V2 — parallel operator namespace. Everything above is V1 and untouched.
 const V2Layout = lazy(() => import("@/components/admin-v2/V2Layout"));
-const V2Overview = lazy(() => import("./pages/admin-v2/V2Overview"));
-const V2People = lazy(() => import("./pages/admin-v2/V2People"));
-const V2EntityOverview = lazy(() => import("./pages/admin-v2/V2EntityOverview"));
-const V2EntityWorkspace = lazy(() => import("./pages/admin-v2/V2EntityWorkspace"));
-const V2Creative = lazy(() => import("./pages/admin-v2/V2Creative"));
-const V2Commerce = lazy(() => import("./pages/admin-v2/V2Commerce"));
-const V2BlankDetail = lazy(() => import("./pages/admin-v2/V2BlankDetail"));
-const V2NotFound = lazy(() => import("./pages/admin-v2/V2NotFound"));
-const V2Orders = lazy(() => import("./pages/admin-v2/V2Orders"));
-const V2Cart = lazy(() => import("./pages/admin-v2/V2Cart"));
-const V2ProductDetail = lazy(() => import("./pages/admin-v2/V2ProductDetail"));
-const V2Desk = lazy(() => import("./pages/admin-v2/V2Desk"));
-const V2Lineup = lazy(() => import("./pages/admin-v2/V2Lineup"));
-const V2PricingSheet = lazy(() => import("./pages/admin-v2/V2PricingSheet"));
-const V2Work = lazy(() => import("./pages/admin-v2/V2Work"));
-const V2Releases = lazy(() => import("./pages/admin-v2/V2Releases"));
+const V2Overview = lazy(v2Pages.overview);
+const V2People = lazy(v2Pages.people);
+const V2EntityOverview = lazy(v2Pages.entityOverview);
+const V2EntityWorkspace = lazy(v2Pages.entityWorkspace);
+const V2Creative = lazy(v2Pages.creative);
+const V2Commerce = lazy(v2Pages.commerce);
+const V2BlankDetail = lazy(v2Pages.blankDetail);
+const V2NotFound = lazy(v2Pages.notFound);
+const V2Orders = lazy(v2Pages.orders);
+const V2Cart = lazy(v2Pages.cart);
+const V2ProductDetail = lazy(v2Pages.productDetail);
+const V2Desk = lazy(v2Pages.desk);
+const V2Lineup = lazy(v2Pages.lineup);
+const V2PricingSheet = lazy(v2Pages.pricingSheet);
+const V2Work = lazy(v2Pages.work);
+const V2Releases = lazy(v2Pages.releases);
 
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
