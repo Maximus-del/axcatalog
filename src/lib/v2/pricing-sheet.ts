@@ -610,3 +610,150 @@ export function useSavePricingSheet(entityId: string) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: sheetKey(entityId) }),
   });
 }
+
+// ------------------------------------------------- condensed print lines
+
+export interface PrintLine {
+  key: string;
+  blankId: string;
+  sides: PrintSides | null;
+  rows: SheetProduct[];
+  /** The breakdown every product on this line shares (from the first typical row). */
+  shared: RowMaths;
+  /** The most common retail on the line, and how many products differ from the shared numbers. */
+  retail: number | null;
+  custom: number;
+}
+
+const sameNumbers = (a: RowMaths, b: RowMaths) =>
+  a.trueCost === b.trueCost && a.clientPrice === b.clientPrice && a.axPerSale === b.axPerSale && a.clientPerSale === b.clientPerSale;
+
+/**
+ * Pure: a blank's products collapsed to one line per print type. Products on
+ * the same blank and print share one breakdown unless a row overrides it —
+ * those are counted as `custom` (a drop special) and stay visible inside.
+ */
+export function printLines(
+  rows: SheetProduct[],
+  drafts: Record<string, RowDraft>,
+  terms: Pick<BrandTerms, "revenueSharePercent" | "splitBasis">,
+  presets: Presets,
+): PrintLine[] {
+  const by = new Map<string, SheetProduct[]>();
+  const maths = new Map(rows.map((p) => [p.id, rowMaths(p, drafts[p.id] ?? draftOf(p), terms, presets)]));
+  for (const p of rows) {
+    const k = `${p.blankId ?? "none"}|${maths.get(p.id)!.sides ?? "unset"}`;
+    by.set(k, [...(by.get(k) ?? []), p]);
+  }
+  const lines = [...by.entries()].map(([key, rs]): PrintLine => {
+    // Typical = a row with no overrides, at the most common retail.
+    const retailCounts = new Map<number, number>();
+    for (const r of rs) {
+      const v = (drafts[r.id] ?? draftOf(r)).retail;
+      if (v != null) retailCounts.set(v, (retailCounts.get(v) ?? 0) + 1);
+    }
+    const retail = [...retailCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const isPlain = (r: SheetProduct) => {
+      const d = drafts[r.id] ?? draftOf(r);
+      return d.blankCost == null && d.printCost == null && d.otherCost == null && d.clientPrice == null && d.sharePercent == null && d.retail === retail;
+    };
+    const typical = rs.find(isPlain) ?? rs[0];
+    const shared = maths.get(typical.id)!;
+    return {
+      key,
+      blankId: rs[0].blankId ?? "none",
+      sides: shared.sides,
+      rows: rs,
+      shared,
+      retail,
+      custom: rs.filter((r) => !sameNumbers(maths.get(r.id)!, shared)).length,
+    };
+  });
+  return lines.sort((a, b) => sidesRank(a.sides) - sidesRank(b.sides));
+}
+
+// ------------------------------------------------- blank assignment & print tags
+
+export interface BlankOption {
+  id: string;
+  name: string;
+  garmentType: string | null;
+  cost: number | null;
+}
+
+/** Every V2 blank, for assigning products that have none. */
+export function useBlankOptions() {
+  return useQuery({
+    queryKey: ["v2", "blank-options"],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<BlankOption[]> => {
+      const res = await t("v2_blanks").select("id, display_name, name, garment_type, cost").order("display_name");
+      if (res.error) throw new Error(res.error.message);
+      return ((res.data ?? []) as Row[]).map((b) => ({
+        id: String(b.id),
+        name: String(b.display_name || b.name || "Blank"),
+        garmentType: (b.garment_type as string | null) ?? null,
+        cost: num(b.cost),
+      }));
+    },
+  });
+}
+
+/**
+ * Put products on a blank (products.v2_blank_id) so they take that blank's
+ * presets — cost, client price and the split. A print type is tagged only when
+ * the pictures cannot tell (older Shopify products).
+ */
+export function useAssignBlank(entityId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ productIds, blankId, sides }: { productIds: string[]; blankId: string; sides: PrintSides | null }) => {
+      if (!productIds.length) return 0;
+      const res = (await must(t("products").update({ v2_blank_id: blankId } as never).in("id", productIds).select("id"))) as { data: Row[] | null };
+      if ((res.data ?? []).length !== productIds.length) throw new Error("Some products were not updated — you may not have access to them.");
+      if (sides) {
+        await must(
+          t("product_pricing").upsert(productIds.map((id) => ({ product_id: id, print_sides: sides })) as never, { onConflict: "product_id" }),
+        );
+      }
+      return productIds.length;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: sheetKey(entityId) }),
+  });
+}
+
+/** One product's print type: what AX tagged, and what its pictures say. */
+export function useProductPrint(productId: string | undefined) {
+  return useQuery({
+    queryKey: ["v2", "product-print", productId],
+    enabled: !!productId,
+    queryFn: async () => {
+      const [tag, imgs] = await Promise.all([
+        t("product_pricing").select("print_sides").eq("product_id", productId as string).maybeSingle(),
+        t("product_images").select("file_name, metadata").eq("product_id", productId as string),
+      ]);
+      if (tag.error) throw new Error(tag.error.message);
+      if (imgs.error) throw new Error(imgs.error.message);
+      const v = (tag.data as Row | null)?.print_sides;
+      return {
+        tagged: v === "front" || v === "front_back" ? (v as PrintSides) : null,
+        detected: detectSides((imgs.data ?? []) as Row[]),
+      };
+    },
+  });
+}
+
+/** Tag a product Front / Front + back, or clear the tag to read it from the pictures again. */
+export function useSetProductPrint(productId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (sides: PrintSides | null) => {
+      await must(t("product_pricing").upsert({ product_id: productId, print_sides: sides } as never, { onConflict: "product_id" }));
+      return sides;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["v2", "product-print", productId] });
+      void qc.invalidateQueries({ queryKey: ["v2", "pricing-sheet"] });
+    },
+  });
+}

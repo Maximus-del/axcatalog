@@ -10,10 +10,10 @@
 // spreadsheet — click, drag, shift-click, ⌘/Ctrl-click, or a column name — and
 // one value fills them all. Save writes the real records, including the client
 // price the portal charges (products.athlete_price).
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowUpRight, Loader2, RotateCcw, X } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, ChevronDown, ChevronRight, Loader2, Lock, RotateCcw, X } from "lucide-react";
 import { Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 import { useEntityWorkspace } from "@/lib/v2/data";
 import { fmtMoney } from "@/lib/v2/pricing";
@@ -31,6 +31,9 @@ import {
   emptyPreset,
   fillCells,
   parseCell,
+  printLines,
+  useAssignBlank,
+  useBlankOptions,
   presetBreakdown,
   presetCosts,
   presetError,
@@ -40,7 +43,6 @@ import {
   useSavePricingSheet,
   type BlankPreset,
   type Component,
-  type GroupBy,
   type NumberField,
   type PrintSides,
   type RowDraft,
@@ -57,12 +59,6 @@ const money = (n: number | null | undefined) => (n == null ? "—" : fmtMoney(n)
 const pctText = (n: number | null | undefined) => (n == null ? "—" : `${n}%`);
 const isPct = (f: NumberField) => f === "sharePercent";
 
-const GROUP_OPTIONS: Array<{ key: GroupBy; label: string }> = [
-  { key: "blank", label: "Blank" },
-  { key: "blank_print", label: "Blank + print" },
-  { key: "print", label: "Print" },
-  { key: "none", label: "None" },
-];
 const SORT_OPTIONS: Array<{ key: SortBy; label: string }> = [
   { key: "print", label: "Print (front first)" },
   { key: "blank", label: "Blank" },
@@ -211,22 +207,18 @@ function Cell({
   );
 }
 
-function SidesToggle({ value, detected, onChange }: { value: PrintSides | null; detected: PrintSides | null; onChange: (v: PrintSides | null) => void }) {
-  const current = value ?? detected;
+/** Print type, read from the product's pictures or tagged on the product. Locked here — it either is or it isn't. */
+function SidesTag({ sides, tagged }: { sides: PrintSides | null; tagged: boolean }) {
   return (
-    <div className="inline-flex overflow-hidden rounded-full border border-[hsl(var(--ax-border))] text-[10.5px]" role="group" aria-label="Print">
-      {(["front", "front_back"] as const).map((s) => (
-        <button
-          key={s}
-          type="button"
-          onClick={() => onChange(detected === s ? null : s)}
-          title={value == null && current === s ? "From the product's pictures" : undefined}
-          className={`px-2 py-0.5 ${current === s ? "bg-[hsl(var(--ax-accent))] font-semibold text-[hsl(var(--ax-on-accent))]" : "text-[hsl(var(--ax-secondary))]"}`}
-        >
-          {s === "front" ? "Front" : "F + B"}
-        </button>
-      ))}
-    </div>
+    <span
+      title={sides ? (tagged ? "Tagged on the product page" : "Read from the product's pictures") : "Not known — tag it on the product page"}
+      className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10.5px] font-semibold ${
+        sides ? "border-[hsl(var(--ax-border))] text-[hsl(var(--ax-ink))]" : "border-[hsl(var(--ax-amber)/0.6)] text-[hsl(var(--ax-amber))]"
+      }`}
+    >
+      <Lock className="h-2.5 w-2.5 opacity-60" aria-hidden />
+      {sides ? SIDES_LABEL[sides] : "Not set"}
+    </span>
   );
 }
 
@@ -366,7 +358,12 @@ export default function V2PricingSheet() {
   const [drafts, setDrafts] = useState<Record<string, RowDraft>>({});
   const [terms, setTerms] = useState<BrandTerms>(EMPTY_TERMS);
   const [presetDrafts, setPresetDrafts] = useState<Record<string, BlankPreset>>({});
-  const [groupBy, setGroupBy] = useState<GroupBy>("blank");
+  const [openLines, setOpenLines] = useState<Set<string>>(new Set());
+  const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [assignBlank, setAssignBlank] = useState("");
+  const [assignSides, setAssignSides] = useState<PrintSides | "auto">("auto");
+  const blankOptions = useBlankOptions();
+  const assign = useAssignBlank(entityId);
   const [sortBy, setSortBy] = useState<SortBy>("print");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [anchor, setAnchor] = useState<string | null>(null);
@@ -385,16 +382,39 @@ export default function V2PricingSheet() {
 
   const presets = useMemo(() => ({ ...savedPresets, ...presetDrafts }), [savedPresets, presetDrafts]);
   const draft = useCallback((p: SheetProduct): RowDraft => drafts[p.id] ?? draftOf(p), [drafts]);
-  const setField = (p: SheetProduct, k: keyof RowDraft, v: RowDraft[keyof RowDraft]) =>
-    setDrafts((d) => ({ ...d, [p.id]: { ...(d[p.id] ?? draftOf(p)), [k]: v } }));
   const setPresetLine = (blankId: string, c: Component, k: "cost" | "price", v: number | null) =>
     setPresetDrafts((d) => {
       const base = d[blankId] ?? savedPresets[blankId] ?? emptyPreset();
       return { ...d, [blankId]: { ...base, [c]: { ...base[c], [k]: v } } };
     });
 
-  const groups = useMemo(() => arrangeRows(products, drafts, { groupBy, sortBy, terms, presets }), [products, drafts, groupBy, sortBy, terms, presets]);
-  const rowOrder = useMemo(() => groups.flatMap((g) => g.rows.map((r) => r.id)), [groups]);
+  // Each blank collapses to one line per print type; a line opens to its products.
+  const sections = useMemo(() => {
+    const byBlank = new Map<string, SheetProduct[]>();
+    for (const p of products) if (p.blankId) byBlank.set(p.blankId, [...(byBlank.get(p.blankId) ?? []), p]);
+    return [...byBlank.entries()]
+      .map(([blankId, rows]) => ({
+        blankId,
+        name: rows[0].blankName ?? "Blank",
+        lines: printLines(rows, drafts, terms, presets).map((l) => ({
+          ...l,
+          rows: arrangeRows(l.rows, drafts, { groupBy: "none", sortBy, terms, presets })[0].rows,
+        })),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [products, drafts, terms, presets, sortBy]);
+  const noBlank = useMemo(() => products.filter((p) => !p.blankId).sort((a, b) => a.title.localeCompare(b.title)), [products]);
+  const rowOrder = useMemo(
+    () => sections.flatMap((sec) => sec.lines.filter((l) => openLines.has(l.key)).flatMap((l) => l.rows.map((r) => r.id))),
+    [sections, openLines],
+  );
+  const toggleLine = (k: string) =>
+    setOpenLines((s) => {
+      const n = new Set(s);
+      if (n.has(k)) n.delete(k);
+      else n.add(k);
+      return n;
+    });
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const maths = useMemo(
     () => new Map(products.map((p) => [p.id, rowMaths(p, drafts[p.id] ?? draftOf(p), terms, presets)])),
@@ -511,7 +531,6 @@ export default function V2PricingSheet() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const selectedRows = useMemo(() => [...new Set([...selected].map((k) => parseCell(k).productId))], [selected]);
   const selectedFields = useMemo(() => {
     const c: Partial<Record<NumberField, number>> = {};
     for (const k of selected) {
@@ -520,17 +539,6 @@ export default function V2PricingSheet() {
     }
     return c;
   }, [selected]);
-  const setSidesForSelected = (s: PrintSides) => {
-    setDrafts((d) => {
-      const n = { ...d };
-      for (const pid of selectedRows) {
-        const p = byId.get(pid);
-        if (p) n[pid] = { ...(n[pid] ?? draftOf(p)), printSides: p.detectedSides === s ? null : s };
-      }
-      return n;
-    });
-  };
-
   // ---------------------------------------------------------- save
   async function saveAll() {
     if (errors.length || termsProblem || presetProblems.length) return;
@@ -565,6 +573,105 @@ export default function V2PricingSheet() {
       ax: avg(ms.map((m) => m.axPerSale)),
     };
   }, [products, maths]);
+
+  /** The products inside one print line — each editable for a drop special. */
+  const productTable = (rows: SheetProduct[]) => {
+    const head = (field: NumberField, text: string, title?: string) => (
+      <Th
+        title={title ?? `Select every ${FIELD_LABEL[field].toLowerCase()} on this line (shift to add)`}
+        onClick={(e) => selectColumn(field, rows, e.shiftKey || e.metaKey || e.ctrlKey)}
+      >
+        {text}
+      </Th>
+    );
+    return (
+      <table className="w-full border-collapse">
+        <thead className="border-b border-[hsl(var(--ax-line))]">
+          <tr>
+            <Th>Print</Th>
+            <Th>Product</Th>
+            {head("blankCost", "Blank", "Our blank cost — empty uses the preset")}
+            {head("printCost", "Print", "Our print cost — empty uses front (+ back) presets")}
+            {head("otherCost", "Services", "Our services cost — empty uses the preset")}
+            <Th right title="Our true cost for one unit">True cost</Th>
+            {head("clientPrice", "Client price", `What one unit costs ${first} — and what the portal charges. Empty uses the presets.`)}
+            <Th right title="Client price − true cost">AX / unit</Th>
+            {head("retail", "Retail", "What a fan pays (internal products only)")}
+            <Th right title={`Retail − ${first}'s cost`}>Profit</Th>
+            {head("sharePercent", `${first} %`, `Override ${first}'s share for this product`)}
+            <Th right>{first} $</Th>
+            <Th right title="AX's share of the profit">AX split</Th>
+            <Th right title="AX per store sale: unit margin + split">AX total</Th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[hsl(var(--ax-line))]">
+          {rows.map((p) => {
+            const d = draft(p);
+            const m = maths.get(p.id)!;
+            const err = rowError(p, d);
+            const dirty = !!drafts[p.id] && changedFields(p, drafts[p.id]).length > 0;
+            const pre = presetCosts(p, m.sides, presets);
+            const cell = (field: NumberField, inherited: number | null, source: string | null, extra?: { locked?: string; invalid?: boolean }) => {
+              const k = cellKey(p.id, field);
+              return (
+                <Cell
+                  key={field}
+                  k={k}
+                  value={d[field]}
+                  inherited={inherited}
+                  source={source}
+                  selected={selected.has(k)}
+                  percent={isPct(field)}
+                  onDown={onDown}
+                  onEnter={onEnter}
+                  onOpen={openEditor}
+                  {...extra}
+                />
+              );
+            };
+            const blankSource = pre.blank != null ? (p.blankId && presets[p.blankId]?.blank.cost != null ? "preset" : "catalog") : null;
+            return (
+              <tr key={p.id} className={dirty ? "bg-[hsl(var(--ax-accent)/0.05)]" : undefined}>
+                <td className="px-2 py-1.5">
+                  <SidesTag sides={m.sides} tagged={p.pricing.printSides != null} />
+                </td>
+                <td className="max-w-[260px] px-2 py-1.5 text-[12px]">
+                  <Link to={`/admin-v2/products/${p.id}`} className="block truncate font-medium hover:underline" title={p.title}>
+                    {p.title}
+                  </Link>
+                  {(m.priceChanges || err || p.onShopify || p.status === "archived") && (
+                    <span className="block truncate text-[10px] text-[hsl(var(--ax-faint))]">
+                      {m.priceChanges && (
+                        <span className="text-[hsl(var(--ax-amber))]">
+                          Portal {money(p.athletePrice ?? p.ruleAthletePrice)} → {money(m.clientPrice)} on Save
+                        </span>
+                      )}
+                      {[p.onShopify ? " On Shopify" : null, p.status === "archived" ? " Archived" : null].filter(Boolean).join(" ·")}
+                      {err && <span className="ml-1 text-[hsl(var(--ax-red))]">{err}</span>}
+                    </span>
+                  )}
+                </td>
+                {cell("blankCost", pre.blank, blankSource)}
+                {cell("printCost", pre.print, pre.print != null ? "preset" : null, { invalid: m.printCost == null })}
+                {cell("otherCost", pre.services, pre.services != null ? "preset" : null)}
+                <Td right strong>{money(m.trueCost)}</Td>
+                {cell("clientPrice", m.clientPriceSource === "row" ? null : m.clientPrice, m.clientPriceSource === "row" ? null : m.clientPriceSource, {
+                  invalid: m.clientPriceSource === "rule",
+                })}
+                <Td right strong tone={m.unitMargin != null ? (m.unitMargin < 0 ? "bad" : "good") : undefined}>{money(m.unitMargin)}</Td>
+                {cell("retail", null, null, { locked: p.onShopify ? "Retail is set in Shopify for this product" : undefined, invalid: d.retail == null })}
+                <Td right tone={m.storeProfit != null && m.storeProfit < 0 ? "bad" : undefined}>{money(m.storeProfit)}</Td>
+                {cell("sharePercent", terms.revenueSharePercent, terms.revenueSharePercent != null ? "terms" : null)}
+                <Td right>{money(m.clientPerSale)}</Td>
+                <Td right>{money(m.axSplit)}</Td>
+                <Td right strong tone={m.axPerSale != null && m.axPerSale < 0 ? "bad" : undefined}>{money(m.axPerSale)}</Td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  };
 
   const label = (s: string) => <span className="text-[10.5px] uppercase tracking-[0.12em] text-[hsl(var(--ax-faint))]">{s}</span>;
   const axKeeps = terms.revenueSharePercent == null ? null : Math.round((100 - terms.revenueSharePercent) * 100) / 100;
@@ -677,147 +784,229 @@ export default function V2PricingSheet() {
           </div>
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            {label("Group")}
-            {GROUP_OPTIONS.map((g) => (
-              <Chip key={g.key} active={groupBy === g.key} onClick={() => setGroupBy(g.key)}>
-                {g.label}
-              </Chip>
-            ))}
-            <span className="mx-1 h-4 w-px bg-[hsl(var(--ax-line))]" />
-            {label("Sort")}
+            {label("Products sort")}
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortBy)}
               className="rounded-full border border-[hsl(var(--ax-border))] bg-transparent px-3 py-1 text-[12px] outline-none"
               aria-label="Sort"
             >
-              {SORT_OPTIONS.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
                 </option>
               ))}
             </select>
+            <button type="button" className={btn} onClick={() => setOpenLines(new Set(sections.flatMap((x) => x.lines.map((l) => l.key))))}>
+              Open all
+            </button>
+            <button type="button" className={btn} onClick={() => setOpenLines(new Set())}>
+              Close all
+            </button>
             <span className="flex-1" />
             <Chip active={showArchived} onClick={() => setShowArchived((v) => !v)}>
               {showArchived ? "Including archived" : "Live only"}
             </Chip>
           </div>
           <p className="mb-3 text-[11px] text-[hsl(var(--ax-faint))]">
-            Click a cell, drag across cells, shift-click for a range, ⌘/Ctrl-click to add one, or click a column name to select it. Then type a
-            number. Delete resets cells back to their preset.
+            Products on the same blank and print share one breakdown. Open a line to see its products and change one for a drop special: click a
+            cell, drag, shift-click or click a column name, then type a number. Delete puts cells back on the preset. Print type is read from each
+            product's pictures and changed only on the product itself.
           </p>
           {summary.incomplete > 0 && (
             <p className="mb-3 flex items-center gap-1.5 text-[12px] text-[hsl(var(--ax-amber))]">
               <AlertTriangle className="h-3.5 w-3.5" />
-              {summary.incomplete} of {summary.count} rows are missing a print type, print cost, client price, retail or split.
+              {summary.incomplete} of {summary.count} products are missing a print type, print cost, client price, retail or split.
             </p>
           )}
 
-          {groups.map((g) => {
-            const head = (field: NumberField, text: string, title?: string) => (
-              <Th
-                title={title ?? `Select every ${FIELD_LABEL[field].toLowerCase()} in this group (shift to add)`}
-                onClick={(e) => selectColumn(field, g.rows, e.shiftKey || e.metaKey || e.ctrlKey)}
-              >
-                {text}
-              </Th>
-            );
-            return (
-              <section key={g.key} className="mb-6">
-                <h2 className="mb-2 text-[14px] font-semibold">
-                  {g.label} <span className="text-[hsl(var(--ax-faint))]">{g.rows.length}</span>
-                </h2>
-                <div className="ax-card overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead className="border-b border-[hsl(var(--ax-line))]">
-                      <tr>
-                        <Th>Print</Th>
-                        <Th>Blank · product</Th>
-                        {head("blankCost", "Blank", "Our blank cost — empty uses the preset")}
-                        {head("printCost", "Print", "Our print cost — empty uses front (+ back) presets")}
-                        {head("otherCost", "Services", "Our services cost — empty uses the preset")}
-                        <Th right title="Our true cost for one unit">True cost</Th>
-                        {head("clientPrice", "Client price", `What one unit costs ${first} — and what the portal charges. Empty uses the presets.`)}
-                        <Th right title="Client price − true cost">AX / unit</Th>
-                        {head("retail", "Retail", "What a fan pays (internal products only)")}
-                        <Th right title={`Retail − ${first}'s cost`}>Profit</Th>
-                        {head("sharePercent", `${first} %`, `Override ${first}'s share for this product`)}
-                        <Th right>{first} $</Th>
-                        <Th right title="AX's share of the profit">AX split</Th>
-                        <Th right title="AX per store sale: unit margin + split">AX total</Th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[hsl(var(--ax-line))]">
-                      {g.rows.map((p) => {
-                        const d = draft(p);
-                        const m = maths.get(p.id)!;
-                        const err = rowError(p, d);
-                        const dirty = !!drafts[p.id] && changedFields(p, drafts[p.id]).length > 0;
-                        const pre = presetCosts(p, m.sides, presets);
-                        const cell = (field: NumberField, inherited: number | null, source: string | null, extra?: { locked?: string; invalid?: boolean }) => {
-                          const k = cellKey(p.id, field);
-                          return (
-                            <Cell
-                              key={field}
-                              k={k}
-                              value={d[field]}
-                              inherited={inherited}
-                              source={source}
-                              selected={selected.has(k)}
-                              percent={isPct(field)}
-                              onDown={onDown}
-                              onEnter={onEnter}
-                              onOpen={openEditor}
-                              {...extra}
-                            />
-                          );
-                        };
-                        const blankSource = pre.blank != null ? (p.blankId && presets[p.blankId]?.blank.cost != null ? "preset" : "catalog") : null;
-                        return (
-                          <tr key={p.id} className={dirty ? "bg-[hsl(var(--ax-accent)/0.05)]" : undefined}>
-                            <td className="px-2 py-1.5">
-                              <SidesToggle value={d.printSides} detected={p.detectedSides} onChange={(v) => setField(p, "printSides", v)} />
+          {sections.map((sec) => (
+            <section key={sec.blankId} className="mb-5">
+              <h2 className="mb-2 text-[14px] font-semibold">
+                {sec.name} <span className="text-[hsl(var(--ax-faint))]">{sec.lines.reduce((n, l) => n + l.rows.length, 0)}</span>
+              </h2>
+              <div className="ax-card overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead className="border-b border-[hsl(var(--ax-line))]">
+                    <tr>
+                      <Th>Print</Th>
+                      <Th>Products</Th>
+                      <Th right>True cost</Th>
+                      <Th right>Client price</Th>
+                      <Th right>AX / unit</Th>
+                      <Th right>Retail</Th>
+                      <Th right>Profit</Th>
+                      <Th right>{first} $</Th>
+                      <Th right>AX split</Th>
+                      <Th right>AX total</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[hsl(var(--ax-line))]">
+                    {sec.lines.map((l) => {
+                      const open = openLines.has(l.key);
+                      const m = l.shared;
+                      const pending = l.rows.filter((r) => maths.get(r.id)?.priceChanges).length;
+                      return (
+                        <Fragment key={l.key}>
+                          <tr
+                            onClick={() => toggleLine(l.key)}
+                            className="cursor-pointer hover:bg-[hsl(var(--ax-accent)/0.04)]"
+                            aria-expanded={open}
+                          >
+                            <td className="px-2 py-2">
+                              <span className="flex items-center gap-1.5">
+                                {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                <SidesTag sides={l.sides} tagged={false} />
+                              </span>
                             </td>
-                            <td className="max-w-[240px] px-2 py-1.5 text-[12px]">
-                              <span className="block truncate font-semibold">{p.blankName ?? "No blank linked"}</span>
-                              <Link to={`/admin-v2/products/${p.id}`} className="block truncate text-[11px] text-[hsl(var(--ax-faint))] hover:underline" title={p.title}>
-                                {p.title}
-                              </Link>
-                              {(m.priceChanges || err || p.onShopify || p.status === "archived") && (
-                                <span className="block truncate text-[10px] text-[hsl(var(--ax-faint))]">
-                                  {m.priceChanges && (
-                                    <span className="text-[hsl(var(--ax-amber))]">
-                                      Portal {money(p.athletePrice ?? p.ruleAthletePrice)} → {money(m.clientPrice)} on Save
-                                    </span>
-                                  )}
-                                  {[p.onShopify ? " On Shopify" : null, p.status === "archived" ? " Archived" : null].filter(Boolean).join(" ·")}
-                                  {err && <span className="ml-1 text-[hsl(var(--ax-red))]">{err}</span>}
-                                </span>
-                              )}
+                            <td className="px-2 py-2 text-[12px]">
+                              <b>{l.rows.length}</b> product{l.rows.length === 1 ? "" : "s"}
+                              {l.custom > 0 && <span className="ml-1.5 text-[hsl(var(--ax-amber))]">· {l.custom} custom</span>}
+                              {pending > 0 && <span className="ml-1.5 text-[hsl(var(--ax-amber))]">· portal price updates on Save</span>}
                             </td>
-                            {cell("blankCost", pre.blank, blankSource)}
-                            {cell("printCost", pre.print, pre.print != null ? "preset" : null, { invalid: m.printCost == null })}
-                            {cell("otherCost", pre.services, pre.services != null ? "preset" : null)}
                             <Td right strong>{money(m.trueCost)}</Td>
-                            {cell("clientPrice", m.clientPriceSource === "row" ? null : m.clientPrice, m.clientPriceSource === "row" ? null : m.clientPriceSource, {
-                              invalid: m.clientPriceSource === "rule",
-                            })}
+                            <Td right strong>{money(m.clientPrice)}</Td>
                             <Td right strong tone={m.unitMargin != null ? (m.unitMargin < 0 ? "bad" : "good") : undefined}>{money(m.unitMargin)}</Td>
-                            {cell("retail", null, null, { locked: p.onShopify ? "Retail is set in Shopify for this product" : undefined, invalid: d.retail == null })}
-                            <Td right tone={m.storeProfit != null && m.storeProfit < 0 ? "bad" : undefined}>{money(m.storeProfit)}</Td>
-                            {cell("sharePercent", terms.revenueSharePercent, terms.revenueSharePercent != null ? "terms" : null)}
+                            <Td right>{money(l.retail)}</Td>
+                            <Td right>{money(m.storeProfit)}</Td>
                             <Td right>{money(m.clientPerSale)}</Td>
                             <Td right>{money(m.axSplit)}</Td>
                             <Td right strong tone={m.axPerSale != null && m.axPerSale < 0 ? "bad" : undefined}>{money(m.axPerSale)}</Td>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                          {open && (
+                            <tr>
+                              <td colSpan={10} className="bg-[hsl(var(--ax-ink)/0.02)] px-2 pb-3 pt-1">
+                                {productTable(l.rows)}
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+
+          {noBlank.length > 0 && (
+            <section className="mb-5">
+              <div className="mb-2 flex flex-wrap items-baseline gap-2">
+                <h2 className="text-[14px] font-semibold">
+                  No blank linked <span className="text-[hsl(var(--ax-faint))]">{noBlank.length}</span>
+                </h2>
+                <span className="text-[11px] text-[hsl(var(--ax-faint))]">
+                  Tick products and put them on a blank. They take that blank's cost, client price and split from the presets above.
+                </span>
+              </div>
+              <div className="ax-card overflow-x-auto">
+                <div className="flex flex-wrap items-center gap-2 border-b border-[hsl(var(--ax-line))] px-3 py-2">
+                  <label className="flex items-center gap-1.5 text-[12px]">
+                    <input
+                      type="checkbox"
+                      checked={checked.size > 0 && noBlank.every((p) => checked.has(p.id))}
+                      onChange={(e) => setChecked(e.target.checked ? new Set(noBlank.map((p) => p.id)) : new Set())}
+                      aria-label="Select all products with no blank"
+                    />
+                    {checked.size > 0 ? `${checked.size} selected` : "Select all"}
+                  </label>
+                  <span className="flex-1" />
+                  <select
+                    value={assignBlank}
+                    onChange={(e) => setAssignBlank(e.target.value)}
+                    className="rounded-full border border-[hsl(var(--ax-border))] bg-transparent px-3 py-1 text-[12px] outline-none"
+                    aria-label="Blank"
+                  >
+                    <option value="">Choose a blank…</option>
+                    {(blankOptions.data ?? []).map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                        {b.cost != null ? ` · $${b.cost}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={assignSides}
+                    onChange={(e) => setAssignSides(e.target.value as PrintSides | "auto")}
+                    className="rounded-full border border-[hsl(var(--ax-border))] bg-transparent px-3 py-1 text-[12px] outline-none"
+                    aria-label="Print"
+                    title="Only needed when the pictures can't tell"
+                  >
+                    <option value="auto">Print: read from pictures</option>
+                    <option value="front">Print: Front</option>
+                    <option value="front_back">Print: Front + back</option>
+                  </select>
+                  <button
+                    type="button"
+                    className={btnPrimary}
+                    disabled={!checked.size || !assignBlank || assign.isPending}
+                    onClick={() =>
+                      assign.mutate(
+                        { productIds: [...checked], blankId: assignBlank, sides: assignSides === "auto" ? null : assignSides },
+                        {
+                          onSuccess: (n) => {
+                            toast.success(`${n} product${n === 1 ? "" : "s"} put on ${(blankOptions.data ?? []).find((b) => b.id === assignBlank)?.name ?? "the blank"}.`);
+                            setChecked(new Set());
+                            void sheet.refetch();
+                          },
+                          onError: (e) => toast.error(e.message),
+                        },
+                      )
+                    }
+                  >
+                    {assign.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Assign {checked.size || ""}
+                  </button>
                 </div>
-              </section>
-            );
-          })}
+                <table className="w-full border-collapse">
+                  <thead className="border-b border-[hsl(var(--ax-line))]">
+                    <tr>
+                      <Th> </Th>
+                      <Th>Product</Th>
+                      <Th>Print</Th>
+                      <Th right>Retail</Th>
+                      <Th right>Portal charges</Th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[hsl(var(--ax-line))]">
+                    {noBlank.map((p) => {
+                      const m = maths.get(p.id)!;
+                      return (
+                        <tr key={p.id} className={checked.has(p.id) ? "bg-[hsl(var(--ax-accent)/0.06)]" : undefined}>
+                          <td className="w-8 px-3 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={checked.has(p.id)}
+                              onChange={() =>
+                                setChecked((c) => {
+                                  const n = new Set(c);
+                                  if (n.has(p.id)) n.delete(p.id);
+                                  else n.add(p.id);
+                                  return n;
+                                })
+                              }
+                              aria-label={`Select ${p.title}`}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5 text-[12px]">
+                            <Link to={`/admin-v2/products/${p.id}`} className="hover:underline">
+                              {p.title}
+                            </Link>
+                            {p.onShopify && <span className="ml-1.5 text-[10px] text-[hsl(var(--ax-faint))]">On Shopify</span>}
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <SidesTag sides={m.sides} tagged={p.pricing.printSides != null} />
+                          </td>
+                          <Td right>{money(p.retail)}</Td>
+                          <Td right>{money(p.athletePrice ?? p.ruleAthletePrice)}</Td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
           <p className="text-[11px] leading-relaxed text-[hsl(var(--ax-faint))]">
             True cost = blank + print + services (ours). Client price = the same lines at what we charge — the price {first}'s portal orders are
             charged. AX / unit = client price − true cost. On a store sale, profit = retail − client price; {first} keeps their share and AX
@@ -863,15 +1052,6 @@ export default function V2PricingSheet() {
             <button type="button" className={btn} onClick={() => applyFill(null)} title="Clear these cells so they use their preset again">
               Use preset
             </button>
-            <span className="mx-1 h-4 w-px bg-[hsl(var(--ax-line))]" />
-            <span className="text-[11px] text-[hsl(var(--ax-faint))]">
-              Print for {selectedRows.length} row{selectedRows.length === 1 ? "" : "s"}:
-            </span>
-            {(["front", "front_back"] as const).map((s) => (
-              <button key={s} type="button" className={btn} onClick={() => setSidesForSelected(s)}>
-                {SIDES_LABEL[s]}
-              </button>
-            ))}
             <span className="flex-1" />
             <button type="button" className={btn} onClick={() => setSelected(new Set())} aria-label="Clear selection">
               <X className="h-3.5 w-3.5" />

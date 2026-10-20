@@ -11,6 +11,7 @@ import {
   garmentOf,
   presetBreakdown,
   presetCosts,
+  printLines,
   rowError,
   rowMaths,
   type Presets,
@@ -175,5 +176,23 @@ describe("helpers", () => {
   it("reads the garment from the blank, then the title", () => {
     expect(garmentOf("WRLD #1 Hoodie", null)).toBe("hoodie");
     expect(garmentOf("Something", "tee")).toBe("tee");
+  });
+});
+
+describe("printLines", () => {
+  it("collapses a blank to one line per print type, sharing one breakdown", () => {
+    const tee2 = make({ id: "tee-fb2", title: "Unleashed #11 Tee" });
+    const lines = printLines([tee, tee2, teeFront], {}, profit90, presets);
+    expect(lines.map((l) => [l.sides, l.rows.length, l.shared.clientPrice, l.custom])).toEqual([
+      ["front", 1, 23, 0],
+      ["front_back", 2, 26, 0],
+    ]);
+  });
+
+  it("counts a product with its own numbers as custom, without moving the line", () => {
+    const tee2 = make({ id: "tee-fb2" });
+    const lines = printLines([tee, tee2], { [tee2.id]: { ...draftOf(tee2), clientPrice: 30 } }, profit90, presets);
+    expect(lines[0]).toMatchObject({ custom: 1 });
+    expect(lines[0].shared.clientPrice).toBe(26);
   });
 });
