@@ -168,7 +168,7 @@ function BulkPage({ pb }: { pb: Playbook }) {
 function PromotePage({ link }: { link: (href: string) => string }) {
   const steps: Array<{ title: string; body: string; href: string; cta: string }> = [
     { title: "Pick the moment", body: "A game, a milestone, a new city, a holiday. A drop needs a reason.", href: "/portal/content?panel=drops", cta: "Plan a drop" },
-    { title: "Grab the content", body: "AX makes photos and graphics for every product. Download them ready to post.", href: "/portal/content", cta: "Content & Drops" },
+    { title: "Grab the content", body: "AX makes photos and graphics for every product, hosted and ready to share.", href: "/portal/content", cta: "Content & Drops" },
     { title: "Share the link", body: "Every product in My Gear has Copy to grab its store link. Put it in your bio and stories.", href: "/portal/products", cta: "My Gear" },
     { title: "Add your code", body: "Fans save, you earn more. Mention it in every post.", href: "/portal/analytics?guide=code", cta: "Your code" },
     { title: "Tell AX", body: "Message the team before a drop so stock, content and timing line up.", href: "/portal/studio", cta: "Creative Studio" },

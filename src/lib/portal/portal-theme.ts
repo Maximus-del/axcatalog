@@ -57,7 +57,7 @@ export const QUICK_PLAYS: { key: QuickPlayKey; label: string }[] = [
   { key: "design", label: "Start a design" },
   { key: "request", label: "Request a design" },
   { key: "projects", label: "Review projects" },
-  { key: "content", label: "Download content" },
+  { key: "content", label: "Content & drops" },
   { key: "code", label: "Get my code" },
   { key: "drops", label: "View drops" },
 ];

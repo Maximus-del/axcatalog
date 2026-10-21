@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowRight, CalendarDays, ChartNoAxesCombined, Copy, ImageOff, Layers, Package, Pencil, RefreshCw, ShoppingCart, ShoppingBag, Ticket, Wallet, Download } from "lucide-react";
+import { ArrowRight, CalendarDays, ChartNoAxesCombined, Copy, ImageOff, Layers, Package, Pencil, RefreshCw, ShoppingCart, ShoppingBag, Ticket, Wallet, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -111,7 +111,7 @@ export function LockerRoom() {
     design: { title: "Start a design", icon: Pencil, href: "/portal/studio" },
     request: { title: "Request a design", icon: Pencil, href: "/portal/studio" },
     projects: { title: "Review projects", icon: Layers, href: "/portal/studio" },
-    content: { title: "Download content", icon: Download, href: "/portal/content" },
+    content: { title: "Content & drops", icon: Images, href: "/portal/content" },
     code: { title: "Get my code", icon: Ticket, onClick: () => setShowCode((value) => !value) },
     drops: { title: "View drops", icon: CalendarDays, href: "/portal/content?panel=drops" },
   };

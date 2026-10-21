@@ -8,7 +8,7 @@ import { usePortalCatalog, usePortalDestinations, usePortalScope } from "@/hooks
 import { usePortalData } from "../PortalDataContext";
 import { ProductOrderDialog } from "../ProductOrderDialog";
 import { DesignsGrid } from "../products/DesignsGrid";
-import { GearProductCard } from "./GearProductCard";
+import { GearProductCard, looksFor } from "./GearProductCard";
 import { portalLink } from "./navigation";
 
 export function MyGear() {
@@ -25,7 +25,9 @@ export function MyGear() {
   const sourceProducts = useMemo(() => new Map([...products, ...archivedProducts].map((product) => [product.id, product])), [products, archivedProducts]);
   const orderProduct = orderId ? sourceProducts.get(orderId) : undefined;
   const activeDestination = destinations.data?.find((destination) => destination.id === collection);
-  const items = showAll ? catalog.items : catalog.items.slice(0, 8);
+  // Only products with a picture to show: a card with nothing on it reads as broken, not as "coming soon".
+  const showable = useMemo(() => catalog.items.filter((p) => looksFor(p, sourceProducts.get(p.id)).length > 0), [catalog.items, sourceProducts]);
+  const items = showAll ? showable : showable.slice(0, 9);
   return <TooltipProvider><main className="mw-gear">
     <header className="mw-gear-header">
       <div><h1 className="mw-heading">Your gear. Your legacy.</h1><p>Manage your merch lineup. Share, promote, and reorder.</p></div>
@@ -34,7 +36,7 @@ export function MyGear() {
       </div>
     </header>
     {tab === "products" ? <section id="gear-panel-products" role="tabpanel" aria-labelledby="gear-tab-products" className="mw-gear-lineup">
-      <h2 className="mw-section-title">Your Live Product Lineup <span className="mw-gear-count">{catalog.loading ? "—" : catalog.liveCount}</span></h2>
+      <h2 className="mw-section-title">Your Live Product Lineup <span className="mw-gear-count">{catalog.loading ? "—" : showable.length}</span></h2>
       <div className="mw-gear-toolbar">
         <div className="mw-gear-filters">
           <div className="mw-gear-collections" role="group" aria-label="Collection">
@@ -48,9 +50,9 @@ export function MyGear() {
         <Button variant="outline" className="mw-gear-bulk" disabled={viewingAs} onClick={openOrderSheet}><ClipboardList />Bulk order sheet</Button>
       </div>
       {viewingAs && <p className="mw-viewing">View-as is read-only. Orders are disabled.</p>}
-      {destinations.isError ? <div className="mw-state" role="alert"><p>Unable to load collections.</p><Button variant="outline" className="mw-pill" onClick={() => { void destinations.refetch(); refetchProducts(); }}><RefreshCw />Try again</Button></div> : catalog.loading ? <div className="mw-gear-grid" role="status" aria-label="Loading products">{Array.from({ length: 8 }, (_, index) => <Skeleton key={index} className="mw-gear-skeleton" />)}</div> : items.length ? <>
-        <div className="mw-gear-grid">{items.map((product) => <GearProductCard key={product.id} product={product} viewingAs={viewingAs} canOrder={product.orderable && sourceProducts.has(product.id)} onOrder={() => setOrderId(product.id)} />)}</div>
-        {!showAll && catalog.items.length > 8 && <Button variant="outline" className="mw-gear-view-all" onClick={() => setShowAll(true)}>View all products<ArrowRight /></Button>}
+      {destinations.isError ? <div className="mw-state" role="alert"><p>Unable to load collections.</p><Button variant="outline" className="mw-pill" onClick={() => { void destinations.refetch(); refetchProducts(); }}><RefreshCw />Try again</Button></div> : catalog.loading ? <div className="mw-content-grid" role="status" aria-label="Loading products">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="mw-gear-skeleton" />)}</div> : items.length ? <>
+        <div className="mw-content-grid mw-gear-show-grid">{items.map((product) => <GearProductCard key={product.id} product={product} source={sourceProducts.get(product.id)} viewingAs={viewingAs} canOrder={product.orderable && sourceProducts.has(product.id)} onOrder={() => setOrderId(product.id)} />)}</div>
+        {!showAll && showable.length > 9 && <Button variant="outline" className="mw-gear-view-all" onClick={() => setShowAll(true)}>View all products<ArrowRight /></Button>}
       </> : <div className="mw-state"><p>No {lifecycle === "live" ? "live" : "archived"} products{activeDestination ? ` in ${activeDestination.label}` : ""} yet</p><Button variant="outline" asChild className="mw-pill"><Link to={portalLink("/portal/studio", location.search)}><Pencil />Start a design</Link></Button></div>}
     </section> : <section id="gear-panel-designs" role="tabpanel" aria-labelledby="gear-tab-designs" className="mw-gear-lineup mw-gear-designs"><h2 className="mw-section-title">My Designs</h2><DesignsGrid /></section>}
     {orderProduct && <ProductOrderDialog key={orderProduct.id} product={orderProduct} open={orderId !== null} onOpenChange={(open) => { if (!open) setOrderId(null); }} />}
