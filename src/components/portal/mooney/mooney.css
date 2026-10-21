@@ -504,8 +504,8 @@ div.mw-bulk[data-state] {
 .mw-logo { width: 40px; height: 40px; flex: none; object-fit: contain; }
 .mw-logo-sm { width: 24px; height: 24px; }
 .mw-heading-accent { color: hsl(var(--accent)); }
-.mw-shell[data-stage="pedestal"] .mw-room-ground { background-image: none; }
-.mw-hero[data-stage="pedestal"] { overflow-x: clip; padding: 44px 24px 36px; background-color: var(--mw-deep); background-image: linear-gradient(to bottom, hsl(var(--dark) / .35) 0%, hsl(var(--dark) / .25) 45%, hsl(var(--dark) / .92) 92%, var(--mw-deep) 100%), var(--mw-hero, url('/mooney/assets/locker-room.png')); background-size: 100% 100%, cover; background-position: center, center 30%; background-repeat: no-repeat; }
+/* The gym itself is the page background (.mw-room-ground, every room); the hero only adds a soft top shade so the headline reads. */
+.mw-hero[data-stage="pedestal"] { overflow-x: clip; padding: 44px 24px 36px; background: linear-gradient(to bottom, hsl(var(--dark) / .35), transparent 40%); }
 .mw-hero[data-stage="pedestal"] .mw-heading { font-family: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif; font-weight: 800; font-size: clamp(34px, 4.7vw, 72px); line-height: 1; letter-spacing: 1px; }
 .mw-shell[data-stage="pedestal"] .mw-section-title, .mw-plaque h2, .mw-plaque-link, .mw-plaque-index { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; }
 .mw-hero[data-stage="pedestal"] .mw-tagline { font-size: 14px; letter-spacing: .32em; color: hsl(var(--foreground) / .85); margin: 14px 0 34px; }
