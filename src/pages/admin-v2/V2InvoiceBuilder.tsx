@@ -207,6 +207,119 @@ export default function V2InvoiceBuilder() {
         ) : (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="min-w-0 space-y-4">
+              {/* Lines */}
+              <Card>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <h2 className="text-[14px] font-semibold">On the invoice</h2>
+                  <span className="text-[11px] text-[hsl(var(--ax-faint))]">{figures.units} pieces</span>
+                  <span className="flex-1" />
+                  {draft.lines.length > 0 && (
+                    <button type="button" className={btn} onClick={() => setDraft(newDraft())}>
+                      Clear
+                    </button>
+                  )}
+                </div>
+                {draft.lines.length === 0 ? (
+                  <EmptyState>Click products below to add them.</EmptyState>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-[12px]">
+                      <thead className="border-b border-[hsl(var(--ax-line))] text-[10.5px] uppercase tracking-[0.1em] text-[hsl(var(--ax-faint))]">
+                        <tr>
+                          <th className="px-1 py-2 text-left font-medium">Product</th>
+                          <th className="px-1 py-2 text-left font-medium">Qty</th>
+                          <th className="px-1 py-2 text-left font-medium" title="Client price — change it for this invoice only">Unit</th>
+                          <th className="px-1 py-2 text-right font-medium">Line</th>
+                          <th className="px-1 py-2 text-right font-medium" title="Our true cost for the line">Our cost</th>
+                          <th className="px-1 py-2 text-right font-medium">AX makes</th>
+                          {draft.mode === "sell" && <th className="px-1 py-2 text-left font-medium" title={`What ${first} sells each for`}>Sells at</th>}
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[hsl(var(--ax-line))]">
+                        {draft.lines.map((l) => {
+                          const p = byId.get(l.productId);
+                          if (!p) return null;
+                          const f = figures.lines.find((x) => x.line.productId === l.productId);
+                          const m = maths.get(p.id)!;
+                          return (
+                            <tr key={l.productId}>
+                              <td className="px-1 py-1.5">
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <Thumb url={p.imageUrl} alt={p.title} size="h-12 w-12" />
+                                  <span className="min-w-0">
+                                    <span className="block max-w-[220px] truncate font-medium">{p.title}</span>
+                                    <span className="block text-[10.5px] text-[hsl(var(--ax-faint))]">
+                                      {p.blankName ?? "No blank"} · {m.sides ? SIDES_LABEL[m.sides] : "Print not set"}
+                                    </span>
+                                    <input
+                                      aria-label={`Notes for ${p.title}`}
+                                      value={l.notes}
+                                      onChange={(e) => patchLine(p.id, { notes: e.target.value })}
+                                      placeholder="Sizes / colors, e.g. 4 M · 6 L · 2 XL"
+                                      className={`${inputCls} mt-1 w-full max-w-[220px] text-[11px]`}
+                                    />
+                                  </span>
+                                </span>
+                              </td>
+                              <td className="px-1 py-1.5">
+                                <input
+                                  inputMode="numeric"
+                                  aria-label={`Quantity of ${p.title}`}
+                                  value={l.quantity || ""}
+                                  onChange={(e) => patchLine(p.id, { quantity: Math.max(0, Math.floor(Number(e.target.value.replace(/\D/g, "")) || 0)) })}
+                                  className={`${inputCls} w-14`}
+                                />
+                              </td>
+                              <td className="px-1 py-1.5">
+                                <input
+                                  inputMode="decimal"
+                                  aria-label={`Unit price of ${p.title}`}
+                                  defaultValue={l.unitPrice ?? ""}
+                                  placeholder={String(m.clientPrice)}
+                                  onChange={(e) => patchLine(p.id, { unitPrice: num(e.target.value) })}
+                                  className={`${inputCls} w-16`}
+                                />
+                              </td>
+                              <td className="px-1 py-1.5 text-right font-semibold tabular-nums">{money(f?.lineTotal)}</td>
+                              <td className="px-1 py-1.5 text-right tabular-nums text-[hsl(var(--ax-secondary))]">{money(f?.trueCost)}</td>
+                              <td className={`px-1 py-1.5 text-right tabular-nums ${f?.axProfit != null && f.axProfit < 0 ? "text-[hsl(var(--ax-red))]" : "text-[hsl(var(--ax-accent))]"}`}>
+                                {money(f?.axProfit)}
+                              </td>
+                              {draft.mode === "sell" && (
+                                <td className="px-1 py-1.5">
+                                  <input
+                                    inputMode="decimal"
+                                    aria-label={`Resale price of ${p.title}`}
+                                    defaultValue={l.resalePrice ?? ""}
+                                    placeholder={p.retail != null ? String(p.retail) : "—"}
+                                    onChange={(e) => patchLine(p.id, { resalePrice: num(e.target.value) })}
+                                    className={`${inputCls} w-16`}
+                                  />
+                                </td>
+                              )}
+                              <td className="px-1 py-1.5 text-right">
+                                <button type="button" onClick={() => remove(p.id)} aria-label={`Remove ${p.title}`} className="text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-red))]">
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <label className="mt-3 grid gap-1 text-[11px] text-[hsl(var(--ax-faint))]">
+                  Note on the order (optional)
+                  <input
+                    value={draft.notes}
+                    onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+                    placeholder="e.g. Camp giveaway, needed by Nov 8"
+                    className="rounded-lg border border-[hsl(var(--ax-border))] bg-transparent px-2.5 py-1.5 text-[12px] text-[hsl(var(--ax-ink))] outline-none focus:border-[hsl(var(--ax-accent))]"
+                  />
+                </label>
+              </Card>
               {/* Picker */}
               <Card>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -269,126 +382,10 @@ export default function V2InvoiceBuilder() {
                 )}
               </Card>
 
-              {/* Lines */}
-              <Card>
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <h2 className="text-[14px] font-semibold">On the invoice</h2>
-                  <span className="text-[11px] text-[hsl(var(--ax-faint))]">{figures.units} pieces</span>
-                  <span className="flex-1" />
-                  {draft.lines.length > 0 && (
-                    <button type="button" className={btn} onClick={() => setDraft(newDraft())}>
-                      Clear
-                    </button>
-                  )}
-                </div>
-                {draft.lines.length === 0 ? (
-                  <EmptyState>Click products above to add them.</EmptyState>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full border-collapse text-[12px]">
-                      <thead className="border-b border-[hsl(var(--ax-line))] text-[10.5px] uppercase tracking-[0.1em] text-[hsl(var(--ax-faint))]">
-                        <tr>
-                          <th className="px-1 py-2 text-left font-medium">Product</th>
-                          <th className="px-1 py-2 text-left font-medium">Qty</th>
-                          <th className="px-1 py-2 text-left font-medium" title="Client price — change it for this invoice only">Unit</th>
-                          <th className="px-1 py-2 text-right font-medium">Line</th>
-                          <th className="px-1 py-2 text-right font-medium" title="Our true cost for the line">Our cost</th>
-                          <th className="px-1 py-2 text-right font-medium">AX makes</th>
-                          {draft.mode === "sell" && <th className="px-1 py-2 text-left font-medium" title={`What ${first} sells each for`}>Sells at</th>}
-                          <th className="px-1 py-2 text-left font-medium">Sizes / notes</th>
-                          <th />
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[hsl(var(--ax-line))]">
-                        {draft.lines.map((l) => {
-                          const p = byId.get(l.productId);
-                          if (!p) return null;
-                          const f = figures.lines.find((x) => x.line.productId === l.productId);
-                          const m = maths.get(p.id)!;
-                          return (
-                            <tr key={l.productId}>
-                              <td className="px-1 py-1.5">
-                                <span className="flex min-w-0 items-center gap-2">
-                                  <Thumb url={p.imageUrl} alt={p.title} />
-                                  <span className="min-w-0">
-                                    <span className="block max-w-[220px] truncate font-medium">{p.title}</span>
-                                    <span className="block text-[10.5px] text-[hsl(var(--ax-faint))]">
-                                      {p.blankName ?? "No blank"} · {m.sides ? SIDES_LABEL[m.sides] : "Print not set"}
-                                    </span>
-                                  </span>
-                                </span>
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <input
-                                  inputMode="numeric"
-                                  aria-label={`Quantity of ${p.title}`}
-                                  value={l.quantity || ""}
-                                  onChange={(e) => patchLine(p.id, { quantity: Math.max(0, Math.floor(Number(e.target.value.replace(/\D/g, "")) || 0)) })}
-                                  className={`${inputCls} w-14`}
-                                />
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <input
-                                  inputMode="decimal"
-                                  aria-label={`Unit price of ${p.title}`}
-                                  defaultValue={l.unitPrice ?? ""}
-                                  placeholder={String(m.clientPrice)}
-                                  onChange={(e) => patchLine(p.id, { unitPrice: num(e.target.value) })}
-                                  className={`${inputCls} w-16`}
-                                />
-                              </td>
-                              <td className="px-1 py-1.5 text-right font-semibold tabular-nums">{money(f?.lineTotal)}</td>
-                              <td className="px-1 py-1.5 text-right tabular-nums text-[hsl(var(--ax-secondary))]">{money(f?.trueCost)}</td>
-                              <td className={`px-1 py-1.5 text-right tabular-nums ${f?.axProfit != null && f.axProfit < 0 ? "text-[hsl(var(--ax-red))]" : "text-[hsl(var(--ax-accent))]"}`}>
-                                {money(f?.axProfit)}
-                              </td>
-                              {draft.mode === "sell" && (
-                                <td className="px-1 py-1.5">
-                                  <input
-                                    inputMode="decimal"
-                                    aria-label={`Resale price of ${p.title}`}
-                                    defaultValue={l.resalePrice ?? ""}
-                                    placeholder={p.retail != null ? String(p.retail) : "—"}
-                                    onChange={(e) => patchLine(p.id, { resalePrice: num(e.target.value) })}
-                                    className={`${inputCls} w-16`}
-                                  />
-                                </td>
-                              )}
-                              <td className="px-1 py-1.5">
-                                <input
-                                  aria-label={`Notes for ${p.title}`}
-                                  value={l.notes}
-                                  onChange={(e) => patchLine(p.id, { notes: e.target.value })}
-                                  placeholder="e.g. 4 M · 6 L · 2 XL, Black"
-                                  className={`${inputCls} w-44`}
-                                />
-                              </td>
-                              <td className="px-1 py-1.5 text-right">
-                                <button type="button" onClick={() => remove(p.id)} aria-label={`Remove ${p.title}`} className="text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-red))]">
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <label className="mt-3 grid gap-1 text-[11px] text-[hsl(var(--ax-faint))]">
-                  Note on the order (optional)
-                  <input
-                    value={draft.notes}
-                    onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-                    placeholder="e.g. Camp giveaway, needed by Nov 8"
-                    className="rounded-lg border border-[hsl(var(--ax-border))] bg-transparent px-2.5 py-1.5 text-[12px] text-[hsl(var(--ax-ink))] outline-none focus:border-[hsl(var(--ax-accent))]"
-                  />
-                </label>
-              </Card>
             </div>
 
-            {/* The three sides */}
-            <div className="space-y-4">
+            {/* The three sides — stay in view while products are added. */}
+            <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
               <Card>
                 <h2 className="mb-2 text-[14px] font-semibold">Invoice · what {first} pays</h2>
                 <div className="space-y-1">
