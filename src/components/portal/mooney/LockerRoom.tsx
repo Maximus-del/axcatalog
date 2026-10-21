@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ArrowRight, CalendarDays, ChartNoAxesCombined, Copy, ImageOff, Layers, Package, Pencil, RefreshCw, ShoppingCart, ShoppingBag, Ticket, Wallet, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +16,7 @@ export function RetryState({ error, retry }: { error: unknown; retry: () => void
   return <div className="mw-state" role="alert"><p>{error instanceof Error ? error.message : "Unable to load this section."}</p><Button variant="ghost" onClick={retry} className="min-h-11"><RefreshCw />Try again</Button></div>;
 }
 
-function DestinationDisplay({ destination, onOpen, priority }: { destination: Destination; onOpen: () => void; priority: boolean }) {
+function DestinationDisplay({ destination, onOpen, onExplore, priority }: { destination: Destination; onOpen: () => void; onExplore: () => void; priority: boolean }) {
   const [failed, setFailed] = useState(false);
   const [wide, setWide] = useState(false);
   useEffect(() => { setFailed(false); setWide(false); }, [destination.image]);
@@ -27,7 +27,7 @@ function DestinationDisplay({ destination, onOpen, priority }: { destination: De
     <div className="mw-destination-caption">
     <h2>{destination.label}</h2>
     <p className="mw-destination-meta">{destination.jerseyNumber !== null ? `#${destination.jerseyNumber}` : ""}</p>
-    <Button variant="outline" className="mw-collection-link" onClick={onOpen} aria-label={`Open ${destination.label} collection`}>Open collection<ArrowRight /></Button>
+    <Button variant="outline" className="mw-collection-link" onClick={onExplore} aria-label={`Open ${destination.label} in My Gear`}>Open collection<ArrowRight /></Button>
     </div>
   </article>;
 }
@@ -36,12 +36,12 @@ function DestinationDisplay({ destination, onOpen, priority }: { destination: De
  * A collection as a plaque on a lit pedestal (Proactive's gym). Several pieces
  * of art fan out like a hand of cards, first on top; one piece stands alone.
  */
-function PlaqueDisplay({ destination, index, onOpen, priority }: { destination: Destination; index: number; onOpen: () => void; priority: boolean }) {
+function PlaqueDisplay({ destination, index, onOpen, onExplore, priority }: { destination: Destination; index: number; onOpen: () => void; onExplore: () => void; priority: boolean }) {
   const [failed, setFailed] = useState<Record<string, boolean>>({});
   const art = destination.images.filter((src) => !failed[src]);
   const n = art.length;
   return <article className="mw-plaque" style={{ "--mw-destination-accent": destination.accent } as CSSProperties}>
-    <Button variant="ghost" className="mw-plaque-stage" onClick={onOpen} aria-label={`Open ${destination.label} collection`} data-count={n}>
+    <Button variant="ghost" className="mw-plaque-stage" onClick={onOpen} aria-label={`Preview ${destination.label} collection`} data-count={n}>
       {n === 0 ? <div className="mw-figure-placeholder"><ImageOff className="h-8 w-8" /><span className="text-xs">Artwork coming soon</span></div> : <span className="mw-deck">{art.slice().reverse().map((src, back) => {
         const i = n - 1 - back; // 0 = top card
         const offset = i - (n - 1) / 2;
@@ -53,7 +53,7 @@ function PlaqueDisplay({ destination, index, onOpen, priority }: { destination: 
       <p className="mw-plaque-index">Collection {String(index + 1).padStart(2, "0")}</p>
       <h2>{destination.label}</h2>
       {destination.caption && <p className="mw-destination-meta">{destination.caption}</p>}
-      <Button variant="outline" className="mw-collection-link mw-plaque-link" onClick={onOpen} aria-label={`Explore ${destination.label} collection`}>Explore collection<ArrowRight /></Button>
+      <Button variant="outline" className="mw-collection-link mw-plaque-link" onClick={onExplore} aria-label={`Explore ${destination.label} in My Gear`}>Explore collection<ArrowRight /></Button>
     </div>
   </article>;
 }
@@ -92,6 +92,9 @@ export function LockerRoom() {
   const activeProjects = projects.data?.items.filter((project) => project.status !== "archived" && project.status !== "approved").slice(0, 2) ?? [];
   const nextDrops = drops.data?.items.filter((drop) => drop.status !== "live").slice(0, 2) ?? [];
   const link = (href: string) => portalLink(href, location.search);
+  const navigate = useNavigate();
+  // The card previews; the button takes them to that collection's tab in My Gear.
+  const explore = (d: Destination) => navigate(link(`/portal/products?collection=${encodeURIComponent(d.id)}`));
 
   useEffect(() => {
     const refresh = () => { void summary.refetch(); void destinations.refetch(); void projects.refetch(); void drops.refetch(); };
@@ -130,8 +133,8 @@ export function LockerRoom() {
       {destinations.isError && <RetryState error={destinations.error} retry={() => void destinations.refetch()} />}
       {destinations.isSuccess && destinations.data.length === 0 && <div className="mw-state"><Package className="mx-auto h-8 w-8 mb-3" /><p>No collections available yet.</p></div>}
       {destinations.data && destinations.data.length > 0 && (pedestal
-        ? <div className="mw-plaques" data-count={destinations.data.length} aria-label="Your collections">{destinations.data.map((destination, index) => <PlaqueDisplay key={destination.id} destination={destination} index={index} priority={index < 2} onOpen={() => setCollection(destination)} />)}</div>
-        : <div className="mw-lockers" aria-label="Your collections">{destinations.data.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} />)}</div>)}
+        ? <div className="mw-plaques" data-count={destinations.data.length} aria-label="Your collections">{destinations.data.map((destination, index) => <PlaqueDisplay key={destination.id} destination={destination} index={index} priority={index < 2} onOpen={() => setCollection(destination)} onExplore={() => explore(destination)} />)}</div>
+        : <div className="mw-lockers" aria-label="Your collections">{destinations.data.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} onExplore={() => explore(destination)} />)}</div>)}
       </div>
       </div>
     </section>
@@ -149,6 +152,6 @@ export function LockerRoom() {
       </div>
       <footer className="mw-footer"><div className="mw-context-links"><Link to={link("/portal/products")}>All gear</Link><Link to={link("/portal/content?panel=drops")}>Drops</Link><Link to={link("/portal/profile")}>Profile</Link></div><span>AthleteXclusive · {voice.name}</span></footer>
     </div>
-    <Sheet open={collection !== null} onOpenChange={(open) => { if (!open) setCollection(null); }}><SheetContent className="mw-drawer sm:max-w-[440px]"><SheetHeader className="text-left"><SheetTitle>{collection?.label ?? "Collection"}</SheetTitle><SheetDescription>Collection products</SheetDescription></SheetHeader>{collection && <CollectionContents destination={collection} />}</SheetContent></Sheet>
+    <Sheet open={collection !== null} onOpenChange={(open) => { if (!open) setCollection(null); }}><SheetContent className="mw-drawer sm:max-w-[440px]"><SheetHeader className="text-left"><SheetTitle>{collection?.label ?? "Collection"}</SheetTitle><SheetDescription>Collection products</SheetDescription></SheetHeader>{collection && <CollectionContents destination={collection} />}{collection && <Button variant="outline" className="mw-pill mt-2" onClick={() => { const d = collection; setCollection(null); explore(d); }}>See it all in My Gear<ArrowRight /></Button>}</SheetContent></Sheet>
   </main>;
 }
