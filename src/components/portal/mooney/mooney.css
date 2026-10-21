@@ -505,7 +505,7 @@ div.mw-bulk[data-state] {
 .mw-logo-sm { width: 24px; height: 24px; }
 .mw-heading-accent { color: hsl(var(--accent)); }
 .mw-shell[data-stage="pedestal"] .mw-room-ground { background-image: none; }
-.mw-hero[data-stage="pedestal"] { padding: 44px 24px 36px; background-color: var(--mw-deep); background-image: linear-gradient(to bottom, hsl(var(--dark) / .35) 0%, hsl(var(--dark) / .25) 45%, hsl(var(--dark) / .92) 92%, var(--mw-deep) 100%), var(--mw-hero, url('/mooney/assets/locker-room.png')); background-size: 100% 100%, cover; background-position: center, center 30%; background-repeat: no-repeat; }
+.mw-hero[data-stage="pedestal"] { overflow-x: clip; padding: 44px 24px 36px; background-color: var(--mw-deep); background-image: linear-gradient(to bottom, hsl(var(--dark) / .35) 0%, hsl(var(--dark) / .25) 45%, hsl(var(--dark) / .92) 92%, var(--mw-deep) 100%), var(--mw-hero, url('/mooney/assets/locker-room.png')); background-size: 100% 100%, cover; background-position: center, center 30%; background-repeat: no-repeat; }
 .mw-hero[data-stage="pedestal"] .mw-heading { font-family: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif; font-weight: 800; font-size: clamp(34px, 4.7vw, 72px); line-height: 1; letter-spacing: 1px; }
 .mw-shell[data-stage="pedestal"] .mw-section-title, .mw-plaque h2, .mw-plaque-link, .mw-plaque-index { font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif; }
 .mw-hero[data-stage="pedestal"] .mw-tagline { font-size: 14px; letter-spacing: .32em; color: hsl(var(--foreground) / .85); margin: 14px 0 34px; }
@@ -536,9 +536,13 @@ div.mw-bulk[data-state] {
 .mw-shell[data-stage="pedestal"] .mw-play:hover { border-color: hsl(var(--accent)); box-shadow: 0 0 18px hsl(var(--accent) / .25); }
 .mw-shell[data-stage="pedestal"] .mw-nav-link[aria-current="page"] { border-left-color: hsl(var(--accent)); }
 @media (max-width: 1100px) { .mw-plaques { --cols: 2 !important; max-width: 700px; } }
-@media (max-width: 560px) {
-  .mw-plaques { --cols: 1 !important; max-width: 340px; }
-  .mw-plaque-stage { height: 320px; }
+@media (max-width: 680px) {
+  .mw-plaques { --cols: 2 !important; gap: 30px 14px; max-width: none; }
+  .mw-plaques[data-count="1"] { --cols: 1 !important; max-width: 220px; }
+  .mw-plaques[data-count="3"] .mw-plaque:last-child { grid-column: 1 / -1; justify-self: center; width: calc(50% - 7px); }
+  .mw-plaque-stage { height: clamp(210px, 57vw, 320px); }
+  .mw-plaque h2 { font-size: 13px; letter-spacing: .04em; }
+  .mw-plaque-link { letter-spacing: .1em; padding: 10px 6px; font-size: 10px; }
   .mw-hero[data-stage="pedestal"] { padding: 28px 16px 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .mw-deck-card { transition: none; } }
