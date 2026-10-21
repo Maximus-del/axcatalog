@@ -25,7 +25,7 @@
 //   retail                                     → products.price (internal products only)
 //   share %, split basis, payment wording      → athletes.metadata.brand_terms
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { must, t, type Row } from "./db";
+import { must, publicUrl, t, type Row } from "./db";
 import { parseBrandTerms, type BrandTerms } from "./brand-terms";
 
 export type Garment = "tee" | "hoodie" | "other";
@@ -53,6 +53,8 @@ export interface SheetProduct {
   blankCatalogCost: number | null;
   /** What the product's pictures say: a BACK mockup means a back print. */
   detectedSides: PrintSides | null;
+  /** The front picture (or the primary one), for previews. */
+  imageUrl?: string | null;
   retail: number | null;
   /** products.athlete_price as stored now — what the portal charges today (null = rule). */
   athletePrice: number | null;
@@ -428,6 +430,21 @@ export function detectSides(images: Row[]): PrintSides | null {
   return fromLibrary ? "front" : null;
 }
 
+/** Pure: the picture to preview a product by — the chosen front, else the primary, else the first. */
+export function previewOf(images: Row[]): string | null {
+  if (!images.length) return null;
+  const meta = (i: Row) => (i.metadata ?? {}) as Row;
+  const usable = images.filter((i) => !meta(i).shopify_orphaned);
+  const pick =
+    usable.find((i) => meta(i).portal_view === "front") ??
+    usable.find((i) => i.is_primary) ??
+    [...usable].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))[0];
+  if (!pick) return null;
+  const path = typeof pick.storage_path === "string" ? pick.storage_path : null;
+  if (path && /^https?:\/\//.test(path)) return path;
+  return publicUrl((pick.storage_bucket as string | null) ?? null, path);
+}
+
 // ------------------------------------------------------------------ data
 
 export interface PricingSheet {
@@ -459,7 +476,7 @@ async function fetchSheet(entityId: string, includeArchived: boolean): Promise<P
   const [pricingRes, blanksRes, imagesRes, presetsRes] = await Promise.all([
     ids.length ? t("product_pricing").select("*").in("product_id", ids) : empty,
     blankIds.length ? t("v2_blanks").select("id, display_name, cost, garment_type").in("id", blankIds) : empty,
-    ids.length ? t("product_images").select("product_id, file_name, metadata").in("product_id", ids) : empty,
+    ids.length ? t("product_images").select("product_id, file_name, metadata, storage_bucket, storage_path, is_primary, sort_order").in("product_id", ids) : empty,
     blankIds.length ? t("blank_cost_presets").select("v2_blank_id, component, cost, price").in("v2_blank_id", blankIds) : empty,
   ]);
   for (const r of [pricingRes, blanksRes, imagesRes, presetsRes]) if (r.error) throw new Error((r.error as { message: string }).message);
@@ -493,6 +510,7 @@ async function fetchSheet(entityId: string, includeArchived: boolean): Promise<P
       blankName: (b?.display_name as string | undefined) ?? null,
       blankCatalogCost: num(b?.cost),
       detectedSides: detectSides(imagesBy.get(String(p.id)) ?? []),
+      imageUrl: previewOf(imagesBy.get(String(p.id)) ?? []),
       retail: num(p.price),
       athletePrice: num(p.athlete_price),
       ruleAthletePrice: ruleAthletePrice(garment),

@@ -190,6 +190,11 @@ describe("pricing sheet", () => {
 
   it("ticks products with no blank and assigns them to one", async () => {
     expect(text()).toContain("No blank linked");
+    // Collapsed by default, and the old Shopify-only products are hidden until asked for.
+    expect(host.querySelector('input[aria-label="Select all products with no blank"]')).toBeNull();
+    expect(text()).toContain("2 older Shopify-only products hidden");
+    await click([...host.querySelectorAll("button")].find((b) => b.textContent?.includes("No blank linked"))!);
+    await click(button("Show Shopify-only (2)"));
     const boxes = [...host.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
     await click(boxes.find((b) => b.getAttribute("aria-label") === "Select all products with no blank")!);
     expect(text()).toContain("2 selected");
