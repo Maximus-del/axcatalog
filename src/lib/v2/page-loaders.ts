@@ -21,6 +21,7 @@ export const v2Pages = {
   lineup: () => import("@/pages/admin-v2/V2Lineup"),
   pricingSheet: () => import("@/pages/admin-v2/V2PricingSheet"),
   invoiceBuilder: () => import("@/pages/admin-v2/V2InvoiceBuilder"),
+  invoiceDocument: () => import("@/pages/admin-v2/V2InvoiceDocument"),
   work: () => import("@/pages/admin-v2/V2Work"),
   releases: () => import("@/pages/admin-v2/V2Releases"),
 } as const;
