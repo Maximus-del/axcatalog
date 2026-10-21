@@ -102,6 +102,7 @@ const V2ProductDetail = lazy(v2Pages.productDetail);
 const V2Desk = lazy(v2Pages.desk);
 const V2Lineup = lazy(v2Pages.lineup);
 const V2PricingSheet = lazy(v2Pages.pricingSheet);
+const V2InvoiceBuilder = lazy(v2Pages.invoiceBuilder);
 const V2Work = lazy(v2Pages.work);
 const V2Releases = lazy(v2Pages.releases);
 
@@ -255,6 +256,8 @@ const App = () => (
                 <Route path="people/:id/lineup" element={<V2Lineup />} />
                 {/* Cost, retail, bulk price and the split for every product of this client. */}
                 <Route path="people/:id/pricing" element={<V2PricingSheet />} />
+                {/* Products + quantities → an invoice, with our side and theirs. */}
+                <Route path="people/:id/invoice" element={<V2InvoiceBuilder />} />
                 {/* AX Studio OS: Projects & Tasks, Asset Library and Releases. */}
                 <Route path="work" element={<V2Work />} />
                 <Route path="creative" element={<V2Creative />} />

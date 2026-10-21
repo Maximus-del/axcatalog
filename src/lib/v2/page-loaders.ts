@@ -20,6 +20,7 @@ export const v2Pages = {
   desk: () => import("@/pages/admin-v2/V2Desk"),
   lineup: () => import("@/pages/admin-v2/V2Lineup"),
   pricingSheet: () => import("@/pages/admin-v2/V2PricingSheet"),
+  invoiceBuilder: () => import("@/pages/admin-v2/V2InvoiceBuilder"),
   work: () => import("@/pages/admin-v2/V2Work"),
   releases: () => import("@/pages/admin-v2/V2Releases"),
 } as const;

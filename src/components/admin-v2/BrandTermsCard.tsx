@@ -33,6 +33,12 @@ export default function BrandTermsCard({ entityId, entityName }: { entityId: str
           Their one-pagers
         </a>
         <Link
+          to={`/admin-v2/people/${entityId}/invoice`}
+          className="rounded-full border border-[hsl(var(--ax-border))] px-3 py-2 text-[12px] text-[hsl(var(--ax-secondary))]"
+        >
+          Build an invoice
+        </Link>
+        <Link
           to={`/admin-v2/people/${entityId}/pricing`}
           className="rounded-full bg-[hsl(var(--ax-accent))] px-3.5 py-2 text-[12px] font-semibold text-[hsl(var(--ax-on-accent))]"
         >

@@ -404,6 +404,11 @@ export default function V2PricingSheet() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [products, drafts, terms, presets, sortBy]);
   const noBlank = useMemo(() => products.filter((p) => !p.blankId).sort((a, b) => a.title.localeCompare(b.title)), [products]);
+  // Older Shopify-backend products are hidden unless asked for: AX runs on its own backend now.
+  const [noBlankOpen, setNoBlankOpen] = useState(false);
+  const [showShopify, setShowShopify] = useState(false);
+  const noBlankShopify = noBlank.filter((p) => p.onShopify).length;
+  const noBlankShown = showShopify ? noBlank : noBlank.filter((p) => !p.onShopify);
   const rowOrder = useMemo(
     () => sections.flatMap((sec) => sec.lines.filter((l) => openLines.has(l.key)).flatMap((l) => l.rows.map((r) => r.id))),
     [sections, openLines],
@@ -685,9 +690,14 @@ export default function V2PricingSheet() {
         title="Pricing sheet"
         subtitle={`Our true cost, what we charge ${first}, and how a store sale splits. Saving updates what their portal charges.`}
         actions={
-          <a className={btn} href={`/portal/analytics?as=${entityId}&guide=money`} target="_blank" rel="noreferrer">
-            Their Brand HQ <ArrowUpRight className="h-3.5 w-3.5" />
-          </a>
+          <>
+            <Link className={btnPrimary} to={`/admin-v2/people/${entityId}/invoice`}>
+              Build an invoice
+            </Link>
+            <a className={btn} href={`/portal/analytics?as=${entityId}&guide=money`} target="_blank" rel="noreferrer">
+              Their Brand HQ <ArrowUpRight className="h-3.5 w-3.5" />
+            </a>
+          </>
         }
       />
 
@@ -891,92 +901,106 @@ export default function V2PricingSheet() {
 
           {noBlank.length > 0 && (
             <section className="mb-5">
-              <div className="mb-2 flex flex-wrap items-baseline gap-2">
-                <h2 className="text-[14px] font-semibold">
-                  No blank linked <span className="text-[hsl(var(--ax-faint))]">{noBlank.length}</span>
-                </h2>
-                <span className="text-[11px] text-[hsl(var(--ax-faint))]">
-                  Tick products and put them on a blank. They take that blank's cost, client price and split from the presets above.
+              <button
+                type="button"
+                onClick={() => setNoBlankOpen((v) => !v)}
+                aria-expanded={noBlankOpen}
+                className="mb-2 flex w-full flex-wrap items-baseline gap-2 text-left"
+              >
+                <span className="flex items-center gap-1.5 text-[14px] font-semibold">
+                  {noBlankOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  No blank linked <span className="text-[hsl(var(--ax-faint))]">{noBlankShown.length}</span>
                 </span>
-              </div>
-              <div className="ax-card overflow-x-auto">
-                <div className="flex flex-wrap items-center gap-2 border-b border-[hsl(var(--ax-line))] px-3 py-2">
-                  <label className="flex items-center gap-1.5 text-[12px]">
-                    <input
-                      type="checkbox"
-                      checked={checked.size > 0 && noBlank.every((p) => checked.has(p.id))}
-                      onChange={(e) => setChecked(e.target.checked ? new Set(noBlank.map((p) => p.id)) : new Set())}
-                      aria-label="Select all products with no blank"
-                    />
-                    {checked.size > 0 ? `${checked.size} selected` : "Select all"}
-                  </label>
-                  <span className="flex-1" />
-                  <select
-                    value={assignBlank}
-                    onChange={(e) => setAssignBlank(e.target.value)}
-                    className="rounded-full border border-[hsl(var(--ax-border))] bg-transparent px-3 py-1 text-[12px] outline-none"
-                    aria-label="Blank"
-                  >
-                    <option value="">Choose a blank…</option>
-                    {(blankOptions.data ?? []).map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                        {b.cost != null ? ` · $${b.cost}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={assignSides}
-                    onChange={(e) => setAssignSides(e.target.value as PrintSides | "auto")}
-                    className="rounded-full border border-[hsl(var(--ax-border))] bg-transparent px-3 py-1 text-[12px] outline-none"
-                    aria-label="Print"
-                    title="Only needed when the pictures can't tell"
-                  >
-                    <option value="auto">Print: read from pictures</option>
-                    <option value="front">Print: Front</option>
-                    <option value="front_back">Print: Front + back</option>
-                  </select>
-                  <button
-                    type="button"
-                    className={btnPrimary}
-                    disabled={!checked.size || !assignBlank || assign.isPending}
-                    onClick={() =>
-                      assign.mutate(
-                        { productIds: [...checked], blankId: assignBlank, sides: assignSides === "auto" ? null : assignSides },
-                        {
-                          onSuccess: (n) => {
-                            toast.success(`${n} product${n === 1 ? "" : "s"} put on ${(blankOptions.data ?? []).find((b) => b.id === assignBlank)?.name ?? "the blank"}.`);
-                            setChecked(new Set());
-                            void sheet.refetch();
+                <span className="text-[11px] text-[hsl(var(--ax-faint))]">
+                  {noBlankShopify > 0 && !showShopify
+                    ? `${noBlankShopify} older Shopify-only product${noBlankShopify === 1 ? "" : "s"} hidden. `
+                    : ""}
+                  Put a product on a blank and it takes that blank's cost, client price and split.
+                </span>
+              </button>
+              {noBlankOpen && (
+                <div className="ax-card">
+                  <div className="flex flex-wrap items-center gap-2 border-b border-[hsl(var(--ax-line))] px-3 py-2">
+                    <label className="flex items-center gap-1.5 text-[12px]">
+                      <input
+                        type="checkbox"
+                        checked={checked.size > 0 && noBlankShown.every((p) => checked.has(p.id))}
+                        onChange={(e) => setChecked(e.target.checked ? new Set(noBlankShown.map((p) => p.id)) : new Set())}
+                        aria-label="Select all products with no blank"
+                      />
+                      {checked.size > 0 ? `${checked.size} selected` : "Select all"}
+                    </label>
+                    {noBlankShopify > 0 && (
+                      <Chip active={showShopify} onClick={() => setShowShopify((v) => !v)}>
+                        {showShopify ? "Hide" : "Show"} Shopify-only ({noBlankShopify})
+                      </Chip>
+                    )}
+                    <span className="flex-1" />
+                    <select
+                      value={assignBlank}
+                      onChange={(e) => setAssignBlank(e.target.value)}
+                      className="rounded-full border border-[hsl(var(--ax-border))] bg-transparent px-3 py-1 text-[12px] outline-none"
+                      aria-label="Blank"
+                    >
+                      <option value="">Choose a blank…</option>
+                      {(blankOptions.data ?? []).map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                          {b.cost != null ? ` · $${b.cost}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={assignSides}
+                      onChange={(e) => setAssignSides(e.target.value as PrintSides | "auto")}
+                      className="rounded-full border border-[hsl(var(--ax-border))] bg-transparent px-3 py-1 text-[12px] outline-none"
+                      aria-label="Print"
+                      title="Only needed when the pictures can't tell"
+                    >
+                      <option value="auto">Print: read from pictures</option>
+                      <option value="front">Print: Front</option>
+                      <option value="front_back">Print: Front + back</option>
+                    </select>
+                    <button
+                      type="button"
+                      className={btnPrimary}
+                      disabled={!checked.size || !assignBlank || assign.isPending}
+                      onClick={() =>
+                        assign.mutate(
+                          { productIds: [...checked], blankId: assignBlank, sides: assignSides === "auto" ? null : assignSides },
+                          {
+                            onSuccess: (n) => {
+                              toast.success(`${n} product${n === 1 ? "" : "s"} put on ${(blankOptions.data ?? []).find((b) => b.id === assignBlank)?.name ?? "the blank"}.`);
+                              setChecked(new Set());
+                              void sheet.refetch();
+                            },
+                            onError: (e) => toast.error(e.message),
                           },
-                          onError: (e) => toast.error(e.message),
-                        },
-                      )
-                    }
-                  >
-                    {assign.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    Assign {checked.size || ""}
-                  </button>
-                </div>
-                <table className="w-full border-collapse">
-                  <thead className="border-b border-[hsl(var(--ax-line))]">
-                    <tr>
-                      <Th> </Th>
-                      <Th>Product</Th>
-                      <Th>Print</Th>
-                      <Th right>Retail</Th>
-                      <Th right>Portal charges</Th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[hsl(var(--ax-line))]">
-                    {noBlank.map((p) => {
-                      const m = maths.get(p.id)!;
-                      return (
-                        <tr key={p.id} className={checked.has(p.id) ? "bg-[hsl(var(--ax-accent)/0.06)]" : undefined}>
-                          <td className="w-8 px-3 py-1.5">
+                        )
+                      }
+                    >
+                      {assign.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      Assign {checked.size || ""}
+                    </button>
+                  </div>
+                  {noBlankShown.length === 0 ? (
+                    <p className="px-3 py-6 text-center text-[12px] text-[hsl(var(--ax-faint))]">Only Shopify-only products are left here.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 lg:grid-cols-6">
+                      {noBlankShown.map((p) => {
+                        const m = maths.get(p.id)!;
+                        const on = checked.has(p.id);
+                        return (
+                          <label
+                            key={p.id}
+                            className={`group relative cursor-pointer overflow-hidden rounded-xl border ${
+                              on ? "border-[hsl(var(--ax-accent))] ring-2 ring-[hsl(var(--ax-accent)/0.35)]" : "border-[hsl(var(--ax-border))]"
+                            }`}
+                          >
                             <input
                               type="checkbox"
-                              checked={checked.has(p.id)}
+                              className="absolute left-2 top-2 z-10"
+                              checked={on}
                               onChange={() =>
                                 setChecked((c) => {
                                   const n = new Set(c);
@@ -987,26 +1011,36 @@ export default function V2PricingSheet() {
                               }
                               aria-label={`Select ${p.title}`}
                             />
-                          </td>
-                          <td className="px-2 py-1.5 text-[12px]">
-                            <Link to={`/admin-v2/products/${p.id}`} className="hover:underline">
-                              {p.title}
-                            </Link>
-                            {p.onShopify && <span className="ml-1.5 text-[10px] text-[hsl(var(--ax-faint))]">On Shopify</span>}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <SidesTag sides={m.sides} tagged={p.pricing.printSides != null} />
-                          </td>
-                          <Td right>{money(p.retail)}</Td>
-                          <Td right>{money(p.athletePrice ?? p.ruleAthletePrice)}</Td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            <div className="aspect-square bg-[hsl(var(--ax-ink)/0.04)]">
+                              {p.imageUrl ? (
+                                <img src={p.imageUrl} alt={p.title} loading="lazy" className="h-full w-full object-contain" />
+                              ) : (
+                                <div className="flex h-full items-center justify-center text-[11px] text-[hsl(var(--ax-faint))]">No picture</div>
+                              )}
+                            </div>
+                            <div className="space-y-1 px-2 py-1.5">
+                              <div className="line-clamp-2 text-[11.5px] font-medium leading-snug" title={p.title}>
+                                {p.title}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1 text-[10.5px] text-[hsl(var(--ax-faint))]">
+                                <SidesTag sides={m.sides} tagged={p.pricing.printSides != null} />
+                                <span>{money(p.retail)}</span>
+                                {p.onShopify && <span>· Shopify</span>}
+                              </div>
+                              <Link to={`/admin-v2/products/${p.id}`} className="text-[10.5px] text-[hsl(var(--ax-accent))] hover:underline" onClick={(e) => e.stopPropagation()}>
+                                Open
+                              </Link>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
           )}
+
           <p className="text-[11px] leading-relaxed text-[hsl(var(--ax-faint))]">
             True cost = blank + print + services (ours). Client price = the same lines at what we charge — the price {first}'s portal orders are
             charged. AX / unit = client price − true cost. On a store sale, profit = retail − client price; {first} keeps their share and AX
