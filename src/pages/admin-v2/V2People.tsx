@@ -1,12 +1,13 @@
-import { useMemo } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { ArrowUpRight, LayoutGrid, List, Search, UserPlus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { LayoutGrid, List, Search, UserPlus } from "lucide-react";
 import { useEntities } from "@/lib/v2/data";
+import AddPersonPanel from "@/components/admin-v2/AddPersonPanel";
 import DropZone from "@/components/admin-v2/DropZone";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import type { Entity } from "@/lib/v2/types";
 import { ENTITY_FACETS, matchesFilter, rankEntities, roleLabel, typeLabel } from "@/lib/v2/entity";
-import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton, V1Link } from "@/components/admin-v2/primitives";
+import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 
 // People is the gateway into the AX ecosystem. One directory, one record per
 // entity — a person who is both an athlete and a client appears under both
@@ -19,6 +20,8 @@ import { AssetImage, Chip, EmptyState, ErrorState, PageHeader, Skeleton, V1Link 
 export default function V2People() {
   const { data, isLoading, isError, error, refetch } = useEntities();
   const [params, setParams] = useSearchParams();
+  const [adding, setAdding] = useState(false);
+  const navigate = useNavigate();
 
   const facet = params.get("facet") ?? "all";
   const activity = params.get("activity") ?? "active";
@@ -56,20 +59,13 @@ export default function V2People() {
         subtitle="Athletes, clients, organisations, schools, teams and partners — one record each."
         actions={
           <>
-            {/*
-              Entity creation still lives in V1 — it is a real form with roles,
-              org assignment and slug rules, and rebuilding it before V2 needs
-              to own it would be duplication for its own sake. Linking out is
-              honest; a disabled button would not be.
-            */}
-            <V1Link
-              to="/admin/athletes"
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
               className="flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3.5 py-2 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))]"
-              title="Adding a person still happens in the V1 directory"
             >
               <UserPlus className="h-3.5 w-3.5" /> Add someone
-              <ArrowUpRight className="h-3.5 w-3.5" />
-            </V1Link>
+            </button>
             <div className="flex items-center gap-1 rounded-full border border-[hsl(var(--ax-border))] p-0.5">
               <button
                 type="button"
@@ -91,6 +87,8 @@ export default function V2People() {
           </>
         }
       />
+
+      {adding && <AddPersonPanel onClose={() => setAdding(false)} onCreated={(id) => navigate(`/admin-v2/people/${id}`)} />}
 
       <div className="mb-5 space-y-3">
         <div className="relative">

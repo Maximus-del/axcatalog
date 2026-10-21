@@ -20,11 +20,17 @@ export function portalLink(href: string, currentSearch: string) {
   return `${target.pathname}${target.search}${target.hash}`;
 }
 
-export function activePortalPage(pathname: string) {
-  if (pathname.startsWith("/portal/build") || pathname.startsWith("/portal/mockups")) return mooneyNavigation[1];
-  if (pathname.startsWith("/portal/drops")) return mooneyNavigation[3];
-  if (pathname.startsWith("/portal/profile") || pathname.startsWith("/portal/era")) return mooneyNavigation[4];
-  return mooneyNavigation.slice(1).find((item) => pathname.startsWith(item.path)) ?? mooneyNavigation[0];
+/** The same five rooms, with the home room named for this client ("Locker Room", "Gym HQ"). */
+export function worldNavigation(roomName: string) {
+  const home = roomName.trim() || mooneyNavigation[0].label;
+  return [{ ...mooneyNavigation[0], label: home }, ...mooneyNavigation.slice(1)];
+}
+
+export function activePortalPage(pathname: string, nav = mooneyNavigation) {
+  if (pathname.startsWith("/portal/build") || pathname.startsWith("/portal/mockups")) return nav[1];
+  if (pathname.startsWith("/portal/drops")) return nav[3];
+  if (pathname.startsWith("/portal/profile") || pathname.startsWith("/portal/era")) return nav[4];
+  return nav.slice(1).find((item) => pathname.startsWith(item.path)) ?? nav[0];
 }
 
 /** navigate() that keeps View-as scope (?as=) on every portal address. */

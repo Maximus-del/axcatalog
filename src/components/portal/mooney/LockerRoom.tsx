@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ArrowRight, CalendarDays, ChartNoAxesCombined, Copy, ImageOff, Package, Pencil, RefreshCw, ShoppingCart, ShoppingBag, Ticket, Wallet, Download } from "lucide-react";
+import { ArrowRight, CalendarDays, ChartNoAxesCombined, Copy, ImageOff, Layers, Package, Pencil, RefreshCw, ShoppingCart, ShoppingBag, Ticket, Wallet, Images } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -10,6 +10,7 @@ import { entityVoice } from "@/lib/portal/entity-voice";
 import { formatMoney } from "@/lib/portal/api/money";
 import type { Destination, Project } from "@/lib/portal/api/contract";
 import { portalLink } from "./navigation";
+import { worldHeadline, type QuickPlayKey } from "@/lib/portal/portal-theme";
 
 export function RetryState({ error, retry }: { error: unknown; retry: () => void }) {
   return <div className="mw-state" role="alert"><p>{error instanceof Error ? error.message : "Unable to load this section."}</p><Button variant="ghost" onClick={retry} className="min-h-11"><RefreshCw />Try again</Button></div>;
@@ -27,6 +28,32 @@ function DestinationDisplay({ destination, onOpen, priority }: { destination: De
     <h2>{destination.label}</h2>
     <p className="mw-destination-meta">{destination.jerseyNumber !== null ? `#${destination.jerseyNumber}` : ""}</p>
     <Button variant="outline" className="mw-collection-link" onClick={onOpen} aria-label={`Open ${destination.label} collection`}>Open collection<ArrowRight /></Button>
+    </div>
+  </article>;
+}
+
+/**
+ * A collection as a plaque on a lit pedestal (Proactive's gym). Several pieces
+ * of art fan out like a hand of cards, first on top; one piece stands alone.
+ */
+function PlaqueDisplay({ destination, index, onOpen, priority }: { destination: Destination; index: number; onOpen: () => void; priority: boolean }) {
+  const [failed, setFailed] = useState<Record<string, boolean>>({});
+  const art = destination.images.filter((src) => !failed[src]);
+  const n = art.length;
+  return <article className="mw-plaque" style={{ "--mw-destination-accent": destination.accent } as CSSProperties}>
+    <Button variant="ghost" className="mw-plaque-stage" onClick={onOpen} aria-label={`Open ${destination.label} collection`} data-count={n}>
+      {n === 0 ? <div className="mw-figure-placeholder"><ImageOff className="h-8 w-8" /><span className="text-xs">Artwork coming soon</span></div> : <span className="mw-deck">{art.slice().reverse().map((src, back) => {
+        const i = n - 1 - back; // 0 = top card
+        const offset = i - (n - 1) / 2;
+        return <img key={src} className="mw-deck-card" src={src} alt={i === 0 ? `${destination.label} plaque` : ""} loading={priority ? "eager" : "lazy"} onError={() => setFailed((f) => ({ ...f, [src]: true }))} style={{ "--deck-offset": offset, zIndex: n - i } as CSSProperties} />;
+      })}</span>}
+      <span className="mw-pedestal" aria-hidden />
+    </Button>
+    <div className="mw-plaque-caption">
+      <p className="mw-plaque-index">Collection {String(index + 1).padStart(2, "0")}</p>
+      <h2>{destination.label}</h2>
+      {destination.caption && <p className="mw-destination-meta">{destination.caption}</p>}
+      <Button variant="outline" className="mw-collection-link mw-plaque-link" onClick={onOpen} aria-label={`Explore ${destination.label} collection`}>Explore collection<ArrowRight /></Button>
     </div>
   </article>;
 }
@@ -49,6 +76,8 @@ function ProjectPreview({ project, href }: { project: Project; href: string }) {
 export function LockerRoom() {
   const { athlete, openOrderSheet } = usePortalData();
   const voice = entityVoice(athlete);
+  const world = athlete.portal_theme.world;
+  const pedestal = world.stage === "pedestal";
   const { viewingAs } = usePortalScope();
   const destinations = usePortalDestinations();
   const summary = usePortalSummary();
@@ -77,34 +106,41 @@ export function LockerRoom() {
     { label: "Orders", value: summary.data?.ordersCount?.toLocaleString() ?? "—", icon: ShoppingBag },
     { label: "Live products", value: summary.data?.liveProductsCount?.toLocaleString() ?? "—", icon: Package },
   ];
-  const plays = [
-    { title: "Order gear", icon: ShoppingCart, onClick: openOrderSheet },
-    { title: "Start a design", icon: Pencil, href: "/portal/studio" },
-    { title: "Get my code", icon: Ticket, onClick: () => setShowCode((value) => !value) },
-    { title: "Download content", icon: Download, href: "/portal/content" },
-  ];
+  const PLAYS: Record<QuickPlayKey, { title: string; icon: typeof Pencil; href?: string; onClick?: () => void }> = {
+    order: { title: "Order gear", icon: ShoppingCart, onClick: openOrderSheet },
+    design: { title: "Start a design", icon: Pencil, href: "/portal/studio" },
+    request: { title: "Request a design", icon: Pencil, href: "/portal/studio" },
+    projects: { title: "Review projects", icon: Layers, href: "/portal/studio" },
+    content: { title: "Content & drops", icon: Images, href: "/portal/content" },
+    code: { title: "Get my code", icon: Ticket, onClick: () => setShowCode((value) => !value) },
+    drops: { title: "View drops", icon: CalendarDays, href: "/portal/content?panel=drops" },
+  };
+  // Which shortcuts, in what order, is this client's theme; what each one does is fixed here.
+  const plays = world.quickPlays.map((key) => PLAYS[key]);
 
   return <main>
-    <section className="mw-hero" data-wall={destinations.data?.length === 4} aria-labelledby="locker-room-heading">
+    <section className="mw-hero" data-stage={world.stage} data-wall={!pedestal && destinations.data?.length === 4} aria-labelledby="locker-room-heading">
       <div className="mw-locker-scene">
       <div className="mw-scene-layer">
       <div className="mw-scene-heading">
-      <h1 id="locker-room-heading" className="mw-heading">Welcome to your Locker Room, {voice.name}.</h1>
-      <p className="mw-tagline">Same game. Bigger moves.</p>
+      <h1 id="locker-room-heading" className="mw-heading">{worldHeadline(world, voice.name)}{world.headlineAccent && <> <span className="mw-heading-accent">{world.headlineAccent}</span></>}</h1>
+      {world.tagline && <p className="mw-tagline">{world.tagline}</p>}
       </div>
       {destinations.isLoading && <div className="mw-lockers" role="status" aria-label="Loading collections">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-[360px] rounded-md" />)}</div>}
       {destinations.isError && <RetryState error={destinations.error} retry={() => void destinations.refetch()} />}
       {destinations.isSuccess && destinations.data.length === 0 && <div className="mw-state"><Package className="mx-auto h-8 w-8 mb-3" /><p>No collections available yet.</p></div>}
-      {destinations.data && destinations.data.length > 0 && <div className="mw-lockers" aria-label="Your collections">{destinations.data.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} />)}</div>}
+      {destinations.data && destinations.data.length > 0 && (pedestal
+        ? <div className="mw-plaques" data-count={destinations.data.length} aria-label="Your collections">{destinations.data.map((destination, index) => <PlaqueDisplay key={destination.id} destination={destination} index={index} priority={index < 2} onOpen={() => setCollection(destination)} />)}</div>
+        : <div className="mw-lockers" aria-label="Your collections">{destinations.data.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} />)}</div>)}
       </div>
       </div>
     </section>
     <div className="mw-content">
-      {summary.isError ? <RetryState error={summary.error} retry={() => void summary.refetch()} /> : <section className="mw-kpis" aria-label="Your summary">{statistics.map((stat, index) => <article key={stat.label} className="mw-stat"><span className="mw-stat-icon"><stat.icon className="h-5 w-5" /></span><div className="mw-stat-copy"><span className="mw-stat-label">{stat.label}</span>{summary.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : <strong className="mw-stat-value">{stat.value}</strong>}</div>{index === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs}>Use credit<ArrowRight /></Button>}</article>)}</section>}
+      {!world.showStats ? null : summary.isError ? <RetryState error={summary.error} retry={() => void summary.refetch()} /> : <section className="mw-kpis" aria-label="Your summary">{statistics.map((stat, index) => <article key={stat.label} className="mw-stat"><span className="mw-stat-icon"><stat.icon className="h-5 w-5" /></span><div className="mw-stat-copy"><span className="mw-stat-label">{stat.label}</span>{summary.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : <strong className="mw-stat-value">{stat.value}</strong>}</div>{index === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs}>Use credit<ArrowRight /></Button>}</article>)}</section>}
       {viewingAs && <p className="mw-viewing mt-3">View-as is read-only. Orders, messages and uploads are disabled.</p>}
       <div className="mw-lower">
         <section className="mw-section" aria-labelledby="quick-plays"><h2 id="quick-plays" className="mw-section-title">Quick Plays</h2><div className="mw-plays">{plays.map((play) => play.href ? <Button key={play.title} variant="ghost" className="mw-play" asChild><Link to={link(play.href)}><play.icon /><span className="mw-play-label">{play.title}<ArrowRight /></span></Link></Button> : <Button key={play.title} variant="ghost" className="mw-play" onClick={play.onClick} disabled={play.title === "Order gear" && viewingAs} aria-expanded={play.title === "Get my code" ? showCode : undefined}><play.icon /><span className="mw-play-label">{play.title}<ArrowRight /></span></Button>)}</div>
-          {showCode && <div className="mw-code">{profile.isLoading ? <Skeleton className="h-8 w-24" /> : profile.isError ? <RetryState error={profile.error} retry={() => void profile.refetch()} /> : profile.data?.referral ? <><code>{profile.data.referral.code}</code><Button variant="ghost" className="min-h-11" onClick={async () => { const code = profile.data?.referral?.code; if (!code) return; try { await navigator.clipboard.writeText(code); setCopied(true); setCopyError(""); } catch { setCopyError("Unable to copy. Please select the code above."); } }}><Copy />{copied ? "Copied" : "Copy code"}</Button>{copyError && <p className="text-xs text-destructive" role="alert">{copyError}</p>}</> : <p className="text-sm text-muted-foreground">Fan codes are coming soon: your fans save, you earn on every sale.</p>}</div>}
+          {showCode && world.quickPlays.includes("code") && <div className="mw-code">{profile.isLoading ? <Skeleton className="h-8 w-24" /> : profile.isError ? <RetryState error={profile.error} retry={() => void profile.refetch()} /> : profile.data?.referral ? <><code>{profile.data.referral.code}</code><Button variant="ghost" className="min-h-11" onClick={async () => { const code = profile.data?.referral?.code; if (!code) return; try { await navigator.clipboard.writeText(code); setCopied(true); setCopyError(""); } catch { setCopyError("Unable to copy. Please select the code above."); } }}><Copy />{copied ? "Copied" : "Copy code"}</Button>{copyError && <p className="text-xs text-destructive" role="alert">{copyError}</p>}</> : <p className="text-sm text-muted-foreground">Fan codes are coming soon: your fans save, you earn on every sale.</p>}</div>}
         </section>
         <section className="mw-section" aria-labelledby="next-move"><h2 id="next-move" className="mw-section-title">Your Next Move</h2><div className="mw-next">
           <div className="space-y-3">{projects.isLoading ? <Skeleton className="h-36" /> : projects.isError ? <RetryState error={projects.error} retry={() => void projects.refetch()} /> : activeProjects.length > 0 ? activeProjects.map((project) => <ProjectPreview key={project.id} project={project} href={link("/portal/studio")} />) : <article className="mw-next-card"><div className="mw-next-body"><Pencil className="text-accent h-7 w-7 shrink-0" /><div><strong>No active projects</strong></div></div><Button className="mw-pill" variant="outline" asChild><Link to={link("/portal/studio")}>Start a design<ArrowRight /></Link></Button></article>}</div>

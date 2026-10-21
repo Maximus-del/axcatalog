@@ -16,6 +16,7 @@ import {
   themeWarnings,
   type PortalTheme,
 } from "@/lib/portal/portal-theme";
+import WorldEditor from "@/components/admin-v2/WorldEditor";
 import { usePortalThemeSettings, useSavePortalTheme } from "@/lib/v2/portal-theme-data";
 import { entityPortalHref } from "@/lib/v2/entity-nav";
 
@@ -60,7 +61,7 @@ export default function PortalThemeCard({ entityId, entityName }: Props) {
   }
 
   function apply(theme: PortalTheme) {
-    setDraft({ ...theme, titleCard: draft.titleCard, layout: draft.layout, brand: draft.brand });
+    setDraft({ ...theme, titleCard: draft.titleCard, layout: draft.layout, brand: draft.brand, world: draft.world });
     setTyped({ accent: theme.accent, header: theme.header, background: theme.background, title: theme.title });
   }
 
@@ -194,14 +195,19 @@ export default function PortalThemeCard({ entityId, entityName }: Props) {
                 ))}
               </div>
               {draft.layout === "world" && (
+                <>
                 <input
                   type="text"
                   maxLength={32}
                   value={draft.brand}
                   onChange={(e) => setDraft((d) => ({ ...d, brand: e.target.value }))}
-                  placeholder="World name — e.g. Mooney World"
+                  placeholder="Sidebar name — e.g. Mooney World, Proactive Sports"
                   className="mt-2 w-full rounded-lg border border-[hsl(var(--ax-border))] bg-transparent px-3 py-2 text-[13px] outline-none focus:border-[hsl(var(--ax-accent))]"
                 />
+                <div className="mt-3">
+                  <WorldEditor entityId={entityId} world={draft.world} onChange={(world) => setDraft((d) => ({ ...d, world }))} />
+                </div>
+                </>
               )}
             </div>
 

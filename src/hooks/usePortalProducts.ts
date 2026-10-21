@@ -91,9 +91,18 @@ interface State {
 /** "TOBACCO BROWN" → "Tobacco Brown". */
 const titleCase = (v: string) => v.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
-/** The colourway one picture shows (metadata.drive_color), title-cased. */
+/**
+ * The colourway a picture is tagged with: metadata.drive_color (Drive library)
+ * or metadata.color (Shopify pictures, from their alt text).
+ */
+function rawColor(metadata: unknown): unknown {
+  const m = metadata as Record<string, unknown> | null | undefined;
+  return m?.drive_color ?? m?.color;
+}
+
+/** The colourway one picture shows, title-cased. */
 function imageColor(metadata: unknown): string | null {
-  const raw = (metadata as Record<string, unknown> | null | undefined)?.drive_color;
+  const raw = rawColor(metadata);
   return typeof raw === "string" && raw.trim() ? titleCase(raw.trim()) : null;
 }
 
@@ -104,7 +113,7 @@ export function colorsFromImages(
   const seen = new Set<string>();
   const out: Array<{ name: string; hex: string | null }> = [];
   for (const img of [...images].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
-    const raw = img.metadata?.drive_color;
+    const raw = rawColor(img.metadata);
     if (typeof raw !== "string" || !raw.trim()) continue;
     const name = titleCase(raw.trim());
     if (seen.has(name)) continue;

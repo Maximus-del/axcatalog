@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarDays, Check, CheckSquare, Download, Ellipsis, Image as ImageIcon, Link2, Search, Square, X } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, CheckSquare, Ellipsis, Image as ImageIcon, Link2, Search, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,23 +22,6 @@ const errText = (e: unknown) => (e instanceof PortalApiError ? e.error.message :
 
 async function copy(text: string, done: string) {
   try { await navigator.clipboard.writeText(text); toast.success(done); } catch { toast.error("Couldn't copy. Try again."); }
-}
-function fileName(asset: MediaAsset, url: string) {
-  const ext = url.split("?")[0].split(".").pop();
-  const base = asset.title.replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-") || "asset";
-  return ext && ext.length <= 5 ? `${base}.${ext}` : base;
-}
-async function saveFile(asset: MediaAsset) {
-  const link = assetDownload(asset);
-  if (!link) throw new Error("No file");
-  const res = await fetch(link.url);
-  if (!res.ok) throw new Error("Download failed");
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = fileName(asset, link.url);
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 const zone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const fmtWhen = (d: DropDetail) => {
@@ -137,7 +120,6 @@ function DropPlanner({ onClose }: { onClose: () => void }) {
 function AssetCard({ asset, selecting, selected, onToggle }: { asset: MediaAsset; selecting: boolean; selected: boolean; onToggle: () => void }) {
   const link = assetDownload(asset);
   const [failed, setFailed] = useState(false);
-  const [busy, setBusy] = useState(false);
   return <article className="mw-content-card" data-selected={selected || undefined}>
     <div className="mw-content-image">
       {asset.thumbnailUrl && !failed ? <img src={asset.thumbnailUrl} alt={asset.title} loading="lazy" onError={() => setFailed(true)} /> : <div className="mw-gear-placeholder">Image unavailable</div>}
@@ -151,7 +133,6 @@ function AssetCard({ asset, selecting, selected, onToggle }: { asset: MediaAsset
       </div>
       <h3>{asset.title}</h3>
       <div className="mw-content-actions">
-        <Button variant="outline" className="mw-pill" disabled={!link || busy} onClick={async () => { setBusy(true); try { await saveFile(asset); } catch { toast.error("That download didn't work. Try again."); } setBusy(false); }}><Download />{busy ? "Saving…" : "Download"}</Button>
         <Button variant="outline" className="mw-pill" disabled={!link} onClick={() => link && void copy(link.url, "Link copied.")}><Link2 />Copy link</Button>
       </div>
     </div>
@@ -166,7 +147,6 @@ export function ContentDrops() {
   const [query, setQuery] = useState("");
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [progress, setProgress] = useState<string | null>(null);
   const assets = usePortalAssets({ kind });
 
   const setPanel = (open: boolean) => {
@@ -181,17 +161,6 @@ export function ContentDrops() {
   }, [assets.data, query]);
   const chosen = items.filter((a) => picked.has(a.id) && assetDownload(a));
   const toggle = (id: string) => setPicked((c) => { const n = new Set(c); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-
-  const downloadAll = async () => {
-    let failed = 0;
-    for (let i = 0; i < chosen.length; i++) {
-      setProgress(`Downloading ${i + 1} of ${chosen.length}`);
-      try { await saveFile(chosen[i]); } catch { failed++; }
-    }
-    setProgress(null);
-    if (failed) toast.error(`${failed} of ${chosen.length} didn't download. Try those again.`);
-    else toast.success(`Downloaded ${chosen.length} file${chosen.length === 1 ? "" : "s"}.`);
-  };
 
   return <main className="mw-gear mw-content">
     <header className="mw-gear-header">
@@ -213,10 +182,9 @@ export function ContentDrops() {
       : items.length === 0 ? <div className="mw-studio-panel mw-state"><p>{query.trim() ? "Nothing matches that search." : "Approved photos and graphics from AX land here, ready to post."}</p></div>
       : <div className="mw-content-grid">{items.map((a) => <AssetCard key={a.id} asset={a} selecting={selecting} selected={picked.has(a.id)} onToggle={() => toggle(a.id)} />)}</div>}
     {selecting && <div className="mw-content-bar" role="region" aria-label="Selection">
-      <p>{progress ?? (chosen.length ? `${chosen.length} selected` : "Select assets to download or share.")}</p>
+      <p>{chosen.length ? `${chosen.length} selected` : "Select assets to share."}</p>
       <div className="mw-content-actions">
-        <Button variant="outline" className="mw-pill" disabled={!chosen.length || !!progress} onClick={() => void copy(chosen.map((a) => assetDownload(a)?.url).join("\n"), "Links copied.")}><Link2 />Copy links</Button>
-        <Button variant="outline" className="mw-pill" disabled={!chosen.length || !!progress} onClick={() => void downloadAll()}><Download />Download selected</Button>
+        <Button variant="outline" className="mw-pill" disabled={!chosen.length} onClick={() => void copy(chosen.map((a) => assetDownload(a)?.url).join("\n"), "Links copied.")}><Link2 />Copy links</Button>
       </div>
     </div>}
   </main>;

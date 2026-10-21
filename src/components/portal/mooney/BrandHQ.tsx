@@ -1,17 +1,20 @@
-import { useMemo, useState, type CSSProperties } from "react";
-import { ArrowRight, BarChart3, Copy, Package, Pencil, ShoppingBag, Users, Wallet } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Link, useLocation } from "react-router-dom";
+import { ArrowRight, BarChart3, Boxes, Copy, Gift, Package, Pencil, ShoppingBag, Sticker, TrendingUp, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  usePortalAnalytics, usePortalDestinations, usePortalOrderHistory, usePortalProfile, usePortalScope, usePortalSummary, usePortalUpdateProfile,
+  usePortalAnalytics, usePortalOrderHistory, usePortalPlaybook, usePortalProfile, usePortalScope, usePortalSummary, usePortalUpdateProfile,
 } from "@/hooks/usePortalApi";
 import { formatMoney } from "@/lib/portal/api/money";
 import { PortalApiError } from "@/lib/portal/api/contract";
 import { entityVoice } from "@/lib/portal/entity-voice";
 import { usePortalData } from "../PortalDataContext";
 import { BrandPlaybook } from "./BrandPlaybook";
+import { portalLink } from "./navigation";
+import { perMonth } from "@/lib/portal/brand-insights";
 
 const READ_ONLY = "View-as is read-only. Profile edits are disabled.";
 const num = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString());
@@ -32,48 +35,121 @@ export function niceCeiling(max: number): number {
   return 10 * p;
 }
 
-function RevenueChart() {
+type InsightTab = "revenue" | "orders" | "units" | "best";
+const INSIGHT_TABS: { key: InsightTab; label: string; icon: typeof BarChart3 }[] = [
+  { key: "revenue", label: "Revenue", icon: BarChart3 },
+  { key: "orders", label: "Orders", icon: ShoppingBag },
+  { key: "units", label: "Units", icon: Package },
+  { key: "best", label: "Best sellers", icon: TrendingUp },
+];
+
+/** One bar chart for every tab: bars, a nice axis, month labels. */
+function Bars({ points, format, label }: { points: { key: string; label: string; value: number }[]; format: (n: number) => string; label: string }) {
+  const top = niceCeiling(Math.max(0, ...points.map((p) => p.value)));
+  const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => top * f);
+  return <div className="mw-hq-plot" role="img" aria-label={label}>
+    <div className="mw-hq-axis">{ticks.map((t) => <span key={t}>{format(t)}</span>)}</div>
+    <div className="mw-hq-bars">{points.map((p) => <div key={p.key} className="mw-hq-col">
+      <div className="mw-hq-bar-wrap"><span className="mw-hq-bar" style={{ height: `${top ? Math.min(100, (p.value / top) * 100) : 0}%` }} title={`${p.label}: ${format(p.value)}`} /></div>
+      <small>{p.label}</small>
+    </div>)}</div>
+  </div>;
+}
+
+function Insights() {
+  const [tab, setTab] = useState<InsightTab>("revenue");
   const [months, setMonths] = useState(12);
   const a = usePortalAnalytics(months);
+  const orders = usePortalOrderHistory(null, 100);
   const d = a.data;
-  const maxMinor = Math.max(0, ...(d?.monthly ?? []).map((m) => m.value?.amountMinor ?? 0));
-  const top = niceCeiling(maxMinor / 100);
   const currency = d?.monthly.find((m) => m.value)?.value?.currency ?? d?.attributedRevenue?.currency ?? "USD";
-  const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => top * f);
-  return <section className="mw-studio-panel mw-hq-chart">
-    <div className="mw-hq-head"><h2 className="mw-section-title"><BarChart3 />Attributed revenue</h2>
-      <select className="mw-studio-input mw-hq-select" value={months} onChange={(e) => setMonths(Number(e.target.value))} aria-label="Period">
+  const money = (n: number) => formatMoney({ amountMinor: Math.round(n * 100), currency });
+  const whole = (n: number) => Math.round(n).toLocaleString();
+  const history = orders.data?.items ?? [];
+  const sold = (d?.attributable ? d.topProducts : []).filter((t) => t.units > 0);
+
+  let body: ReactNode;
+  if (tab === "revenue") {
+    body = a.isLoading ? <Skeleton className="mw-studio-skeleton" /> : a.isError ? <div className="mw-state" role="alert"><p>Unable to load revenue.</p><Button variant="outline" className="mw-pill" onClick={() => void a.refetch()}>Try again</Button></div>
+      : !d?.attributable ? <div className="mw-state"><p>Store sales aren't tied to you yet — they'll chart here once they are.</p></div>
+      : <><div className="mw-hq-figure"><strong className="mw-hq-total">{formatMoney(d.attributedRevenue)}</strong><span className="mw-studio-meta">Gross store sales, last {months} months · updated {fmtDate(d.asOf, true)}</span></div>
+        <Bars label={`Monthly gross revenue, last ${months} months`} format={money} points={d.monthly.map((m) => ({ key: m.month, label: monthLabel(m.month), value: (m.value?.amountMinor ?? 0) / 100 }))} /></>;
+  } else if (tab === "orders" || tab === "units") {
+    const pts = perMonth(history, months, tab);
+    const total = pts.reduce((n, p) => n + p.value, 0);
+    body = orders.isLoading ? <Skeleton className="mw-studio-skeleton" /> : orders.isError ? <div className="mw-state" role="alert"><p>Unable to load orders.</p><Button variant="outline" className="mw-pill" onClick={() => void orders.refetch()}>Try again</Button></div>
+      : <><div className="mw-hq-figure"><strong className="mw-hq-total">{whole(total)}</strong><span className="mw-studio-meta">{tab === "orders" ? "Orders you placed with AX" : "Pieces ordered"}, last {months} months</span></div>
+        <Bars label={`${tab === "orders" ? "Orders" : "Units"} per month, last ${months} months`} format={whole} points={pts.map((p) => ({ key: p.month, label: monthLabel(p.month), value: p.value }))} /></>;
+  } else {
+    const max = Math.max(1, ...sold.map((t) => t.units));
+    body = a.isLoading ? <Skeleton className="mw-studio-skeleton" /> : sold.length === 0 ? <div className="mw-state"><p>No store sales tied to you yet — your best sellers will rank here.</p></div>
+      : <ol className="mw-hq-best">{sold.slice(0, 6).map((t, i) => <li key={`${t.title}-${i}`}>
+        <span className="mw-hq-thumb">{t.imageUrl ? <img src={t.imageUrl} alt="" /> : <Package />}</span>
+        <div className="min-w-0"><strong>{t.title}</strong><span className="mw-hq-best-track"><span style={{ width: `${(t.units / max) * 100}%` }} /></span></div>
+        <b>{t.units.toLocaleString()} sold<small>{formatMoney(t.gross)}</small></b>
+      </li>)}</ol>;
+  }
+
+  return <section className="mw-studio-panel mw-hq-chart" aria-label="Your numbers">
+    <div className="mw-hq-head">
+      <div className="mw-hq-tabs" role="tablist" aria-label="Chart">
+        {INSIGHT_TABS.map((t) => <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}><t.icon />{t.label}</button>)}
+      </div>
+      {tab !== "best" && <select className="mw-studio-input mw-hq-select" value={months} onChange={(e) => setMonths(Number(e.target.value))} aria-label="Period">
         {[3, 6, 12].map((m) => <option key={m} value={m}>Last {m} months</option>)}
-      </select>
+      </select>}
     </div>
-    {a.isLoading ? <Skeleton className="mw-studio-skeleton" /> : a.isError ? <div className="mw-state" role="alert"><p>Unable to load revenue.</p><Button variant="outline" className="mw-pill" onClick={() => void a.refetch()}>Try again</Button></div>
-      : !d?.attributable ? <div className="mw-state"><p>Revenue not attributed</p></div>
-      : <>
-        <strong className="mw-hq-total">{formatMoney(d.attributedRevenue)}</strong>
-        <p className="mw-studio-meta">Last {months} months · gross, before refunds · Updated {fmtDate(d.asOf, true)}</p>
-        <div className="mw-hq-plot" role="img" aria-label={`Monthly gross revenue, last ${months} months`}>
-          <div className="mw-hq-axis">{ticks.map((t) => <span key={t}>{formatMoney({ amountMinor: Math.round(t * 100), currency })}</span>)}</div>
-          <div className="mw-hq-bars">{d.monthly.map((m) => <div key={m.month} className="mw-hq-col">
-            <div className="mw-hq-bar-wrap"><span className="mw-hq-bar" style={{ height: `${m.value ? Math.min(100, (m.value.amountMinor / 100 / top) * 100) : 0}%` }} title={`${monthLabel(m.month)}: ${formatMoney(m.value)}`} /></div>
-            <small>{monthLabel(m.month)}</small>
-          </div>)}</div>
-        </div>
-      </>}
+    <div role="tabpanel">{body}</div>
   </section>;
 }
 
-function TopProducts() {
-  const a = usePortalAnalytics(12);
-  const sold = (a.data?.attributable ? a.data.topProducts : []).filter((t) => t.units > 0);
-  return <section className="mw-studio-panel">
-    <h2 className="mw-section-title mw-hq-title"><Package />Top products</h2>
-    {a.isLoading ? <Skeleton className="mw-studio-skeleton" /> : sold.length === 0 ? <div className="mw-state"><p>No attributed sales yet — your best sellers will show here.</p></div>
-      : <ol className="mw-hq-top">{sold.map((t, i) => <li key={`${t.title}-${i}`}>
-        <span className="mw-hq-rank">{i + 1}</span>
-        <span className="mw-hq-thumb">{t.imageUrl ? <img src={t.imageUrl} alt="" /> : <Package />}</span>
-        <div className="min-w-0"><strong>{t.title}</strong><span>{t.units.toLocaleString()} sold</span></div>
-        <b>{formatMoney(t.gross)}</b>
-      </li>)}</ol>}
+/**
+ * Ways to get more out of every order — and the add-ons AX sells with them.
+ * Bundle savings come from the live volume breaks (what the order sheet
+ * charges); add-ons with no price in AX yet say "ask AX" rather than invent one.
+ */
+function GrowEveryOrder() {
+  const pb = usePortalPlaybook();
+  const location = useLocation();
+  const { openOrderSheet } = usePortalData();
+  const { viewingAs } = usePortalScope();
+  const link = (href: string) => portalLink(href, location.search);
+  const breaks = (pb.data?.volumeBreaks ?? []).slice().sort((x, y) => x.minUnits - y.minUnits);
+  const offers: { icon: typeof Boxes; title: string; body: string; tag?: string; action: ReactNode }[] = [
+    {
+      icon: Boxes,
+      title: "Bundle up and save",
+      body: breaks.length ? breaks.map((b) => `${b.minUnits}+ pieces: ${b.percent}% off`).join(" · ") : "The more pieces in one order, the less each costs.",
+      tag: breaks.length ? `Up to ${Math.max(...breaks.map((b) => b.percent))}% off` : undefined,
+      action: <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs}>Build a bundle<ArrowRight /></Button>,
+    },
+    {
+      icon: Sticker,
+      title: "Stickers in every bag",
+      body: "Die-cut logo stickers ride along with each order. A cheap extra fans keep — and a reason to come back.",
+      action: <Button variant="outline" className="mw-pill" asChild><Link to={link("/portal/studio")}>Ask AX for pricing<ArrowRight /></Link></Button>,
+    },
+    {
+      icon: Package,
+      title: "Branded poly bags",
+      body: "Your mark on the bag, folded and tagged. Retail-ready packaging for gym sales, camps and events.",
+      action: <Button variant="outline" className="mw-pill" asChild><Link to={link("/portal/studio")}>Ask AX for pricing<ArrowRight /></Link></Button>,
+    },
+    {
+      icon: Gift,
+      title: "Event & team packs",
+      body: "Tee + hoodie + stickers for a camp, a team or staff — one order, the bundle discount applied to every piece.",
+      action: <Button variant="outline" className="mw-pill" asChild><Link to={link("/portal/studio")}>Plan a pack<ArrowRight /></Link></Button>,
+    },
+  ];
+  return <section className="mw-hq-grow" aria-labelledby="grow-every-order">
+    <h2 id="grow-every-order" className="mw-section-title">Grow every order</h2>
+    <div className="mw-hq-grow-grid">{offers.map((o) => <article key={o.title} className="mw-studio-panel mw-hq-offer">
+      <div className="mw-hq-offer-head"><span className="mw-stat-icon"><o.icon className="h-5 w-5" /></span>{o.tag && <span className="mw-drops-badge" data-status="scheduled">{o.tag}</span>}</div>
+      <strong>{o.title}</strong>
+      <p>{o.body}</p>
+      {o.action}
+    </article>)}</div>
   </section>;
 }
 
@@ -102,27 +178,6 @@ function RecentOrders() {
         </div>
         {!all && items.length > 5 && <Button variant="outline" className="mw-gear-view-all" onClick={() => setAll(true)}>View all<ArrowRight /></Button>}
       </>}
-  </section>;
-}
-
-function Community() {
-  const s = usePortalSummary();
-  const rows = [["Followers", s.data?.followers], ["Access members", s.data?.accessMembers], ["VIP members", s.data?.vipMembers]] as const;
-  return <section className="mw-studio-panel">
-    <h2 className="mw-section-title mw-hq-title"><Users />Your community</h2>
-    <div className="mw-hq-community">{rows.map(([label, v]) => <div key={label}><span className="mw-stat-label">{label}</span>{s.isLoading ? <Skeleton className="h-7 w-16 mt-1" /> : <strong className="mw-stat-value">{num(v)}</strong>}</div>)}</div>
-  </section>;
-}
-
-function Journey() {
-  const d = usePortalDestinations();
-  return <section className="mw-studio-panel">
-    <h2 className="mw-section-title">Your journey</h2>
-    {d.isLoading ? <Skeleton className="mw-studio-skeleton" /> : !(d.data ?? []).length ? <div className="mw-state"><p>No eras yet.</p></div>
-      : <div className="mw-hq-eras">{d.data!.map((x) => <article key={x.id} className="mw-hq-era" style={{ "--mw-destination-accent": x.accent } as CSSProperties}>
-        <div className="mw-hq-era-art">{x.image ? <img src={x.image} alt="" /> : <Package />}</div>
-        <strong>{x.label}{x.jerseyNumber !== null ? ` #${x.jerseyNumber}` : ""}</strong>
-      </article>)}</div>}
   </section>;
 }
 
@@ -180,16 +235,16 @@ export function BrandHQ() {
     { label: "Orders", icon: ShoppingBag, value: num(sum?.ordersCount), sub: null },
   ], [sum]);
   return <main className="mw-gear mw-hq">
-    <header className="mw-gear-header"><div><h1 className="mw-heading">Your brand. The big picture.</h1><p>Track your products, orders, and fans all in one place.</p></div></header>
+    <header className="mw-gear-header"><div><h1 className="mw-heading">Your brand. The big picture.</h1><p>Your numbers, your playbook, and ways to earn more on every order.</p></div></header>
     <section className="mw-kpis mw-hq-kpis" aria-label="Your summary">{s.isError ? <div className="mw-state" role="alert"><p>Unable to load your summary.</p><Button variant="outline" className="mw-pill" onClick={() => void s.refetch()}>Try again</Button></div>
       : stats.map((st, i) => <article key={st.label} className="mw-stat"><span className="mw-stat-icon"><st.icon className="h-5 w-5" /></span>
         <div className="mw-stat-copy"><span className="mw-stat-label">{st.label}</span>{s.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : <strong className="mw-stat-value">{st.value}</strong>}{st.sub && <span className="mw-studio-meta">{st.sub}</span>}</div>
         {i === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs} title={viewingAs ? "View-as is read-only." : undefined}>Use credit<ArrowRight /></Button>}
       </article>)}</section>
+    <Insights />
     <BrandPlaybook />
-    <div className="mw-hq-grid"><RevenueChart /><TopProducts /></div>
+    <GrowEveryOrder />
     <RecentOrders />
-    <div className="mw-hq-grid mw-hq-grid-even"><Community /><Journey /></div>
     <ProfileStrip />
   </main>;
 }
