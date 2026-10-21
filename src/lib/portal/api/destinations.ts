@@ -11,6 +11,8 @@
 //     jersey_number: 1,          // the number worn in THAT era — not the athlete's current number
 //     accent: "#EF233C",
 //     image: "/mooney/assets/atlanta-1.png",
+//     images: ["https://…/crest-1.png", "https://…/crest-2.png"],  // optional deck; first wins over `image`
+//     caption: "Crest I · Crest II",                                 // optional
 //     sort: 10,
 //     hidden: false
 //   }
@@ -64,8 +66,14 @@ export function toDestination(row: CollectionRow, productCount: number): Destina
       : row.team?.primary_color && HEX.test(row.team.primary_color)
         ? row.team.primary_color
         : DEFAULT_ACCENT;
-  const image =
-    typeof cfg.image === "string" && (cfg.image.startsWith("/") || cfg.image.startsWith("https://")) ? cfg.image : null;
+  const usable = (v: unknown): v is string => typeof v === "string" && (v.startsWith("/") || v.startsWith("https://"));
+  // `images` is the deck; `image` is the older single-art field. Both are read
+  // so Mooney's lockers (image only) keep working untouched.
+  const images = Array.from(
+    new Set([...(Array.isArray(cfg.images) ? cfg.images.filter(usable) : []), ...(usable(cfg.image) ? [cfg.image] : [])]),
+  ).slice(0, 6);
+  const image = images[0] ?? null;
+  const caption = typeof cfg.caption === "string" ? cfg.caption.trim().slice(0, 60) : "";
   const label =
     (typeof cfg.label === "string" && cfg.label.trim()) || row.team?.city || row.team?.name || row.name;
   return {
@@ -74,6 +82,8 @@ export function toDestination(row: CollectionRow, productCount: number): Destina
     jerseyNumber,
     accent,
     image,
+    images,
+    caption,
     href: destinationHref(key),
     collectionId: row.id,
     productCount,

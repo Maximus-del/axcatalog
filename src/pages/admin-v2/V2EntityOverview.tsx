@@ -21,6 +21,7 @@ import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import DropZone, { DropTrigger } from "@/components/admin-v2/DropZone";
 import ClientAccessCard from "@/components/admin-v2/ClientAccessCard";
 import PortalThemeCard from "@/components/admin-v2/PortalThemeCard";
+import CollectionWallCard from "@/components/admin-v2/CollectionWallCard";
 import BrandTermsCard from "@/components/admin-v2/BrandTermsCard";
 import { useDesignDrop } from "@/lib/v2/use-design-drop";
 import { productHref } from "@/lib/v2/entity-nav";
@@ -226,6 +227,8 @@ export default function V2EntityOverview() {
       <ClientAccessCard entityId={entity.id} entityName={entity.name} />
       {/* What their portal looks like — set here, seen there. */}
       <PortalThemeCard entityId={entity.id} entityName={entity.name} />
+      {/* What stands on their home page — lockers, plaques — and in what order. */}
+      <CollectionWallCard entityId={entity.id} entityName={entity.name} organizationId={entity.organizationId} />
       {/* The split, as the client's Brand HQ one-pagers will state it. */}
       <BrandTermsCard entityId={entity.id} entityName={entity.name} />
       <Link

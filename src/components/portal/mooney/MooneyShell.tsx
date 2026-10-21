@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ChevronRight, LogOut, Menu, MessageCircle, Moon, PanelLeft, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { entityVoice } from "@/lib/portal/entity-voice";
 import { brandLines, worldBrand } from "@/lib/portal/world";
 import { usePortalProfile } from "@/hooks/usePortalApi";
 import { AXTeamDrawer } from "./AXTeamDrawer";
-import { activePortalPage, mooneyNavigation, portalLink } from "./navigation";
+import { activePortalPage, portalLink, worldNavigation } from "./navigation";
 import "./mooney.css";
 
 export function MooneyShell({ children }: { children: ReactNode }) {
@@ -24,20 +24,27 @@ export function MooneyShell({ children }: { children: ReactNode }) {
   const profile = usePortalProfile();
   const { signOut } = useAuth();
   const location = useLocation();
-  const active = activePortalPage(location.pathname);
+  const world = athlete.portal_theme.world;
+  const nav = worldNavigation(world.roomName);
+  const active = activePortalPage(location.pathname, nav);
+  const [logoFailed, setLogoFailed] = useState(false);
+  // The client's own mark when they have one; the moon is Mooney World's.
+  const mark = world.logoUrl && !logoFailed ? <img className="mw-logo" src={world.logoUrl} alt="" onError={() => setLogoFailed(true)} /> : <Moon />;
+  const markSmall = world.logoUrl && !logoFailed ? <img className="mw-logo mw-logo-sm" src={world.logoUrl} alt="" /> : <Moon className="text-accent" />;
   const [avatarFailed, setAvatarFailed] = useState(false);
   const avatar = profile.data?.avatarUrl;
   const portrait = avatar && !avatarFailed ? <img className="mw-avatar" src={avatar} alt="" onError={() => setAvatarFailed(true)} /> : <span className="mw-avatar">{voice.initials}</span>;
 
   function navigation() {
-    return <nav className="mw-nav" aria-label="Client portal">{mooneyNavigation.map((item) => <Link key={item.path} to={portalLink(item.path, location.search)} className="mw-nav-link" aria-current={active.path === item.path ? "page" : undefined} title={item.label} onClick={() => setNavOpen(false)}><item.icon /><span>{item.label}</span></Link>)}</nav>;
+    return <nav className="mw-nav" aria-label="Client portal">{nav.map((item) => <Link key={item.path} to={portalLink(item.path, location.search)} className="mw-nav-link" aria-current={active.path === item.path ? "page" : undefined} title={item.label} onClick={() => setNavOpen(false)}><item.icon /><span>{item.label}</span></Link>)}</nav>;
   }
   function openTeam() { setNavOpen(false); setTeamOpen(true); }
   const teamButton = <Button variant="ghost" className="mw-team-shortcut" title="AX Team" aria-label="Open AX Team messages" onClick={openTeam}><MessageCircle /><span>AX Team<small>We’re here for you.</small></span><ChevronRight className="mw-chevron" /></Button>;
 
-  return <div className="mw-shell"><div className="mw-frame" data-collapsed={collapsed}>
+  const shellStyle = (world.heroUrl ? { "--mw-hero": `url("${world.heroUrl}")` } : {}) as CSSProperties;
+  return <div className="mw-shell" data-stage={world.stage} style={shellStyle}><div className="mw-frame" data-collapsed={collapsed}>
     <aside className={`mw-sidebar ${collapsed ? "mw-collapsed" : ""}`}>
-      <Link className="mw-wordmark" to={portalLink("/portal", location.search)} aria-label={`${brand} Locker Room`}><Moon /><strong>{brandTop}{brandBottom && <span>{brandBottom}</span>}</strong></Link>
+      <Link className="mw-wordmark" to={portalLink("/portal", location.search)} aria-label={`${brand} ${world.roomName}`}>{mark}<strong>{brandTop}{brandBottom && <span>{brandBottom}</span>}</strong></Link>
       {navigation()}
       <div className="mw-sidebar-footer">{teamButton}<Link className="mw-identity" to={portalLink("/portal/profile", location.search)} title={voice.name}>{portrait}<div><strong>{voice.name}</strong><small>{voice.subtitle}</small></div></Link></div>
     </aside>
@@ -51,7 +58,7 @@ export function MooneyShell({ children }: { children: ReactNode }) {
       <div className="mw-room-ground">{children}</div>
     </div>
   </div>
-  <Sheet open={navOpen} onOpenChange={setNavOpen}><SheetContent side="left" className="mw-drawer w-[min(320px,90vw)] sm:max-w-[320px]"><SheetHeader className="text-left"><SheetTitle className="flex items-center gap-2"><Moon className="text-accent" />{brand}</SheetTitle><SheetDescription>{voice.name}</SheetDescription></SheetHeader>{navigation()}<div className="mt-auto">{teamButton}<Button variant="ghost" asChild className="w-full mt-3 min-h-11"><Link to={portalLink("/portal/profile", location.search)} onClick={() => setNavOpen(false)}><UserRound />Your profile</Link></Button></div></SheetContent></Sheet>
+  <Sheet open={navOpen} onOpenChange={setNavOpen}><SheetContent side="left" className="mw-drawer w-[min(320px,90vw)] sm:max-w-[320px]"><SheetHeader className="text-left"><SheetTitle className="flex items-center gap-2">{markSmall}{brand}</SheetTitle><SheetDescription>{voice.name}</SheetDescription></SheetHeader>{navigation()}<div className="mt-auto">{teamButton}<Button variant="ghost" asChild className="w-full mt-3 min-h-11"><Link to={portalLink("/portal/profile", location.search)} onClick={() => setNavOpen(false)}><UserRound />Your profile</Link></Button></div></SheetContent></Sheet>
   <AXTeamDrawer open={teamOpen} onOpenChange={setTeamOpen} />
   </div>;
 }

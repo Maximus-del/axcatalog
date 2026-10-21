@@ -43,9 +43,62 @@ export interface PortalTheme {
   layout: PortalLayoutKind;
   /** The world's name in the sidebar logo, e.g. "Mooney World". Empty → the client's last name + " World". */
   brand: string;
+  /** How the world shell dresses itself for THIS client. Defaults are Mooney's, so an unset theme changes nothing. */
+  world: PortalWorld;
 }
 
 export type PortalLayoutKind = "classic" | "world";
+
+/** The home room's shortcuts, in the order they show. Each is a fixed action; only the choice and order are data. */
+export type QuickPlayKey = "order" | "design" | "request" | "projects" | "content" | "code" | "drops";
+
+export const QUICK_PLAYS: { key: QuickPlayKey; label: string }[] = [
+  { key: "order", label: "Order gear" },
+  { key: "design", label: "Start a design" },
+  { key: "request", label: "Request a design" },
+  { key: "projects", label: "Review projects" },
+  { key: "content", label: "Download content" },
+  { key: "code", label: "Get my code" },
+  { key: "drops", label: "View drops" },
+];
+
+/**
+ * The world shell, per client. Mooney World is a locker room with lockers;
+ * Proactive is a gym with plaques on pedestals. Same shell, same data — what
+ * changes is written here, so the next client is a form, not a fork.
+ */
+export interface PortalWorld {
+  /** The home room's name — nav label and page title. "Locker Room", "Gym HQ". */
+  roomName: string;
+  /** Home headline. {name} → the client's name, {room} → roomName. */
+  headline: string;
+  /** Optional words after the headline, in the accent colour ("THE GYM"). */
+  headlineAccent: string;
+  tagline: string;
+  /** Sidebar mark. Empty → the moon icon. https:// or a /public path. */
+  logoUrl: string;
+  /** The room photo behind the home page. Empty → the locker room. */
+  heroUrl: string;
+  /** Second brand colour, used sparingly (glows, the active underline). Empty → none. */
+  accent2: string;
+  /** "locker": art stands in the locker bays. "pedestal": plaques on lit pedestals. */
+  stage: "locker" | "pedestal";
+  showStats: boolean;
+  quickPlays: QuickPlayKey[];
+}
+
+export const DEFAULT_WORLD: PortalWorld = {
+  roomName: "Locker Room",
+  headline: "Welcome to your {room}, {name}.",
+  headlineAccent: "",
+  tagline: "Same game. Bigger moves.",
+  logoUrl: "",
+  heroUrl: "",
+  accent2: "",
+  stage: "locker",
+  showStats: true,
+  quickPlays: ["order", "design", "code", "content"],
+};
 
 /** What the portal looked like before themes existed — so "no theme" changes nothing. */
 export const DEFAULT_PORTAL_THEME: PortalTheme = {
@@ -56,6 +109,7 @@ export const DEFAULT_PORTAL_THEME: PortalTheme = {
   titleCard: { eyebrow: "", headline: "", subline: "" },
   layout: "classic",
   brand: "",
+  world: DEFAULT_WORLD,
 };
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -103,7 +157,45 @@ export function parsePortalTheme(raw: unknown): PortalTheme {
     },
     layout: src.layout === "world" ? "world" : "classic",
     brand: cleanText(src.brand).slice(0, 32),
+    world: parseWorld(src.world),
   };
+}
+
+const PLAY_KEYS = new Set(QUICK_PLAYS.map((p) => p.key));
+
+/** An image address the portal may load: https, or a path under /public. Anything else → "". */
+export function cleanImageUrl(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const v = value.trim();
+  if (/^https:\/\/[^\s"'()<>]+$/i.test(v)) return v.slice(0, 600);
+  if (/^\/[A-Za-z0-9/_.-]+$/.test(v) && !v.includes("..")) return v.slice(0, 300);
+  return "";
+}
+
+export function parseWorld(raw: unknown): PortalWorld {
+  const src = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const d = DEFAULT_WORLD;
+  const text = (v: unknown, fallback: string, max = MAX_TEXT) => (typeof v === "string" ? cleanText(v).slice(0, max) : fallback);
+  const plays = Array.isArray(src.quickPlays)
+    ? Array.from(new Set(src.quickPlays.filter((k): k is QuickPlayKey => typeof k === "string" && PLAY_KEYS.has(k as QuickPlayKey)))).slice(0, 4)
+    : d.quickPlays;
+  return {
+    roomName: text(src.roomName, d.roomName, 24) || d.roomName,
+    headline: text(src.headline, d.headline),
+    headlineAccent: text(src.headlineAccent, d.headlineAccent, 40),
+    tagline: text(src.tagline, d.tagline),
+    logoUrl: cleanImageUrl(src.logoUrl),
+    heroUrl: cleanImageUrl(src.heroUrl),
+    accent2: normalizeHex(src.accent2) ?? "",
+    stage: src.stage === "pedestal" ? "pedestal" : "locker",
+    showStats: typeof src.showStats === "boolean" ? src.showStats : d.showStats,
+    quickPlays: plays.length ? plays : d.quickPlays,
+  };
+}
+
+/** "Welcome to your {room}, {name}." with the room and client filled in. */
+export function worldHeadline(world: PortalWorld, name: string): string {
+  return world.headline.replace(/\{name\}/g, name).replace(/\{room\}/g, world.roomName);
 }
 
 export function isDefaultTheme(theme: PortalTheme): boolean {
@@ -193,6 +285,8 @@ export function themeCssVars(theme: PortalTheme): Record<string, string> {
     "--dark": hexToHslTriplet(theme.header),
     "--background": hexToHslTriplet(theme.background),
     "--portal-title": hexToHslTriplet(theme.title),
+    // Second brand colour; falls back to the accent so nothing reads it as unset.
+    "--accent-2": hexToHslTriplet(theme.world.accent2 || theme.accent),
   };
 }
 

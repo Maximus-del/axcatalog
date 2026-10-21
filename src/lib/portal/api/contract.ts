@@ -35,6 +35,13 @@ export interface Destination {
   accent: string;
   /** Collectible artwork URL, or null when none is configured — render a fallback, never a broken image. */
   image: string | null;
+  /**
+   * [ADDED] Every piece of art for this destination, first = `image`. More than
+   * one is shown as a fanned deck (Proactive's University crests I and II).
+   */
+  images: string[];
+  /** [ADDED] Small line under the label, from the config ("Crest I · Crest II"). Empty when unset. */
+  caption: string;
   href: string;
   /** [ADDED] The collection behind this destination. */
   collectionId: string;
