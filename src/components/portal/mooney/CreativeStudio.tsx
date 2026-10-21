@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ArrowRight, Calendar, Check, CloudUpload, Ellipsis, Layers, Lightbulb, Loader2, Pencil, Shirt, User, Volleyball, X,
+  ArrowLeft, ArrowRight, Calendar, Check, CloudUpload, Copy, Ellipsis, Layers, Lightbulb, Link2, Loader2, Pencil, Shirt, Sparkles, User, Volleyball, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,10 @@ import { newIdempotencyKey } from "@/lib/portal/api/orders";
 import { uploadProblem, type ProjectDetail, type ProjectKind } from "@/lib/portal/api/studio";
 import { PortalApiError } from "@/lib/portal/api/contract";
 import { usePortalData } from "../PortalDataContext";
+import { usePortalDesigns } from "@/hooks/usePortalDesigns";
+import { CLIENT_PREVIEW_BUCKET, type PortalDesign } from "@/lib/portal/client-designs";
+import { useSignedUrl } from "@/lib/storage";
+import { STARTS, briefFor, briefProblem, parseLinks, startCopy, type StudioStart } from "@/lib/portal/studio-start";
 
 const KINDS: { kind: ProjectKind; label: string; icon: ReactNode }[] = [
   { kind: "new_merch", label: "New Merch", icon: <Shirt /> },
@@ -55,10 +59,45 @@ function HowItWorks() {
   </section>;
 }
 
+const START_ICON: Record<StudioStart, ReactNode> = { fresh: <Sparkles />, remix: <Copy />, inspire: <Lightbulb /> };
+
+function StartPicker({ value, onChange }: { value: StudioStart; onChange: (s: StudioStart) => void }) {
+  return <div className="mw-studio-starts" role="radiogroup" aria-label="How do you want to start?">
+    {STARTS.map((s) => <button key={s.key} type="button" role="radio" aria-checked={value === s.key} className="mw-studio-start" onClick={() => onChange(s.key)}>
+      <span className="mw-studio-start-icon">{START_ICON[s.key]}</span>
+      <strong>{s.title}</strong>
+      <span>{s.blurb}</span>
+    </button>)}
+  </div>;
+}
+
+function DesignTile({ design, picked, onPick }: { design: PortalDesign; picked: boolean; onPick: () => void }) {
+  const { url } = useSignedUrl(design.previewPath ? CLIENT_PREVIEW_BUCKET : null, design.previewPath);
+  return <button type="button" className="mw-studio-design" aria-pressed={picked} onClick={onPick} title={design.title}>
+    <span className="mw-studio-design-art">{url ? <img src={url} alt="" loading="lazy" /> : <Pencil />}</span>
+    <span className="mw-studio-design-name">{design.designNumber ? `#${design.designNumber} · ` : ""}{design.title}</span>
+    {picked && <Check className="mw-studio-design-check" />}
+  </button>;
+}
+
+function DesignPicker({ picked, onPick }: { picked: PortalDesign | null; onPick: (d: PortalDesign | null) => void }) {
+  const { athlete } = usePortalData();
+  const { designs, error } = usePortalDesigns(athlete.id) as { designs: PortalDesign[] | null; error: string | null };
+  if (error) return null;
+  if (designs === null) return <Skeleton className="h-28 w-full" />;
+  if (designs.length === 0) return <p className="mw-studio-meta">No designs shared with you yet — upload the file below instead.</p>;
+  return <div className="mw-studio-designs" role="group" aria-label="Your designs">
+    {designs.slice(0, 18).map((d) => <DesignTile key={d.id} design={d} picked={picked?.id === d.id} onPick={() => onPick(picked?.id === d.id ? null : d)} />)}
+  </div>;
+}
+
 function Brief({ onCreated }: { onCreated: (p: ProjectDetail) => void }) {
   const { viewingAs } = usePortalScope();
   const create = usePortalCreateProject();
   const upload = usePortalUpload();
+  const [start, setStart] = useState<StudioStart>("fresh");
+  const [design, setDesign] = useState<PortalDesign | null>(null);
+  const [linkText, setLinkText] = useState("");
   const [kind, setKind] = useState<ProjectKind>("new_merch");
   const [idea, setIdea] = useState("");
   const [vibes, setVibes] = useState<string[]>([]);
@@ -83,21 +122,26 @@ function Brief({ onCreated }: { onCreated: (p: ProjectDetail) => void }) {
     }
   };
 
+  const copy = startCopy(start);
+  const links = parseLinks(linkText);
+  const done = files.filter((f) => f.status === "done" && f.uploadId);
+
   const submit = async () => {
     if (viewingAs || create.isPending) return;
-    if (!idea.trim()) { setError("Tell us your idea first."); return; }
+    const problem = briefProblem({ start, idea, hasDesign: !!design, uploads: done.length, links: links.length });
+    if (problem) { setError(problem); return; }
     setError(null);
     const label = KINDS.find((k) => k.kind === kind)?.label ?? "Project";
-    const short = idea.trim().slice(0, 60);
+    const { title, details: detailText } = briefFor({ start, kindLabel: label, idea, details, design: start === "remix" ? design : null, links: start === "fresh" ? [] : links });
     try {
       const project = await create.mutateAsync({
         idempotencyKey: keyRef.current,
-        title: `${label}: ${short}${idea.trim().length > 60 ? "…" : ""}`,
-        kind, idea: idea.trim(), vibes, details: details.trim() || null,
-        inspirationIds: files.filter((f) => f.status === "done" && f.uploadId).map((f) => f.uploadId as string),
+        title,
+        kind, idea: idea.trim(), vibes, details: detailText,
+        inspirationIds: done.map((f) => f.uploadId as string),
       });
       keyRef.current = newIdempotencyKey();
-      setIdea(""); setVibes([]); setDetails(""); setFiles([]);
+      setIdea(""); setVibes([]); setDetails(""); setFiles([]); setDesign(null); setLinkText("");
       toast.success("Sent to the AX design team.");
       onCreated(project);
     } catch (e) {
@@ -106,19 +150,13 @@ function Brief({ onCreated }: { onCreated: (p: ProjectDetail) => void }) {
     }
   };
 
-  return <section className="mw-studio-panel mw-studio-brief">
-    <h2 className="mw-studio-label">Project type</h2>
-    <div className="mw-studio-kinds" role="radiogroup" aria-label="Project type">
-      {KINDS.map((k) => <button key={k.kind} type="button" role="radio" aria-checked={kind === k.kind} className="mw-studio-kind" onClick={() => setKind(k.kind)}>{k.icon}<span>{k.label}</span></button>)}
-    </div>
-    <label className="mw-studio-label" htmlFor="mw-idea">Tell us your idea</label>
-    <textarea id="mw-idea" required className="mw-studio-input" rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} placeholder="Describe what you want to make…" />
-    <h2 className="mw-studio-label">Add inspiration</h2>
+  const drop = <>
+    <h2 className="mw-studio-label">{copy.uploadLabel}</h2>
     <button type="button" className="mw-studio-drop" data-drag={drag || undefined} disabled={viewingAs}
       onClick={() => inputRef.current?.click()}
       onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)}
       onDrop={(e) => { e.preventDefault(); setDrag(false); add(e.dataTransfer.files); }}>
-      <CloudUpload /><span>Upload images or drag and drop</span>
+      <CloudUpload /><span>{start === "inspire" ? "Drop screenshots or images, or click to choose" : "Upload images or drag and drop"}</span>
     </button>
     <input ref={inputRef} type="file" hidden multiple accept="image/png,image/jpeg,image/webp,image/gif,image/heic,application/pdf" onChange={(e) => { add(e.target.files); e.target.value = ""; }} />
     {files.length > 0 && <ul className="mw-studio-files">{files.map((f) => <li key={f.key} data-status={f.status}>
@@ -128,6 +166,24 @@ function Brief({ onCreated }: { onCreated: (p: ProjectDetail) => void }) {
       {f.error && <em>{f.error}</em>}
       <button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((c) => c.filter((x) => x.key !== f.key))}><X /></button>
     </li>)}</ul>}
+    {start === "inspire" && <>
+      <label className="mw-studio-label" htmlFor="mw-links">Or paste links</label>
+      <div className="mw-studio-linkbox"><Link2 /><textarea id="mw-links" className="mw-studio-input" rows={2} value={linkText} onChange={(e) => setLinkText(e.target.value)} placeholder="Instagram, Pinterest, a website… one per line" /></div>
+      {links.length > 0 && <p className="mw-studio-meta">{links.length} link{links.length === 1 ? "" : "s"} added</p>}
+    </>}
+  </>;
+
+  return <section className="mw-studio-panel mw-studio-brief">
+    <StartPicker value={start} onChange={(v) => { setStart(v); setError(null); }} />
+    {start === "remix" && <><h2 className="mw-studio-label">Pick the design</h2><DesignPicker picked={design} onPick={setDesign} /></>}
+    {copy.uploadFirst && drop}
+    <h2 className="mw-studio-label">Project type</h2>
+    <div className="mw-studio-kinds" role="radiogroup" aria-label="Project type">
+      {KINDS.map((k) => <button key={k.kind} type="button" role="radio" aria-checked={kind === k.kind} className="mw-studio-kind" onClick={() => setKind(k.kind)}>{k.icon}<span>{k.label}</span></button>)}
+    </div>
+    <label className="mw-studio-label" htmlFor="mw-idea">{copy.ideaLabel}</label>
+    <textarea id="mw-idea" required className="mw-studio-input" rows={3} value={idea} onChange={(e) => setIdea(e.target.value)} placeholder={copy.ideaPlaceholder} />
+    {!copy.uploadFirst && drop}
     <h2 className="mw-studio-label">What's the vibe?</h2>
     <div className="mw-studio-vibes">{VIBES.map((v) => <button key={v} type="button" className="mw-gear-chip" aria-pressed={vibes.includes(v)} onClick={() => setVibes((c) => (c.includes(v) ? c.filter((x) => x !== v) : [...c, v]))}>{v}</button>)}</div>
     <label className="mw-studio-label" htmlFor="mw-details">Anything we should include?</label>
@@ -267,7 +323,7 @@ export function CreativeStudio() {
   const projectId = new URLSearchParams(search).get("project");
   const [created, setCreated] = useState<ProjectDetail | null>(null);
   return <main className="mw-gear mw-studio">
-    <header className="mw-gear-header"><div><h1 className="mw-heading">What should we make next?</h1><p>Bring your next idea into the locker room.</p></div></header>
+    <header className="mw-gear-header"><div><h1 className="mw-heading">What should we make next?</h1><p>Start fresh, remix one of yours, or show us what inspired you.</p></div></header>
     {projectId ? <ProjectView projectId={projectId} /> : <div className="mw-studio-layout">
       <Brief onCreated={setCreated} />
       <aside className="mw-studio-side"><ProjectList created={created} /><HowItWorks /></aside>
