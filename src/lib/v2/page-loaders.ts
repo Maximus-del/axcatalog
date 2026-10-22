@@ -23,6 +23,7 @@ export const v2Pages = {
   invoiceBuilder: () => import("@/pages/admin-v2/V2InvoiceBuilder"),
   work: () => import("@/pages/admin-v2/V2Work"),
   releases: () => import("@/pages/admin-v2/V2Releases"),
+  contentReview: () => import("@/pages/admin-v2/V2ContentReview"),
 } as const;
 
 let started = false;

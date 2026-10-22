@@ -105,6 +105,7 @@ const V2PricingSheet = lazy(v2Pages.pricingSheet);
 const V2InvoiceBuilder = lazy(v2Pages.invoiceBuilder);
 const V2Work = lazy(v2Pages.work);
 const V2Releases = lazy(v2Pages.releases);
+const V2ContentReview = lazy(v2Pages.contentReview);
 
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
@@ -263,6 +264,8 @@ const App = () => (
                 <Route path="creative" element={<V2Creative />} />
                 <Route path="library" element={<V2Creative variant="library" />} />
                 <Route path="releases" element={<V2Releases />} />
+                {/* One picture at a time: approve, send back to fix, or archive. */}
+                <Route path="review" element={<V2ContentReview />} />
                 <Route path="commerce" element={<V2Commerce />} />
                 <Route path="commerce/blanks" element={<V2Commerce />} />
                 <Route path="commerce/blanks/:id" element={<V2BlankDetail />} />
