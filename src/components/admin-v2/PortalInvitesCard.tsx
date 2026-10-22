@@ -12,7 +12,7 @@ import { useState } from "react";
 import { Check, Copy, ExternalLink, Globe, Link2, Loader2, ShieldCheck, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { toneText } from "@/components/admin-v2/primitives";
-import { inviteUrl, lockerUrl, LOCKER_FALLBACK_ORIGIN, onboardingSummary, type PortalRole } from "@/lib/portal/invites";
+import { inviteUrl, lockerUrl, onboardingSummary, type PortalRole } from "@/lib/portal/invites";
 import {
   useDecideAccess,
   useEnsureInvite,
@@ -79,7 +79,8 @@ export default function PortalInvitesCard({ entityId, entityName, organizationId
   const copyInvite = async (role: PortalRole) => {
     try {
       const inv = await ensure.mutateAsync(role);
-      await copyText(inviteUrl(inv.token), `${ROLE_COPY[role].label} copied`);
+      // Links point at whichever deployment you are on — production in production, the preview while testing.
+      await copyText(inviteUrl(inv.token, window.location.origin), `${ROLE_COPY[role].label} copied`);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -89,7 +90,7 @@ export default function PortalInvitesCard({ entityId, entityName, organizationId
     p.then(() => toast.success(ok)).catch((e: Error) => toast.error(e.message));
 
   const liveUrl = savedLocker.enabled && savedLocker.slug ? lockerUrl(savedLocker.slug) : null;
-  const previewUrl = savedLocker.slug ? lockerUrl(savedLocker.slug, LOCKER_FALLBACK_ORIGIN) : null;
+  const previewUrl = savedLocker.slug ? lockerUrl(savedLocker.slug, window.location.origin) : null;
 
   return (
     <div className="ax-card mb-6 space-y-5 px-4 py-4">
