@@ -74,6 +74,7 @@ export function sectionOf(pathname: string, search = ""): StudioSection {
     case "library":
       return "library";
     case "releases":
+    case "review":
       return "releases";
     case "commerce":
     case "orders":
