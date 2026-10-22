@@ -15,8 +15,11 @@ export function portalLink(href: string, currentSearch: string) {
   const target = new URL(href, "https://portal.local");
   if (target.pathname === "/portal/gear") target.pathname = "/portal/products";
   if (target.pathname === "/portal/brand") target.pathname = "/portal/analytics";
-  const scope = new URLSearchParams(currentSearch).get("as");
+  const current = new URLSearchParams(currentSearch);
+  const scope = current.get("as");
   if (scope) target.searchParams.set("as", scope);
+  // An admin previewing the Team view keeps it while clicking around.
+  if (scope && current.get("view") === "team") target.searchParams.set("view", "team");
   return `${target.pathname}${target.search}${target.hash}`;
 }
 

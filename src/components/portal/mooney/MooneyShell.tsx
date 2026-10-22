@@ -10,13 +10,14 @@ import { brandLines, worldBrand } from "@/lib/portal/world";
 import { usePortalProfile } from "@/hooks/usePortalApi";
 import { AXTeamDrawer } from "./AXTeamDrawer";
 import { activePortalPage, portalLink, worldNavigation } from "./navigation";
+import { navForRole } from "@/lib/portal/roles";
 import "./mooney.css";
 
 export function MooneyShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [teamOpen, setTeamOpen] = useState(false);
-  const { athlete } = usePortalData();
+  const { athlete, portalRole, isOwner } = usePortalData();
   const voice = entityVoice(athlete);
   // The wordmark is this client's world, from their portal theme — never another client's name.
   const brand = worldBrand(athlete.portal_theme, athlete.last_name, voice.name);
@@ -25,7 +26,7 @@ export function MooneyShell({ children }: { children: ReactNode }) {
   const { signOut } = useAuth();
   const location = useLocation();
   const world = athlete.portal_theme.world;
-  const nav = worldNavigation(world.roomName);
+  const nav = navForRole(worldNavigation(world.roomName), portalRole);
   const active = activePortalPage(location.pathname, nav);
   const [logoFailed, setLogoFailed] = useState(false);
   // The client's own mark when they have one; the moon is Mooney World's.
@@ -46,14 +47,14 @@ export function MooneyShell({ children }: { children: ReactNode }) {
     <aside className={`mw-sidebar ${collapsed ? "mw-collapsed" : ""}`}>
       <Link className="mw-wordmark" to={portalLink("/portal", location.search)} aria-label={`${brand} ${world.roomName}`}>{mark}<strong>{brandTop}{brandBottom && <span>{brandBottom}</span>}</strong></Link>
       {navigation()}
-      <div className="mw-sidebar-footer">{teamButton}<Link className="mw-identity" to={portalLink("/portal/profile", location.search)} title={voice.name}>{portrait}<div><strong>{voice.name}</strong><small>{voice.subtitle}</small></div></Link></div>
+      <div className="mw-sidebar-footer">{teamButton}{isOwner ? <Link className="mw-identity" to={portalLink("/portal/profile", location.search)} title={voice.name}>{portrait}<div><strong>{voice.name}</strong><small>{voice.subtitle}</small></div></Link> : <div className="mw-identity" title={voice.name}>{portrait}<div><strong>{voice.name}</strong><small>Team access</small></div></div>}</div>
     </aside>
     <div className="mw-main">
       <header className="mw-topbar">
         <Button variant="ghost" size="icon" className="mw-icon mw-desktop-toggle" title={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}><PanelLeft /></Button>
         <Button variant="ghost" size="icon" className="mw-icon mw-mobile-menu" title="Open navigation" aria-label="Open navigation" onClick={() => setNavOpen(true)}><Menu /></Button>
         <h2>{active.label}</h2>
-        <div className="mw-topbar-actions"><Button variant="ghost" size="icon" className="mw-icon" aria-label="Open AX Team messages" title="AX Team messages" onClick={openTeam}><MessageCircle /></Button><Button variant="ghost" size="icon" className="mw-icon" title="Your profile" aria-label="Your profile" asChild><Link to={portalLink("/portal/profile", location.search)}><UserRound /></Link></Button><Button variant="ghost" size="icon" className="mw-icon" title="Sign out" aria-label="Sign out" onClick={signOut}><LogOut /></Button><span className="mw-topbar-avatar">{portrait}</span></div>
+        <div className="mw-topbar-actions"><Button variant="ghost" size="icon" className="mw-icon" aria-label="Open AX Team messages" title="AX Team messages" onClick={openTeam}><MessageCircle /></Button>{isOwner && <Button variant="ghost" size="icon" className="mw-icon" title="Your profile" aria-label="Your profile" asChild><Link to={portalLink("/portal/profile", location.search)}><UserRound /></Link></Button>}<Button variant="ghost" size="icon" className="mw-icon" title="Sign out" aria-label="Sign out" onClick={signOut}><LogOut /></Button><span className="mw-topbar-avatar">{portrait}</span></div>
       </header>
       <div className="mw-room-ground">{children}</div>
     </div>

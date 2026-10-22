@@ -5,8 +5,11 @@ import { cn } from "@/lib/utils";
 import { haptic } from "@/lib/haptics";
 import { isActive, labelFor, PRIMARY_NAV, toWithSearch } from "@/lib/portal/nav";
 import { NAV_ICONS } from "@/components/portal/portal-nav-icons";
+import { navForRole } from "@/lib/portal/roles";
+import { usePortalData } from "@/components/portal/PortalDataContext";
 
 export function PortalBottomNav() {
+  const { portalRole } = usePortalData();
   const { pathname, search } = useLocation();
 
   return (
@@ -15,7 +18,7 @@ export function PortalBottomNav() {
       aria-label="Primary"
     >
       <ul className="flex items-stretch justify-around">
-        {PRIMARY_NAV.map((d) => {
+        {navForRole(PRIMARY_NAV, portalRole).map((d) => {
           const Icon = NAV_ICONS[d.icon];
           const active = isActive(d, pathname);
           return (

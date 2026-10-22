@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/auth/AuthProvider";
 import { parsePortalTheme, type PortalTheme } from "@/lib/portal/portal-theme";
+import { resolvePortalRole } from "@/lib/portal/roles";
+import type { PortalRole } from "@/lib/portal/invites";
 
 export type CurrentAthlete = {
   id: string;
@@ -41,6 +43,8 @@ interface State {
   isImpersonating: boolean;
   /** No athlete resolvable for this user. */
   noAccess: boolean;
+  /** Owner (C-level, sees money) or Team (gear only). Admins preview Team with ?view=team. */
+  portalRole: PortalRole;
 }
 
 /**
@@ -58,7 +62,7 @@ const ATHLETE_COLUMNS: string =
  *  - Else noAccess = true.
  */
 export function useCurrentAthlete(): State {
-  const { user, role, linkedAthleteIds, loading: authLoading } = useAuth();
+  const { user, role, linkedAthleteIds, portalRoles, loading: authLoading } = useAuth();
   const [searchParams] = useSearchParams();
   const asParam = searchParams.get("as");
 
@@ -77,6 +81,11 @@ export function useCurrentAthlete(): State {
   })();
 
   const noAccess = !authLoading && !!user && !targetId;
+  const portalRole = resolvePortalRole({
+    isAdmin,
+    viewParam: searchParams.get("view"),
+    linkRole: targetId ? portalRoles[targetId] : undefined,
+  });
 
   useEffect(() => {
     if (authLoading) return;
@@ -115,5 +124,6 @@ export function useCurrentAthlete(): State {
     error,
     isImpersonating,
     noAccess,
+    portalRole,
   };
 }

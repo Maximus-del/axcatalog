@@ -3,6 +3,8 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { isActive, labelFor, PORTAL_NAV, toWithSearch } from "@/lib/portal/nav";
 import { NAV_ICONS } from "@/components/portal/portal-nav-icons";
+import { navForRole } from "@/lib/portal/roles";
+import { usePortalData } from "@/components/portal/PortalDataContext";
 
 interface Props {
   open: boolean;
@@ -11,6 +13,7 @@ interface Props {
 
 
 export function PortalNavDrawer({ open, onClose }: Props) {
+  const { portalRole } = usePortalData();
   const { pathname, search } = useLocation();
 
   // Lock body scroll while open
@@ -55,7 +58,7 @@ export function PortalNavDrawer({ open, onClose }: Props) {
         <div className="p-6">
           <div className="ax-label mb-6">Navigate</div>
           <nav className="flex flex-col gap-1">
-            {PORTAL_NAV.map((l) => {
+            {navForRole(PORTAL_NAV, portalRole).map((l) => {
               const Icon = NAV_ICONS[l.icon];
               const active = isActive(l, pathname);
               return (
