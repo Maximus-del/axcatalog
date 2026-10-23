@@ -20,6 +20,8 @@ export function portalLink(href: string, currentSearch: string) {
   if (scope) target.searchParams.set("as", scope);
   // An admin previewing the Team view keeps it while clicking around.
   if (scope && current.get("view") === "team") target.searchParams.set("view", "team");
+  // ...and a test drive keeps its control bar.
+  if (scope && current.get("drive") === "1") target.searchParams.set("drive", "1");
   return `${target.pathname}${target.search}${target.hash}`;
 }
 

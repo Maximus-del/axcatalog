@@ -16,14 +16,26 @@ import { Label } from "@/components/ui/label";
 import { LoadingScreen } from "@/components/brand/LoadingScreen";
 import { GateCard, RoleChip, ThemedGate } from "@/components/portal/invite/ThemedGate";
 import { useQueryClient } from "@tanstack/react-query";
-import { myRequestsKey, requestAccess, useInviteInfo } from "@/lib/portal/invites";
+import { myRequestsKey, requestAccess, useInviteInfo, type InviteInfo } from "@/lib/portal/invites";
 
 type Mode = "create" | "signin";
 
-export default function PortalInvite() {
+/**
+ * `preview` is the Test drive: the exact same screen an invitee sees, fed a
+ * fake invite, with nothing created and nothing filed — Continue just moves
+ * the drive to the next stage.
+ */
+export interface InvitePreview {
+  info: InviteInfo;
+  onContinue: (name: string) => void;
+}
+
+export default function PortalInvite({ preview }: { preview?: InvitePreview } = {}) {
   const { token } = useParams<{ token: string }>();
-  const { session, user, role, loading, reload } = useAuth();
-  const info = useInviteInfo(token);
+  const { session: realSession, user, role, loading, reload } = useAuth();
+  const info = useInviteInfo(preview ? undefined : token);
+  // In a test drive you're seen as a brand-new, signed-out person.
+  const session = preview ? null : realSession;
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [mode, setMode] = useState<Mode>("create");
@@ -33,9 +45,10 @@ export default function PortalInvite() {
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
 
-  if (loading || info.isLoading) return <LoadingScreen />;
+  if (!preview && (loading || info.isLoading)) return <LoadingScreen />;
 
-  if (!info.data) {
+  const data = preview?.info ?? info.data;
+  if (!data) {
     return (
       <ThemedGate>
         <GateCard className="text-center">
@@ -49,7 +62,7 @@ export default function PortalInvite() {
     );
   }
 
-  const { entityName, role: linkRole, theme } = info.data;
+  const { entityName, role: linkRole, theme } = data;
 
   const file = async (fullName: string) => {
     const status = await requestAccess(token!, fullName);
@@ -61,6 +74,10 @@ export default function PortalInvite() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (preview) {
+      preview.onContinue(name.trim() || "Test Person");
+      return;
+    }
     setBusy(true);
     try {
       if (session) {
@@ -109,7 +126,7 @@ export default function PortalInvite() {
           <div className="rounded-xl border border-border p-4 text-center text-sm">
             Check <b>{email}</b> for a confirmation link. It brings you right back here.
           </div>
-        ) : role === "admin" ? (
+        ) : !preview && role === "admin" ? (
           <div className="space-y-3 text-center text-sm text-muted-foreground">
             <p>You're signed in as AX staff — you don't need an invite.</p>
             <Button asChild className="w-full"><Link to="/admin-v2">Back to the dashboard</Link></Button>
@@ -136,22 +153,22 @@ export default function PortalInvite() {
             {(session || mode === "create") && (
               <div className="space-y-1.5">
                 <Label htmlFor="name">Full name</Label>
-                <Input id="name" required value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" className="h-11 bg-background/60" />
+                <Input id="name" required={!preview} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" className="h-11 bg-background/60" />
               </div>
             )}
             {!session && (
               <>
                 <div className="space-y-1.5">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" className="h-11 bg-background/60" />
+                  <Input id="email" type="email" required={!preview} value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" className="h-11 bg-background/60" />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Password</Label>
                   <Input
                     id="password"
                     type="password"
-                    required
-                    minLength={8}
+                    required={!preview}
+                    minLength={preview ? undefined : 8}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete={mode === "create" ? "new-password" : "current-password"}
@@ -164,7 +181,9 @@ export default function PortalInvite() {
             <Button type="submit" disabled={busy} className="h-12 w-full rounded-xl bg-accent font-bold uppercase tracking-wider text-accent-foreground hover:bg-accent/90">
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : session ? "Request access" : mode === "create" ? "Create account" : "Sign in & request access"}
             </Button>
-            <p className="text-center text-[11px] text-muted-foreground">AX approves every request — usually same day.</p>
+            <p className="text-center text-[11px] text-muted-foreground">
+              {preview ? "Test drive — nothing is created. Fields are optional." : "AX approves every request — usually same day."}
+            </p>
           </form>
         )}
       </GateCard>

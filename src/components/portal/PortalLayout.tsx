@@ -2,6 +2,8 @@
 import { useCallback, useState } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { canSeePath } from "@/lib/portal/roles";
+import { readDrive } from "@/lib/portal/test-drive";
+import { TestDriveBar } from "@/components/test-drive/TestDriveBar";
 import { LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/auth/AuthProvider";
@@ -74,6 +76,8 @@ function RoleOutlet() {
 
 export default function PortalLayout() {
   const { athlete, loading, isImpersonating, noAccess, portalRole } = useCurrentAthlete();
+  const location = useLocation();
+  const drive = isImpersonating ? readDrive(location.pathname, location.search) : null;
   // The client's look, set by AX in V2. Called before any early return so the
   // hook order is stable; null until the athlete row arrives.
   useApplyPortalTheme(athlete?.portal_theme ?? null);
@@ -140,7 +144,9 @@ export default function PortalLayout() {
             </div>
           )}
 
-          {isImpersonating && (
+          {isImpersonating && drive ? (
+            <TestDriveBar entityId={athlete.id} role={drive.role} stage={drive.stage} />
+          ) : isImpersonating && (
             <ImpersonationBanner
               athleteId={athlete.id}
               athleteName={

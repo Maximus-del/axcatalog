@@ -13,6 +13,8 @@ import { ShoppingBag, X, Minus, Plus, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { LoadingScreen } from "@/components/brand/LoadingScreen";
+import { useAuth } from "@/auth/AuthProvider";
+import { TestDriveBar } from "@/components/test-drive/TestDriveBar";
 import { Wordmark } from "@/components/brand/Wordmark";
 import { parsePortalTheme, themeCssVars } from "@/lib/portal/portal-theme";
 import {
@@ -189,6 +191,11 @@ export default function PublicLocker({ slugOverride }: { slugOverride?: string }
   const params = useParams<{ slug: string }>();
   const slug = (slugOverride ?? params.slug ?? "").toLowerCase();
   const locker = usePublicLocker(slug);
+  // AX test drive: the control bar on top. Only for staff — a customer adding ?drive=1 sees nothing.
+  const { role: authRole } = useAuth();
+  const driveParams = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+  const driveEntity = authRole === "admin" && driveParams.get("drive") === "1" ? driveParams.get("entity") : null;
+  const driveBar = driveEntity ? <TestDriveBar entityId={driveEntity} role="customer" stage="locker" /> : null;
   const [active, setActive] = useState<string | null>(null);
   const [open, setOpen] = useState<LockerProduct | null>(null);
   const [bag, setBag] = useState<BagLine[]>(() => loadBag(slug));
@@ -202,11 +209,14 @@ export default function PublicLocker({ slugOverride }: { slugOverride?: string }
   if (locker.isLoading) return <LoadingScreen />;
   if (!locker.data) {
     return (
+      <>
+      {driveBar}
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <Wordmark size="lg" />
         <h1 className="text-2xl font-bold">This locker isn't open yet</h1>
         <a href="https://athletexclusive.com" className="text-sm text-accent underline">Shop Athlete Xclusive</a>
       </div>
+      </>
     );
   }
 
@@ -244,8 +254,9 @@ export default function PublicLocker({ slugOverride }: { slugOverride?: string }
 
   return (
     <div className="min-h-screen bg-background text-foreground" style={themeCssVars(theme) as CSSProperties}>
+      {driveBar}
       {/* top bar */}
-      <header className="sticky top-0 z-30 border-b border-border/50 bg-[hsl(var(--dark)/0.85)] backdrop-blur">
+      <header className={`${driveBar ? "relative" : "sticky top-0"} z-30 border-b border-border/50 bg-[hsl(var(--dark)/0.85)] backdrop-blur`}>
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           {world.logoUrl ? <img src={world.logoUrl} alt={entity.name} className="h-8 w-auto max-w-[140px] object-contain" /> : <span className="font-bold">{entity.name}</span>}
           <button onClick={() => setBagOpen(true)} className="relative flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm font-semibold" aria-label="Open bag">
