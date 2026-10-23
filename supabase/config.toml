@@ -39,3 +39,6 @@ verify_jwt = true
 
 [functions.drive-sync-product-images]
 verify_jwt = true
+
+[functions.demo-session]
+verify_jwt = false

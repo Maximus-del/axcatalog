@@ -71,12 +71,14 @@ export function useCurrentAthlete(): State {
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = role === "admin";
-  const isImpersonating = isAdmin && !!asParam;
+  // A demo-link account walks the real portal read-only, exactly like View-as.
+  const isDemo = (user?.user_metadata as { ax_demo?: boolean } | undefined)?.ax_demo === true;
+  const isImpersonating = (isAdmin && !!asParam) || isDemo;
 
   // Determine target athlete id
   const targetId = (() => {
     if (!user) return null;
-    if (isImpersonating) return asParam!;
+    if (isAdmin && asParam) return asParam;
     return linkedAthleteIds[0] ?? null;
   })();
 
