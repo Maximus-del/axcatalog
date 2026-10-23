@@ -11,8 +11,11 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { isActive, labelFor, PORTAL_NAV, toWithSearch } from "@/lib/portal/nav";
 import { NAV_ICONS } from "@/components/portal/portal-nav-icons";
+import { navForRole } from "@/lib/portal/roles";
+import { usePortalData } from "@/components/portal/PortalDataContext";
 
 export function PortalDesktopNav() {
+  const { portalRole } = usePortalData();
   const { pathname, search } = useLocation();
 
   return (
@@ -21,7 +24,7 @@ export function PortalDesktopNav() {
       aria-label="Sections"
     >
       <ul className="max-w-[1200px] mx-auto px-4 sm:px-6 flex items-stretch gap-1 overflow-x-auto scroll-touch">
-        {PORTAL_NAV.map((d) => {
+        {navForRole(PORTAL_NAV, portalRole).map((d) => {
           const Icon = NAV_ICONS[d.icon];
           const active = isActive(d, pathname);
           return (

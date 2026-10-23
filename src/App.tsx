@@ -15,6 +15,7 @@ import Login from "./pages/Login";
 import PendingAccess from "./pages/PendingAccess";
 import SetPassword from "./pages/SetPassword";
 import NotFound from "./pages/NotFound";
+import LockerHostRoute from "./pages/LockerHostRoute";
 
 import FanLayout from "@/components/fan/FanLayout";
 import FanJoin from "./pages/fan/FanJoin";
@@ -35,6 +36,8 @@ import { RedirectKeepSearch } from "@/components/portal/RedirectKeepSearch";
 // Lazy: internal surfaces (admin, portal, affiliate, catalog) are code-split so
 // fans never download them. Only these bundles change on the respective routes.
 const QuestionnairePublic = lazy(() => import("./pages/QuestionnairePublic"));
+const PortalInvite = lazy(() => import("./pages/PortalInvite"));
+const PublicLocker = lazy(() => import("./pages/PublicLocker"));
 
 const AdminLayout = lazy(() => import("@/components/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -146,11 +149,15 @@ const App = () => (
         <AuthProvider>
           <Suspense fallback={<LoadingScreen />}>
             <Routes>
-              <Route path="/" element={<RootRedirect />} />
+              <Route path="/" element={<LockerHostRoute root fallback={<RootRedirect />} />} />
               <Route path="/login" element={<Login />} />
               <Route path="/pending-access" element={<PendingAccess />} />
               <Route path="/set-password" element={<SetPassword />} />
               <Route path="/q/:slug" element={<QuestionnairePublic />} />
+
+              {/* Client portal invites + public lockers (no login) */}
+              <Route path="/invite/:token" element={<PortalInvite />} />
+              <Route path="/l/:slug" element={<PublicLocker />} />
 
               {/* Goat Farm Access (fan) — public entry + shareable pages */}
               <Route path="/join" element={<FanJoin />} />
@@ -321,6 +328,8 @@ const App = () => (
               </Route>
 
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              {/* lockers.athletexclusive.com/<slug> — a locker; anywhere else a 404 */}
+              <Route path="/:slug" element={<LockerHostRoute />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>

@@ -58,6 +58,8 @@ const CLIENT_HOOK_PREFIXES = [
 const ALLOWED: Record<string, string> = {
   // Added 2026-10-15 alongside the operator gate.
   athletes: "client reads own athlete — id in viewer_athlete_ids()",
+  // Added 2026-10-22 with portal invites: a person reads only their own request (their saved answers).
+  portal_access_requests: "requester reads own access requests — user_id = auth.uid()",
   teams: "client reads own teams — id in viewer_team_ids()",
   team_memberships: "client reads own memberships — athlete_id in viewer_athlete_ids()",
   products: "client reads own products — id in viewer_product_ids()",

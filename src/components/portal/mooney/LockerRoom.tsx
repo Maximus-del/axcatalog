@@ -10,6 +10,7 @@ import { entityVoice } from "@/lib/portal/entity-voice";
 import { formatMoney } from "@/lib/portal/api/money";
 import type { Destination, Project } from "@/lib/portal/api/contract";
 import { portalLink } from "./navigation";
+import { playsForRole } from "@/lib/portal/roles";
 import { worldHeadline, type QuickPlayKey } from "@/lib/portal/portal-theme";
 
 export function RetryState({ error, retry }: { error: unknown; retry: () => void }) {
@@ -74,7 +75,7 @@ function ProjectPreview({ project, href }: { project: Project; href: string }) {
 }
 
 export function LockerRoom() {
-  const { athlete, openOrderSheet } = usePortalData();
+  const { athlete, openOrderSheet, portalRole, isOwner } = usePortalData();
   const voice = entityVoice(athlete);
   const world = athlete.portal_theme.world;
   const pedestal = world.stage === "pedestal";
@@ -119,7 +120,7 @@ export function LockerRoom() {
     drops: { title: "View drops", icon: CalendarDays, href: "/portal/content?panel=drops" },
   };
   // Which shortcuts, in what order, is this client's theme; what each one does is fixed here.
-  const plays = world.quickPlays.map((key) => PLAYS[key]);
+  const plays = playsForRole(world.quickPlays, portalRole).map((key) => PLAYS[key]);
 
   return <main>
     <section className="mw-hero" data-stage={world.stage} data-wall={!pedestal && destinations.data?.length === 4} aria-labelledby="locker-room-heading">
@@ -139,7 +140,7 @@ export function LockerRoom() {
       </div>
     </section>
     <div className="mw-content">
-      {!world.showStats ? null : summary.isError ? <RetryState error={summary.error} retry={() => void summary.refetch()} /> : <section className="mw-kpis" aria-label="Your summary">{statistics.map((stat, index) => <article key={stat.label} className="mw-stat"><span className="mw-stat-icon"><stat.icon className="h-5 w-5" /></span><div className="mw-stat-copy"><span className="mw-stat-label">{stat.label}</span>{summary.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : <strong className="mw-stat-value">{stat.value}</strong>}</div>{index === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs}>Use credit<ArrowRight /></Button>}</article>)}</section>}
+      {!world.showStats || !isOwner ? null : summary.isError ? <RetryState error={summary.error} retry={() => void summary.refetch()} /> : <section className="mw-kpis" aria-label="Your summary">{statistics.map((stat, index) => <article key={stat.label} className="mw-stat"><span className="mw-stat-icon"><stat.icon className="h-5 w-5" /></span><div className="mw-stat-copy"><span className="mw-stat-label">{stat.label}</span>{summary.isLoading ? <Skeleton className="h-7 w-20 mt-1" /> : <strong className="mw-stat-value">{stat.value}</strong>}</div>{index === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs}>Use credit<ArrowRight /></Button>}</article>)}</section>}
       {viewingAs && <p className="mw-viewing mt-3">View-as is read-only. Orders, messages and uploads are disabled.</p>}
       <div className="mw-lower">
         <section className="mw-section" aria-labelledby="quick-plays"><h2 id="quick-plays" className="mw-section-title">Quick Plays</h2><div className="mw-plays">{plays.map((play) => play.href ? <Button key={play.title} variant="ghost" className="mw-play" asChild><Link to={link(play.href)}><play.icon /><span className="mw-play-label">{play.title}<ArrowRight /></span></Link></Button> : <Button key={play.title} variant="ghost" className="mw-play" onClick={play.onClick} disabled={play.title === "Order gear" && viewingAs} aria-expanded={play.title === "Get my code" ? showCode : undefined}><play.icon /><span className="mw-play-label">{play.title}<ArrowRight /></span></Button>)}</div>

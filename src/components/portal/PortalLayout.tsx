@@ -1,6 +1,7 @@
 // Mobile-first. Test at 375px before merging.
 import { useCallback, useState } from "react";
-import { Navigate, Outlet } from "react-router-dom";
+import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
+import { canSeePath } from "@/lib/portal/roles";
 import { LogOut, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/auth/AuthProvider";
@@ -53,8 +54,26 @@ function OrderDraftBarBridge({ onOpen }: { onOpen: () => void }) {
   return <OrderDraftBar onOpenSheet={onOpen} />;
 }
 
+/**
+ * The page, unless this is a Team login on an owner-only page — then a plain
+ * note instead. Covers typed URLs and old bookmarks; the nav never offers
+ * those pages to Team in the first place.
+ */
+function RoleOutlet() {
+  const { portalRole } = usePortalData();
+  const { pathname } = useLocation();
+  if (canSeePath(pathname, portalRole)) return <Outlet />;
+  return (
+    <div className="mx-auto max-w-md px-6 py-20 text-center">
+      <h1 className="text-xl font-bold">Owner access only</h1>
+      <p className="mt-2 text-sm text-muted-foreground">This part of the locker is for your organization's owners. Your gear and orders are all in My Gear.</p>
+      <Button asChild className="mt-6"><Link to={`/portal/products${window.location.search}`}>Go to My Gear</Link></Button>
+    </div>
+  );
+}
+
 export default function PortalLayout() {
-  const { athlete, loading, isImpersonating, noAccess } = useCurrentAthlete();
+  const { athlete, loading, isImpersonating, noAccess, portalRole } = useCurrentAthlete();
   // The client's look, set by AX in V2. Called before any early return so the
   // hook order is stable; null until the athlete row arrives.
   useApplyPortalTheme(athlete?.portal_theme ?? null);
@@ -102,6 +121,7 @@ export default function PortalLayout() {
       <PortalDataProvider
         athlete={athlete}
         isImpersonating={isImpersonating}
+        portalRole={portalRole}
         openOrderSheet={() => setOrderSheetOpen(true)}
         openGuard={() => setGuardOpen(true)}
       >
@@ -133,7 +153,7 @@ export default function PortalLayout() {
           <PortalLayoutKindProvider value={layout}>
             {layout === "world" ? (
               <MooneyShell>
-                <Outlet />
+                <RoleOutlet />
               </MooneyShell>
             ) : (
               <>
@@ -149,7 +169,7 @@ export default function PortalLayout() {
                   </Button>
                 </div>
                 <div className="pb-bottom-nav md:pb-0">
-                  <Outlet />
+                  <RoleOutlet />
                 </div>
                 <PortalBottomNav />
               </>

@@ -9,12 +9,16 @@ import { usePortalSales } from "@/hooks/usePortalSales";
 import { usePortalProducts } from "@/hooks/usePortalProducts";
 import { usePortalOrders } from "@/hooks/usePortalOrders";
 import { usePortalHiddenProducts } from "@/hooks/usePortalHiddenProducts";
+import type { PortalRole } from "@/lib/portal/invites";
 
 type Athlete = ReturnType<typeof useCurrentAthlete>["athlete"];
 
 interface PortalDataValue {
   athlete: NonNullable<Athlete>;
   isImpersonating: boolean;
+  /** Owner (C-level) or Team (gear only). See lib/portal/roles.ts. */
+  portalRole: PortalRole;
+  isOwner: boolean;
   teamName: string | null;
   stats: ReturnType<typeof usePortalStats>;
   sales: ReturnType<typeof usePortalSales>;
@@ -43,6 +47,7 @@ interface ProviderProps {
   children: ReactNode;
   athlete: NonNullable<Athlete>;
   isImpersonating: boolean;
+  portalRole?: PortalRole;
   openOrderSheet: () => void;
   openGuard: () => void;
 }
@@ -51,6 +56,7 @@ export function PortalDataProvider({
   children,
   athlete,
   isImpersonating,
+  portalRole = "owner",
   openOrderSheet,
   openGuard,
 }: ProviderProps) {
@@ -106,6 +112,8 @@ export function PortalDataProvider({
   const value: PortalDataValue = {
     athlete,
     isImpersonating,
+    portalRole,
+    isOwner: portalRole === "owner",
     teamName,
     stats,
     sales,

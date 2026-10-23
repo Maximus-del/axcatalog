@@ -22,6 +22,7 @@ import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
 import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
+import { useMyOnboarding } from "@/lib/portal/invites";
 import { effectiveTiers, pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
 import { usePortalQuote } from "@/hooks/usePortalApi";
 import { sheetUnitPrice } from "@/lib/portal/api/products";
@@ -53,7 +54,9 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   // Two steps: build the order, then confirm it before it is placed.
   const [reviewing, setReviewing] = useState(false);
   const { user } = useAuth();
-  const { athlete, isImpersonating } = useCurrentAthlete();
+  const { athlete, isImpersonating, portalRole } = useCurrentAthlete();
+  // Team logins answered a size when they joined; their order opens with one in it.
+  const myOnboarding = useMyOnboarding(portalRole === "team" ? athlete?.id : null);
   const { config } = usePortalPricing(athlete?.organization_id ?? null);
   const curve = useSizeDistributionCurve(athlete?.organization_id ?? null);
 
@@ -139,6 +142,15 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     if (product.status === "archived") return !!v;
     return !!v && v.available === true;
   };
+
+  useEffect(() => {
+    if (!open) return;
+    const size = myOnboarding.data?.answers?.topSize;
+    const row = colorRows[0];
+    if (!size || !row || !sizes.includes(size) || !isCellAvailable(row.key, size)) return;
+    setQtys((q) => (Object.keys(q).length ? q : { [cellKey(row.key, size)]: 1 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once when the dialog opens with answers in hand
+  }, [open, myOnboarding.data]);
 
   const applyAutoTotal = (total: number) => {
     const clamped = Math.max(0, Math.min(500, Math.floor(total)));

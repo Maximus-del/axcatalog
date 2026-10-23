@@ -16,6 +16,8 @@ interface AuthState {
   role: AppRole;
   /** Athletes this user is linked to via user_athlete_links. */
   linkedAthleteIds: string[];
+  /** athlete id → portal role on that link ('owner' | 'team'). */
+  portalRoles: Record<string, string>;
   /** True when user_profiles.is_platform_admin is set. */
   isPlatformAdmin: boolean;
   /** Org memberships (organization_id + role) from organization_memberships. */
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole>(null);
   const [linkedAthleteIds, setLinkedAthleteIds] = useState<string[]>([]);
+  const [portalRoles, setPortalRoles] = useState<Record<string, string>>({});
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
   const [hasFanProfile, setHasFanProfile] = useState(false);
@@ -51,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!newSession) {
         setRole(null);
         setLinkedAthleteIds([]);
+        setPortalRoles({});
         setIsPlatformAdmin(false);
         setOrgRoles([]);
         setHasFanProfile(false);
@@ -76,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!userId) {
       setRole(null);
       setLinkedAthleteIds([]);
+      setPortalRoles({});
       setIsPlatformAdmin(false);
       setOrgRoles([]);
       setHasFanProfile(false);
@@ -90,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTimeout(async () => {
       const [profileRes, linksRes, membershipsRes, fanRes] = await Promise.all([
         supabase.from("user_profiles").select("role, is_platform_admin").eq("id", userId).maybeSingle(),
-        supabase.from("user_athlete_links").select("athlete_id").eq("user_id", userId),
+        supabase.from("user_athlete_links").select("athlete_id, portal_role" as "athlete_id").eq("user_id", userId),
         supabase
           .from("organization_memberships" as never)
           .select("organization_id, role")
@@ -104,7 +109,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const resolvedRole = (profileRes.data?.role as AppRole) ?? null;
       setRole(resolvedRole);
       setIsPlatformAdmin(Boolean((profileRes.data as { is_platform_admin?: boolean } | null)?.is_platform_admin));
-      setLinkedAthleteIds((linksRes.data ?? []).map((r) => r.athlete_id));
+      const linkRows = (linksRes.data ?? []) as unknown as { athlete_id: string; portal_role?: string | null }[];
+      setLinkedAthleteIds(linkRows.map((r) => r.athlete_id));
+      setPortalRoles(Object.fromEntries(linkRows.map((r) => [r.athlete_id, r.portal_role ?? "owner"])));
       setOrgRoles(
         ((membershipsRes.data ?? []) as unknown as { organization_id: string; role: string }[]).map((m) => ({
           organizationId: m.organization_id,
@@ -130,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       role,
       linkedAthleteIds,
+      portalRoles,
       isPlatformAdmin,
       orgRoles,
       hasFanProfile,
@@ -137,7 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       reload,
       signOut,
     }),
-    [session, role, linkedAthleteIds, isPlatformAdmin, orgRoles, hasFanProfile, loading, profileLoading, reload],
+    [session, role, linkedAthleteIds, portalRoles, isPlatformAdmin, orgRoles, hasFanProfile, loading, profileLoading, reload],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
