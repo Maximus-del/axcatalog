@@ -84,7 +84,7 @@ export default function PortalLayout() {
   // World (Locker Room) shell or classic: the client's theme decides, so the
   // Mooney World redesign only reaches clients AX has switched over.
   const layout = useResolvedLayout(athlete?.portal_theme ?? null);
-  const { user, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const [navOpen, setNavOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
@@ -144,9 +144,9 @@ export default function PortalLayout() {
             </div>
           )}
 
-          {isImpersonating && drive ? (
+          {isImpersonating && role === "admin" && drive ? (
             <TestDriveBar entityId={athlete.id} role={drive.role} stage={drive.stage} />
-          ) : isImpersonating && (
+          ) : isImpersonating && role === "admin" && (
             <ImpersonationBanner
               athleteId={athlete.id}
               athleteName={
