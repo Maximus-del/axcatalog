@@ -9,7 +9,10 @@
 //   In the locker — everyone with access and their role, switchable.
 //   Public locker — on/off, web address, headline. Retail only.
 import { useState } from "react";
-import { Check, Copy, ExternalLink, Globe, Link2, Loader2, ShieldCheck, Users, X } from "lucide-react";
+import { Car, Check, Copy, ExternalLink, Globe, Link2, Loader2, ShieldCheck, Users, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useDriveEntity } from "@/components/test-drive/TestDriveBar";
+import { DRIVE_ROLES, DRIVE_STAGES, driveHref } from "@/lib/portal/test-drive";
 import { toast } from "sonner";
 import { toneText } from "@/components/admin-v2/primitives";
 import { inviteUrl, lockerUrl, onboardingSummary, type PortalRole } from "@/lib/portal/invites";
@@ -58,6 +61,7 @@ const ghost = `${btn} border border-[hsl(var(--ax-line))] hover:border-[hsl(var(
 
 export default function PortalInvitesCard({ entityId, entityName, organizationId }: Props) {
   const access = usePortalAccess(entityId);
+  const driveEntity = useDriveEntity(entityId);
   const ensure = useEnsureInvite(entityId, organizationId);
   const revoke = useRevokeInvite(entityId);
   const decide = useDecideAccess(entityId);
@@ -106,6 +110,31 @@ export default function PortalInvitesCard({ entityId, entityName, organizationId
           </div>
         </div>
         {pending.length ? <Pill tone="--ax-amber">{pending.length} to review</Pill> : null}
+      </div>
+
+      {/* test drive: be the Owner, a coach, or a customer — no account, nothing saved */}
+      <div className="rounded-xl border border-[hsl(var(--ax-line))] p-3">
+        <div className="flex items-center gap-2">
+          <Car className="h-3.5 w-3.5 text-[hsl(var(--ax-faint))]" />
+          <span className="text-[13px] font-semibold">Test drive</span>
+          <span className="text-[12px] text-[hsl(var(--ax-faint))]">See exactly what they see. No account, nothing saved.</span>
+        </div>
+        <div className="mt-2.5 space-y-2">
+          {DRIVE_ROLES.map((r) => (
+            <div key={r.value} className="flex flex-wrap items-center gap-1.5">
+              <span className="w-[76px] shrink-0 text-[12px] font-semibold" title={r.sub}>{r.label}</span>
+              {DRIVE_STAGES[r.value].map((st, i) => (
+                <Link
+                  key={st.value}
+                  to={driveHref(entityId, r.value, st.value, driveEntity.data?.lockerSlug ?? "")}
+                  className={i === 0 ? primary : ghost}
+                >
+                  {i === 0 ? `Start: ${st.label}` : st.label}
+                </Link>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* invite links */}

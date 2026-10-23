@@ -38,6 +38,7 @@ import { RedirectKeepSearch } from "@/components/portal/RedirectKeepSearch";
 const QuestionnairePublic = lazy(() => import("./pages/QuestionnairePublic"));
 const PortalInvite = lazy(() => import("./pages/PortalInvite"));
 const PublicLocker = lazy(() => import("./pages/PublicLocker"));
+const TestDrive = lazy(() => import("./pages/TestDrive"));
 
 const AdminLayout = lazy(() => import("@/components/admin/AdminLayout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
@@ -158,6 +159,8 @@ const App = () => (
               {/* Client portal invites + public lockers (no login) */}
               <Route path="/invite/:token" element={<PortalInvite />} />
               <Route path="/l/:slug" element={<PublicLocker />} />
+              {/* AX only: walk a client's invite → portal → locker as Owner / Team / Customer, nothing saved */}
+              <Route path="/test-drive/:entityId" element={<RequireAdmin><TestDrive /></RequireAdmin>} />
 
               {/* Goat Farm Access (fan) — public entry + shareable pages */}
               <Route path="/join" element={<FanJoin />} />

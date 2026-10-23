@@ -23,6 +23,8 @@ interface Props {
   linkRole: PortalRole;
   initial?: OnboardingAnswers | null;
   onDone: () => void;
+  /** Test drive: hand the answers back instead of saving them. */
+  onPreviewSubmit?: (a: OnboardingAnswers) => void;
 }
 
 function Chip({ on, children, onClick }: { on: boolean; children: React.ReactNode; onClick: () => void }) {
@@ -55,7 +57,7 @@ function SizeRow({ label, value, onChange }: { label: string; value: Size | null
   );
 }
 
-export function OnboardingForm({ athleteId, entityName, linkRole, initial, onDone }: Props) {
+export function OnboardingForm({ athleteId, entityName, linkRole, initial, onDone, onPreviewSubmit }: Props) {
   const [a, setA] = useState<OnboardingAnswers>(
     initial ?? { ...EMPTY_ONBOARDING, position: linkRole === "owner" ? "owner" : "coach" },
   );
@@ -65,6 +67,11 @@ export function OnboardingForm({ athleteId, entityName, linkRole, initial, onDon
     setA((x) => ({ ...x, wants: x.wants.includes(w) ? x.wants.filter((y) => y !== w) : [...x.wants, w] }));
 
   const submit = async () => {
+    if (onPreviewSubmit) {
+      onPreviewSubmit(a);
+      onDone();
+      return;
+    }
     try {
       await save.mutateAsync({ athleteId, answers: a });
       onDone();
