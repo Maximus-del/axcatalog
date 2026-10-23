@@ -9,7 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowUpRight, CheckCircle2, Loader2, Mail, Plus, Printer, Search, X } from "lucide-react";
+import { ArrowUpRight, CheckCircle2, FileText, Loader2, Mail, Plus, Search, X } from "lucide-react";
 import { Card, Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 import { useEntityWorkspace } from "@/lib/v2/data";
 import { fmtMoney } from "@/lib/v2/pricing";
@@ -17,6 +17,7 @@ import { draftOf, printLines, rowMaths, SIDES_LABEL, usePricingSheet, type Sheet
 import { invoiceFigures, ladderPercent, useCreateInvoice, type InvoiceLineDraft } from "@/lib/v2/invoice-builder";
 import { fetchInvoice, invoiceEmail, mailtoHref, useSetPaymentStatus } from "@/lib/v2/invoices";
 import { effectiveTiers, usePortalPricing } from "@/hooks/usePortalPricing";
+import { PreviewPlus } from "@/components/admin-v2/ProductPreview";
 
 const btn =
   "inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] transition-colors hover:text-[hsl(var(--ax-ink))] disabled:opacity-50";
@@ -161,11 +162,10 @@ export default function V2InvoiceBuilder() {
 
   if (sheet.isError) return <ErrorState error={sheet.error} what="this client's products" onRetry={() => void sheet.refetch()} />;
   const loading = sheet.isLoading || ws.isLoading;
-  const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
   return (
     <div className="pb-16">
-      <div className="print:hidden">
+      <div>
         <Link to={`/admin-v2/people/${entityId}`} className="mb-3 inline-block text-[11px] text-[hsl(var(--ax-faint))]">
           ← {entity?.name ?? "Client"}
         </Link>
@@ -177,9 +177,6 @@ export default function V2InvoiceBuilder() {
               <Link className={btn} to={`/admin-v2/people/${entityId}/pricing`}>
                 Pricing sheet <ArrowUpRight className="h-3.5 w-3.5" />
               </Link>
-              <button type="button" className={btn} onClick={() => window.print()} disabled={!figures.lines.length}>
-                <Printer className="h-3.5 w-3.5" /> Print invoice
-              </button>
             </>
           }
         />
@@ -190,7 +187,10 @@ export default function V2InvoiceBuilder() {
             <div className="min-w-0 flex-1 text-[13px]">
               <b>Invoice {created.orderNumber}</b> is on {first}'s orders, unpaid.
             </div>
-            <button type="button" className={btnPrimary} onClick={() => void emailCreated()}>
+            <a className={btnPrimary} href={`/admin-v2/invoice/${created.id}`} target="_blank" rel="noreferrer">
+              <FileText className="h-3.5 w-3.5" /> Open invoice
+            </a>
+            <button type="button" className={btn} onClick={() => void emailCreated()}>
               <Mail className="h-3.5 w-3.5" /> Email invoice
             </button>
             <Link className={btn} to={`/admin-v2/people/${entityId}`}>
@@ -246,7 +246,13 @@ export default function V2InvoiceBuilder() {
                             <tr key={l.productId}>
                               <td className="px-1 py-1.5">
                                 <span className="flex min-w-0 items-center gap-2">
-                                  <Thumb url={p.imageUrl} alt={p.title} size="h-12 w-12" />
+                                  <span className="relative shrink-0">
+                                    <Thumb url={p.imageUrl} alt={p.title} size="h-12 w-12" />
+                                    <PreviewPlus
+                                      className="!-right-2 !-top-2 !h-5 !w-5"
+                                      product={{ title: p.title, imageUrl: p.imageUrl, backImageUrl: p.backImageUrl, sides: m.sides, subtitle: p.blankName }}
+                                    />
+                                  </span>
                                   <span className="min-w-0">
                                     <span className="block max-w-[220px] truncate font-medium">{p.title}</span>
                                     <span className="block text-[10.5px] text-[hsl(var(--ax-faint))]">
@@ -357,8 +363,9 @@ export default function V2InvoiceBuilder() {
                             {g.rows.map((p) => {
                               const on = onInvoice.has(p.id);
                               return (
+                                <div key={p.id} className="relative">
+                                <PreviewPlus product={{ title: p.title, imageUrl: p.imageUrl, backImageUrl: p.backImageUrl, sides: maths.get(p.id)?.sides, subtitle: g.label }} />
                                 <button
-                                  key={p.id}
                                   type="button"
                                   onClick={() => (on ? remove(p.id) : add([p.id]))}
                                   aria-pressed={on}
@@ -372,6 +379,7 @@ export default function V2InvoiceBuilder() {
                                   </span>
                                   <span className="block truncate px-1.5 py-1 text-[10.5px]">{p.title.replace(/^Mooney World /, "")}</span>
                                 </button>
+                                </div>
                               );
                             })}
                           </div>
@@ -475,52 +483,6 @@ export default function V2InvoiceBuilder() {
         )}
       </div>
 
-      {/* Printable invoice: only what the client pays. */}
-      <div className="hidden text-black print:block">
-        <h1 className="text-2xl font-bold">Invoice</h1>
-        <p className="mt-1 text-sm">
-          AthleteXclusive · {entity?.name} · {today}
-        </p>
-        <table className="mt-6 w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="py-2">Product</th>
-              <th className="py-2">Notes</th>
-              <th className="py-2 text-right">Qty</th>
-              <th className="py-2 text-right">Unit</th>
-              <th className="py-2 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {figures.lines.map((f) => (
-              <tr key={f.line.productId} className="border-b">
-                <td className="py-1.5">{f.product.title}</td>
-                <td className="py-1.5">{f.line.notes}</td>
-                <td className="py-1.5 text-right">{f.line.quantity}</td>
-                <td className="py-1.5 text-right">{money(f.effectiveUnit)}</td>
-                <td className="py-1.5 text-right">{money(f.lineTotal)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className="mt-4 ml-auto w-64 space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>{money(figures.subtotal)}</span>
-          </div>
-          {figures.discount > 0 && (
-            <div className="flex justify-between">
-              <span>Volume discount ({figures.discountPercent}%)</span>
-              <span>−{money(figures.discount)}</span>
-            </div>
-          )}
-          <div className="flex justify-between border-t pt-1 font-bold">
-            <span>Total due</span>
-            <span>{money(figures.total)}</span>
-          </div>
-        </div>
-        <p className="mt-6 text-sm">{terms?.paymentInstructions || "Pay by Zelle or through the invoice we email you."}</p>
-      </div>
     </div>
   );
 }

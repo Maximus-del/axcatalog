@@ -15,6 +15,7 @@ import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowUpRight, ChevronDown, ChevronRight, Loader2, Lock, RotateCcw, X } from "lucide-react";
 import { Chip, EmptyState, ErrorState, PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+import { PreviewPlus } from "@/components/admin-v2/ProductPreview";
 import { useEntityWorkspace } from "@/lib/v2/data";
 import { fmtMoney } from "@/lib/v2/pricing";
 import { EMPTY_TERMS, brandTermsError, useSaveBrandTerms, type BrandTerms } from "@/lib/v2/brand-terms";
@@ -640,7 +641,15 @@ export default function V2PricingSheet() {
                 <td className="px-2 py-1.5">
                   <SidesTag sides={m.sides} tagged={p.pricing.printSides != null} />
                 </td>
-                <td className="max-w-[260px] px-2 py-1.5 text-[12px]">
+                <td className="max-w-[300px] px-2 py-1.5 text-[12px]">
+                  <span className="flex min-w-0 items-center gap-2">
+                  <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md bg-[hsl(var(--ax-ink)/0.05)]">
+                    {p.imageUrl && <img src={p.imageUrl} alt="" loading="lazy" className="h-full w-full object-contain" />}
+                  </span>
+                  <span className="relative">
+                    <PreviewPlus className="!static !h-5 !w-5" product={{ title: p.title, imageUrl: p.imageUrl, backImageUrl: p.backImageUrl, sides: m.sides, subtitle: p.blankName }} />
+                  </span>
+                  <span className="min-w-0">
                   <Link to={`/admin-v2/products/${p.id}`} className="block truncate font-medium hover:underline" title={p.title}>
                     {p.title}
                   </Link>
@@ -655,6 +664,8 @@ export default function V2PricingSheet() {
                       {err && <span className="ml-1 text-[hsl(var(--ax-red))]">{err}</span>}
                     </span>
                   )}
+                  </span>
+                  </span>
                 </td>
                 {cell("blankCost", pre.blank, blankSource)}
                 {cell("printCost", pre.print, pre.print != null ? "preset" : null, { invalid: m.printCost == null })}
@@ -1011,6 +1022,7 @@ export default function V2PricingSheet() {
                               }
                               aria-label={`Select ${p.title}`}
                             />
+                            <PreviewPlus product={{ title: p.title, imageUrl: p.imageUrl, backImageUrl: p.backImageUrl, sides: m.sides }} />
                             <div className="aspect-square bg-[hsl(var(--ax-ink)/0.04)]">
                               {p.imageUrl ? (
                                 <img src={p.imageUrl} alt={p.title} loading="lazy" className="h-full w-full object-contain" />

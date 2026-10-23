@@ -37,3 +37,37 @@ describe("invoice email", () => {
     expect(href).toBe("mailto:teamclaypool+mooney@gmail.com?subject=A%20%26%20B&body=x%0Ay");
   });
 });
+
+describe("Claude Design brief", () => {
+  it("carries the exact figures and the brand", async () => {
+    const { claudeDesignBrief } = await import("./invoices");
+    const brief = claudeDesignBrief(
+      {
+        id: "o1",
+        athleteId: "a1",
+        orderNumber: "BR-2026-00042",
+        clientName: "Darnell Mooney",
+        clientEmail: "dm@example.com",
+        createdAt: "2026-10-20T19:00:00Z",
+        status: "submitted",
+        paymentStatus: "unpaid",
+        invoicedAt: null,
+        paidAt: null,
+        notes: "Camp giveaway",
+        units: 12,
+        lines: [{ productId: "p1", title: "Signature Jersey #11 Tee", color: null, size: null, quantity: 12, unitPrice: 26, lineTotal: 312, notes: "6 L · 6 XL", imageUrl: "https://img/x.png" }],
+        subtotal: 312,
+        creditApplied: 0,
+        amountDue: 312,
+        paymentInstructions: "Zelle to pay@ax.test",
+      },
+      { from: "Athlete Xclusive", dueLabel: "Due on receipt" },
+    );
+    expect(brief).toContain("#03AC13");
+    expect(brief).toContain('"invoice_number": "BR-2026-00042"');
+    expect(brief).toContain('"amount_due": 312');
+    expect(brief).toContain('"details": "6 L · 6 XL"');
+    expect(brief).toContain('"payment_instructions": "Zelle to pay@ax.test"');
+    expect(brief).not.toContain("ax_credit_applied");
+  });
+});
