@@ -28,6 +28,7 @@ export const PORTAL_NAV: PortalDestination[] = [
   { to: "/portal/content", label: "Content", longLabel: "Social Content", icon: "Image", primary: true },
   { to: "/portal/messages", label: "Messages", icon: "MessageSquare" },
   { to: "/portal/analytics", label: "Analytics", icon: "BarChart3" },
+  { to: "/portal/catalog", label: "Catalog", longLabel: "Blank Catalog", icon: "LayoutGrid" },
   { to: "/portal/drops", label: "Drops", longLabel: "Upcoming Drops", icon: "Sparkles" },
   { to: "/portal/era", label: "Era", longLabel: "Era Comparison", icon: "Layers" },
   { to: "/portal/profile", label: "Profile", longLabel: "Profile & Brand", icon: "User", primary: true },

@@ -124,6 +124,7 @@ const PortalEra = lazy(() => import("./pages/portal/PortalEra"));
 const PortalMessages = lazy(() => import("./pages/portal/PortalMessages"));
 const PortalStudio = lazy(() => import("./pages/portal/PortalStudio"));
 const PortalProfile = lazy(() => import("./pages/portal/PortalProfile"));
+const PortalCatalog = lazy(() => import("./pages/portal/PortalCatalog"));
 const GameDayBuilder = lazy(() => import("./pages/portal/build/GameDayBuilder"));
 const CampBuilder = lazy(() => import("./pages/portal/build/CampBuilder"));
 const CustomBuilder = lazy(() => import("./pages/portal/build/CustomBuilder"));
@@ -310,6 +311,7 @@ const App = () => (
                 <Route path="messages" element={<PortalMessages />} />
                 <Route path="studio" element={<PortalStudio />} />
                 <Route path="profile" element={<PortalProfile />} />
+                <Route path="catalog" element={<PortalCatalog />} />
                 <Route path="build/game-day" element={<GameDayBuilder />} />
                 <Route path="build/camp" element={<CampBuilder />} />
                 <Route path="build/custom" element={<CustomBuilder />} />
