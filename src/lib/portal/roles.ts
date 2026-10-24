@@ -12,7 +12,7 @@ import type { PortalRole } from "./invites";
 import type { QuickPlayKey } from "./portal-theme";
 
 /** Path prefixes a Team login never sees. */
-export const OWNER_ONLY_PATHS = ["/portal/analytics", "/portal/brand", "/portal/era", "/portal/profile", "/portal/studio"];
+export const OWNER_ONLY_PATHS = ["/portal/analytics", "/portal/brand", "/portal/era", "/portal/profile", "/portal/studio", "/portal/catalog"];
 
 export function canSeePath(pathname: string, role: PortalRole): boolean {
   if (role === "owner") return true;

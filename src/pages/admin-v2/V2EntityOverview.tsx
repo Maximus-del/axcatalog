@@ -20,6 +20,7 @@ import {
 import { useEntityWorkspace, useMockupLibrary } from "@/lib/v2/data";
 import DropZone, { DropTrigger } from "@/components/admin-v2/DropZone";
 import PortalInvitesCard from "@/components/admin-v2/PortalInvitesCard";
+import BlankRequestsCard from "@/components/admin-v2/BlankRequestsCard";
 import ClientAccessCard from "@/components/admin-v2/ClientAccessCard";
 import PortalThemeCard from "@/components/admin-v2/PortalThemeCard";
 import CollectionWallCard from "@/components/admin-v2/CollectionWallCard";
@@ -228,6 +229,8 @@ export default function V2EntityOverview() {
       <ClientAccessCard entityId={entity.id} entityName={entity.name} />
       {/* Owner/Team invite links, the approval queue, roles, and the public locker. */}
       <PortalInvitesCard entityId={entity.id} entityName={entity.name} organizationId={entity.organizationId ?? null} />
+      {/* What they picked from the blank catalog in their portal. */}
+      <BlankRequestsCard entityId={entity.id} entityName={entity.name} />
       {/* What their portal looks like — set here, seen there. */}
       <PortalThemeCard entityId={entity.id} entityName={entity.name} />
       {/* What stands on their home page — lockers, plaques — and in what order. */}

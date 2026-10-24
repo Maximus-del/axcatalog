@@ -23,6 +23,7 @@ import {
 } from "@/lib/portal/api/orders";
 import type { MediaAsset, Product, Project } from "@/lib/portal/api/contract";
 import { fetchPlaybook } from "@/lib/portal/api/playbook";
+import { fetchBlankCatalog, requestBlank, type BlankRequestInput } from "@/lib/portal/api/blank-catalog";
 import {
   createDrop,
   fetchAnalytics,
@@ -323,5 +324,25 @@ export function usePortalPlaybook() {
     queryKey: keyFor(scope, "playbook"),
     queryFn: () => fetchPlaybook(scope),
     staleTime: 5 * 60_000,
+  });
+}
+
+/** AX's approved blanks, priced for this client (owners only). */
+export function usePortalBlankCatalog() {
+  const scope = usePortalScope();
+  return useQuery({
+    queryKey: keyFor(scope, "blank-catalog"),
+    queryFn: () => fetchBlankCatalog(scope),
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** "Add to my shop" — files a blank request for AX to turn into a product. */
+export function usePortalRequestBlank() {
+  const scope = usePortalScope();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BlankRequestInput) => requestBlank(scope, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keyFor(scope, "blank-catalog") }),
   });
 }
