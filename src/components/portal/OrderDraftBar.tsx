@@ -7,7 +7,7 @@ interface Props {
 }
 
 /**
- * Floating bottom-right bar shown when the order draft has items.
+ * Floating bottom-right bar shown when the cart has items. Opens the cart.
  */
 export function OrderDraftBar({ onOpenSheet }: Props) {
   const { unitCount, itemCount, clear } = useOrderDraft();
@@ -23,10 +23,10 @@ export function OrderDraftBar({ onOpenSheet }: Props) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold leading-none">
-          {unitCount} unit{unitCount === 1 ? "" : "s"} in draft
+          {unitCount} unit{unitCount === 1 ? "" : "s"} in your cart
         </div>
         <div className="text-xs text-muted-foreground mt-1">
-          {itemCount} size{itemCount === 1 ? "" : "s"} across products
+          {itemCount} size{itemCount === 1 ? "" : "s"} · priced at checkout
         </div>
       </div>
       <Button
@@ -42,7 +42,7 @@ export function OrderDraftBar({ onOpenSheet }: Props) {
         onClick={onOpenSheet}
         className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
       >
-        Review
+        View cart
       </Button>
     </div>
   );

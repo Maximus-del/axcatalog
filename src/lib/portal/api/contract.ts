@@ -118,8 +118,14 @@ export interface Order {
   destinationId: DestinationId | null;
   /** What is still owed after AX credit. */
   amountDue?: Money | null;
-  /** unpaid · invoiced · paid · waived — set by AX (orders are paid off-platform in phase 2). */
+  /** unpaid · invoiced · paid · waived. */
   paymentStatus?: string | null;
+  /** pay_now · net_30 (cart checkout) · invoice (AX invoices) · null (older orders). */
+  paymentTerms?: string | null;
+  /** Net 30 due date, YYYY-MM-DD. */
+  dueDate?: string | null;
+  /** Shopify checkout (pay now) or invoice page (net 30). */
+  paymentUrl?: string | null;
 }
 
 export type RevenueBasis = "gross" | "net" | "athlete_share";

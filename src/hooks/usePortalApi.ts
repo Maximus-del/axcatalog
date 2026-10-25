@@ -24,6 +24,7 @@ import {
 import type { MediaAsset, Product, Project } from "@/lib/portal/api/contract";
 import { fetchPlaybook } from "@/lib/portal/api/playbook";
 import { fetchBlankCatalog, requestBlank, type BlankRequestInput } from "@/lib/portal/api/blank-catalog";
+import { fetchCheckoutOptions } from "@/lib/portal/api/checkout";
 import {
   createDrop,
   fetchAnalytics,
@@ -154,6 +155,17 @@ export function usePortalSubmitOrder() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["portal-api", scope.athleteId] });
     },
+  });
+}
+
+/** Cart checkout: can this login choose how to pay, is Net 30 on, last ship-to. */
+export function usePortalCheckoutOptions(enabled = true) {
+  const scope = usePortalScope();
+  return useQuery({
+    queryKey: keyFor(scope, "checkout-options"),
+    queryFn: () => fetchCheckoutOptions(scope),
+    enabled,
+    staleTime: 5 * 60_000,
   });
 }
 

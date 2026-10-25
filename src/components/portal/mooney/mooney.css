@@ -597,3 +597,44 @@ div.mw-bulk[data-state] {
 .mw-studio-optional { font-weight: 400; color: var(--mw-quiet); text-transform: none; letter-spacing: 0; }
 .mw-studio-linkbox { display: flex; align-items: flex-start; gap: 10px; }
 .mw-studio-linkbox > svg { width: 18px; margin-top: 12px; flex: none; color: var(--mw-quiet); }
+
+/* ── Quick order on a gear card: sizes straight into the cart ───────────── */
+.mw-gear-show-actions .mw-gear-copy { flex: 0 0 44px; padding: 0; }
+.mw-quick { display: grid; gap: 8px; border-top: 1px solid var(--mw-line); padding-top: 6px; }
+.mw-quick-toggle { justify-self: center; display: grid; place-items: center; width: 44px; height: 24px; border-radius: 999px; color: var(--mw-brand); }
+.mw-quick-toggle:hover, .mw-quick-toggle:focus-visible { background: hsl(var(--accent) / .12); }
+.mw-quick-toggle svg { width: 18px; height: 18px; }
+.mw-quick-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.mw-quick-chip { position: relative; flex: 1 0 48px; min-height: 44px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--mw-line); background: hsl(var(--dark) / .5); color: var(--mw-ink); font-size: 13px; font-weight: 700; transition: border-color .12s, transform .08s; }
+.mw-quick-chip:hover { border-color: var(--mw-brand); }
+.mw-quick-chip:active { transform: scale(.96); }
+.mw-quick-chip.has-qty { border-color: var(--mw-brand); color: var(--mw-brand); background: hsl(var(--accent) / .1); }
+.mw-quick-chip:disabled { opacity: .35; text-decoration: line-through; cursor: not-allowed; }
+.mw-quick-badge { position: absolute; top: -7px; right: -7px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px; background: var(--mw-brand); color: hsl(var(--accent-foreground)); font-size: 11px; line-height: 20px; text-align: center; }
+.mw-quick-panel { display: grid; gap: 10px; animation: mw-quick-up .18s ease-out; }
+@keyframes mw-quick-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.mw-quick-colors { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; }
+.mw-quick-colors button { flex: none; display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--mw-line); font-size: 12px; text-transform: capitalize; }
+.mw-quick-colors button[aria-pressed="true"] { border-color: var(--mw-brand); color: var(--mw-brand); }
+.mw-quick-dot { width: 12px; height: 12px; border-radius: 999px; border: 1px solid var(--mw-line); }
+.mw-quick-steppers { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.mw-quick-steppers li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 4px 4px 12px; border: 1px solid var(--mw-line); border-radius: 6px; }
+.mw-quick-steppers li.is-out { opacity: .45; }
+.mw-quick-label { font-size: 13px; font-weight: 700; text-transform: capitalize; }
+.mw-quick-stepper { display: flex; align-items: center; }
+.mw-quick-stepper button { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 6px; color: var(--mw-ink); }
+.mw-quick-stepper button:hover:not(:disabled) { color: var(--mw-brand); background: hsl(var(--accent) / .1); }
+.mw-quick-stepper button:disabled { opacity: .3; }
+.mw-quick-stepper button svg { width: 14px; height: 14px; }
+.mw-quick-stepper span { min-width: 26px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+.mw-quick-out { font-size: 11px; color: var(--mw-quiet); padding-right: 8px; }
+.mw-quick-foot { display: flex; align-items: center; gap: 8px; }
+.mw-quick-cart { flex: 1; display: flex; align-items: center; gap: 6px; min-height: 40px; font-size: 12px; color: var(--mw-quiet); text-align: left; }
+.mw-quick-cart:not(:disabled) { color: var(--mw-ink); }
+.mw-quick-cart:not(:disabled) span { color: var(--mw-brand); font-weight: 700; }
+.mw-quick-cart svg { width: 16px; height: 16px; color: var(--mw-brand); }
+.mw-quick-close { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 6px; color: var(--mw-quiet); }
+.mw-quick-close:hover { color: var(--mw-ink); background: hsl(var(--accent) / .08); }
+.mw-quick-close svg { width: 16px; height: 16px; }
+@media (prefers-reduced-motion: reduce) { .mw-quick-panel { animation: none; } }
+.mw-hq-pay { margin-left: 6px; min-height: 30px; padding: 0 12px; }

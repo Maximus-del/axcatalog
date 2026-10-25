@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Eye, Link2, ShoppingCart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Link2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import type { Product } from "@/lib/portal/api/contract";
@@ -10,6 +10,7 @@ import { gearLooks, type GearLook } from "@/lib/portal/gear-looks";
 import { buildShareUrl } from "../ProductCard";
 import { imagesForColor } from "./GearProductView";
 import { portalLink } from "./navigation";
+import { QuickOrder } from "./QuickOrder";
 
 /** Every colourway this card can show. Empty = nothing to show, and My Gear leaves the product out. */
 export function looksFor(product: Product, source: PortalProduct | undefined): GearLook[] {
@@ -20,8 +21,9 @@ export function looksFor(product: Product, source: PortalProduct | undefined): G
 
 /**
  * One product, big: flip through its colourways (arrows or the swatch strip),
- * Front / Back, then Add to cart, View or Copy link. No download — the files
- * stay hosted by AX; the link is what gets shared.
+ * Front / Back, then Quick order (sizes straight into the cart), View product
+ * or Copy link. No download — the files stay hosted by AX; the link is what
+ * gets shared.
  */
 export function GearProductCard({
   product,
@@ -41,6 +43,7 @@ export function GearProductCard({
   const [at, setAt] = useState(0);
   const [side, setSide] = useState<"front" | "back">("front");
   const [failed, setFailed] = useState<string[]>([]);
+  const [quick, setQuick] = useState(false);
   const look = looks[Math.min(at, looks.length - 1)];
   const image = (side === "back" && look?.back) || look?.front || null;
   const shareUrl = product.publicUrl ?? (source ? buildShareUrl(source) : null);
@@ -118,28 +121,31 @@ export function GearProductCard({
           {formatMoney(product.unitPrice, { cents: true })} <span>/ unit</span>
           {product.lifecycle === "archive" && <span className="mw-gear-archive-note"> · reprinted from the design file</span>}
         </p>
-        <div className="mw-content-actions mw-gear-show-actions">
-          <Button
-            variant="outline"
-            className="mw-pill mw-gear-order"
-            onClick={onOrder}
-            disabled={!canOrder || viewingAs}
-            title={viewingAs ? "View-as is read-only. Orders are disabled." : !canOrder ? "Not available to order" : undefined}
-          >
-            <ShoppingCart />
-            Add to cart
-          </Button>
-          <Button variant="outline" className="mw-pill" asChild>
-            <Link to={portalLink(`/portal/products/${encodeURIComponent(product.id)}`, location.search)}>
-              <Eye />
-              View
-            </Link>
-          </Button>
-          <Button variant="outline" className="mw-pill" onClick={copy} disabled={!shareUrl} title={shareUrl ? "Copy store link" : "Not on the store yet"}>
-            <Link2 />
-            Copy link
-          </Button>
-        </div>
+        {quick && source ? (
+          <QuickOrder product={source} lookLabel={look?.label} onClose={() => setQuick(false)} />
+        ) : (
+          <div className="mw-content-actions mw-gear-show-actions">
+            <Button
+              variant="outline"
+              className="mw-pill mw-gear-order"
+              onClick={() => (source ? setQuick(true) : onOrder())}
+              disabled={!canOrder || viewingAs}
+              title={viewingAs ? "View-as is read-only. Orders are disabled." : !canOrder ? "Not available to order" : undefined}
+            >
+              <Zap />
+              Quick order
+            </Button>
+            <Button variant="outline" className="mw-pill" asChild>
+              <Link to={portalLink(`/portal/products/${encodeURIComponent(product.id)}`, location.search)}>
+                <Eye />
+                View product
+              </Link>
+            </Button>
+            <Button variant="outline" className="mw-pill mw-gear-copy" onClick={copy} disabled={!shareUrl} title={shareUrl ? "Copy store link" : "Not on the store yet"} aria-label="Copy store link">
+              <Link2 />
+            </Button>
+          </div>
+        )}
       </div>
     </article>
   );

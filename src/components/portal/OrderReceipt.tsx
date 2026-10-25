@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useAuth } from "@/auth/AuthProvider";
 import { usePortalPlaybook } from "@/hooks/usePortalApi";
 import { portalLink } from "@/components/portal/mooney/navigation";
+import { dueLabel } from "@/lib/portal/cart";
+import { isSafePaymentUrl } from "@/lib/portal/api/checkout";
 
 export interface PlacedOrder {
   orderNumber: string | null;
@@ -24,6 +26,15 @@ export interface PlacedOrder {
   creditApplied: number;
   amountDue: number | null;
   replayed?: boolean;
+  /** Set by the cart checkout when the owner picked how to pay. */
+  payment?: {
+    terms: "pay_now" | "net_30";
+    payNowDiscount?: number;
+    dueDate?: string | null;
+    paymentUrl?: string | null;
+    /** Online payment couldn't be set up yet — AX sends the link. */
+    linkComing?: boolean;
+  } | null;
 }
 
 const EVENT = "portal:order-placed";
@@ -82,6 +93,37 @@ export function OrderReceiptHost() {
               <h3 className="text-xs font-bold uppercase tracking-wider text-accent">{fullyCredited ? "Nothing to pay" : "How to pay"}</h3>
               {fullyCredited ? (
                 <p className="text-muted-foreground">Your AX credit covered this order.</p>
+              ) : order.payment?.terms === "net_30" ? (
+                <>
+                  <p>
+                    <strong>{dueLabel(order.payment.dueDate) ?? "Due in 30 days"}.</strong> Your gear goes ahead now — sell it, then pay.
+                  </p>
+                  <p className="text-muted-foreground">
+                    {order.payment.linkComing
+                      ? `AX will email the invoice${user?.email ? ` to ${user.email}` : ""}.`
+                      : "Shopify emails the invoice and a reminder before it's due. Pay any time from the invoice page."}
+                  </p>
+                  {isSafePaymentUrl(order.payment.paymentUrl) && (
+                    <Button variant="outline" asChild className="mt-1">
+                      <a href={order.payment.paymentUrl} target="_blank" rel="noopener noreferrer">View invoice</a>
+                    </Button>
+                  )}
+                </>
+              ) : order.payment?.terms === "pay_now" ? (
+                <>
+                  <p>
+                    You're getting 5% off{order.payment.payNowDiscount ? ` (${usd(order.payment.payNowDiscount)})` : ""} for paying now.
+                  </p>
+                  {isSafePaymentUrl(order.payment.paymentUrl) ? (
+                    <Button asChild className="mt-1">
+                      <a href={order.payment.paymentUrl}>Pay {usd(order.amountDue)}</a>
+                    </Button>
+                  ) : (
+                    <p className="text-muted-foreground">
+                      AX will email your secure payment link{user?.email ? ` to ${user.email}` : ""} shortly — the 5% stays on it.
+                    </p>
+                  )}
+                </>
               ) : (
                 <>
                   {instructions && <p>{instructions}</p>}
@@ -92,7 +134,9 @@ export function OrderReceiptHost() {
               )}
               <h3 className="pt-2 text-xs font-bold uppercase tracking-wider text-accent">What happens next</h3>
               <p className="text-muted-foreground">
-                AX confirms the order and sizes, sends the invoice, and starts production once it's paid. Track it under Recent orders in Brand HQ.
+                {order.payment
+                  ? "AX confirms the order and sizes and starts production. Track it under Recent orders in Brand HQ."
+                  : "AX confirms the order and sizes, sends the invoice, and starts production once it's paid. Track it under Recent orders in Brand HQ."}
               </p>
             </div>
             <div className="flex flex-wrap justify-end gap-2 pt-1">

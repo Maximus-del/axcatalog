@@ -211,7 +211,7 @@ export async function fetchOrders(scope: PortalScope, cursor: string | null = nu
   const size = Math.min(Math.max(limit, 1), 100);
   let q = supabase
     .from("bulk_order_requests")
-    .select("id, order_number, created_at, total_units, status, wholesale_subtotal, amount_due, payment_status")
+    .select("id, order_number, created_at, total_units, status, wholesale_subtotal, amount_due, payment_status, payment_terms, due_date, payment_url")
     .eq("athlete_id", scope.athleteId)
     .neq("status", "draft")
     .order("created_at", { ascending: false })
@@ -231,6 +231,9 @@ export async function fetchOrders(scope: PortalScope, cursor: string | null = nu
     destinationId: null,
     amountDue: money(r.amount_due, "USD"),
     paymentStatus: typeof r.payment_status === "string" ? r.payment_status : null,
+    paymentTerms: typeof r.payment_terms === "string" ? r.payment_terms : null,
+    dueDate: typeof r.due_date === "string" ? r.due_date : null,
+    paymentUrl: typeof r.payment_url === "string" ? r.payment_url : null,
   }));
   return { items, nextCursor: rows.length > size ? String(rows[size - 1].created_at) : null };
 }

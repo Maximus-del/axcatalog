@@ -15,7 +15,8 @@ import { ImpersonationBanner } from "./ImpersonationBanner";
 import { ImpersonationGuardModal } from "./ImpersonationGuardModal";
 import { BulkOrderSheet } from "./BulkOrderSheet";
 import { OrderDraftBar } from "./OrderDraftBar";
-import { OrderDraftProvider } from "./OrderDraftContext";
+import { OrderDraftProvider, useOrderDraft } from "./OrderDraftContext";
+import { CartSheet } from "./CartSheet";
 import { PortalDataProvider, usePortalData } from "./PortalDataContext";
 import { MooneyShell } from "./mooney/MooneyShell";
 import { PortalNavDrawer } from "./PortalNavDrawer";
@@ -52,8 +53,9 @@ function BulkOrderSheetBridge({
   );
 }
 
-function OrderDraftBarBridge({ onOpen }: { onOpen: () => void }) {
-  return <OrderDraftBar onOpenSheet={onOpen} />;
+function OrderDraftBarBridge() {
+  const { openCart } = useOrderDraft();
+  return <OrderDraftBar onOpenSheet={openCart} />;
 }
 
 /**
@@ -121,7 +123,7 @@ export default function PortalLayout() {
   }
 
   return (
-    <OrderDraftProvider>
+    <OrderDraftProvider storageKeyFor={isImpersonating ? `view-${athlete.id}` : athlete.id}>
       <PortalDataProvider
         athlete={athlete}
         isImpersonating={isImpersonating}
@@ -183,7 +185,8 @@ export default function PortalLayout() {
           </PortalLayoutKindProvider>
 
           <BulkOrderSheetBridge open={orderSheetOpen} onOpenChange={setOrderSheetOpen} world={layout === "world"} />
-          <OrderDraftBarBridge onOpen={() => setOrderSheetOpen(true)} />
+          <OrderDraftBarBridge />
+          <CartSheet />
           <ImpersonationGuardModal open={guardOpen} onOpenChange={setGuardOpen} />
           {/* Every order flow ends here: number, amount due, how to pay. */}
           <OrderReceiptHost />

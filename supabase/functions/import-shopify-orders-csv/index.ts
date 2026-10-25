@@ -258,6 +258,12 @@ Deno.serve(async (req) => {
         /\btest\b/i.test(tags) || /\btest\b/i.test(name) || /test/i.test(financial_status);
       const is_refund = !!cancelledAt || (refundedAmount ?? 0) > 0 || /refund/i.test(financial_status);
 
+      // Client wholesale orders paid through the portal (portal-checkout) are
+      // already recorded as order requests — not retail sales, not earnings.
+      if (/\bax-portal-wholesale\b/i.test(tags)) {
+        orders_skipped++;
+        continue;
+      }
       if (shopify_order_id && existingSet.has(shopify_order_id)) {
         orders_skipped++;
         continue;

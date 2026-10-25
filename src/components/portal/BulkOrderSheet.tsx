@@ -265,7 +265,7 @@ export function BulkOrderSheet({
   world,
 }: Props) {
   const { user } = useAuth();
-  const { draft, setQty, clear } = useOrderDraft();
+  const { draft, setQty, openCart } = useOrderDraft();
   const [submitting, setSubmitting] = useState(false);
   const { config } = usePortalPricing(organizationId);
   const curve = useSizeDistributionCurve(organizationId);
@@ -372,116 +372,6 @@ export function BulkOrderSheet({
     }
     for (const s of targets) {
       setQty(productId, s, dist[s] ?? 0, color);
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (impersonating) {
-      onBlockedSubmit?.();
-      return;
-    }
-    if (totalUnits <= 0) {
-      toast.error("Add at least one unit before submitting");
-      return;
-    }
-    if (!user) {
-      toast.error("You must be signed in to submit an order");
-      return;
-    }
-    // Block submission when any quantity targets an unavailable variant.
-    {
-      const productById = new Map(products.map((p) => [p.id, p]));
-      for (const [productId, byColor] of Object.entries(draft)) {
-        const p = productById.get(productId);
-        if (
-          !p ||
-          !p.variants ||
-          p.variants.length === 0 ||
-          !p.variants.some(
-            (v) => (v.color ?? "") !== "" || (v.size ?? "") !== "",
-          )
-        )
-          continue;
-        const lookup = new Map<string, (typeof p.variants)[number]>();
-        for (const v of p.variants) {
-          lookup.set(`${v.color ?? ""}|${v.size ?? ""}`, v);
-        }
-        for (const [color, sizes] of Object.entries(byColor)) {
-          for (const [size, qty] of Object.entries(sizes)) {
-            if (!qty || qty <= 0) continue;
-            const v = lookup.get(`${color ?? ""}|${size}`);
-            if (!v || (p.status !== "archived" && v.available !== true)) {
-              toast.error(
-                `Remove out-of-stock items (${p.title} · ${color || "—"} · ${size}) before submitting`,
-              );
-              return;
-            }
-          }
-        }
-      }
-    }
-    setSubmitting(true);
-    try {
-      // What, not what it costs: the server prices it (bulk-sheet rules), checks
-      // stock, applies the credit and records the amount due in one transaction.
-      const items: PortalOrderItem[] = [];
-      const productById = new Map(products.map((p) => [p.id, p]));
-      for (const [productId, byColor] of Object.entries(draft)) {
-        const p = productById.get(productId);
-        if (!p) continue;
-        for (const [color, sizes] of Object.entries(byColor)) {
-          for (const [size, qty] of Object.entries(sizes)) {
-            if (qty > 0) {
-              items.push({
-                product_id: productId,
-                product_name: p.title,
-                size,
-                quantity: qty,
-                color: color || null,
-              });
-            }
-          }
-        }
-      }
-
-      const res = await submitPortalOrder({
-        organizationId,
-        athleteId,
-        userId: user.id,
-        items,
-        summary: "Bulk order sheet",
-        creditToApply,
-        amountDue,
-        idempotencyKey: orderKey,
-        viewingAs: impersonating,
-        screenSubtotal: Math.round(orderSubtotal * 100) / 100,
-      });
-      if (!res.ok) {
-        if (res.newQuote) setServerPrice({ key: draftKey, subtotal: res.newQuote.subtotalDollars });
-        toast.error(res.error ?? "Submit failed");
-        return;
-      }
-      if ((res.creditApplied ?? creditToApply) > 0) await refetchWallet();
-
-      announceOrder({
-        orderNumber: res.orderNumber ?? null,
-        units: totalUnits,
-        subtotal: res.subtotal ?? orderSubtotal,
-        creditApplied: res.creditApplied ?? 0,
-        amountDue: res.amountDue ?? null,
-        replayed: res.replayed,
-      });
-      clear();
-      setCreditInput("");
-      setOrderKey(newIdempotencyKey());
-      onOpenChange(false);
-      onSubmitted?.();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Submit failed";
-      console.error("Order submit error", err);
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -1127,42 +1017,9 @@ export function BulkOrderSheet({
 
         <div className={cn("border-t border-border px-6 py-4 bg-[hsl(var(--dark))] space-y-3", world && "mw-bulk-foot")}>
           {availableCredit > 0 && orderSubtotal > 0 && (
-            <div className={cn("rounded border border-accent/30 bg-accent/5 p-3 space-y-2", world && "mw-bulk-credit")}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="ax-label text-[10px]">{world ? "AX Credit" : "Credit Balance"}</div>
-                  <div className="text-sm font-semibold text-accent">
-                    ${availableCredit.toFixed(2)} available
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="credit-apply" className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Apply
-                  </Label>
-                  <input
-                    id="credit-apply"
-                    type="number"
-                    min={0}
-                    max={maxApplicable}
-                    step="0.01"
-                    value={creditInput}
-                    placeholder="0.00"
-                    onChange={(e) => setCreditInput(e.target.value)}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="h-8 w-24 text-right text-sm rounded bg-background border border-border px-2 focus:outline-none focus:border-accent"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-[10px] uppercase tracking-wider"
-                    onClick={() => setCreditInput(maxApplicable.toFixed(2))}
-                  >
-                    Max
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <p className={cn("text-[11px] text-muted-foreground", world && "mw-bulk-credit")}>
+              ${availableCredit.toFixed(2)} AX credit available — apply it at checkout, along with pay now (save 5%) or net 30.
+            </p>
           )}
 
           <div className="flex items-center justify-between gap-3">
@@ -1209,13 +1066,19 @@ export function BulkOrderSheet({
               Close
             </Button>
             <Button
-              onClick={handleSubmit}
-              disabled={submitting || (totalUnits === 0 && !impersonating)}
+              onClick={() => {
+                if (impersonating) {
+                  onBlockedSubmit?.();
+                  return;
+                }
+                onOpenChange(false);
+                openCart();
+              }}
+              disabled={totalUnits === 0 && !impersonating}
               className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
               title={impersonating ? "Blocked while impersonating" : undefined}
             >
-              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Submit Order
+              Checkout
             </Button>
           </div>
         </div>
