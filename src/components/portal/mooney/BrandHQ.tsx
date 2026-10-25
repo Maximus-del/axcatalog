@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { ArrowRight, BarChart3, Boxes, Copy, Gift, Package, Pencil, ShoppingBag, Sticker, TrendingUp, Wallet } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +9,9 @@ import {
   usePortalAnalytics, usePortalOrderHistory, usePortalPlaybook, usePortalProfile, usePortalScope, usePortalSummary, usePortalUpdateProfile,
 } from "@/hooks/usePortalApi";
 import { formatMoney } from "@/lib/portal/api/money";
-import { PortalApiError } from "@/lib/portal/api/contract";
+import { PortalApiError, type Order } from "@/lib/portal/api/contract";
+import { isSafePaymentUrl, startPayment } from "@/lib/portal/api/checkout";
+import { dueLabel } from "@/lib/portal/cart";
 import { entityVoice } from "@/lib/portal/entity-voice";
 import { usePortalData } from "../PortalDataContext";
 import { BrandPlaybook } from "./BrandPlaybook";
@@ -153,13 +155,35 @@ function GrowEveryOrder() {
   </section>;
 }
 
-/** Paid off-platform in phase 2: AX invoices, the client pays by Zelle or the invoice. */
-function paymentLabel(o: { paymentStatus?: string | null; amountDue?: { amountMinor: number } | null }): string {
+/** Where the money is on an order: paid, covered, due on a date, or waiting on AX's invoice. */
+function paymentLabel(o: { paymentStatus?: string | null; paymentTerms?: string | null; dueDate?: string | null; amountDue?: { amountMinor: number } | null }): string {
   if (o.paymentStatus === "paid") return "Paid";
   if (o.paymentStatus === "waived") return "Covered";
   if (o.amountDue && o.amountDue.amountMinor <= 1) return "Covered by credit";
+  if (o.paymentTerms === "net_30") return dueLabel(o.dueDate) ?? "Net 30";
+  if (o.paymentTerms === "pay_now") return "Not paid yet";
   if (o.paymentStatus === "invoiced") return "Invoice sent";
   return "Invoice coming";
+}
+
+/** "Pay" on an unpaid cart order: the saved link, or set one up now. */
+function PayButton({ order }: { order: Order }) {
+  const { viewingAs } = usePortalScope();
+  const [busy, setBusy] = useState(false);
+  const owes = order.paymentStatus !== "paid" && order.paymentStatus !== "waived" && (order.amountDue?.amountMinor ?? 0) > 1;
+  if (!owes || (order.paymentTerms !== "pay_now" && order.paymentTerms !== "net_30")) return null;
+  const go = async () => {
+    if (isSafePaymentUrl(order.paymentUrl)) {
+      window.location.assign(order.paymentUrl);
+      return;
+    }
+    setBusy(true);
+    const link = await startPayment(order.id);
+    setBusy(false);
+    if (link.ok && isSafePaymentUrl(link.paymentUrl)) window.location.assign(link.paymentUrl);
+    else toast.message(link.error ?? "AX will email your payment link.");
+  };
+  return <Button variant="outline" size="sm" className="mw-gear-chip mw-hq-pay" disabled={busy || viewingAs} onClick={go} title={viewingAs ? "View-as is read-only." : undefined}>{busy ? "…" : "Pay"}</Button>;
 }
 
 function RecentOrders() {
@@ -167,6 +191,24 @@ function RecentOrders() {
   const [all, setAll] = useState(false);
   const items = orders.data?.items ?? [];
   const shown = all ? items : items.slice(0, 5);
+  const { viewingAs } = usePortalScope();
+  // Back from the Shopify checkout: ask whether the open ones are paid now.
+  const openIds = items
+    .filter((o) => (o.paymentTerms === "pay_now" || o.paymentTerms === "net_30") && o.paymentStatus !== "paid" && o.paymentUrl)
+    .slice(0, 5)
+    .map((o) => o.id)
+    .join(",");
+  useEffect(() => {
+    if (!openIds || viewingAs) return;
+    let cancelled = false;
+    void Promise.all(openIds.split(",").map((id) => startPayment(id, "refresh"))).then((r) => {
+      if (!cancelled && r.some((x) => x.ok && x.paymentStatus === "paid")) void orders.refetch();
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per set of open orders
+  }, [openIds, viewingAs]);
   return <section className="mw-studio-panel">
     <h2 className="mw-section-title mw-hq-title"><ShoppingBag />Recent orders</h2>
     {orders.isLoading ? <Skeleton className="mw-studio-skeleton" /> : orders.isError ? <div className="mw-state" role="alert"><p>Unable to load orders.</p><Button variant="outline" className="mw-pill" onClick={() => void orders.refetch()}>Try again</Button></div>
@@ -174,7 +216,7 @@ function RecentOrders() {
       : <>
         <div className="mw-hq-table" role="table">
           <div role="row" className="mw-hq-row mw-hq-row-head mw-hq-row-pay"><span role="columnheader">Order #</span><span role="columnheader">Date</span><span role="columnheader">Units</span><span role="columnheader">Total</span><span role="columnheader">Status</span><span role="columnheader">Payment</span></div>
-          {shown.map((o) => <div role="row" key={o.id} className="mw-hq-row mw-hq-row-pay"><span role="cell"><strong>{o.number}</strong></span><span role="cell">{fmtDate(o.createdAt)}</span><span role="cell">{o.units}</span><span role="cell">{o.total && o.total.amountMinor > 0 ? formatMoney(o.total, { cents: true }) : "—"}</span><span role="cell"><span className="mw-drops-badge" data-status={o.status}>{o.status.replace(/_/g, " ")}</span></span><span role="cell">{paymentLabel(o)}</span></div>)}
+          {shown.map((o) => <div role="row" key={o.id} className="mw-hq-row mw-hq-row-pay"><span role="cell"><strong>{o.number}</strong></span><span role="cell">{fmtDate(o.createdAt)}</span><span role="cell">{o.units}</span><span role="cell">{o.total && o.total.amountMinor > 0 ? formatMoney(o.total, { cents: true }) : "—"}</span><span role="cell"><span className="mw-drops-badge" data-status={o.status}>{o.status.replace(/_/g, " ")}</span></span><span role="cell">{paymentLabel(o)} <PayButton order={o} /></span></div>)}
         </div>
         {!all && items.length > 5 && <Button variant="outline" className="mw-gear-view-all" onClick={() => setAll(true)}>View all<ArrowRight /></Button>}
       </>}

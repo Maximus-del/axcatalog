@@ -45,3 +45,6 @@ verify_jwt = false
 
 [functions.printful]
 verify_jwt = false
+
+[functions.portal-checkout]
+verify_jwt = false

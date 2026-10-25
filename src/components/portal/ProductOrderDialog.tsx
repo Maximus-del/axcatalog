@@ -1,11 +1,10 @@
 // Mobile-first. Test at 375px before merging.
 //
-// Bulk order dialog for a single product. Extracted from the portal
-// ProductCard so the same flow is reused on the product detail page.
+// Order grid for a single product (product page "Order" and the classic
+// ProductCard): every colour × size at once, with auto-distribute. It adds to
+// the cart; the cart prices the whole order and checks out (pay now / net 30).
 import { useEffect, useMemo, useState } from "react";
-import { submitPortalOrder, type PortalOrderItem } from "@/lib/portal-commerce";
-import { newIdempotencyKey } from "@/lib/portal/api/orders";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -17,10 +16,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useOrderDraft } from "./OrderDraftContext";
 import { cn } from "@/lib/utils";
 import type { PortalProduct } from "@/hooks/usePortalProducts";
 import { ProductImage } from "@/components/shared/ProductImage";
-import { useAuth } from "@/auth/AuthProvider";
 import { useCurrentAthlete } from "@/hooks/useCurrentAthlete";
 import { useMyOnboarding } from "@/lib/portal/invites";
 import { effectiveTiers, pickDiscount, usePortalPricing } from "@/hooks/usePortalPricing";
@@ -30,7 +29,6 @@ import type { OrderLineInput } from "@/lib/portal/api/orders";
 import { PortalApiError } from "@/lib/portal/api/contract";
 import { distributeByCurve, useSizeDistributionCurve } from "@/hooks/useSizeDistributionCurve";
 import { MilestoneSlider } from "./MilestoneSlider";
-import { announceOrder } from "./OrderReceipt";
 
 const STANDARD_SIZES = ["S", "M", "L", "XL", "2XL", "3XL"] as const;
 
@@ -46,14 +44,8 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
   const [qtys, setQtys] = useState<Record<string, number>>({});
   const [autoDistribute, setAutoDistribute] = useState(false);
   const [autoTotal, setAutoTotal] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  // One key per checkout attempt, kept across retries and double-clicks.
-  const [orderKey, setOrderKey] = useState(() => newIdempotencyKey());
   const [breakdownOpen, setBreakdownOpen] = useState(false);
-  const [useCredit, setUseCredit] = useState(false);
-  // Two steps: build the order, then confirm it before it is placed.
-  const [reviewing, setReviewing] = useState(false);
-  const { user } = useAuth();
+  const { addQty, openCart } = useOrderDraft();
   const { athlete, isImpersonating, portalRole } = useCurrentAthlete();
   // Team logins answered a size when they joined; their order opens with one in it.
   const myOnboarding = useMyOnboarding(portalRole === "team" ? athlete?.id : null);
@@ -207,9 +199,6 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     : grossSubtotal != null ? grossSubtotal * (1 - discountPct / 100) : null;
   const discountAmount =
     grossSubtotal != null && subtotal != null ? grossSubtotal - subtotal : null;
-  const creditAvailable = serverQuote?.creditAvailable ? serverQuote.creditAvailable.amountMinor / 100 : 0;
-  const creditToApply = useCredit && subtotal != null ? Math.min(creditAvailable, subtotal) : 0;
-  const amountDue = subtotal != null ? Math.max(0, subtotal - creditToApply) : null;
   const breakdownRows = colorRows.flatMap((row) =>
     sizes
       .map((s) => ({
@@ -229,16 +218,15 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
     }));
   };
 
-  const handleSubmit = async () => {
+  const handleAdd = () => {
     if (isImpersonating) {
-      toast.error("Submission blocked while impersonating");
+      toast.error("View-as is read-only. Orders are disabled.");
       return;
     }
     if (totalUnits <= 0) {
       toast.error("Enter at least one quantity");
       return;
     }
-    // Block submission of any unavailable variant.
     if (hasVariants) {
       const bad = Object.entries(qtys).find(([k, q]) => {
         if (!q || q <= 0) return false;
@@ -246,62 +234,21 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
         return !isCellAvailable(c, s);
       });
       if (bad) {
-        toast.error("Remove quantities on out-of-stock sizes before submitting");
+        toast.error("Remove quantities on out-of-stock sizes first");
         return;
       }
     }
-    if (!user || !athlete) {
-      toast.error("You must be signed in to submit an order");
-      return;
+    for (const [key, qty] of Object.entries(qtys)) {
+      if (!qty || qty <= 0) continue;
+      const [color, size] = key.split("|");
+      addQty(product.id, size, qty, color);
     }
-    setSubmitting(true);
-    try {
-      // The server prices the order (bulk-sheet rules) and checks stock; the
-      // unit price on this dialog is a display estimate.
-      const items: PortalOrderItem[] = Object.entries(qtys)
-        .filter(([, qty]) => qty > 0)
-        .map(([key, qty]) => {
-          const [color, size] = key.split("|");
-          return { product_id: product.id, product_name: product.title, size, quantity: qty, color: color || null };
-        });
-      const res = await submitPortalOrder({
-        organizationId: athlete.organization_id,
-        athleteId: athlete.id,
-        userId: user.id,
-        items,
-        summary: `Single product order · ${product.title}`,
-        creditToApply: Math.round(creditToApply * 100) / 100,
-        amountDue: amountDue ?? 0,
-        // Pin the price the person saw; the server refuses if it moved.
-        screenSubtotal: subtotal ?? undefined,
-        idempotencyKey: orderKey,
-        viewingAs: isImpersonating,
-      });
-      if (!res.ok) {
-        toast.error(res.error ?? "Submit failed");
-        return;
-      }
-      announceOrder({
-        orderNumber: res.orderNumber ?? null,
-        units: totalUnits,
-        subtotal: res.subtotal ?? subtotal,
-        creditApplied: res.creditApplied ?? 0,
-        amountDue: res.amountDue ?? amountDue,
-        replayed: res.replayed,
-      });
-      setReviewing(false);
-      setOrderKey(newIdempotencyKey());
-      setQtys({});
-      setAutoTotal(0);
-      setAutoDistribute(false);
-      setUseCredit(false);
-      onOpenChange(false);
-    } catch (err) {
-      console.error("Order submit error", err);
-      toast.error(err instanceof Error ? err.message : "Submit failed");
-    } finally {
-      setSubmitting(false);
-    }
+    const n = totalUnits;
+    setQtys({});
+    setAutoTotal(0);
+    setAutoDistribute(false);
+    onOpenChange(false);
+    toast.success(`${n} added to your cart`, { action: { label: "View cart", onClick: openCart } });
   };
 
   return (
@@ -600,53 +547,32 @@ export function ProductOrderDialog({ product, open, onOpenChange }: Props) {
         )}
         <div className="border-t border-border px-6 py-4 flex items-center justify-between gap-3 bg-[hsl(var(--dark))]">
           <div className="min-w-0">
-            <div className="ax-label">{useCredit && creditToApply > 0 ? "Due" : "Subtotal"} · {totalUnits} units</div>
+            <div className="ax-label">Subtotal · {totalUnits} units</div>
             <div className="text-2xl font-bold text-accent leading-none mt-1">
-              {(useCredit ? amountDue : subtotal) != null ? `$${(useCredit ? amountDue! : subtotal!).toFixed(2)}` : "—"}
+              {subtotal != null ? `$${subtotal.toFixed(2)}` : "—"}
             </div>
             {discountPct > 0 && (
               <div className="text-[11px] text-accent uppercase tracking-wider mt-1">
                 {discountPct}% volume discount
               </div>
             )}
-            {creditAvailable > 0 && totalUnits > 0 && (
-              <label className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
-                <Switch checked={useCredit} onCheckedChange={setUseCredit} aria-label="Use AX credit" />
-                Use AX credit (${creditAvailable.toFixed(2)} available)
-              </label>
-            )}
             {quoteError && totalUnits > 0 && (
               <div className="text-[11px] text-destructive mt-1" role="alert">{quoteError}</div>
             )}
           </div>
-          {reviewing ? (
-            <div className="flex flex-col items-end gap-1.5">
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={() => setReviewing(false)} disabled={submitting}>
-                  Back
-                </Button>
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitting || totalUnits === 0 || !!quoteError}
-                  className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
-                >
-                  {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Confirm order
-                </Button>
-              </div>
-              <span className="text-[11px] text-muted-foreground text-right max-w-[220px]">
-                No payment now — AX emails you an invoice (Zelle or invoice).
-              </span>
-            </div>
-          ) : (
+          <div className="flex flex-col items-end gap-1.5">
             <Button
-              onClick={() => setReviewing(true)}
-              disabled={totalUnits === 0 || !!quoteError || subtotal == null}
+              onClick={handleAdd}
+              disabled={totalUnits === 0 || !!quoteError || isImpersonating}
               className="bg-accent text-accent-foreground hover:bg-accent/90 font-bold uppercase tracking-wider"
             >
-              Review order
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Add to cart
             </Button>
-          )}
+            <span className="text-[11px] text-muted-foreground text-right max-w-[220px]">
+              Pay now and save 5%, or net 30 — at checkout.
+            </span>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
