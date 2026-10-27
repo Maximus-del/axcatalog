@@ -1,4 +1,4 @@
-import { createContext, useContext, useCallback, useEffect, useMemo, useState, ReactNode } from "react";
+import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState, ReactNode } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -46,11 +46,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [reloadNonce, setReloadNonce] = useState(0);
 
   const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
+  // The user id we last resolved a profile for. Supabase re-emits SIGNED_IN /
+  // TOKEN_REFRESHED for the SAME user whenever the tab regains focus (and
+  // hourly on refresh). Those must not flip the app back into a loading
+  // state: the profile effect below is keyed on user id, so it would never
+  // re-run to clear profileLoading and every page sat on the loader until a
+  // hard refresh.
+  const userIdRef = useRef<string | null>(null);
 
   // CRITICAL ORDER: register the listener BEFORE getSession to avoid missing events.
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
+      const nextUserId = newSession?.user?.id ?? null;
+      const userChanged = nextUserId !== userIdRef.current;
+      userIdRef.current = nextUserId;
+      // Same user, new token: keep the existing session object when nothing
+      // meaningful changed so consumers don't re-render on every tab focus.
+      setSession((prev) =>
+        prev && newSession && prev.access_token === newSession.access_token ? prev : newSession,
+      );
       if (!newSession) {
         setRole(null);
         setLinkedAthleteIds([]);
@@ -59,13 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setOrgRoles([]);
         setHasFanProfile(false);
         setProfileLoading(false);
-      } else {
-        // New session arrived — profile must be re-resolved before routing.
+      } else if (userChanged) {
+        // A different user signed in — profile must be re-resolved before routing.
         setProfileLoading(true);
       }
     });
 
     supabase.auth.getSession().then(({ data }) => {
+      userIdRef.current = data.session?.user?.id ?? null;
       setSession(data.session);
       setLoading(false);
       if (!data.session) setProfileLoading(false);
