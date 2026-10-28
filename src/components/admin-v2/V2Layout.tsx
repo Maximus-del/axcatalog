@@ -12,12 +12,15 @@ import {
   Sparkles,
   Sunrise,
   Users,
+  Ruler,
+  Shirt,
   type LucideIcon,
 } from "lucide-react";
 import { useDeskWaitingCount } from "@/lib/v2/desk";
 import { useOverview } from "@/lib/v2/data";
 import { useOpenTaskCount } from "@/lib/v2/work";
 import { usePendingReviewCount } from "@/lib/v2/content-review";
+import { usePendingMockupCount } from "@/lib/v2/mockup-review";
 import { SECTION_LABEL, STUDIO_NAV, sectionOf, type StudioSection } from "@/lib/v2/studio-nav";
 import { entityHref } from "@/lib/v2/entity-nav";
 import { tintOf } from "@/lib/v2/entity";
@@ -90,6 +93,7 @@ export default function V2Layout() {
   // Briefs and messages from client portals that nobody at AX has answered.
   const deskWaiting = useDeskWaitingCount();
   const reviewWaiting = usePendingReviewCount();
+  const mockupWaiting = usePendingMockupCount();
   const openTasks = useOpenTaskCount();
   const overview = useOverview();
   const shortcuts = (overview.data?.recentEntities ?? []).slice(0, 5);
@@ -162,6 +166,31 @@ export default function V2Layout() {
                         {reviewWaiting}
                       </span>
                     )}
+                  </NavLink>
+                )}
+                {item.section === "releases" && (
+                  <NavLink to="/admin-v2/mockups-review" className={({ isActive }) =>
+                      `ml-7 mt-0.5 flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] transition-colors ${
+                        isActive ? "bg-white/10 text-white" : "text-[#a9b8c2] hover:bg-[#273a46] hover:text-white"
+                      }`
+                    }>
+                    <Shirt className="h-3.5 w-3.5" />
+                    <span className="flex-1">Mockup review</span>
+                    {mockupWaiting > 0 && (
+                      <span className="rounded bg-[#e9b735] px-1.5 text-[10px] font-bold leading-4 text-[#2a1f00]" aria-label={`${mockupWaiting} mockups to review`}>
+                        {mockupWaiting}
+                      </span>
+                    )}
+                  </NavLink>
+                )}
+                {item.section === "releases" && (
+                  <NavLink to="/admin-v2/placement" className={({ isActive }) =>
+                      `ml-7 mt-0.5 flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] transition-colors ${
+                        isActive ? "bg-white/10 text-white" : "text-[#a9b8c2] hover:bg-[#273a46] hover:text-white"
+                      }`
+                    }>
+                    <Ruler className="h-3.5 w-3.5" />
+                    <span className="flex-1">Placement studio</span>
                   </NavLink>
                 )}
                 {item.section === "work" && (

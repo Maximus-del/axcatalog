@@ -1,0 +1,300 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, Download, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useBlanks } from "@/lib/v2/data";
+import { loadImage, downloadBlob } from "@/lib/v2/mockup-export";
+import {
+  BUILT_IN_PRESETS, MAX_PRINT, clamp, defaultCalibration, describe, oversize, presetRect, referenceFilename, toPreset,
+  type Calibration, type Preset, type View,
+} from "@/lib/v2/placement-studio";
+import { PageHeader, Skeleton } from "@/components/admin-v2/primitives";
+
+// PLACEMENT STUDIO — draw where the print goes, in inches, on the real blank,
+// and export a PNG + one line of text to hand GPT ("print inside this box").
+// Presets are saved per blank so every design prints in the same spot.
+
+const ACCENT = "#03AC13";
+const label = "text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]";
+const field = "mt-1 block w-full rounded-lg border border-[hsl(var(--ax-border))] bg-white px-2.5 py-1.5 text-[13px] font-normal normal-case tracking-normal text-[hsl(var(--ax-ink))]";
+const pill = "inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))] disabled:opacity-40";
+const chip = (on: boolean) => `rounded-full border px-2.5 py-1 text-[11.5px] ${on ? "border-[hsl(var(--ax-ink))] bg-[hsl(var(--ax-ink))] text-white" : "border-[hsl(var(--ax-border))] text-[hsl(var(--ax-secondary))] hover:text-[hsl(var(--ax-ink))]"}`;
+
+function Slider({ name, value, min, max, step, unit = "in", onChange }: { name: string; value: number; min: number; max: number; step: number; unit?: string; onChange: (v: number) => void }) {
+  return (
+    <label className="block">
+      <span className="flex justify-between text-[12px]"><span className="text-[hsl(var(--ax-secondary))]">{name}</span><span className="tabular-nums font-semibold">{Number(value.toFixed(2))}{unit}</span></span>
+      <input type="range" className="w-full accent-[#03AC13]" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </label>
+  );
+}
+
+const PRESETS_KEY = ["v2", "placement-presets"] as const;
+
+function useSavedPresets() {
+  return useQuery({
+    queryKey: PRESETS_KEY,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("placement_presets" as never).select("*").order("name");
+      if (error) {
+        if ((error as { code?: string }).code === "42P01") return [] as Array<Preset & { blankStyle: string }>;
+        throw new Error(error.message);
+      }
+      return ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => ({ ...toPreset(r), blankStyle: String(r.blank_style ?? "") }));
+    },
+  });
+}
+
+export default function V2PlacementStudio() {
+  const blanks = useBlanks();
+  const saved = useSavedPresets();
+  const qc = useQueryClient();
+
+  const [blankId, setBlankId] = useState<string>("");
+  const [colorId, setColorId] = useState<string>("");
+  const [view, setView] = useState<View>("front");
+  const [ownImage, setOwnImage] = useState<string | null>(null);
+  const [calib, setCalib] = useState<Calibration>(() => defaultCalibration("front"));
+  const [box, setBox] = useState<Preset>(() => BUILT_IN_PRESETS[1]);
+  const [lockSquare, setLockSquare] = useState(true);
+  const [aspect, setAspect] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const list = useMemo(() => (blanks.data ?? []).filter((b) => b.colors.some((c) => c.imageUrl)), [blanks.data]);
+  useEffect(() => {
+    if (blankId || !list.length) return;
+    const axism = list.find((b) => (b.styleNumber ?? "").includes("7010")) ?? list[0];
+    setBlankId(axism.id);
+  }, [list, blankId]);
+  const blank = list.find((b) => b.id === blankId) ?? null;
+  const colors = useMemo(() => (blank?.colors ?? []).filter((c) => (view === "back" ? c.imageUrlBack ?? c.imageUrl : c.imageUrl)), [blank, view]);
+  useEffect(() => {
+    if (!colors.length) return;
+    if (!colors.some((c) => c.id === colorId)) setColorId((colors.find((c) => /^black$/i.test(c.name)) ?? colors[0]).id);
+  }, [colors, colorId]);
+  const color = colors.find((c) => c.id === colorId) ?? null;
+  const photo = ownImage ?? (color ? (view === "back" ? color.imageUrlBack ?? color.imageUrl : color.imageUrl) : null);
+  const blankName = blank ? [blank.brand, blank.styleNumber].filter(Boolean).join(" ") || blank.displayName || blank.name : "Any tee";
+
+  // A new view starts from that view's calibration and its first preset.
+  useEffect(() => {
+    setCalib(defaultCalibration(view));
+    setBox((b) => (b.view === view ? b : BUILT_IN_PRESETS.find((p) => p.view === view) ?? b));
+  }, [view]);
+
+  const presets = useMemo(() => {
+    const mine = (saved.data ?? []).filter((p) => p.view === view && (p.blankStyle === blankName || p.blankStyle === "Any tee"));
+    return [...mine, ...BUILT_IN_PRESETS.filter((p) => p.view === view)];
+  }, [saved.data, view, blankName]);
+
+  const W = 1000;
+  const H = W / aspect;
+  const r = presetRect(box, calib, W, H);
+  const ppi = r.w / Math.max(box.widthIn, 0.01);
+  const tooBig = oversize(box);
+  const line = describe(box, blankName);
+
+  const setDim = (key: "widthIn" | "heightIn", v: number) =>
+    setBox((b) => (lockSquare && b.widthIn === b.heightIn ? { ...b, widthIn: v, heightIn: v, builtIn: false } : { ...b, [key]: v, builtIn: false }));
+
+  const savePreset = useMutation({
+    mutationFn: async () => {
+      const name = box.name.trim() || "Preset";
+      const { error } = await supabase.from("placement_presets" as never).upsert({
+        blank_style: blankName, view, name, width_in: box.widthIn, height_in: box.heightIn, top_in: box.topIn, center_x_in: box.centerXIn, notes: box.notes ?? null,
+      } as never, { onConflict: "blank_style,view,name" });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => { toast.success(`Saved “${box.name}” for ${blankName}`); void qc.invalidateQueries({ queryKey: PRESETS_KEY }); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Could not save"),
+  });
+
+  const deletePreset = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("placement_presets" as never).delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: PRESETS_KEY }),
+  });
+
+  const exportPng = async () => {
+    if (!photo) return;
+    setExporting(true);
+    try {
+      const img = await loadImage(photo);
+      const outW = 1600;
+      const outH = Math.round(outW / (img.naturalWidth / img.naturalHeight));
+      const footer = 150;
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH + footer;
+      const ctx = canvas.getContext("2d")!;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, outW, outH);
+      const k = outW / W;
+      const rr = presetRect(box, calib, outW, outH);
+      const inch = rr.w / box.widthIn;
+      // inch grid inside the box
+      ctx.strokeStyle = "rgba(3,172,19,0.35)";
+      ctx.lineWidth = 1;
+      for (let x = rr.x + inch; x < rr.x + rr.w - 0.5; x += inch) { ctx.beginPath(); ctx.moveTo(x, rr.y); ctx.lineTo(x, rr.y + rr.h); ctx.stroke(); }
+      for (let y = rr.y + inch; y < rr.y + rr.h - 0.5; y += inch) { ctx.beginPath(); ctx.moveTo(rr.x, y); ctx.lineTo(rr.x + rr.w, y); ctx.stroke(); }
+      // the box
+      ctx.fillStyle = "rgba(3,172,19,0.10)";
+      ctx.fillRect(rr.x, rr.y, rr.w, rr.h);
+      ctx.setLineDash([14 * k, 8 * k]);
+      ctx.strokeStyle = ACCENT;
+      ctx.lineWidth = 5 * k;
+      ctx.strokeRect(rr.x, rr.y, rr.w, rr.h);
+      ctx.setLineDash([]);
+      // collar marker + centre line
+      const cx = calib.collarX * outW;
+      const cy = calib.collarY * outH;
+      ctx.strokeStyle = "rgba(0,0,0,0.35)";
+      ctx.lineWidth = 2 * k;
+      ctx.beginPath(); ctx.moveTo(cx, cy - 18 * k); ctx.lineTo(cx, outH); ctx.stroke();
+      ctx.fillStyle = ACCENT;
+      ctx.beginPath(); ctx.arc(cx, cy, 7 * k, 0, Math.PI * 2); ctx.fill();
+      // dimension label
+      const tag = `${box.widthIn} × ${box.heightIn} in`;
+      ctx.font = `600 ${Math.round(28 * k)}px Inter, system-ui, sans-serif`;
+      const tw = ctx.measureText(tag).width;
+      ctx.fillStyle = ACCENT;
+      ctx.fillRect(rr.x, rr.y - 44 * k, tw + 24 * k, 38 * k);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(tag, rr.x + 12 * k, rr.y - 16 * k);
+      // footer
+      ctx.fillStyle = "#111111";
+      ctx.fillRect(0, outH, outW, footer);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "600 30px Inter, system-ui, sans-serif";
+      ctx.fillText(`${blankName} · ${view.toUpperCase()} · ${box.name}`, 32, outH + 52);
+      ctx.font = "400 24px Inter, system-ui, sans-serif";
+      const rest = line.split(": ").slice(1).join(": ");
+      const words = rest.split(" ");
+      let cur = "", yy = outH + 92;
+      for (const w of words) {
+        if (ctx.measureText(`${cur} ${w}`).width > outW - 64) { ctx.fillText(cur, 32, yy); cur = w; yy += 32; }
+        else cur = cur ? `${cur} ${w}` : w;
+      }
+      if (cur) ctx.fillText(cur, 32, yy);
+      const blob: Blob = await new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Export failed"))), "image/png"));
+      downloadBlob(blob, referenceFilename(blankName, box));
+      toast.success("Placement reference downloaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not export");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Releases · Placement studio"
+        title="Where the print goes"
+        subtitle="Pick a blank, start from a preset, adjust in inches, then export the PNG and copy the line for GPT."
+      />
+      {blanks.isLoading ? <Skeleton className="h-[60vh]" /> : (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0">
+            <div className="relative mx-auto w-full max-w-[760px] overflow-hidden rounded-2xl bg-[#f3f3f1]" style={{ aspectRatio: String(aspect) }}>
+              {photo ? (
+                <img src={photo} alt={`${blankName} ${view}`} className="absolute inset-0 h-full w-full object-fill" referrerPolicy="no-referrer"
+                  onLoad={(e) => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setAspect(i.naturalWidth / i.naturalHeight); }} />
+              ) : <div className="absolute inset-0 grid place-items-center text-[13px] text-[hsl(var(--ax-faint))]">No photo for this blank — use your own image.</div>}
+              <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+                {/* guides: collar, centre line, chest edges */}
+                <line x1={calib.chestLeft * W} x2={calib.chestLeft * W} y1={0} y2={H} stroke="#2563eb" strokeOpacity="0.35" strokeDasharray="6 6" strokeWidth="2" />
+                <line x1={calib.chestRight * W} x2={calib.chestRight * W} y1={0} y2={H} stroke="#2563eb" strokeOpacity="0.35" strokeDasharray="6 6" strokeWidth="2" />
+                <line x1={calib.collarX * W} x2={calib.collarX * W} y1={calib.collarY * H - 14} y2={H} stroke="#000" strokeOpacity="0.2" strokeWidth="1.5" />
+                <circle cx={calib.collarX * W} cy={calib.collarY * H} r="6" fill={ACCENT} />
+                {/* inch grid */}
+                {Array.from({ length: Math.max(0, Math.floor(box.widthIn) ) }, (_, i) => i + 1).filter((i) => i < box.widthIn).map((i) => (
+                  <line key={`v${i}`} x1={r.x + i * ppi} x2={r.x + i * ppi} y1={r.y} y2={r.y + r.h} stroke={ACCENT} strokeOpacity="0.35" strokeWidth="1" />
+                ))}
+                {Array.from({ length: Math.max(0, Math.floor(box.heightIn)) }, (_, i) => i + 1).filter((i) => i < box.heightIn).map((i) => (
+                  <line key={`h${i}`} x1={r.x} x2={r.x + r.w} y1={r.y + i * ppi} y2={r.y + i * ppi} stroke={ACCENT} strokeOpacity="0.35" strokeWidth="1" />
+                ))}
+                <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={ACCENT} fillOpacity="0.1" stroke={tooBig ? "#dc2626" : ACCENT} strokeWidth="3" strokeDasharray="10 6" />
+                <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT}>{box.widthIn} × {box.heightIn} in</text>
+              </svg>
+            </div>
+            <p className="mx-auto mt-3 max-w-[760px] rounded-lg bg-[hsl(var(--ax-ink)/0.04)] px-3 py-2 text-[12.5px]">{line}</p>
+            {tooBig && <p className="mx-auto mt-2 max-w-[760px] text-[12px] text-[hsl(var(--ax-red))]">Over the {MAX_PRINT.widthIn} × {MAX_PRINT.heightIn} in max print size.</p>}
+          </div>
+
+          <aside className="ax-card flex flex-col gap-4 self-start p-5">
+            <div className="grid grid-cols-2 gap-2">
+              <label className={`${label} col-span-2`}>Blank
+                <select className={field} value={blankId} onChange={(e) => { setBlankId(e.target.value); setOwnImage(null); }}>
+                  {list.map((b) => <option key={b.id} value={b.id}>{[b.brand, b.styleNumber].filter(Boolean).join(" ") || b.displayName || b.name}</option>)}
+                </select>
+              </label>
+              <label className={label}>Colour
+                <select className={field} value={colorId} onChange={(e) => { setColorId(e.target.value); setOwnImage(null); }}>
+                  {colors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </label>
+              <div className={label}>View
+                <div className="mt-1 flex gap-1">
+                  {(["front", "back"] as const).map((v) => <button key={v} type="button" className={chip(view === v)} onClick={() => setView(v)}>{v === "front" ? "Front" : "Back"}</button>)}
+                </div>
+              </div>
+              <button type="button" className={`${pill} col-span-2 justify-center`} onClick={() => fileRef.current?.click()}><ImagePlus className="h-3.5 w-3.5" />Use my own photo</button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setOwnImage(URL.createObjectURL(f)); e.target.value = ""; }} />
+            </div>
+
+            <div>
+              <p className={label}>Presets</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {presets.map((p) => (
+                  <span key={`${p.id ?? "b"}-${p.name}`} className="inline-flex items-center">
+                    <button type="button" className={chip(box.name === p.name && box.widthIn === p.widthIn && box.topIn === p.topIn)} onClick={() => setBox({ ...p })}>{p.name}</button>
+                    {p.id && <button type="button" aria-label={`Delete ${p.name}`} className="ml-0.5 text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-red))]" onClick={() => deletePreset.mutate(p.id!)}><Trash2 className="h-3 w-3" /></button>}
+                  </span>
+                ))}
+              </div>
+              {box.notes && <p className="mt-1.5 text-[11.5px] text-[hsl(var(--ax-faint))]">{box.notes}</p>}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <p className={label}>Print box</p>
+              <Slider name="Width" value={box.widthIn} min={1} max={16} step={0.25} onChange={(v) => setDim("widthIn", v)} />
+              <Slider name="Height" value={box.heightIn} min={0.5} max={20} step={0.25} onChange={(v) => setDim("heightIn", v)} />
+              <label className="flex items-center gap-2 text-[12px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={lockSquare} onChange={(e) => setLockSquare(e.target.checked)} />Keep square while it is square</label>
+              <Slider name="Top edge below collar" value={box.topIn} min={0} max={14} step={0.25} onChange={(v) => setBox((b) => ({ ...b, topIn: v, builtIn: false }))} />
+              <Slider name="Left / right of centre" value={box.centerXIn} min={-8} max={8} step={0.25} onChange={(v) => setBox((b) => ({ ...b, centerXIn: v, builtIn: false }))} />
+            </div>
+
+            <details className="rounded-lg border border-[hsl(var(--ax-border))] px-3 py-2">
+              <summary className="cursor-pointer text-[12px] font-semibold">Line the guides up with this photo</summary>
+              <p className="mt-1 text-[11.5px] text-[hsl(var(--ax-faint))]">Green dot on the collar seam; blue lines on the body edges at the armpits. Set the chest width of the sample.</p>
+              <div className="mt-2 flex flex-col gap-2">
+                <Slider name="Chest width (flat)" value={calib.chestWidthIn} min={16} max={30} step={0.5} onChange={(v) => setCalib((c) => ({ ...c, chestWidthIn: v }))} />
+                <Slider name="Collar height" unit="%" value={Math.round(calib.collarY * 100)} min={5} max={45} step={0.5} onChange={(v) => setCalib((c) => ({ ...c, collarY: v / 100 }))} />
+                <Slider name="Left body edge" unit="%" value={Math.round(calib.chestLeft * 100)} min={2} max={48} step={0.5} onChange={(v) => setCalib((c) => ({ ...c, chestLeft: clamp(v / 100, 0, c.chestRight - 0.05) }))} />
+                <Slider name="Right body edge" unit="%" value={Math.round(calib.chestRight * 100)} min={52} max={98} step={0.5} onChange={(v) => setCalib((c) => ({ ...c, chestRight: clamp(v / 100, c.chestLeft + 0.05, 1) }))} />
+              </div>
+            </details>
+
+            <label className={label}>Preset name
+              <input className={field} value={box.name} onChange={(e) => setBox((b) => ({ ...b, name: e.target.value, builtIn: false }))} />
+            </label>
+
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-ink))] px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40" disabled={!photo || exporting} onClick={() => void exportPng()}>
+                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}Export PNG
+              </button>
+              <button type="button" className={pill} onClick={() => { void navigator.clipboard.writeText(line).then(() => toast.success("Copied for GPT")); }}><Copy className="h-3.5 w-3.5" />Copy line</button>
+              <button type="button" className={pill} disabled={savePreset.isPending} onClick={() => savePreset.mutate()}><Save className="h-3.5 w-3.5" />Save preset</button>
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
+  );
+}
