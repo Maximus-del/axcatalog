@@ -55,7 +55,7 @@ function loadOnce(url: string): Promise<HTMLImageElement> {
  * attempt and falls back to the proxy if it refuses, so a new photography host
  * works without a code change as long as the proxy will relay it.
  */
-async function loadImage(url: string): Promise<HTMLImageElement> {
+export async function loadImage(url: string): Promise<HTMLImageElement> {
   const plan = planFor(url);
   if (plan.kind === "proxy") return loadOnce(proxiedUrl(url, SUPABASE_URL, SUPABASE_ANON_KEY));
   try {

@@ -24,6 +24,8 @@ export const v2Pages = {
   work: () => import("@/pages/admin-v2/V2Work"),
   releases: () => import("@/pages/admin-v2/V2Releases"),
   contentReview: () => import("@/pages/admin-v2/V2ContentReview"),
+  mockupReview: () => import("@/pages/admin-v2/V2MockupReview"),
+  placementStudio: () => import("@/pages/admin-v2/V2PlacementStudio"),
 } as const;
 
 let started = false;
