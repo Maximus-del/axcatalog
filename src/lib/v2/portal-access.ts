@@ -35,7 +35,22 @@ export interface AccessRequest {
   onboarding: OnboardingAnswers | null;
   suggested: PortalRole;
   createdAt: string;
+  /** Came in by typing an access code (approved on the spot). */
+  viaCode: boolean;
 }
+
+/** An instant-access code: whoever types it gets this role, no approval step. */
+export interface AccessCode {
+  id: string;
+  role: PortalRole;
+  code: string;
+  uses: number;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+/** "ABCD2345" -> "ABCD-2345" (how it's read out and typed). */
+export const formatCode = (code: string) => (code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code);
 
 export interface Member {
   userId: string;
@@ -76,6 +91,7 @@ export function toRequests(rows: Row[]): AccessRequest[] {
         onboarding,
         suggested: suggestedRole(onboarding, requestedRole),
         createdAt: String(r.created_at ?? ""),
+        viaCode: r.via_code_id != null,
       } satisfies AccessRequest;
     })
     .sort((a, b) => order[a.status] - order[b.status] || b.createdAt.localeCompare(a.createdAt));
@@ -90,7 +106,7 @@ export function usePortalAccess(entityId: string) {
       const [inv, req, links, meta] = await Promise.all([
         t("portal_invites").select("id, role, token, active, created_at").eq("athlete_id", entityId).order("created_at", { ascending: false }),
         t("portal_access_requests")
-          .select("id, user_id, full_name, email, requested_role, granted_role, status, onboarding, created_at")
+          .select("*")
           .eq("athlete_id", entityId),
         t("user_athlete_links").select("user_id, portal_role").eq("athlete_id", entityId),
         t("athletes").select("metadata").eq("id", entityId).maybeSingle(),
@@ -105,6 +121,13 @@ export function usePortalAccess(entityId: string) {
         createdAt: String(r.created_at ?? ""),
       }));
       const requests = toRequests((req.data ?? []) as Row[]);
+
+      // Codes table may not exist on an older database — the card just hides codes then.
+      const codeRes = await t("portal_access_codes").select("id, role, code, uses, last_used_at, created_at").eq("athlete_id", entityId).eq("active", true);
+      const codes: AccessCode[] = codeRes.error ? [] : ((codeRes.data ?? []) as Row[]).map((r) => ({
+        id: String(r.id), role: role(r.role), code: String(r.code), uses: Number(r.uses ?? 0),
+        lastUsedAt: (r.last_used_at as string | null) ?? null, createdAt: String(r.created_at ?? ""),
+      }));
 
       const linkRows = (links.data ?? []) as Row[];
       const ids = linkRows.map((l) => String(l.user_id));
@@ -136,7 +159,7 @@ export function usePortalAccess(entityId: string) {
         headline: typeof pl.headline === "string" ? pl.headline : "",
         tagline: typeof pl.tagline === "string" ? pl.tagline : "",
       };
-      return { invites, requests, members, locker };
+      return { invites, requests, members, locker, codes };
     },
   });
 }
@@ -183,6 +206,7 @@ export function useDecideAccess(entityId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: key(entityId) });
       qc.invalidateQueries({ queryKey: ["v2", "client-access", entityId] });
+      qc.invalidateQueries({ queryKey: PENDING_KEY });
     },
   });
 }
@@ -222,5 +246,83 @@ export function useSaveLocker(entityId: string) {
       if (!(res.data as Row[] | null)?.length) throw new Error("Not saved — you may not have access to edit this entity.");
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key(entityId) }),
+  });
+}
+
+/** Make a fresh code for this client + role (the old one stops working). */
+export function useNewAccessCode(entityId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (r: PortalRole): Promise<string> => {
+      const { data, error } = await supabase.rpc("portal_new_access_code" as never, { _athlete_id: entityId, _role: r } as never);
+      if (error) throw new Error(error.message);
+      return String((data as { code?: string } | null)?.code ?? "");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: key(entityId) }),
+  });
+}
+
+export function useTurnOffCode(entityId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (codeId: string) => {
+      const res = await must(t("portal_access_codes").update({ active: false } as never).eq("id", codeId).select("id"));
+      if (!(res.data as Row[] | null)?.length) throw new Error("Couldn't turn that code off.");
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: key(entityId) }),
+  });
+}
+
+// ------------------------------------------------ every client's waiting requests
+
+export interface PendingAccess extends AccessRequest {
+  athleteId: string;
+  entityName: string;
+}
+
+const PENDING_KEY = ["v2", "access-pending"] as const;
+
+/** Every request waiting on AX, across all clients — the queue behind the nav badge. */
+export function usePendingAccessAll() {
+  return useQuery({
+    queryKey: PENDING_KEY,
+    staleTime: 15_000,
+    refetchInterval: 60_000,
+    queryFn: async (): Promise<PendingAccess[]> => {
+      const res = await t("portal_access_requests").select("*").eq("status", "pending").order("created_at", { ascending: false });
+      if (res.error) throw new Error(res.error.message);
+      const rows = (res.data ?? []) as Row[];
+      const ids = [...new Set(rows.map((r) => String(r.athlete_id)))];
+      const names = new Map<string, string>();
+      if (ids.length) {
+        const a = await t("athletes").select("id, display_name, full_name").in("id", ids);
+        for (const x of (a.data ?? []) as Row[]) names.set(String(x.id), String(x.display_name || x.full_name || "Client"));
+      }
+      const byId = new Map(rows.map((r) => [String(r.id), r]));
+      return toRequests(rows).map((q) => {
+        const athleteId = String(byId.get(q.id)?.athlete_id ?? "");
+        return { ...q, athleteId, entityName: names.get(athleteId) ?? "Client" };
+      });
+    },
+  });
+}
+
+export function usePendingAccessCount(): number {
+  return usePendingAccessAll().data?.length ?? 0;
+}
+
+/** Approve / deny from the cross-client queue. */
+export function useDecideAccessAny() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (v: { requestId: string; decision: "approve" | "deny"; role?: PortalRole }) => {
+      const { error } = await supabase.rpc("portal_decide_access" as never, { _request_id: v.requestId, _decision: v.decision, _role: v.role ?? null } as never);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: PENDING_KEY });
+      qc.invalidateQueries({ queryKey: ["v2", "portal-access"] });
+      qc.invalidateQueries({ queryKey: ["v2", "client-access"] });
+    },
   });
 }

@@ -6,6 +6,7 @@ import {
   BarChart3,
   Images,
   Inbox,
+  KeyRound,
   ScanEye,
   ListChecks,
   Rocket,
@@ -21,6 +22,7 @@ import { useOverview } from "@/lib/v2/data";
 import { useOpenTaskCount } from "@/lib/v2/work";
 import { usePendingReviewCount } from "@/lib/v2/content-review";
 import { usePendingMockupCount } from "@/lib/v2/mockup-review";
+import { usePendingAccessCount } from "@/lib/v2/portal-access";
 import { SECTION_LABEL, STUDIO_NAV, sectionOf, type StudioSection } from "@/lib/v2/studio-nav";
 import { entityHref } from "@/lib/v2/entity-nav";
 import { tintOf } from "@/lib/v2/entity";
@@ -94,6 +96,7 @@ export default function V2Layout() {
   const deskWaiting = useDeskWaitingCount();
   const reviewWaiting = usePendingReviewCount();
   const mockupWaiting = usePendingMockupCount();
+  const accessWaiting = usePendingAccessCount();
   const openTasks = useOpenTaskCount();
   const overview = useOverview();
   const shortcuts = (overview.data?.recentEntities ?? []).slice(0, 5);
@@ -191,6 +194,21 @@ export default function V2Layout() {
                     }>
                     <Ruler className="h-3.5 w-3.5" />
                     <span className="flex-1">Placement studio</span>
+                  </NavLink>
+                )}
+                {item.section === "clients" && (
+                  <NavLink to="/admin-v2/access" className={({ isActive }) =>
+                      `ml-7 mt-0.5 flex items-center gap-2 rounded-lg px-3 py-1.5 text-[12px] transition-colors ${
+                        isActive ? "bg-white/10 text-white" : "text-[#a9b8c2] hover:bg-[#273a46] hover:text-white"
+                      }`
+                    }>
+                    <KeyRound className="h-3.5 w-3.5" />
+                    <span className="flex-1">Access requests</span>
+                    {accessWaiting > 0 && (
+                      <span className="rounded bg-[#e9b735] px-1.5 text-[10px] font-bold leading-4 text-[#2a1f00]" aria-label={`${accessWaiting} waiting to get in`}>
+                        {accessWaiting}
+                      </span>
+                    )}
                   </NavLink>
                 )}
                 {item.section === "work" && (

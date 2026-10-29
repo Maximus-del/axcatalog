@@ -3,13 +3,15 @@
 //   Invite links  — copy the Owner link (C-level: sales, earnings, playbook)
 //                   or the Team link (their gear, no money). The link carries
 //                   the role; you still approve every person.
+//   Access codes  — for someone you're already talking to: read out / text the
+//                   code, they type it and they're in with that role. No approval.
 //   Requests      — name, email, their answers, the role they asked for, and
 //                   a suggestion when the answers disagree with the link.
 //                   Approve / approve as the other role / deny.
 //   In the locker — everyone with access and their role, switchable.
 //   Public locker — on/off, web address, headline. Retail only.
 import { useState } from "react";
-import { Car, Check, Copy, ExternalLink, Globe, Link2, Loader2, ShieldCheck, Users, X } from "lucide-react";
+import { Car, Check, Copy, ExternalLink, Globe, KeyRound, Link2, Loader2, RefreshCw, ShieldCheck, Users, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useDriveEntity } from "@/components/test-drive/TestDriveBar";
 import { DRIVE_ROLES, DRIVE_STAGES, driveHref } from "@/lib/portal/test-drive";
@@ -17,8 +19,11 @@ import { toast } from "sonner";
 import { toneText } from "@/components/admin-v2/primitives";
 import { inviteUrl, lockerUrl, onboardingSummary, type PortalRole } from "@/lib/portal/invites";
 import {
+  formatCode,
   useDecideAccess,
   useEnsureInvite,
+  useNewAccessCode,
+  useTurnOffCode,
   usePortalAccess,
   useRevokeInvite,
   useSaveLocker,
@@ -67,6 +72,8 @@ export default function PortalInvitesCard({ entityId, entityName, organizationId
   const decide = useDecideAccess(entityId);
   const setRole = useSetMemberRole(entityId);
   const saveLocker = useSaveLocker(entityId);
+  const newCode = useNewAccessCode(entityId);
+  const offCode = useTurnOffCode(entityId);
   const [locker, setLocker] = useState<LockerSettings | null>(null);
   const [showDecided, setShowDecided] = useState(false);
 
@@ -74,7 +81,7 @@ export default function PortalInvitesCard({ entityId, entityName, organizationId
   if (access.error) {
     return <div className="ax-card mb-6 px-3.5 py-3 text-[12px] text-[hsl(var(--ax-faint))]">Invites couldn't load: {(access.error as Error).message}</div>;
   }
-  const { invites, requests, members, locker: savedLocker } = access.data!;
+  const { invites, requests, members, locker: savedLocker, codes } = access.data!;
   const form = locker ?? savedLocker;
   const pending = requests.filter((r) => r.status === "pending");
   const decided = requests.filter((r) => r.status !== "pending");
@@ -165,6 +172,48 @@ export default function PortalInvitesCard({ entityId, entityName, organizationId
         })}
       </div>
 
+      {/* instant access codes */}
+      <div className="rounded-xl border border-[hsl(var(--ax-line))] p-3">
+        <div className="flex items-center gap-2">
+          <KeyRound className="h-3.5 w-3.5 text-[hsl(var(--ax-faint))]" />
+          <span className="text-[13px] font-semibold">Instant access codes</span>
+          <span className="text-[12px] text-[hsl(var(--ax-faint))]">For someone you've already vetted: they sign up, type the code, and they're in. No approval step.</span>
+        </div>
+        <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
+          {(["owner", "team"] as PortalRole[]).map((r) => {
+            const c = codes.find((x) => x.role === r);
+            return (
+              <div key={r} className="flex flex-wrap items-center gap-2 rounded-lg bg-[hsl(var(--ax-ink)/0.03)] px-2.5 py-2">
+                <span className="w-[52px] text-[12px] font-semibold">{r === "owner" ? "Owner" : "Team"}</span>
+                {c ? (
+                  <>
+                    <code className="rounded-md bg-[hsl(var(--ax-ink)/0.06)] px-2 py-0.5 font-mono text-[14px] font-bold tracking-[0.12em]">{formatCode(c.code)}</code>
+                    <span className="text-[11px] text-[hsl(var(--ax-faint))]">{c.uses ? `used ${c.uses}×` : "not used yet"}</span>
+                    <span className="ml-auto flex gap-1.5">
+                      <button type="button" className={ghost} title="Copy code + where to enter it"
+                        onClick={() => void copyText(`Your ${entityName} locker code: ${formatCode(c.code)}\nSign up at ${window.location.origin}/login, then enter the code.`, "Code copied — paste it in a text")}>
+                        <Copy className="h-3.5 w-3.5" />Copy
+                      </button>
+                      <button type="button" className={ghost} title="Make a new code (this one stops working)" disabled={newCode.isPending}
+                        onClick={() => run(newCode.mutateAsync(r), "New code made — the old one no longer works")}>
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </button>
+                      <button type="button" className={ghost} title="Turn this code off" onClick={() => run(offCode.mutateAsync(c.id), "Code turned off")}>
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  </>
+                ) : (
+                  <button type="button" className={primary} disabled={newCode.isPending} onClick={() => run(newCode.mutateAsync(r), `${r === "owner" ? "Owner" : "Team"} code made`)}>
+                    {newCode.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <KeyRound className="h-3.5 w-3.5" />}Make {r === "owner" ? "Owner" : "Team"} code
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* requests */}
       {pending.length ? (
         <div className="space-y-2">
@@ -235,7 +284,7 @@ export default function PortalInvitesCard({ entityId, entityName, organizationId
         <div className="space-y-1 text-[12px] text-[hsl(var(--ax-faint))]">
           {decided.map((r) => (
             <div key={r.id}>
-              {r.fullName || r.email} — {r.status === "approved" ? `approved as ${r.grantedRole === "owner" ? "Owner" : "Team"}` : "denied"}
+              {r.fullName || r.email} — {r.status === "approved" ? `${r.viaCode ? "came in with a code" : "approved"} as ${r.grantedRole === "owner" ? "Owner" : "Team"}` : "denied"}
             </div>
           ))}
         </div>
