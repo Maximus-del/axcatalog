@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, Eye, EyeOff, ImagePlus, Images, Loader2, RotateCcw, Save, Shirt, Trash2, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Copy, Download, Eye, EyeOff, ImagePlus, Images, Inbox, Loader2, RotateCcw, Save, Shirt, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { useBlanks } from "@/lib/v2/data";
+import { useBlanks, useEntities } from "@/lib/v2/data";
+import { studioCode, type ArtItem } from "@/lib/v2/art-library";
+import { MOCKUP_REVIEW_KEY } from "@/lib/v2/mockup-review";
+import { ArtLibraryPanel } from "@/components/admin-v2/ArtLibraryPanel";
 import { loadImage, downloadBlob } from "@/lib/v2/mockup-export";
 import {
   BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, hasWhiteSheet, heightForArt, knockOutWhite, mockupFilename, moveBy, oversize, presetRect, referenceFilename, resizeBy, toPreset,
@@ -20,10 +24,21 @@ import { PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 // and every artwork uses the same placement. "Export mockups" renders the art
 // on the blank (one file per artwork, optionally every colour).
 
-type Art = { id: string; name: string; url: string; srcUrl: string; cleanUrl: string | null; cleaned: boolean; aspect: number };
+type Art = {
+  id: string; name: string; url: string; srcUrl: string; cleanUrl: string | null; cleaned: boolean; aspect: number;
+  /** Set when the art came from a client's library: which file, which design (set). */
+  fileId?: string; designId?: string; designTitle?: string;
+};
+
+/** Each side of the garment keeps its own art, placement and photo alignment. */
+type Side = { box: Preset; calib: Calibration; arts: Art[]; idx: number };
+const newSide = (v: View): Side => ({
+  box: v === "front" ? BUILT_IN_PRESETS[1] : BUILT_IN_PRESETS.find((p) => p.view === "back")!,
+  calib: defaultCalibration(v), arts: [], idx: 0,
+});
 
 /** Read an uploaded image; if it sits on a white sheet, also make a version with that white removed. */
-async function prepareArt(file: File): Promise<Art> {
+async function prepareArt(file: File, from?: Pick<Art, "fileId" | "designId" | "designTitle">): Promise<Art> {
   const srcUrl = URL.createObjectURL(file);
   const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(`Could not read ${file.name}`)); i.src = srcUrl; });
   const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
@@ -43,8 +58,18 @@ async function prepareArt(file: File): Promise<Art> {
       if (blob) cleanUrl = URL.createObjectURL(blob);
     }
   } catch { /* keep the original */ }
-  return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${file.name}`, name: file.name, srcUrl, cleanUrl, cleaned: !!cleanUrl, url: cleanUrl ?? srcUrl, aspect };
+  return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${file.name}`, name: file.name, srcUrl, cleanUrl, cleaned: !!cleanUrl, url: cleanUrl ?? srcUrl, aspect, ...from };
 }
+
+/** A library file (signed URL) -> the same Art an upload makes. */
+async function artFromLibrary(item: ArtItem): Promise<Art> {
+  const res = await fetch(item.url!);
+  if (!res.ok) throw new Error(`Could not open ${item.fileName}`);
+  const blob = await res.blob();
+  return prepareArt(new File([blob], item.fileName, { type: blob.type || "image/png" }), { fileId: item.fileId, designId: item.designId, designTitle: item.designTitle });
+}
+
+const pngBlob = (c: HTMLCanvasElement) => new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Export failed"))), "image/png"));
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const ACCENT = "#03AC13";
@@ -87,20 +112,33 @@ export default function V2PlacementStudio() {
   const [colorId, setColorId] = useState<string>("");
   const [view, setView] = useState<View>("front");
   const [ownImage, setOwnImage] = useState<string | null>(null);
-  const [calib, setCalib] = useState<Calibration>(() => defaultCalibration("front"));
-  const [box, setBox] = useState<Preset>(() => BUILT_IN_PRESETS[1]);
+  const [sides, setSides] = useState<Record<View, Side>>(() => ({ front: newSide("front"), back: newSide("back") }));
   const [lockSquare, setLockSquare] = useState(true);
   const [aspect, setAspect] = useState(1);
   const [exporting, setExporting] = useState(false);
-  const [arts, setArts] = useState<Art[]>([]);
-  const [artIdx, setArtIdx] = useState(0);
+  const entities = useEntities();
+  const [clientId, setClientId] = useState<string | null>(() => { try { return localStorage.getItem("ax.studio.client"); } catch { return null; } });
+  const [autoPair, setAutoPair] = useState(true);
+  const [productName, setProductName] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
   const [showGuides, setShowGuides] = useState(true);
   const [everyColour, setEveryColour] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const artRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ mode: "move" | "resize"; x: number; y: number; start: Preset } | null>(null);
+
+  // The side being edited, plus setters that write to it.
+  const side = sides[view];
+  const { box, calib, arts, idx: artIdx } = side;
   const art = arts[artIdx] ?? null;
+  type Up<T> = T | ((prev: T) => T);
+  const patch = (v: View, fn: (s: Side) => Side) => setSides((all) => ({ ...all, [v]: fn(all[v]) }));
+  const apply = <T,>(u: Up<T>, prev: T) => (typeof u === "function" ? (u as (p: T) => T)(prev) : u);
+  const setBox = (u: Up<Preset>) => patch(view, (s) => ({ ...s, box: apply(u, s.box) }));
+  const setCalib = (u: Up<Calibration>) => patch(view, (s) => ({ ...s, calib: apply(u, s.calib) }));
+  const setArtIdx = (i: number) => patch(view, (s) => ({ ...s, idx: i }));
+  const pickClient = (id: string | null) => { setClientId(id); try { if (id) localStorage.setItem("ax.studio.client", id); else localStorage.removeItem("ax.studio.client"); } catch { /* private mode */ } };
 
   const list = useMemo(() => (blanks.data ?? []).filter((b) => b.colors.some((c) => c.imageUrl)), [blanks.data]);
   useEffect(() => {
@@ -117,17 +155,6 @@ export default function V2PlacementStudio() {
   const color = colors.find((c) => c.id === colorId) ?? null;
   const photo = ownImage ?? (color ? (view === "back" ? color.imageUrlBack ?? color.imageUrl : color.imageUrl) : null);
   const blankName = blank ? [blank.brand, blank.styleNumber].filter(Boolean).join(" ") || blank.displayName || blank.name : "Any tee";
-
-  // A new view starts from that view's calibration and its first preset.
-  useEffect(() => {
-    setCalib(defaultCalibration(view));
-    setBox((b) => {
-      if (b.view === view) return b;
-      const next = BUILT_IN_PRESETS.find((p) => p.view === view) ?? b;
-      return art ? { ...next, heightIn: Math.min(MAX_PRINT.heightIn, heightForArt(next.widthIn, art.aspect)) } : next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
 
   const presets = useMemo(() => {
     const mine = (saved.data ?? []).filter((p) => p.view === view && (p.blankStyle === blankName || p.blankStyle === "Any tee"));
@@ -150,31 +177,54 @@ export default function V2PlacementStudio() {
 
   // Switching artwork keeps width + position; height follows the new art.
   useEffect(() => {
-    if (art) setBox((b) => ({ ...b, heightIn: heightForArt(b.widthIn, art.aspect) }));
-  }, [art]);
+    if (art) setBox((b) => (b.heightIn === heightForArt(b.widthIn, art.aspect) ? b : { ...b, heightIn: heightForArt(b.widthIn, art.aspect) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [art, view]);
 
+  /**
+   * Put art on a side. The first art on a side lands big and centred (a full
+   * print); a LOGO lands as a 4-inch centre-chest mark instead.
+   */
+  const placeArt = (v: View, added: Art[], asLogo = false) => {
+    if (!added.length) return;
+    patch(v, (s) => {
+      let bx = s.box;
+      if (!s.arts.length || asLogo) {
+        const widthIn = asLogo ? 4 : v === "back" ? 12 : 10;
+        bx = { ...bx, name: asLogo ? "Center chest logo" : v === "back" ? "Full back" : "Full front", widthIn, heightIn: Math.min(MAX_PRINT.heightIn, heightForArt(widthIn, added[0].aspect)), topIn: asLogo ? 3 : v === "back" ? 4 : 3, centerXIn: 0, builtIn: false };
+      }
+      return { ...s, box: bx, arts: [...s.arts, ...added], idx: s.arts.length };
+    });
+    setShowGuides(false);
+    if (added.some((a) => a.cleaned)) toast.success("Removed the white background so it sits on the shirt. Untick “Remove white background” to undo.");
+  };
   const addArt = async (files: FileList | null) => {
     if (!files?.length) return;
     const added: Art[] = [];
     for (const f of Array.from(files)) {
       try { added.push(await prepareArt(f)); } catch (e) { toast.error(e instanceof Error ? e.message : "Could not read that file"); }
     }
-    if (!added.length) return;
-    // First artwork lands big and centred (a full print), not in a 4-inch logo box.
-    if (!arts.length) {
-      const widthIn = view === "back" ? 12 : 10;
-      setBox((bx) => ({ ...bx, name: view === "back" ? "Full back" : "Full front", widthIn, heightIn: Math.min(MAX_PRINT.heightIn, heightForArt(widthIn, added[0].aspect)), topIn: view === "back" ? 4 : 3, centerXIn: 0, builtIn: false }));
+    placeArt(view, added);
+  };
+  /** From the client library: fronts/backs go to their own side, logos to the side you're on. */
+  const pickFromLibrary = async (item: ArtItem, pair: ArtItem | null) => {
+    try {
+      const target: View = item.role === "back" ? "back" : item.role === "front" ? "front" : view;
+      const [a, b] = await Promise.all([artFromLibrary(item), pair ? artFromLibrary(pair) : Promise.resolve(null)]);
+      placeArt(target, [a], item.role === "logo");
+      if (b && pair) placeArt(pair.role === "back" ? "back" : "front", [b]);
+      setView(target);
+      if (!productName.trim()) setProductName(item.designTitle);
+      if (b) toast.success(`Loaded ${item.designTitle} front + back`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not load that art");
     }
-    setArts((a) => { setArtIdx(a.length); return [...a, ...added]; });
-    setShowGuides(false);
-    if (added.some((a) => a.cleaned)) toast.success("Removed the white background so it sits on the shirt. Untick “Remove white background” to undo.");
   };
   const toggleClean = (on: boolean) =>
-    setArts((list) => list.map((a, i) => (i === artIdx && a.cleanUrl ? { ...a, cleaned: on, url: on ? a.cleanUrl : a.srcUrl } : a)));
-  const removeArt = (i: number) => {
-    setArts((a) => a.filter((_, j) => j !== i));
-    setArtIdx((k) => (k > i ? k - 1 : k === i ? Math.max(0, i - 1) : k));
-  };
+    patch(view, (s) => ({ ...s, arts: s.arts.map((a, i) => (i === s.idx && a.cleanUrl ? { ...a, cleaned: on, url: on ? a.cleanUrl : a.srcUrl } : a)) }));
+  const removeArt = (i: number) =>
+    patch(view, (s) => ({ ...s, arts: s.arts.filter((_, j) => j !== i), idx: s.idx > i ? s.idx - 1 : s.idx === i ? Math.max(0, i - 1) : s.idx }));
+  const activeFileIds = useMemo(() => new Set([sides.front, sides.back].map((sd) => sd.arts[sd.idx]?.fileId).filter((x): x is string => !!x)), [sides]);
 
   // Canvas dragging: body moves the print, corner handle resizes it.
   const toImage = () => { const rect = svgRef.current?.getBoundingClientRect(); return rect && rect.width ? W / rect.width : 1; };
@@ -301,7 +351,7 @@ export default function V2PlacementStudio() {
   };
 
   // Art on the blank, no guides — a real mockup file.
-  const renderMockup = async (garmentUrl: string, a: Art): Promise<Blob> => {
+  const renderMockup = async (garmentUrl: string, a: Art, sd: Pick<Side, "box" | "calib"> = side): Promise<Blob> => {
     const [img, artImg] = await Promise.all([loadImage(garmentUrl), loadImage(a.url)]);
     const outW = 1600;
     const outH = Math.round(outW / (img.naturalWidth / img.naturalHeight));
@@ -310,12 +360,60 @@ export default function V2PlacementStudio() {
     canvas.height = outH;
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0, outW, outH);
-    const ar = artRect(presetRect(box, calib, outW, outH), artImg.naturalWidth / artImg.naturalHeight);
+    const ar = artRect(presetRect(sd.box, sd.calib, outW, outH), artImg.naturalWidth / artImg.naturalHeight);
     ctx.drawImage(artImg, ar.x, ar.y, ar.w, ar.h);
-    return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Export failed"))), "image/png"));
+    return pngBlob(canvas);
   };
 
-  const garmentOf = (c: { imageUrl: string | null; imageUrlBack?: string | null }) => (view === "back" ? c.imageUrlBack ?? c.imageUrl : c.imageUrl);
+  const garmentOf = (c: { imageUrl: string | null; imageUrlBack?: string | null }, v: View = view) => (v === "back" ? c.imageUrlBack ?? c.imageUrl : c.imageUrl);
+
+  // ------------------------------------------------ save to Mockup Review
+  const client = (entities.data ?? []).find((e) => e.id === clientId) ?? null;
+  const sidesWithArt = (["front", "back"] as const).filter((v) => sides[v].arts[sides[v].idx]);
+  const saveColours = useMemo(() => {
+    const all = blank?.colors ?? [];
+    const usable = all.filter((c) => sidesWithArt.every((v) => garmentOf(c, v)));
+    return everyColour ? usable : usable.filter((c) => c.id === colorId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blank, everyColour, colorId, sides]);
+  const code = client && productName.trim() ? studioCode(client.slug || client.name, productName) : null;
+
+  const saveToReview = async () => {
+    if (!client || !code || !sidesWithArt.length || !saveColours.length) return;
+    const total = saveColours.length;
+    const rows: Record<string, unknown>[] = [];
+    let n = 0;
+    try {
+      for (const c of saveColours) {
+        setSaving(`${++n} / ${total}`);
+        const urls: Partial<Record<View, string>> = {};
+        for (const v of sidesWithArt) {
+          const sd = sides[v];
+          const blob = await renderMockup(garmentOf(c, v)!, sd.arts[sd.idx], sd);
+          const path = `${client.id}/${code}/${c.name.replace(/[^A-Za-z0-9]+/g, "-")}-${v}-${Date.now()}.png`;
+          const up = await supabase.storage.from("studio-mockups").upload(path, blob, { contentType: "image/png", upsert: true });
+          if (up.error) throw up.error;
+          urls[v] = supabase.storage.from("studio-mockups").getPublicUrl(path).data.publicUrl;
+        }
+        rows.push({
+          athlete_id: client.id, design_code: code, design_name: productName.trim(), product_title: productName.trim(),
+          garment: blankName, blank_style: blankName, color: c.name,
+          front_url: urls.front ?? null, back_url: urls.back ?? null, front_drive_id: null, back_drive_id: null,
+          review_state: "pending", review_note: null, reviewed_at: null, reviewed_by: null, updated_at: new Date().toISOString(),
+        });
+      }
+      const { error } = await supabase.from("mockup_reviews" as never).upsert(rows as never, { onConflict: "design_code,garment,color" });
+      if (error) throw error;
+      void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
+      toast.success(`${rows.length} colour${rows.length === 1 ? "" : "s"} of ${productName.trim()} sent to Mockup Review`, {
+        action: { label: "Review", onClick: () => { window.location.href = "/admin-v2/mockups-review"; } },
+      });
+    } catch (e) {
+      toast.error(`Stopped after ${rows.length}: ${e instanceof Error ? e.message : "could not save"}`);
+    } finally {
+      setSaving(null);
+    }
+  };
   const mockupJobs = useMemo(() => {
     if (!arts.length) return [] as Array<{ art: Art; colour: string; url: string }>;
     const targets = everyColour
@@ -354,6 +452,15 @@ export default function V2PlacementStudio() {
       {blanks.isLoading ? <Skeleton className="h-[60vh]" /> : (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0">
+            <ArtLibraryPanel
+              entities={entities.data ?? []}
+              clientId={clientId}
+              onClientChange={pickClient}
+              autoPair={autoPair}
+              onAutoPairChange={setAutoPair}
+              onPick={(item, pair) => void pickFromLibrary(item, pair)}
+              activeFileIds={activeFileIds}
+            />
             <div tabIndex={0} onKeyDown={nudge} aria-label="Placement canvas — drag the print, arrow keys nudge 1/8 in (Shift: 1 in)"
               className="relative mx-auto w-full max-w-[760px] overflow-hidden rounded-2xl bg-[#f3f3f1] outline-none focus-visible:ring-2 focus-visible:ring-[#03AC13]" style={{ aspectRatio: String(aspect) }}>
               {photo ? (
@@ -413,7 +520,12 @@ export default function V2PlacementStudio() {
               </label>
               <div className={label}>View
                 <div className="mt-1 flex gap-1">
-                  {(["front", "back"] as const).map((v) => <button key={v} type="button" className={chip(view === v)} onClick={() => setView(v)}>{v === "front" ? "Front" : "Back"}</button>)}
+                  {(["front", "back"] as const).map((v) => (
+                    <button key={v} type="button" className={`${chip(view === v)} inline-flex items-center gap-1`} onClick={() => setView(v)}>
+                      {v === "front" ? "Front" : "Back"}
+                      {sides[v].arts.length > 0 && <span className="h-1.5 w-1.5 rounded-full bg-[#03AC13]" aria-label="has art" />}
+                    </button>
+                  ))}
                 </div>
               </div>
               <button type="button" className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-full bg-[#03AC13] px-3.5 py-2.5 text-[13px] font-semibold text-white" onClick={() => artRef.current?.click()}><ImagePlus className="h-4 w-4" />{arts.length ? "Upload more artwork" : "Upload artwork"}</button>
@@ -463,12 +575,26 @@ export default function V2PlacementStudio() {
             </label>
 
             <div className="flex flex-wrap gap-2">
-              <div className="flex w-full flex-col gap-1.5 rounded-lg border border-[hsl(var(--ax-border))] p-2.5">
-                <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#03AC13] px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40" disabled={!mockupJobs.length || exporting} onClick={() => void exportMockups()}>
-                  {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Images className="h-3.5 w-3.5" />}
-                  {arts.length ? `Export ${mockupJobs.length} mockup${mockupJobs.length === 1 ? "" : "s"}` : "Add artwork to export mockups"}
+              <label className="flex w-full items-center gap-2 text-[12px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={everyColour} onChange={(e) => setEveryColour(e.target.checked)} />Every colour of this blank ({blank?.colors.length ?? 0}) — otherwise just {color?.name ?? "this colour"}</label>
+              <div className="flex w-full flex-col gap-2 rounded-lg border-2 border-[#03AC13]/40 bg-[#03AC13]/[0.04] p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">Save to {client ? client.name : "a client"}</p>
+                <input className="rounded-lg border border-[hsl(var(--ax-border))] bg-white px-2.5 py-1.5 text-[13px]" placeholder="Product name, e.g. Ice Man Tee" value={productName} onChange={(e) => setProductName(e.target.value)} />
+                <p className="text-[11.5px] text-[hsl(var(--ax-faint))]">
+                  {!client ? "Pick a client in Client art above." : !sidesWithArt.length ? "Add art to the front or back first." : `${sidesWithArt.map((v) => (v === "front" ? "Front" : "Back")).join(" + ")} · ${saveColours.length} colour${saveColours.length === 1 ? "" : "s"} · ${blankName}`}
+                </p>
+                <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#03AC13] px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
+                  disabled={!code || !sidesWithArt.length || !saveColours.length || !!saving || !!ownImage} onClick={() => void saveToReview()}
+                  title={ownImage ? "Switch back to the blank photo to save — custom shirt photos aren't part of the blank library" : undefined}>
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Inbox className="h-3.5 w-3.5" />}
+                  {saving ? `Saving ${saving}…` : "Send to Mockup Review"}
                 </button>
-                <label className="flex items-center gap-2 text-[12px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={everyColour} onChange={(e) => setEveryColour(e.target.checked)} />Every colour of this blank ({colors.length})</label>
+                <Link to="/admin-v2/mockups-review" className="text-center text-[11.5px] text-[hsl(var(--ax-secondary))] underline-offset-2 hover:underline">Open Mockup Review</Link>
+              </div>
+              <div className="flex w-full flex-col gap-1.5 rounded-lg border border-[hsl(var(--ax-border))] p-2.5">
+                <button type="button" className={`${pill} justify-center`} disabled={!mockupJobs.length || exporting} onClick={() => void exportMockups()}>
+                  {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Images className="h-3.5 w-3.5" />}
+                  {arts.length ? `Download ${mockupJobs.length} mockup${mockupJobs.length === 1 ? "" : "s"}` : "Add artwork to download mockups"}
+                </button>
               </div>
               <button type="button" className="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-ink))] px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40" disabled={!photo || exporting} onClick={() => void exportPng()}>
                 <Download className="h-3.5 w-3.5" />Placement guide
