@@ -42,6 +42,12 @@ export interface Destination {
   images: string[];
   /** [ADDED] Small line under the label, from the config ("Crest I · Crest II"). Empty when unset. */
   caption: string;
+  /**
+   * [ADDED] Shown on the home room's stage (lockers / pedestals). false keeps a
+   * collection as a My Gear filter only — Mooney's team collections, once his
+   * room shows design lines instead. Config: portal_destination.on_stage = false.
+   */
+  onStage: boolean;
   href: string;
   /** [ADDED] The collection behind this destination. */
   collectionId: string;

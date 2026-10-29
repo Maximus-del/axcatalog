@@ -40,6 +40,8 @@
 .mw-identity small { color: var(--mw-quiet); font-size: 11px; }
 .mw-main { min-width: 0; }
 .mw-room-ground { min-height: calc(100dvh - 64px); background-color: var(--mw-deep); background-image: linear-gradient(to bottom, hsl(var(--dark) / .25), hsl(var(--dark) / .85)), var(--mw-hero, url('/mooney/assets/locker-room.png')); background-size: 100% 100%, cover; background-position: center, center bottom; background-attachment: scroll, fixed; background-repeat: no-repeat; }
+/* Phones held upright get the portrait room when the theme has one (theme.world.heroMobileUrl). */
+@media (max-width: 768px) and (orientation: portrait) { .mw-room-ground { background-image: linear-gradient(to bottom, hsl(var(--dark) / .2), hsl(var(--dark) / .85)), var(--mw-hero-mobile, var(--mw-hero, url('/mooney/assets/locker-room.png'))); background-position: center, center top; } }
 .mw-topbar { display: flex; align-items: center; gap: 12px; padding: 8px 20px; min-height: 64px; background: var(--mw-deep); border-bottom: 1px solid var(--mw-line); }
 .mw-topbar h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; }
 .mw-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }

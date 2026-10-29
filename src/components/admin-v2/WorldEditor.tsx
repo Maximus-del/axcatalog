@@ -121,6 +121,7 @@ export default function WorldEditor({
       <div className="grid gap-3 sm:grid-cols-2">
         <ImageField entityId={entityId} kind="logo" title="Logo" help="Top of the sidebar. Transparent PNG is best." value={world.logoUrl} onChange={(v) => set("logoUrl", v)} />
         <ImageField entityId={entityId} kind="hero" title="Room photo" help="Behind the home page — no text or buttons in it." value={world.heroUrl} onChange={(v) => set("heroUrl", v)} tall />
+        <ImageField entityId={entityId} kind="hero" title="Room photo — phone" help="Optional upright version for phones. Empty uses the room photo." value={world.heroMobileUrl} onChange={(v) => set("heroMobileUrl", v)} tall />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">

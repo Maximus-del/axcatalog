@@ -14,7 +14,8 @@
 //     images: ["https://…/crest-1.png", "https://…/crest-2.png"],  // optional deck; first wins over `image`
 //     caption: "Crest I · Crest II",                                 // optional
 //     sort: 10,
-//     hidden: false
+//     hidden: false,             // true → not shown anywhere in the portal
+//     on_stage: true             // false → a My Gear filter only, not on the home room's stage
 //   }
 //
 // Without that config a collection still appears, labelled from its team's city
@@ -88,6 +89,7 @@ export function toDestination(row: CollectionRow, productCount: number): Destina
     collectionId: row.id,
     productCount,
     teamName: row.team?.name ?? null,
+    onStage: cfg.on_stage !== false,
   };
 }
 

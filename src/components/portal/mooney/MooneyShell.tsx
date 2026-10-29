@@ -42,7 +42,10 @@ export function MooneyShell({ children }: { children: ReactNode }) {
   function openTeam() { setNavOpen(false); setTeamOpen(true); }
   const teamButton = <Button variant="ghost" className="mw-team-shortcut" title="AX Team" aria-label="Open AX Team messages" onClick={openTeam}><MessageCircle /><span>AX Team<small>We’re here for you.</small></span><ChevronRight className="mw-chevron" /></Button>;
 
-  const shellStyle = (world.heroUrl ? { "--mw-hero": `url("${world.heroUrl}")` } : {}) as CSSProperties;
+  const shellStyle = {
+    ...(world.heroUrl ? { "--mw-hero": `url("${world.heroUrl}")` } : {}),
+    ...(world.heroMobileUrl ? { "--mw-hero-mobile": `url("${world.heroMobileUrl}")` } : {}),
+  } as CSSProperties;
   return <div className="mw-shell" data-stage={world.stage} style={shellStyle}><div className="mw-frame" data-collapsed={collapsed}>
     <aside className={`mw-sidebar ${collapsed ? "mw-collapsed" : ""}`}>
       <Link className="mw-wordmark" to={portalLink("/portal", location.search)} aria-label={`${brand} ${world.roomName}`}>{mark}<strong>{brandTop}{brandBottom && <span>{brandBottom}</span>}</strong></Link>

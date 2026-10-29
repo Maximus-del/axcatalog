@@ -79,6 +79,8 @@ export interface PortalWorld {
   logoUrl: string;
   /** The room photo behind the home page. Empty → the locker room. */
   heroUrl: string;
+  /** Optional portrait version for phones. Empty → heroUrl everywhere. */
+  heroMobileUrl: string;
   /** Second brand colour, used sparingly (glows, the active underline). Empty → none. */
   accent2: string;
   /** "locker": art stands in the locker bays. "pedestal": plaques on lit pedestals. */
@@ -94,6 +96,7 @@ export const DEFAULT_WORLD: PortalWorld = {
   tagline: "Same game. Bigger moves.",
   logoUrl: "",
   heroUrl: "",
+  heroMobileUrl: "",
   accent2: "",
   stage: "locker",
   showStats: true,
@@ -186,6 +189,7 @@ export function parseWorld(raw: unknown): PortalWorld {
     tagline: text(src.tagline, d.tagline),
     logoUrl: cleanImageUrl(src.logoUrl),
     heroUrl: cleanImageUrl(src.heroUrl),
+    heroMobileUrl: cleanImageUrl(src.heroMobileUrl),
     accent2: normalizeHex(src.accent2) ?? "",
     stage: src.stage === "pedestal" ? "pedestal" : "locker",
     showStats: typeof src.showStats === "boolean" ? src.showStats : d.showStats,
