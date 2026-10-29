@@ -121,9 +121,11 @@ export function LockerRoom() {
   };
   // Which shortcuts, in what order, is this client's theme; what each one does is fixed here.
   const plays = playsForRole(world.quickPlays, portalRole).map((key) => PLAYS[key]);
+  // The stage shows only collections configured for it; the rest stay My Gear filters.
+  const staged = destinations.data?.filter((d) => d.onStage);
 
   return <main>
-    <section className="mw-hero" data-stage={world.stage} data-wall={!pedestal && destinations.data?.length === 4} aria-labelledby="locker-room-heading">
+    <section className="mw-hero" data-stage={world.stage} data-wall={!pedestal && staged?.length === 4} aria-labelledby="locker-room-heading">
       <div className="mw-locker-scene">
       <div className="mw-scene-layer">
       <div className="mw-scene-heading">
@@ -132,10 +134,10 @@ export function LockerRoom() {
       </div>
       {destinations.isLoading && <div className="mw-lockers" role="status" aria-label="Loading collections">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-[360px] rounded-md" />)}</div>}
       {destinations.isError && <RetryState error={destinations.error} retry={() => void destinations.refetch()} />}
-      {destinations.isSuccess && destinations.data.length === 0 && <div className="mw-state"><Package className="mx-auto h-8 w-8 mb-3" /><p>No collections available yet.</p></div>}
-      {destinations.data && destinations.data.length > 0 && (pedestal
-        ? <div className="mw-plaques" data-count={destinations.data.length} aria-label="Your collections">{destinations.data.map((destination, index) => <PlaqueDisplay key={destination.id} destination={destination} index={index} priority={index < 2} onOpen={() => setCollection(destination)} onExplore={() => explore(destination)} />)}</div>
-        : <div className="mw-lockers" aria-label="Your collections">{destinations.data.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} onExplore={() => explore(destination)} />)}</div>)}
+      {destinations.isSuccess && staged?.length === 0 && <div className="mw-state"><Package className="mx-auto h-8 w-8 mb-3" /><p>No collections available yet.</p></div>}
+      {staged && staged.length > 0 && (pedestal
+        ? <div className="mw-plaques" data-count={staged.length} aria-label="Your collections">{staged.map((destination, index) => <PlaqueDisplay key={destination.id} destination={destination} index={index} priority={index < 3} onOpen={() => setCollection(destination)} onExplore={() => explore(destination)} />)}</div>
+        : <div className="mw-lockers" aria-label="Your collections">{staged.map((destination, index) => <DestinationDisplay key={destination.id} destination={destination} priority={index < 2} onOpen={() => setCollection(destination)} onExplore={() => explore(destination)} />)}</div>)}
       </div>
       </div>
     </section>
