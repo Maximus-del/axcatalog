@@ -127,3 +127,52 @@ export function referenceFilename(blank: string, p: Pick<Preset, "name" | "view"
   const slug = (s: string) => s.replace(/[×x]/g, "x").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return `PLACEMENT_${slug(blank)}_${p.view.toUpperCase()}_${slug(p.name)}.png`;
 }
+
+// ---------------------------------------------------------------------------
+// ARTWORK LAYER + DIRECT MANIPULATION
+//
+// Artwork sits INSIDE the print box: fitted, centred left-right, top edge on
+// the box's top edge (how a printer places it). With artwork loaded, the box
+// follows the art's proportions so "the box" and "the print" are the same
+// thing, and dragging/resizing on the canvas moves the print itself.
+
+const eighth = (n: number) => Math.round(n * 8) / 8;
+
+/** Box height (in) that fits artwork of this aspect (w/h) at the box's width. */
+export function heightForArt(widthIn: number, artAspect: number): number {
+  return artAspect > 0 ? Math.max(0.5, eighth(widthIn / artAspect)) : widthIn;
+}
+
+/** Where artwork is drawn inside a box rect: contained, centred, top-aligned. */
+export function artRect(box: Rect, artAspect: number): Rect {
+  if (!(artAspect > 0)) return box;
+  const fitW = Math.min(box.w, box.h * artAspect);
+  const fitH = fitW / artAspect;
+  return { x: box.x + (box.w - fitW) / 2, y: box.y, w: fitW, h: fitH };
+}
+
+/** Drag the box by (dx, dy) image pixels. Snaps to centre, never above the collar. */
+export function moveBy<T extends Pick<Preset, "topIn" | "centerXIn">>(p: T, dxPx: number, dyPx: number, ppi: number): T {
+  if (!(ppi > 0)) return p;
+  let cx = eighth(p.centerXIn + dxPx / ppi);
+  if (Math.abs(cx) < 0.2) cx = 0;
+  return { ...p, centerXIn: clamp(cx, -8, 8), topIn: clamp(eighth(p.topIn + dyPx / ppi), 0, 14) };
+}
+
+/**
+ * Resize from the corner handle. The box stays centred where it is, so a
+ * handle moved dx to the right widens it by 2·dx. With artwork, height follows
+ * the art's proportions; without, it follows the handle.
+ */
+export function resizeBy<T extends Pick<Preset, "widthIn" | "heightIn">>(p: T, dxPx: number, dyPx: number, ppi: number, artAspect: number | null): T {
+  if (!(ppi > 0)) return p;
+  const widthIn = clamp(eighth(p.widthIn + (2 * dxPx) / ppi), 0.5, MAX_PRINT.widthIn);
+  const heightIn = artAspect ? heightForArt(widthIn, artAspect) : clamp(eighth(p.heightIn + dyPx / ppi), 0.5, MAX_PRINT.heightIn);
+  return { ...p, widthIn, heightIn };
+}
+
+/** Filename for a rendered mockup: <ART>_<BLANK>_<Colour>_<VIEW>.png */
+export function mockupFilename(artName: string, blank: string, color: string, view: View): string {
+  const slug = (s: string) => s.replace(/\.[a-z0-9]+$/i, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `${slug(artName)}_${slug(blank)}_${slug(color)}_${view.toUpperCase()}.png`;
+}

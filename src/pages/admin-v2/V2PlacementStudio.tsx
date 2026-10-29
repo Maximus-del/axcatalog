@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, ImagePlus, Loader2, Save, Trash2 } from "lucide-react";
+import { Copy, Download, Eye, EyeOff, ImagePlus, Images, Loader2, RotateCcw, Save, Shirt, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBlanks } from "@/lib/v2/data";
 import { loadImage, downloadBlob } from "@/lib/v2/mockup-export";
 import {
-  BUILT_IN_PRESETS, MAX_PRINT, clamp, defaultCalibration, describe, oversize, presetRect, referenceFilename, toPreset,
+  BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, heightForArt, mockupFilename, moveBy, oversize, presetRect, referenceFilename, resizeBy, toPreset,
   type Calibration, type Preset, type View,
 } from "@/lib/v2/placement-studio";
 import { PageHeader, Skeleton } from "@/components/admin-v2/primitives";
@@ -14,6 +14,15 @@ import { PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 // PLACEMENT STUDIO — draw where the print goes, in inches, on the real blank,
 // and export a PNG + one line of text to hand GPT ("print inside this box").
 // Presets are saved per blank so every design prints in the same spot.
+//
+// Artwork is a LAYER on top of the garment, never a replacement for it: drop
+// in one or more PNGs, drag the print to move it, pull the corner to size it,
+// and every artwork uses the same placement. "Export mockups" renders the art
+// on the blank (one file per artwork, optionally every colour).
+
+type Art = { id: string; name: string; url: string; aspect: number };
+const readAspect = (url: string) => new Promise<number>((res) => { const i = new Image(); i.onload = () => res(i.naturalWidth / Math.max(1, i.naturalHeight)); i.onerror = () => res(1); i.src = url; });
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const ACCENT = "#03AC13";
 const label = "text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]";
@@ -60,7 +69,15 @@ export default function V2PlacementStudio() {
   const [lockSquare, setLockSquare] = useState(true);
   const [aspect, setAspect] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [arts, setArts] = useState<Art[]>([]);
+  const [artIdx, setArtIdx] = useState(0);
+  const [showGuides, setShowGuides] = useState(true);
+  const [everyColour, setEveryColour] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const artRef = useRef<HTMLInputElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const drag = useRef<{ mode: "move" | "resize"; x: number; y: number; start: Preset } | null>(null);
+  const art = arts[artIdx] ?? null;
 
   const list = useMemo(() => (blanks.data ?? []).filter((b) => b.colors.some((c) => c.imageUrl)), [blanks.data]);
   useEffect(() => {
@@ -97,7 +114,57 @@ export default function V2PlacementStudio() {
   const line = describe(box, blankName);
 
   const setDim = (key: "widthIn" | "heightIn", v: number) =>
-    setBox((b) => (lockSquare && b.widthIn === b.heightIn ? { ...b, widthIn: v, heightIn: v, builtIn: false } : { ...b, [key]: v, builtIn: false }));
+    setBox((b) => {
+      // With artwork, the box keeps the art's proportions whichever slider moves.
+      if (art) return key === "widthIn" ? { ...b, widthIn: v, heightIn: heightForArt(v, art.aspect), builtIn: false } : { ...b, heightIn: v, widthIn: Math.min(MAX_PRINT.widthIn, Math.round(v * art.aspect * 8) / 8), builtIn: false };
+      return lockSquare && b.widthIn === b.heightIn ? { ...b, widthIn: v, heightIn: v, builtIn: false } : { ...b, [key]: v, builtIn: false };
+    });
+
+  // Switching artwork keeps width + position; height follows the new art.
+  useEffect(() => {
+    if (art) setBox((b) => ({ ...b, heightIn: heightForArt(b.widthIn, art.aspect) }));
+  }, [art]);
+
+  const addArt = async (files: FileList | null) => {
+    if (!files?.length) return;
+    const added: Art[] = [];
+    for (const f of Array.from(files)) {
+      const url = URL.createObjectURL(f);
+      added.push({ id: `${Date.now()}-${f.name}`, name: f.name, url, aspect: await readAspect(url) });
+    }
+    setArts((a) => { setArtIdx(a.length); return [...a, ...added]; });
+    if (!added.every((a) => /\.png$/i.test(a.name))) toast.message("Tip: use transparent PNGs — a JPG brings its white background onto the shirt.");
+  };
+  const removeArt = (i: number) => {
+    setArts((a) => a.filter((_, j) => j !== i));
+    setArtIdx((k) => (k > i ? k - 1 : k === i ? Math.max(0, i - 1) : k));
+  };
+
+  // Canvas dragging: body moves the print, corner handle resizes it.
+  const toImage = () => { const rect = svgRef.current?.getBoundingClientRect(); return rect && rect.width ? W / rect.width : 1; };
+  const startDrag = (mode: "move" | "resize") => (e: ReactPointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    svgRef.current?.setPointerCapture(e.pointerId);
+    drag.current = { mode, x: e.clientX, y: e.clientY, start: box };
+  };
+  const onDrag = (e: ReactPointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const k = toImage();
+    const dx = (e.clientX - d.x) * k;
+    const dy = (e.clientY - d.y) * k;
+    setBox({ ...(d.mode === "move" ? moveBy(d.start, dx, dy, ppi) : resizeBy(d.start, dx, dy, ppi, art?.aspect ?? null)), builtIn: false });
+  };
+  const endDrag = () => { drag.current = null; };
+  const nudge = (e: ReactKeyboardEvent) => {
+    const step = (e.shiftKey ? 1 : 0.125) * ppi;
+    const m: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    const v = m[e.key];
+    if (!v) return;
+    e.preventDefault();
+    setBox((b) => ({ ...moveBy(b, v[0], v[1], ppi), builtIn: false }));
+  };
 
   const savePreset = useMutation({
     mutationFn: async () => {
@@ -136,6 +203,12 @@ export default function V2PlacementStudio() {
       ctx.drawImage(img, 0, 0, outW, outH);
       const k = outW / W;
       const rr = presetRect(box, calib, outW, outH);
+      if (art) {
+        // The artwork in place, so GPT sees exactly what goes where.
+        const artImg = await loadImage(art.url);
+        const ar = artRect(rr, artImg.naturalWidth / artImg.naturalHeight);
+        ctx.drawImage(artImg, ar.x, ar.y, ar.w, ar.h);
+      }
       const inch = rr.w / box.widthIn;
       // inch grid inside the box
       ctx.strokeStyle = "rgba(3,172,19,0.35)";
@@ -191,22 +264,70 @@ export default function V2PlacementStudio() {
     }
   };
 
+  // Art on the blank, no guides — a real mockup file.
+  const renderMockup = async (garmentUrl: string, a: Art): Promise<Blob> => {
+    const [img, artImg] = await Promise.all([loadImage(garmentUrl), loadImage(a.url)]);
+    const outW = 1600;
+    const outH = Math.round(outW / (img.naturalWidth / img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(img, 0, 0, outW, outH);
+    const ar = artRect(presetRect(box, calib, outW, outH), artImg.naturalWidth / artImg.naturalHeight);
+    ctx.drawImage(artImg, ar.x, ar.y, ar.w, ar.h);
+    return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("Export failed"))), "image/png"));
+  };
+
+  const garmentOf = (c: { imageUrl: string | null; imageUrlBack?: string | null }) => (view === "back" ? c.imageUrlBack ?? c.imageUrl : c.imageUrl);
+  const mockupJobs = useMemo(() => {
+    if (!arts.length) return [] as Array<{ art: Art; colour: string; url: string }>;
+    const targets = everyColour
+      ? colors.map((c) => ({ colour: c.name, url: garmentOf(c) })).filter((t): t is { colour: string; url: string } => !!t.url)
+      : photo ? [{ colour: ownImage ? "Custom" : color?.name ?? "Colour", url: photo }] : [];
+    return arts.flatMap((a) => targets.map((t) => ({ art: a, ...t })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arts, everyColour, colors, photo, ownImage, color, view]);
+
+  const exportMockups = async () => {
+    if (!mockupJobs.length) return;
+    setExporting(true);
+    let done = 0;
+    try {
+      for (const j of mockupJobs) {
+        const blob = await renderMockup(j.url, j.art);
+        downloadBlob(blob, mockupFilename(j.art.name, blankName, j.colour, view));
+        done++;
+        if (mockupJobs.length > 1) await pause(350); // browsers drop rapid back-to-back downloads
+      }
+      toast.success(`${done} mockup${done === 1 ? "" : "s"} downloaded`);
+    } catch (e) {
+      toast.error(`${done} done, then: ${e instanceof Error ? e.message : "export failed"}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <>
       <PageHeader
         eyebrow="Releases · Placement studio"
         title="Where the print goes"
-        subtitle="Pick a blank, start from a preset, adjust in inches, then export the PNG and copy the line for GPT."
+        subtitle="Add your artwork, drag it into place (pull the corner to size it), then export mockups — or export the placement guide and copy the line for GPT."
       />
       {blanks.isLoading ? <Skeleton className="h-[60vh]" /> : (
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-w-0">
-            <div className="relative mx-auto w-full max-w-[760px] overflow-hidden rounded-2xl bg-[#f3f3f1]" style={{ aspectRatio: String(aspect) }}>
+            <div tabIndex={0} onKeyDown={nudge} aria-label="Placement canvas — drag the print, arrow keys nudge 1/8 in (Shift: 1 in)"
+              className="relative mx-auto w-full max-w-[760px] overflow-hidden rounded-2xl bg-[#f3f3f1] outline-none focus-visible:ring-2 focus-visible:ring-[#03AC13]" style={{ aspectRatio: String(aspect) }}>
               {photo ? (
                 <img src={photo} alt={`${blankName} ${view}`} className="absolute inset-0 h-full w-full object-fill" referrerPolicy="no-referrer"
                   onLoad={(e) => { const i = e.currentTarget; if (i.naturalWidth && i.naturalHeight) setAspect(i.naturalWidth / i.naturalHeight); }} />
               ) : <div className="absolute inset-0 grid place-items-center text-[13px] text-[hsl(var(--ax-faint))]">No photo for this blank — use your own image.</div>}
-              <svg className="absolute inset-0 h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+              <svg ref={svgRef} className="absolute inset-0 h-full w-full touch-none select-none" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+                onPointerMove={onDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
+                {art && (() => { const a = artRect(r, art.aspect); return <image href={art.url} x={a.x} y={a.y} width={a.w} height={a.h} preserveAspectRatio="none" style={{ pointerEvents: "none" }} />; })()}
+                {showGuides && <g style={{ pointerEvents: "none" }}>
                 {/* guides: collar, centre line, chest edges */}
                 <line x1={calib.chestLeft * W} x2={calib.chestLeft * W} y1={0} y2={H} stroke="#2563eb" strokeOpacity="0.35" strokeDasharray="6 6" strokeWidth="2" />
                 <line x1={calib.chestRight * W} x2={calib.chestRight * W} y1={0} y2={H} stroke="#2563eb" strokeOpacity="0.35" strokeDasharray="6 6" strokeWidth="2" />
@@ -219,11 +340,26 @@ export default function V2PlacementStudio() {
                 {Array.from({ length: Math.max(0, Math.floor(box.heightIn)) }, (_, i) => i + 1).filter((i) => i < box.heightIn).map((i) => (
                   <line key={`h${i}`} x1={r.x} x2={r.x + r.w} y1={r.y + i * ppi} y2={r.y + i * ppi} stroke={ACCENT} strokeOpacity="0.35" strokeWidth="1" />
                 ))}
-                <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={ACCENT} fillOpacity="0.1" stroke={tooBig ? "#dc2626" : ACCENT} strokeWidth="3" strokeDasharray="10 6" />
-                <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT}>{box.widthIn} × {box.heightIn} in</text>
+                </g>}
+                <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={ACCENT} fillOpacity={art ? 0.001 : showGuides ? 0.1 : 0.001} stroke={tooBig ? "#dc2626" : ACCENT} strokeOpacity={showGuides ? 1 : 0.5} strokeWidth="3" strokeDasharray="10 6"
+                  style={{ cursor: "move" }} onPointerDown={startDrag("move")} />
+                <rect x={r.x + r.w - 11} y={r.y + r.h - 11} width="22" height="22" rx="4" fill="#fff" stroke={ACCENT} strokeWidth="3" style={{ cursor: "nwse-resize" }} onPointerDown={startDrag("resize")} />
+                <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT} style={{ pointerEvents: "none" }}>{box.widthIn} × {box.heightIn} in · {box.topIn} in below collar</text>
               </svg>
             </div>
-            <p className="mx-auto mt-3 max-w-[760px] rounded-lg bg-[hsl(var(--ax-ink)/0.04)] px-3 py-2 text-[12.5px]">{line}</p>
+            <div className="mx-auto mt-3 flex max-w-[760px] flex-wrap items-center gap-2">
+              {arts.map((a, i) => (
+                <span key={a.id} className={`group relative h-14 w-14 overflow-hidden rounded-lg border-2 bg-[#2b2b2b] ${i === artIdx ? "border-[#03AC13]" : "border-transparent"}`}>
+                  <button type="button" className="h-full w-full" title={a.name} onClick={() => setArtIdx(i)}><img src={a.url} alt={a.name} className="h-full w-full object-contain" /></button>
+                  <button type="button" aria-label={`Remove ${a.name}`} className="absolute right-0.5 top-0.5 hidden rounded-full bg-black/70 p-0.5 text-white group-hover:block" onClick={() => removeArt(i)}><X className="h-3 w-3" /></button>
+                </span>
+              ))}
+              <button type="button" className={`${pill} h-14`} onClick={() => artRef.current?.click()}><ImagePlus className="h-3.5 w-3.5" />{arts.length ? "Add more artwork" : "Add artwork (PNG)"}</button>
+              <input ref={artRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { void addArt(e.target.files); e.target.value = ""; }} />
+              <button type="button" className={`${pill} ml-auto`} onClick={() => setShowGuides((g) => !g)}>{showGuides ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{showGuides ? "Hide guides" : "Show guides"}</button>
+            </div>
+            <p className="mx-auto mt-2 max-w-[760px] text-[11.5px] text-[hsl(var(--ax-faint))]">Drag the print to move it · pull the white corner to size it · arrow keys nudge ⅛ in (Shift = 1 in). Every artwork uses the same placement.</p>
+            <p className="mx-auto mt-2 max-w-[760px] rounded-lg bg-[hsl(var(--ax-ink)/0.04)] px-3 py-2 text-[12.5px]">{line}</p>
             {tooBig && <p className="mx-auto mt-2 max-w-[760px] text-[12px] text-[hsl(var(--ax-red))]">Over the {MAX_PRINT.widthIn} × {MAX_PRINT.heightIn} in max print size.</p>}
           </div>
 
@@ -244,7 +380,8 @@ export default function V2PlacementStudio() {
                   {(["front", "back"] as const).map((v) => <button key={v} type="button" className={chip(view === v)} onClick={() => setView(v)}>{v === "front" ? "Front" : "Back"}</button>)}
                 </div>
               </div>
-              <button type="button" className={`${pill} col-span-2 justify-center`} onClick={() => fileRef.current?.click()}><ImagePlus className="h-3.5 w-3.5" />Use my own photo</button>
+              <button type="button" className={`${pill} justify-center ${ownImage ? "" : "col-span-2"}`} onClick={() => fileRef.current?.click()}><Shirt className="h-3.5 w-3.5" />{ownImage ? "Swap garment photo" : "Use my own garment photo"}</button>
+              {ownImage && <button type="button" className={`${pill} justify-center`} onClick={() => setOwnImage(null)}><RotateCcw className="h-3.5 w-3.5" />Back to blank</button>}
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setOwnImage(URL.createObjectURL(f)); e.target.value = ""; }} />
             </div>
 
@@ -253,7 +390,7 @@ export default function V2PlacementStudio() {
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {presets.map((p) => (
                   <span key={`${p.id ?? "b"}-${p.name}`} className="inline-flex items-center">
-                    <button type="button" className={chip(box.name === p.name && box.widthIn === p.widthIn && box.topIn === p.topIn)} onClick={() => setBox({ ...p })}>{p.name}</button>
+                    <button type="button" className={chip(box.name === p.name && box.widthIn === p.widthIn && box.topIn === p.topIn)} onClick={() => setBox({ ...p, heightIn: art ? heightForArt(p.widthIn, art.aspect) : p.heightIn })}>{p.name}</button>
                     {p.id && <button type="button" aria-label={`Delete ${p.name}`} className="ml-0.5 text-[hsl(var(--ax-faint))] hover:text-[hsl(var(--ax-red))]" onClick={() => deletePreset.mutate(p.id!)}><Trash2 className="h-3 w-3" /></button>}
                   </span>
                 ))}
@@ -286,8 +423,15 @@ export default function V2PlacementStudio() {
             </label>
 
             <div className="flex flex-wrap gap-2">
+              <div className="flex w-full flex-col gap-1.5 rounded-lg border border-[hsl(var(--ax-border))] p-2.5">
+                <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#03AC13] px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40" disabled={!mockupJobs.length || exporting} onClick={() => void exportMockups()}>
+                  {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Images className="h-3.5 w-3.5" />}
+                  {arts.length ? `Export ${mockupJobs.length} mockup${mockupJobs.length === 1 ? "" : "s"}` : "Add artwork to export mockups"}
+                </button>
+                <label className="flex items-center gap-2 text-[12px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={everyColour} onChange={(e) => setEveryColour(e.target.checked)} />Every colour of this blank ({colors.length})</label>
+              </div>
               <button type="button" className="inline-flex items-center gap-1.5 rounded-full bg-[hsl(var(--ax-ink))] px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40" disabled={!photo || exporting} onClick={() => void exportPng()}>
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}Export PNG
+                <Download className="h-3.5 w-3.5" />Placement guide
               </button>
               <button type="button" className={pill} onClick={() => { void navigator.clipboard.writeText(line).then(() => toast.success("Copied for GPT")); }}><Copy className="h-3.5 w-3.5" />Copy line</button>
               <button type="button" className={pill} disabled={savePreset.isPending} onClick={() => savePreset.mutate()}><Save className="h-3.5 w-3.5" />Save preset</button>

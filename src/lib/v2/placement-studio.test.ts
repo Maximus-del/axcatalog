@@ -46,3 +46,36 @@ group("placement studio", () => {
     expect(defaultCalibration("back").collarY).toBeLessThan(defaultCalibration("front").collarY);
   });
 });
+
+import { artRect, heightForArt, mockupFilename, moveBy, resizeBy } from "./placement-studio";
+
+group("placement studio — artwork layer", () => {
+  it("box height follows the art at the box's width", () => {
+    expect(heightForArt(12, 0.75)).toBe(16);
+    expect(heightForArt(10, 2)).toBe(5);
+  });
+
+  it("art is contained, centred and top-aligned inside the box", () => {
+    const a = artRect({ x: 100, y: 200, w: 400, h: 400 }, 2);
+    expect(a).toEqual({ x: 100, y: 200, w: 400, h: 200 });
+    const tall = artRect({ x: 100, y: 200, w: 400, h: 400 }, 0.5);
+    expect(tall).toEqual({ x: 200, y: 200, w: 200, h: 400 });
+  });
+
+  it("drag moves in inches, snaps to centre and stops at the collar", () => {
+    const p = { topIn: 4, centerXIn: 0 };
+    expect(moveBy(p, 60, 30, 30)).toEqual({ topIn: 5, centerXIn: 2 });
+    expect(moveBy(p, 3, 0, 30).centerXIn).toBe(0);
+    expect(moveBy(p, 0, -300, 30).topIn).toBe(0);
+  });
+
+  it("corner resize widens symmetrically and keeps the art's shape", () => {
+    expect(resizeBy({ widthIn: 12, heightIn: 16 }, -30, 0, 30, 0.75)).toEqual({ widthIn: 10, heightIn: 13.375 });
+    expect(resizeBy({ widthIn: 12, heightIn: 16 }, 300, 0, 30, null).widthIn).toBe(16);
+    expect(resizeBy({ widthIn: 4, heightIn: 4 }, 0, 30, 30, null).heightIn).toBe(5);
+  });
+
+  it("names a rendered mockup", () => {
+    expect(mockupFilename("Crimzyn Chin back.png", "AXISM 7010", "Smoke Gray", "back")).toBe("Crimzyn-Chin-back_AXISM-7010_Smoke-Gray_BACK.png");
+  });
+});
