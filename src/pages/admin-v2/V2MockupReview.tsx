@@ -4,7 +4,7 @@ import { Archive, ArrowLeft, ArrowRight, Check, ExternalLink, FolderSync, Loader
 import { toast } from "sonner";
 import {
   MOCKUP_DROP_CHIPS, MOCKUP_FIX_CHIPS, hasChanges, mockupKey, planSummary, planSync,
-  useMockupDecision, useMockupIntake, useMockupReviews, useMockupSync,
+  useMockupDecision, useMockupDecisionMany, useMockupIntake, useMockupReviews, useMockupSync,
   type MockupDecision, type MockupItem, type MockupState, type SyncPlan,
 } from "@/lib/v2/mockup-review";
 import { addChip, indexAfterRemoval } from "@/lib/v2/content-review";
@@ -83,6 +83,8 @@ export default function V2MockupReview() {
   const [note, setNote] = useState("");
   const [last, setLast] = useState<{ id: string; label: string; decision: MockupDecision } | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const decideMany = useMockupDecisionMany();
   const noteRef = useRef<HTMLTextAreaElement>(null);
 
   const all = useMemo(() => items.data ?? [], [items.data]);
@@ -99,7 +101,7 @@ export default function V2MockupReview() {
   const shown = current ? (side === "back" ? current.backUrl ?? current.frontUrl : current.frontUrl) : null;
 
   useEffect(() => { setIndex(0); setMode(null); setNote(""); }, [tab, design]);
-  useEffect(() => { setSide("front"); }, [current?.id]);
+  // Front/back stays where you put it while you arrow through — B or the toggle flips it.
 
   const act = useCallback((decision: MockupDecision, text?: string) => {
     if (!current) return;
@@ -178,6 +180,30 @@ export default function V2MockupReview() {
       <SyncPanel plans={plans} syncing={syncing} onSync={runSync} />
 
       <TabBar<MockupState> tabs={TABS} active={tab} onSelect={setTab} label={(t) => `${TAB_LABEL[t]} ${all.filter((i) => i.state === t).length || ""}`.trim()} />
+
+      {tab === "pending" && list.length > 1 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {confirmAll ? (
+            <>
+              <span className="text-[12.5px]">Approve all {list.length}{design !== "all" ? ` ${list[0]?.designName}` : ""} colourways?</span>
+              <button type="button" className="rounded-full bg-[hsl(var(--ax-accent))] px-3 py-1.5 text-[12px] font-semibold text-[hsl(var(--ax-on-accent))]" disabled={decideMany.isPending}
+                onClick={() => {
+                  const ids = list.map((i) => i.id);
+                  decideMany.mutate({ ids, decision: "approve" }, {
+                    onSuccess: (n) => toast.success(`${n} approved — press Sync to put them on Shopify`),
+                    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't approve them all"),
+                  });
+                  setConfirmAll(false);
+                }}>Yes, approve all</button>
+              <button type="button" className="rounded-full px-3 py-1.5 text-[12px] text-[hsl(var(--ax-secondary))]" onClick={() => setConfirmAll(false)}>Cancel</button>
+            </>
+          ) : (
+            <button type="button" className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--ax-border))] px-3 py-1.5 text-[12px] font-semibold hover:border-[hsl(var(--ax-accent)/0.5)]" onClick={() => setConfirmAll(true)}>
+              <Check className="h-3.5 w-3.5" />Approve all {list.length}{design !== "all" ? ` in ${list[0]?.designName}` : ""}
+            </button>
+          )}
+        </div>
+      )}
 
       {designs.length > 1 && (
         <div className="mb-5 flex flex-wrap gap-2">

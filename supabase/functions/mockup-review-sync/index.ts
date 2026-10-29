@@ -1,6 +1,9 @@
 // Mockup review -> Shopify. Pushes ONE design's decisions to its Shopify product.
 //
-// POST { design_code, product_type?, price?, sku_prefix? }
+// POST { lookup: "collections", query? }  -> { collections: [{ id, title, count }] }
+// POST { design_code, product_type?, price?, sku_prefix?, title?, tags?, collection_id?, new_collection_title? }
+//   title/tags apply to a NEW product (tags are also added to an existing one);
+//   collection_id (or new_collection_title, created on the spot) files the product.
 //   The optional fields come from Placement Studio (the blank's garment type,
 //   the price typed there, AX + style number). Without them: Tee / $45 / AX7010.
 //   approved  -> colour is on the product (variants S..3XL created if missing,
@@ -47,6 +50,23 @@ Deno.serve(async (req) => {
   if (opErr || isOp !== true) return json({ error: "AX team only" }, 403);
 
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
+
+  // ------------------------------------------------------------- lookups
+  if (body.lookup === "collections") {
+    const adminL = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: orgL } = await adminL.from("organizations").select("shopify_shop_domain, shopify_access_token").eq("id", "2d6f377e-4fe8-448b-84b3-42aed237f3da").maybeSingle();
+    if (!orgL?.shopify_shop_domain || !orgL.shopify_access_token) return json({ error: "Shopify is not connected" }, 400);
+    const q = typeof body.query === "string" ? body.query.replace(/["\\]/g, "").slice(0, 60) : "";
+    const res = await fetch(`https://${orgL.shopify_shop_domain}/admin/api/${API}/graphql.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": orgL.shopify_access_token },
+      body: JSON.stringify({ query: `query c($q: String) { collections(first: 100, query: $q, sortKey: TITLE) { nodes { id title productsCount { count } } } }`, variables: { q: q ? `title:*${q}*` : null } }),
+    });
+    const out = await res.json();
+    if (!res.ok || out.errors) return json({ error: `Shopify: ${JSON.stringify(out.errors ?? out).slice(0, 200)}` }, 502);
+    return json({ collections: (out.data.collections.nodes as Array<{ id: string; title: string; productsCount?: { count: number } }>).map((c) => ({ id: c.id, title: c.title, count: c.productsCount?.count ?? 0 })) });
+  }
+
   const designCode = String(body.design_code ?? "").trim();
   if (!designCode) return json({ error: "design_code required" }, 400);
   const clean = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[^\w .&'-]/g, "").trim().slice(0, max) : "");
@@ -54,6 +74,10 @@ Deno.serve(async (req) => {
   const priceIn = Number(body.price);
   const newPrice = Number.isFinite(priceIn) && priceIn > 0 && priceIn < 10000 ? priceIn.toFixed(2) : DEFAULT_PRICE;
   const skuPrefix = clean(body.sku_prefix, 16).replace(/[^A-Za-z0-9]/g, "") || "AX7010";
+  const titleIn = typeof body.title === "string" ? body.title.trim().slice(0, 200) : "";
+  const extraTags = Array.isArray(body.tags) ? (body.tags as unknown[]).map((t) => clean(t, 60)).filter(Boolean).slice(0, 20) : [];
+  const collectionIn = typeof body.collection_id === "string" && body.collection_id.startsWith("gid://shopify/Collection/") ? body.collection_id : null;
+  const newCollectionTitle = typeof body.new_collection_title === "string" ? body.new_collection_title.trim().slice(0, 120) : "";
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: rowsData, error: rErr } = await admin.from("mockup_reviews").select("*").eq("design_code", designCode);
@@ -131,16 +155,34 @@ Deno.serve(async (req) => {
     }
   };
 
+  // File the product in a collection (making the collection first if asked).
+  const fileInCollection = async (): Promise<{ id: string; title: string } | null> => {
+    let id = collectionIn;
+    let title = "";
+    if (!id && newCollectionTitle) {
+      const c = await gql(`mutation c($input: CollectionInput!) { collectionCreate(input: $input) { collection { id title } userErrors { message } } }`, { input: { title: newCollectionTitle } });
+      userErrors(c.collectionCreate);
+      id = c.collectionCreate.collection.id as string;
+      title = c.collectionCreate.collection.title as string;
+    }
+    if (!id) return null;
+    const a = await gql(`mutation a($id: ID!, $ids: [ID!]!) { collectionAddProducts(id: $id, productIds: $ids) { collection { title } userErrors { message } } }`, { id, ids: [productGid] });
+    const errs = (a.collectionAddProducts?.userErrors ?? []) as Array<{ message: string }>;
+    // Already in the collection is fine.
+    if (errs.length && !errs.every((e) => /already/i.test(e.message))) throw new Error(errs.map((e) => e.message).join("; "));
+    return { id, title: title || (a.collectionAddProducts?.collection?.title ?? "") };
+  };
+
   try {
     // ---------------------------------------------------------------- create
     if (!productGid) {
       if (!approved.length) return json({ design_code: designCode, added, removed, note: "Nothing approved yet" });
-      const title = rows[0].product_title ?? `${rows[0].design_name} Tee`;
+      const title = titleIn || rows[0].product_title || `${rows[0].design_name} ${productType}`;
       const colors = approved.map((r) => r.color);
       const d = await gql(`mutation s($input: ProductSetInput!) { productSet(input: $input, synchronous: true) { product { id } userErrors { message } } }`, {
         input: {
           title, status: "DRAFT", vendor: "Athlete Xclusive", productType,
-          tags: ["Athlete Xclusive", "Streetwear", productType, rows[0].design_name],
+          tags: [...new Set(["Athlete Xclusive", "Streetwear", productType, rows[0].design_name, ...extraTags])],
           productOptions: [{ name: "Color", values: colors.map((name) => ({ name })) }, { name: "Size", values: DEFAULT_SIZES.map((name) => ({ name })) }],
           variants: colors.flatMap((c) => DEFAULT_SIZES.map((sz) => ({
             optionValues: [{ optionName: "Color", name: c }, { optionName: "Size", name: sz }],
@@ -154,7 +196,8 @@ Deno.serve(async (req) => {
       await attachPhotos(title, colors);
       added.push(...colors);
       await mark(colors, "on");
-      return json({ design_code: designCode, product_gid: productGid, added, removed });
+      const collection = await fileInCollection();
+      return json({ design_code: designCode, product_gid: productGid, title, created: true, collection, added, removed });
     }
 
     // -------------------------------------------------------------- existing
@@ -198,7 +241,12 @@ Deno.serve(async (req) => {
 
     await mark([...added, ...alreadyOn], "on");
     await mark([...removed, ...alreadyOff], "off");
-    return json({ design_code: designCode, product_gid: productGid, added, removed });
+    if (extraTags.length) {
+      const tg = await gql(`mutation t($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { userErrors { message } } }`, { id: productGid, tags: extraTags });
+      userErrors(tg.tagsAdd);
+    }
+    const collection = await fileInCollection();
+    return json({ design_code: designCode, product_gid: productGid, title, created: false, collection, added, removed });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await admin.from("mockup_reviews").update({ sync_error: msg.slice(0, 500), updated_at: new Date().toISOString() }).eq("design_code", designCode);

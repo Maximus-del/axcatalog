@@ -195,6 +195,32 @@ export function useMockupDecision() {
   });
 }
 
+/** Approve (or drop) many colourways at once — "Approve all" in the review queue. */
+export function useMockupDecisionMany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { ids: string[]; decision: MockupDecision }) => {
+      const failed: string[] = [];
+      for (let i = 0; i < input.ids.length; i += 8) {
+        const chunk = input.ids.slice(i, i + 8);
+        const res = await Promise.all(chunk.map((id) => supabase.rpc("ax_mockup_review" as never, { _id: id, _decision: input.decision, _note: null } as never)));
+        res.forEach((r, j) => { if (r.error) failed.push(chunk[j]); });
+      }
+      if (failed.length) throw new Error(`${failed.length} of ${input.ids.length} didn't save — try again.`);
+      return input.ids.length;
+    },
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: KEY });
+      const before = qc.getQueryData<MockupItem[]>(KEY);
+      const ids = new Set(input.ids);
+      qc.setQueryData<MockupItem[]>(KEY, (list) => (list ?? []).map((i) => (ids.has(i.id) ? { ...i, state: STATE_OF[input.decision], reviewedAt: new Date().toISOString() } : i)));
+      return { before };
+    },
+    onError: (_e, _input, ctx) => { if (ctx?.before) qc.setQueryData(KEY, ctx.before); },
+    onSettled: () => { void qc.invalidateQueries({ queryKey: KEY }); },
+  });
+}
+
 export interface SyncResult {
   design_code: string;
   product_gid?: string;

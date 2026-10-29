@@ -8,6 +8,8 @@ import { useBlanks, useEntities } from "@/lib/v2/data";
 import { studioCode, type ArtItem } from "@/lib/v2/art-library";
 import { MOCKUP_REVIEW_KEY } from "@/lib/v2/mockup-review";
 import { ArtLibraryPanel } from "@/components/admin-v2/ArtLibraryPanel";
+import { ShopifyPublishDialog, type PublishPlan } from "@/components/admin-v2/ShopifyPublishDialog";
+import { linkProductToClient } from "@/lib/v2/studio-shopify";
 import { corsSafeUrl, loadImage, downloadBlob } from "@/lib/v2/mockup-export";
 import {
   BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, hasWhiteSheet, heightForArt, knockOutWhite, mockupFilename, moveBy, normalizeDeg, oversize, presetRect, referenceFilename, resizeBy, toPreset,
@@ -114,6 +116,28 @@ function useSavedPresets() {
   });
 }
 
+const CALIB_KEY = ["v2", "studio", "blank-calibrations"] as const;
+
+/** Saved collar / body-edge positions per blank + side. */
+function useBlankCalibrations() {
+  return useQuery({
+    queryKey: CALIB_KEY,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase.from("studio_blank_calibrations" as never).select("*");
+      if (error) return new Map<string, Calibration>(); // table not there yet -> defaults
+      const m = new Map<string, Calibration>();
+      for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+        m.set(`${r.blank_style}|${r.view}`, {
+          collarX: Number(r.collar_x ?? 0.5), collarY: Number(r.collar_y), chestLeft: Number(r.chest_left),
+          chestRight: Number(r.chest_right), chestWidthIn: Number(r.chest_width_in),
+        });
+      }
+      return m;
+    },
+  });
+}
+
 export default function V2PlacementStudio() {
   const blanks = useBlanks();
   const saved = useSavedPresets();
@@ -134,13 +158,16 @@ export default function V2PlacementStudio() {
   const [saving, setSaving] = useState<string | null>(null);
   const [price, setPrice] = useState("45");
   const [viaReview, setViaReview] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState<string | null>(null);
+  /** Colours unticked in the every-colour strip: not saved, not downloaded, not on Shopify. */
+  const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
   const [showGuides, setShowGuides] = useState(true);
   const [everyColour, setEveryColour] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const artRef = useRef<HTMLInputElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
-  const drag = useRef<{ mode: "move" | "resize"; x: number; y: number; start: Preset } | null>(null);
+  const drag = useRef<{ mode: "move" | "resize" | "collar"; x: number; y: number; start: Preset; startCollarY?: number } | null>(null);
 
   // The side being edited, plus setters that write to it.
   const side = sides[view];
@@ -168,7 +195,20 @@ export default function V2PlacementStudio() {
   }, [colors, colorId]);
   const color = colors.find((c) => c.id === colorId) ?? null;
   const photo = ownImage ?? (color ? (view === "back" ? color.imageUrlBack ?? color.imageUrl : color.imageUrl) : null);
+  useEffect(() => { setExcluded(new Set()); }, [blankId]);
+  const toggleColour = (id: string) => setExcluded((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const blankName = blank ? [blank.brand, blank.styleNumber].filter(Boolean).join(" ") || blank.displayName || blank.name : "Any tee";
+
+  // Each blank remembers where its collar / body edges are (saved once, used by every design).
+  const calibrations = useBlankCalibrations();
+  useEffect(() => {
+    if (!calibrations.data) return;
+    setSides((all) => {
+      const next = { ...all };
+      for (const v of ["front", "back"] as const) next[v] = { ...all[v], calib: calibrations.data!.get(`${blankName}|${v}`) ?? defaultCalibration(v) };
+      return next;
+    });
+  }, [blankName, calibrations.data]);
 
   const presets = useMemo(() => {
     const mine = (saved.data ?? []).filter((p) => p.view === view && (p.blankStyle === blankName || p.blankStyle === "Any tee"));
@@ -242,11 +282,11 @@ export default function V2PlacementStudio() {
 
   // Canvas dragging: body moves the print, corner handle resizes it.
   const toImage = () => { const rect = svgRef.current?.getBoundingClientRect(); return rect && rect.width ? W / rect.width : 1; };
-  const startDrag = (mode: "move" | "resize") => (e: ReactPointerEvent) => {
+  const startDrag = (mode: "move" | "resize" | "collar") => (e: ReactPointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
     svgRef.current?.setPointerCapture(e.pointerId);
-    drag.current = { mode, x: e.clientX, y: e.clientY, start: box };
+    drag.current = { mode, x: e.clientX, y: e.clientY, start: box, startCollarY: calib.collarY };
   };
   const onDrag = (e: ReactPointerEvent) => {
     const d = drag.current;
@@ -254,6 +294,11 @@ export default function V2PlacementStudio() {
     const k = toImage();
     const dx = (e.clientX - d.x) * k;
     const dy = (e.clientY - d.y) * k;
+    if (d.mode === "collar") {
+      // Up / down only: the collar is the 0" line every placement measures from.
+      setCalib((c) => ({ ...c, collarY: clamp((d.startCollarY ?? c.collarY) + dy / H, 0.02, 0.6) }));
+      return;
+    }
     setBox({ ...(d.mode === "move" ? moveBy(d.start, dx, dy, ppi) : resizeBy(d.start, dx, dy, ppi, art?.aspect ?? null)), builtIn: false });
   };
   const endDrag = () => { drag.current = null; };
@@ -268,6 +313,22 @@ export default function V2PlacementStudio() {
     e.preventDefault();
     setBox((b) => ({ ...moveBy(b, v[0], v[1], ppi), builtIn: false }));
   };
+
+  const savedCalib = calibrations.data?.get(`${blankName}|${view}`) ?? null;
+  // "Moved" = differs from what's saved for this blank (or from the starting guess when nothing is saved yet).
+  const calibBase = savedCalib ?? defaultCalibration(view);
+  const calibDirty = (["collarX", "collarY", "chestLeft", "chestRight", "chestWidthIn"] as const).some((k) => Math.abs(calibBase[k] - calib[k]) > 0.0005);
+  const saveCalib = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("studio_blank_calibrations" as never).upsert({
+        blank_style: blankName, view, collar_x: calib.collarX, collar_y: calib.collarY, chest_left: calib.chestLeft,
+        chest_right: calib.chestRight, chest_width_in: calib.chestWidthIn, updated_at: new Date().toISOString(),
+      } as never, { onConflict: "blank_style,view" });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => { toast.success(`Collar + guides saved for ${blankName} (${view})`); void qc.invalidateQueries({ queryKey: CALIB_KEY }); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't save the guides"),
+  });
 
   const savePreset = useMutation({
     mutationFn: async () => {
@@ -392,86 +453,208 @@ export default function V2PlacementStudio() {
   const saveColours = useMemo(() => {
     const all = blank?.colors ?? [];
     const usable = all.filter((c) => sidesWithArt.every((v) => garmentOf(c, v)));
-    return everyColour ? usable : usable.filter((c) => c.id === colorId);
+    return everyColour ? usable.filter((c) => !excluded.has(c.id)) : usable.filter((c) => c.id === colorId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blank, everyColour, colorId, sides]);
-  const code = client && productName.trim() ? studioCode(client.slug || client.name, productName) : null;
+  }, [blank, everyColour, colorId, sides, excluded]);
+  const codeFor = (name: string) => (client && name.trim() ? studioCode(client.slug || client.name, name) : null);
+  const code = codeFor(productName);
 
-  const saveMockups = async () => {
-    if (!client || !code || !sidesWithArt.length || !saveColours.length) return;
-    const total = saveColours.length;
+  /**
+   * Render + store the ticked colours and record them. Unticked colours that were
+   * saved before are archived, so they come off Shopify on the next sync.
+   * Returns false when nothing was saved.
+   */
+  type Colour = NonNullable<typeof blank>["colors"][number];
+  /** Everything one mockup set needs to render + save, independent of what's on screen. */
+  interface SetJob {
+    clientId: string; name: string; blankName: string; productType: string; skuPrefix: string;
+    sides: Record<View, Side>; colours: Colour[]; droppedNames: string[];
+  }
+
+  /** The set on screen right now. */
+  const currentJob = (name = productName): SetJob | null =>
+    client && name.trim() && sidesWithArt.length && saveColours.length
+      ? {
+          clientId: client.id, name: name.trim(), blankName, productType, skuPrefix,
+          sides: { front: { ...sides.front }, back: { ...sides.back } }, colours: [...saveColours],
+          droppedNames: everyColour ? (blank?.colors ?? []).filter((c) => excluded.has(c.id)).map((c) => c.name) : [],
+        }
+      : null;
+
+  /**
+   * Render + store a set's colours and record them. Unticked colours that were
+   * saved before are archived, so they come off Shopify on the next sync.
+   * Returns the product code, or null when nothing was saved.
+   */
+  const saveSet = async (job: SetJob, approved: boolean, progress: (s: string) => void): Promise<string | null> => {
+    const ent = (entities.data ?? []).find((e) => e.id === job.clientId);
+    const code = ent ? studioCode(ent.slug || ent.name, job.name) : null;
+    const withArt = (["front", "back"] as const).filter((v) => job.sides[v].arts[job.sides[v].idx]);
+    if (!code || !withArt.length || !job.colours.length) return null;
     const rows: Record<string, unknown>[] = [];
     let n = 0;
-    try {
-      for (const c of saveColours) {
-        setSaving(`${++n} / ${total}`);
-        const urls: Partial<Record<View, string>> = {};
-        for (const v of sidesWithArt) {
-          const sd = sides[v];
-          const blob = await renderMockup(garmentOf(c, v)!, sd.arts[sd.idx], sd);
-          const path = `${client.id}/${code}/${c.name.replace(/[^A-Za-z0-9]+/g, "-")}-${v}-${Date.now()}.png`;
-          const up = await supabase.storage.from("studio-mockups").upload(path, blob, { contentType: "image/png", upsert: true });
-          if (up.error) throw up.error;
-          urls[v] = supabase.storage.from("studio-mockups").getPublicUrl(path).data.publicUrl;
-        }
-        rows.push({
-          athlete_id: client.id, design_code: code, design_name: productName.trim(), product_title: productName.trim(),
-          garment: blankName, blank_style: blankName, color: c.name,
-          front_url: urls.front ?? null, back_url: urls.back ?? null, front_drive_id: null, back_drive_id: null,
-          // Straight to approved unless it should go through Mockup Review first.
-          review_state: viaReview ? "pending" : "approved", review_note: null, reviewed_at: viaReview ? null : new Date().toISOString(), reviewed_by: null, updated_at: new Date().toISOString(),
-        });
+    for (const c of job.colours) {
+      progress(`${job.name}: ${++n} / ${job.colours.length}`);
+      const urls: Partial<Record<View, string>> = {};
+      for (const v of withArt) {
+        const sd = job.sides[v];
+        const g = garmentOf(c, v);
+        if (!g) continue;
+        const blob = await renderMockup(g, sd.arts[sd.idx], sd);
+        const path = `${job.clientId}/${code}/${c.name.replace(/[^A-Za-z0-9]+/g, "-")}-${v}-${Date.now()}.png`;
+        const up = await supabase.storage.from("studio-mockups").upload(path, blob, { contentType: "image/png", upsert: true });
+        if (up.error) throw up.error;
+        urls[v] = supabase.storage.from("studio-mockups").getPublicUrl(path).data.publicUrl;
       }
-      const { error } = await supabase.from("mockup_reviews" as never).upsert(rows as never, { onConflict: "design_code,garment,color" });
-      if (error) throw error;
-      void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
-      toast.success(`${rows.length} mockup${rows.length === 1 ? "" : "s"} of ${productName.trim()} saved${viaReview ? " for review" : ""}`, {
-        action: { label: "Open", onClick: () => { window.location.href = openHref; } },
+      rows.push({
+        athlete_id: job.clientId, design_code: code, design_name: job.name, product_title: job.name,
+        garment: job.blankName, blank_style: job.blankName, color: c.name,
+        front_url: urls.front ?? null, back_url: urls.back ?? null, front_drive_id: null, back_drive_id: null,
+        // Straight to approved unless it should go through Mockup Review first.
+        review_state: approved ? "approved" : "pending", review_note: null, reviewed_at: approved ? new Date().toISOString() : null, reviewed_by: null, updated_at: new Date().toISOString(),
       });
+    }
+    const { error } = await supabase.from("mockup_reviews" as never).upsert(rows as never, { onConflict: "design_code,garment,color" });
+    if (error) throw error;
+    if (job.droppedNames.length) {
+      await supabase.from("mockup_reviews" as never).update({ review_state: "archived", review_note: "Unticked in Placement Studio", updated_at: new Date().toISOString() } as never)
+        .eq("design_code", code).eq("garment", job.blankName).in("color", job.droppedNames).neq("review_state", "archived");
+    }
+    void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
+    return code;
+  };
+
+  /** "Save mockups" for the set on screen. */
+  const saveMockups = async (opts: { name?: string; approved?: boolean } = {}): Promise<boolean> => {
+    const job = currentJob(opts.name);
+    if (!job) return false;
+    const approved = opts.approved ?? !viaReview;
+    try {
+      const saved = await saveSet(job, approved, setSaving);
+      if (!saved) return false;
+      toast.success(`${job.colours.length} mockup${job.colours.length === 1 ? "" : "s"} of ${job.name} saved${approved ? "" : " for review"}`, {
+        action: { label: "Open", onClick: () => { window.location.href = `/admin-v2/mockups-review?design=${encodeURIComponent(saved)}&tab=${approved ? "approved" : "pending"}`; } },
+      });
+      return true;
     } catch (e) {
-      toast.error(`Stopped after ${rows.length}: ${e instanceof Error ? e.message : "could not save"}`);
+      toast.error(e instanceof Error ? e.message : "Could not save");
+      return false;
     } finally {
       setSaving(null);
+    }
+  };
+
+  // ------------------------------------------------ batch: several sets, one save
+  interface BatchItem extends SetJob { id: string; aspect: number; code: string | null; status: "ready" | "saving" | "saved" | "error"; error?: string }
+  const [batch, setBatch] = useState<BatchItem[]>([]);
+  const [batchSaving, setBatchSaving] = useState<string | null>(null);
+  const [publishTarget, setPublishTarget] = useState<BatchItem | null>(null);
+
+  const addToBatch = () => {
+    const job = currentJob();
+    if (!job) { toast.error("Pick a client, name the product, add art and at least one colour first."); return; }
+    const clash = batch.find((b) => b.name.toLowerCase() === job.name.toLowerCase() && b.blankName === job.blankName && b.colours.some((c) => job.colours.some((x) => x.name === c.name)));
+    if (clash) { toast.error(`"${job.name}" on ${job.blankName} is already in the batch with some of the same colours — give this one its own name (e.g. "${job.name} — All Red").`); return; }
+    setBatch((list) => [...list, { ...job, id: `${Date.now()}`, aspect, code: null, status: "ready" }]);
+    toast.success(`Added "${job.name}" (${job.colours.length} colour${job.colours.length === 1 ? "" : "s"}) — swap the art or blank for the next one`);
+  };
+  const loadFromBatch = (item: BatchItem) => {
+    const b = list.find((x) => x.name === item.blankName || [x.brand, x.styleNumber].filter(Boolean).join(" ") === item.blankName);
+    if (b) setBlankId(b.id);
+    setSides({ front: { ...item.sides.front }, back: { ...item.sides.back } });
+    setProductName(item.name);
+    pickClient(item.clientId);
+    setBatch((all) => all.filter((x) => x.id !== item.id));
+    toast.message(`"${item.name}" is back on the canvas — add it to the batch again when it's right`);
+  };
+  const saveBatch = async () => {
+    const todo = batch.filter((b) => b.status !== "saved");
+    if (!todo.length) return;
+    let done = 0;
+    for (const item of todo) {
+      setBatch((all) => all.map((x) => (x.id === item.id ? { ...x, status: "saving" } : x)));
+      try {
+        const saved = await saveSet(item, !viaReview, setBatchSaving);
+        setBatch((all) => all.map((x) => (x.id === item.id ? { ...x, status: saved ? "saved" : "error", code: saved, error: saved ? undefined : "Nothing to save" } : x)));
+        if (saved) done++;
+      } catch (e) {
+        setBatch((all) => all.map((x) => (x.id === item.id ? { ...x, status: "error", error: e instanceof Error ? e.message : "Couldn't save" } : x)));
+      }
+    }
+    setBatchSaving(null);
+    toast.success(`${done} of ${todo.length} set${todo.length === 1 ? "" : "s"} saved — now add each to Shopify`);
+  };
+
+  const invokeSync = async (body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("mockup-review-sync", { body });
+    if (error) {
+      const ctx = (error as { context?: Response }).context;
+      const b = ctx ? await ctx.json().catch(() => null) : null;
+      throw new Error(b?.error ?? error.message);
+    }
+    const r = data as { added?: string[]; removed?: string[]; note?: string; error?: string; product_gid?: string; title?: string; created?: boolean; collection?: { title: string } | null };
+    if (r.error) throw new Error(r.error);
+    return r;
+  };
+
+  /**
+   * The last step for one set (on screen, or a batch item): save its colours,
+   * then create / update the Shopify product, collection and tags.
+   */
+  const publish = async (plan: PublishPlan) => {
+    const target = publishTarget;
+    const name = plan.target.kind === "new" ? plan.target.title : plan.target.product.title;
+    const base = target ? { ...target, name } : currentJob(name);
+    const ent = (entities.data ?? []).find((e) => e.id === (target?.clientId ?? clientId));
+    if (!base || !ent) { toast.error("Pick a client and add art + colours first."); return; }
+    const job: SetJob = { ...base, clientId: ent.id, name };
+    try {
+      setPublishing("Saving mockups…");
+      if (!target && name !== productName) setProductName(name);
+      const pCode = await saveSet(job, true, setPublishing);
+      if (!pCode) { toast.error("Nothing to save — add art and tick at least one colour."); return; }
+      if (target) setBatch((all) => all.map((x) => (x.id === target.id ? { ...x, status: "saved", code: pCode, name, clientId: ent.id } : x)));
+      if (plan.target.kind === "existing") {
+        await supabase.from("mockup_reviews" as never).update({ shopify_product_gid: plan.target.product.shopifyGid, product_title: name } as never).eq("design_code", pCode);
+      }
+      setPublishing("Sending to Shopify…");
+      const r = await invokeSync({
+        design_code: pCode, product_type: job.productType, price: plan.price.toFixed(2), sku_prefix: job.skuPrefix,
+        title: plan.target.kind === "new" ? name : undefined, tags: plan.tags,
+        collection_id: plan.collection.kind === "existing" ? plan.collection.id : undefined,
+        new_collection_title: plan.collection.kind === "new" ? plan.collection.title : undefined,
+      });
+      if (r.created && r.product_gid) {
+        setPublishing("Linking to the client…");
+        await linkProductToClient({ shopifyGid: r.product_gid, title: r.title ?? name, clientId: ent.id, price: plan.price, colors: job.colours.map((c) => c.name) });
+      }
+      void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
+      void qc.invalidateQueries({ queryKey: ["v2", "studio", "client-products", ent.id] });
+      void qc.invalidateQueries({ queryKey: ["v2", "studio", "shopify-collections"] });
+      setPublishOpen(false);
+      setPublishTarget(null);
+      toast.success(
+        `${name}: ${r.created ? "created on Shopify (draft)" : "updated on Shopify"} · ${r.added?.length ?? 0} colour${r.added?.length === 1 ? "" : "s"} added${r.removed?.length ? ` · ${r.removed.length} removed` : ""}${r.collection ? ` · in ${r.collection.title}` : ""}`,
+        { duration: 8000 },
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Shopify didn't take it");
+    } finally {
+      setPublishing(null);
     }
   };
   const openHref = code ? `/admin-v2/mockups-review?design=${encodeURIComponent(code)}&tab=${viaReview ? "pending" : "approved"}` : "/admin-v2/mockups-review";
   const productType = blank ? (blank.garmentType || "tee").replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Tee";
   const skuPrefix = blank ? `AX${(blank.styleNumber ?? blank.name ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase().slice(0, 10)}` : "AX";
 
-  /** The saved, approved colours of this product -> a Shopify DRAFT (or added to the existing product). */
-  const createShopifyProduct = async () => {
-    if (!code) return;
-    const amount = Number(price);
-    if (!(amount > 0)) { toast.error("Set a price first"); return; }
-    setCreating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("mockup-review-sync", {
-        body: { design_code: code, product_type: productType, price: amount.toFixed(2), sku_prefix: skuPrefix },
-      });
-      if (error) {
-        const ctx = (error as { context?: Response }).context;
-        const body = ctx ? await ctx.json().catch(() => null) : null;
-        throw new Error(body?.error ?? error.message);
-      }
-      const r = data as { added?: string[]; removed?: string[]; note?: string; product_gid?: string };
-      void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
-      if (r.note) toast.message(r.note === "Nothing approved yet" ? "Save the mockups first (or approve them in Mockup Review)." : r.note);
-      else toast.success(`${productName.trim()}: ${r.added?.length ?? 0} colour${r.added?.length === 1 ? "" : "s"} on Shopify (draft)${r.removed?.length ? `, ${r.removed.length} removed` : ""}`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Shopify didn't take it");
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const mockupJobs = useMemo(() => {
     if (!arts.length) return [] as Array<{ art: Art; colour: string; url: string }>;
     const targets = everyColour
-      ? colors.map((c) => ({ colour: c.name, url: garmentOf(c) })).filter((t): t is { colour: string; url: string } => !!t.url)
+      ? colors.filter((c) => !excluded.has(c.id)).map((c) => ({ colour: c.name, url: garmentOf(c) })).filter((t): t is { colour: string; url: string } => !!t.url)
       : photo ? [{ colour: ownImage ? "Custom" : color?.name ?? "Colour", url: photo }] : [];
     return arts.flatMap((a) => targets.map((t) => ({ art: a, ...t })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arts, everyColour, colors, photo, ownImage, color, view]);
+  }, [arts, everyColour, colors, photo, ownImage, color, view, excluded]);
 
   const exportMockups = async () => {
     if (!mockupJobs.length) return;
@@ -525,7 +708,6 @@ export default function V2PlacementStudio() {
                 <line x1={calib.chestLeft * W} x2={calib.chestLeft * W} y1={0} y2={H} stroke="#2563eb" strokeOpacity="0.35" strokeDasharray="6 6" strokeWidth="2" />
                 <line x1={calib.chestRight * W} x2={calib.chestRight * W} y1={0} y2={H} stroke="#2563eb" strokeOpacity="0.35" strokeDasharray="6 6" strokeWidth="2" />
                 <line x1={calib.collarX * W} x2={calib.collarX * W} y1={calib.collarY * H - 14} y2={H} stroke="#000" strokeOpacity="0.2" strokeWidth="1.5" />
-                <circle cx={calib.collarX * W} cy={calib.collarY * H} r="6" fill={ACCENT} />
                 {/* inch grid */}
                 {Array.from({ length: Math.max(0, Math.floor(box.widthIn) ) }, (_, i) => i + 1).filter((i) => i < box.widthIn).map((i) => (
                   <line key={`v${i}`} x1={r.x + i * ppi} x2={r.x + i * ppi} y1={r.y} y2={r.y + r.h} stroke={ACCENT} strokeOpacity="0.35" strokeWidth="1" />
@@ -539,20 +721,37 @@ export default function V2PlacementStudio() {
                   style={{ cursor: "move" }} onPointerDown={startDrag("move")} />
                 <rect x={r.x + r.w - 11} y={r.y + r.h - 11} width="22" height="22" rx="4" fill="#fff" stroke={ACCENT} strokeWidth="3" style={{ cursor: "nwse-resize" }} onPointerDown={startDrag("resize")} />
                 </g>
+                {/* collar point: drag up / down to sit it on the collar seam of this blank */}
+                <g style={{ cursor: "ns-resize" }} onPointerDown={startDrag("collar")}>
+                  <line x1={calib.collarX * W - 40} x2={calib.collarX * W + 40} y1={calib.collarY * H} y2={calib.collarY * H} stroke={ACCENT} strokeOpacity="0.7" strokeWidth="2" strokeDasharray="4 4" />
+                  <circle cx={calib.collarX * W} cy={calib.collarY * H} r="18" fill="transparent" />
+                  <circle cx={calib.collarX * W} cy={calib.collarY * H} r="8" fill={ACCENT} stroke="#fff" strokeWidth="3" />
+                </g>
                 <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT} style={{ pointerEvents: "none" }}>{box.widthIn} × {box.heightIn} in · {box.topIn} in below collar{rotation ? ` · ${rotation}°` : ""}</text>
               </svg>
             </div>
             {everyColour && colors.length > 0 && (
               <div className="mx-auto mt-3 max-w-[760px]">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">Every colour · click one to check it up close</p>
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">Every colour · {colors.length - colors.filter((c) => excluded.has(c.id)).length} of {colors.length} in</p>
+                  <span className="text-[11px] text-[hsl(var(--ax-faint))]">Click to check up close · untick the ones that don't look right</span>
+                  <span className="ml-auto flex gap-2 text-[11px]">
+                    <button type="button" className="underline-offset-2 hover:underline" onClick={() => setExcluded(new Set())}>All in</button>
+                    <button type="button" className="underline-offset-2 hover:underline" onClick={() => setExcluded(new Set(colors.map((c) => c.id)))}>None</button>
+                  </span>
+                </div>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {colors.map((c) => {
                     const g = garmentOf(c);
                     const a = art ? artRect(r, art.aspect) : null;
                     const on = !ownImage && c.id === colorId;
+                    const out = excluded.has(c.id);
                     return (
-                      <button key={c.id} type="button" onClick={() => { setColorId(c.id); setOwnImage(null); }} title={c.name}
-                        className={`w-[92px] shrink-0 overflow-hidden rounded-lg border-2 bg-[#f3f3f1] text-left ${on ? "border-[#03AC13]" : "border-transparent hover:border-[hsl(var(--ax-border))]"}`}>
+                      <div key={c.id} className={`relative w-[92px] shrink-0 overflow-hidden rounded-lg border-2 bg-[#f3f3f1] ${on ? "border-[#03AC13]" : "border-transparent hover:border-[hsl(var(--ax-border))]"} ${out ? "opacity-40" : ""}`}>
+                      <label className="absolute right-1 top-1 z-10 grid h-5 w-5 cursor-pointer place-items-center rounded bg-white/90 shadow" title={out ? `Put ${c.name} back in` : `Leave ${c.name} out`}>
+                        <input type="checkbox" className="h-3.5 w-3.5 accent-[#03AC13]" checked={!out} onChange={() => toggleColour(c.id)} aria-label={`Include ${c.name}`} />
+                      </label>
+                      <button type="button" onClick={() => { setColorId(c.id); setOwnImage(null); }} title={c.name} className="block w-full text-left">
                         <span className="relative block w-full" style={{ aspectRatio: String(aspect) }}>
                           {g && <img src={g} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-fill" />}
                           {a && art && (
@@ -561,8 +760,9 @@ export default function V2PlacementStudio() {
                             </svg>
                           )}
                         </span>
-                        <span className="block truncate px-1.5 py-1 text-[10.5px]">{c.name}</span>
+                        <span className={`block truncate px-1.5 py-1 text-[10.5px] ${out ? "line-through" : ""}`}>{c.name}</span>
                       </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -577,10 +777,72 @@ export default function V2PlacementStudio() {
               ))}
               <button type="button" className={`${pill} h-14`} onClick={() => artRef.current?.click()}><ImagePlus className="h-3.5 w-3.5" />{arts.length ? "Add more artwork" : "Add artwork (PNG)"}</button>
               <input ref={artRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { void addArt(e.target.files); e.target.value = ""; }} />
-              <button type="button" className={`${pill} ml-auto`} onClick={() => setShowGuides((g) => !g)}>{showGuides ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{showGuides ? "Hide guides" : "Show guides"}</button>
+              {calibDirty && !ownImage && (
+                <button type="button" className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-[#03AC13] bg-[#03AC13]/10 px-3 py-1.5 text-[12px] font-semibold" disabled={saveCalib.isPending}
+                  onClick={() => saveCalib.mutate()} title="Locks this collar position (and body edges) to this blank, for every design">
+                  <Save className="h-3.5 w-3.5" />{savedCalib ? "Collar moved — save for this blank" : `Save collar for ${blankName}`}
+                </button>
+              )}
+              <button type="button" className={`${pill} ${calibDirty && !ownImage ? "" : "ml-auto"}`} onClick={() => setShowGuides((g) => !g)}>{showGuides ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{showGuides ? "Hide guides" : "Show guides"}</button>
             </div>
-            <p className="mx-auto mt-2 max-w-[760px] text-[11.5px] text-[hsl(var(--ax-faint))]">Drag the print to move it · pull the white corner to size it · arrow keys nudge ⅛ in (Shift = 1 in) · [ and ] rotate 1° (Shift = 15°). Every artwork uses the same placement.</p>
+            <p className="mx-auto mt-2 max-w-[760px] text-[11.5px] text-[hsl(var(--ax-faint))]">Drag the print to move it · pull the white corner to size it · arrow keys nudge ⅛ in (Shift = 1 in) · [ and ] rotate 1° (Shift = 15°) · drag the green dot to the collar. Every artwork uses the same placement.</p>
             <p className="mx-auto mt-2 max-w-[760px] rounded-lg bg-[hsl(var(--ax-ink)/0.04)] px-3 py-2 text-[12.5px]">{line}</p>
+
+            {batch.length > 0 && (
+              <section className="ax-card mx-auto mt-4 max-w-[760px] p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">This batch · {batch.length} set{batch.length === 1 ? "" : "s"} · {batch.reduce((n, b) => n + b.colours.length, 0)} mockups</p>
+                  <button type="button" className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-[#03AC13] px-3.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+                    disabled={!!batchSaving || batch.every((b) => b.status === "saved")} onClick={() => void saveBatch()}>
+                    {batchSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    {batchSaving ? `Saving ${batchSaving}…` : `Save all${viaReview ? " for review" : ""}`}
+                  </button>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {batch.map((b) => {
+                    const ent = (entities.data ?? []).find((e) => e.id === b.clientId);
+                    const withArt = (["front", "back"] as const).filter((v) => b.sides[v].arts[b.sides[v].idx]);
+                    const v0 = withArt[0] ?? "front";
+                    const sd = b.sides[v0];
+                    const bw = 1000, bh = 1000 / b.aspect;
+                    const bArt = sd.arts[sd.idx];
+                    const ar = bArt ? artRect(presetRect(sd.box, sd.calib, bw, bh), bArt.aspect) : null;
+                    return (
+                      <div key={b.id} className="rounded-xl border border-[hsl(var(--ax-border))] p-2.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[13px] font-semibold">{b.name}</span>
+                          <span className="text-[11.5px] text-[hsl(var(--ax-faint))]">{ent?.name ?? "Client"} · {b.blankName} · {withArt.map((v) => (v === "front" ? "Front" : "Back")).join(" + ")} · {b.colours.length} colour{b.colours.length === 1 ? "" : "s"}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${b.status === "saved" ? "bg-[#03AC13]/15 text-[#03AC13]" : b.status === "error" ? "bg-red-500/15 text-red-500" : "bg-[hsl(var(--ax-ink)/0.06)]"}`} title={b.error}>
+                            {b.status === "saved" ? "Saved" : b.status === "saving" ? "Saving…" : b.status === "error" ? "Didn't save" : "Not saved yet"}
+                          </span>
+                          <span className="ml-auto flex gap-1.5">
+                            <button type="button" className={pill} onClick={() => { setPublishTarget(b); setPublishOpen(true); }}><ShoppingBag className="h-3.5 w-3.5" />Add to Shopify…</button>
+                            {b.status !== "saved" && <button type="button" className={pill} onClick={() => loadFromBatch(b)} title="Put this set back on the canvas to change it">Edit</button>}
+                            <button type="button" className={pill} aria-label={`Remove ${b.name} from the batch`} onClick={() => setBatch((all) => all.filter((x) => x.id !== b.id))}><X className="h-3.5 w-3.5" /></button>
+                          </span>
+                        </div>
+                        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
+                          {b.colours.map((c) => {
+                            const g = garmentOf(c, v0);
+                            return (
+                              <span key={c.id} className="relative w-[64px] shrink-0 overflow-hidden rounded-md bg-[#f3f3f1]" title={c.name} style={{ aspectRatio: String(b.aspect) }}>
+                                {g && <img src={g} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-fill" />}
+                                {ar && bArt && (
+                                  <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${bw} ${bh}`} preserveAspectRatio="none" aria-hidden="true">
+                                    <image href={bArt.url} x={ar.x} y={ar.y} width={ar.w} height={ar.h} preserveAspectRatio="none" transform={turn(sd.box.rotationDeg, ar)} />
+                                  </svg>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-[11.5px] text-[hsl(var(--ax-faint))]">Keep going: swap the art (or the blank), tick the colours, and press <b>Add to batch</b> again. Nothing is saved until you press Save all.</p>
+              </section>
+            )}
             {tooBig && <p className="mx-auto mt-2 max-w-[760px] text-[12px] text-[hsl(var(--ax-red))]">Over the {MAX_PRINT.widthIn} × {MAX_PRINT.heightIn} in max print size.</p>}
           </div>
 
@@ -641,7 +903,10 @@ export default function V2PlacementStudio() {
 
             <details className="rounded-lg border border-[hsl(var(--ax-border))] px-3 py-2">
               <summary className="cursor-pointer text-[12px] font-semibold">Line the guides up with this photo</summary>
-              <p className="mt-1 text-[11.5px] text-[hsl(var(--ax-faint))]">Green dot on the collar seam; blue lines on the body edges at the armpits. Set the chest width of the sample.</p>
+              <p className="mt-1 text-[11.5px] text-[hsl(var(--ax-faint))]">Drag the green dot up or down onto the collar seam; blue lines on the body edges at the armpits. Set the chest width of the sample, then save it for this blank.</p>
+              <button type="button" className={`${pill} mt-2`} disabled={saveCalib.isPending || (!calibDirty && !!savedCalib) || !!ownImage} onClick={() => saveCalib.mutate()}>
+                <Save className="h-3.5 w-3.5" />{calibDirty || !savedCalib ? `Save guides for ${blankName} (${view})` : `Saved for ${blankName} (${view})`}
+              </button>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <button type="button" className={pill} onClick={() => fileRef.current?.click()}><Shirt className="h-3.5 w-3.5" />{ownImage ? "Swap shirt photo" : "Use a different shirt photo"}</button>
                 {ownImage && <button type="button" className={pill} onClick={() => setOwnImage(null)}><RotateCcw className="h-3.5 w-3.5" />Back to blank</button>}
@@ -677,12 +942,16 @@ export default function V2PlacementStudio() {
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                   {saving ? `Saving ${saving}…` : `Save ${saveColours.length > 1 ? `${saveColours.length} mockups` : "mockup"}`}
                 </button>
+                <button type="button" className={`${pill} justify-center`} disabled={!code || !sidesWithArt.length || !saveColours.length || !!ownImage} onClick={addToBatch}
+                  title="Keep this set and start the next one (other art, other colours, another blank) — save them all at the end">
+                  <Images className="h-3.5 w-3.5" />Add to batch{batch.length ? ` (${batch.length})` : ""}
+                </button>
                 <label className="flex items-center gap-2 text-[11.5px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={viaReview} onChange={(e) => setViaReview(e.target.checked)} />Send through Mockup Review first</label>
                 <div className="grid grid-cols-2 gap-1.5">
                   <Link to={openHref} className={`${pill} justify-center ${code ? "" : "pointer-events-none opacity-40"}`}><ExternalLink className="h-3.5 w-3.5" />Open mockups</Link>
-                  <button type="button" className={`${pill} justify-center`} disabled={!code || creating} onClick={() => void createShopifyProduct()}
-                    title={`Approved colours → Shopify draft · ${productType} · $${price || "?"} · SKU ${skuPrefix}-…`}>
-                    {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}Create on Shopify
+                  <button type="button" className={`${pill} justify-center`} disabled={!sidesWithArt.length || !saveColours.length || !!ownImage} onClick={() => setPublishOpen(true)}
+                    title="Pick the product, client and collection, then save + send to Shopify in one go">
+                    <ShoppingBag className="h-3.5 w-3.5" />Add to Shopify…
                   </button>
                 </div>
               </div>
@@ -701,6 +970,19 @@ export default function V2PlacementStudio() {
           </aside>
         </div>
       )}
+      <ShopifyPublishDialog
+        open={publishOpen}
+        onClose={() => { setPublishOpen(false); setPublishTarget(null); }}
+        entities={entities.data ?? []}
+        clientId={publishTarget?.clientId ?? clientId}
+        onClientChange={(id) => { if (publishTarget) { setPublishTarget({ ...publishTarget, clientId: id }); setBatch((all) => all.map((x) => (x.id === publishTarget.id ? { ...x, clientId: id } : x))); } else pickClient(id); }}
+        productName={publishTarget?.name ?? productName}
+        price={price}
+        productType={publishTarget?.productType ?? productType}
+        summary={publishTarget ? `${publishTarget.name} · ${publishTarget.colours.length} colour${publishTarget.colours.length === 1 ? "" : "s"} (${publishTarget.colours.slice(0, 6).map((c) => c.name).join(", ")}${publishTarget.colours.length > 6 ? "…" : ""}) · ${publishTarget.blankName}` : `${sidesWithArt.map((v) => (v === "front" ? "Front" : "Back")).join(" + ") || "No art yet"} · ${saveColours.length} colour${saveColours.length === 1 ? "" : "s"}${saveColours.length ? ` (${saveColours.slice(0, 6).map((c) => c.name).join(", ")}${saveColours.length > 6 ? "…" : ""})` : ""} · ${blankName}`}
+        busy={publishing ?? (saving ? `Saving ${saving}…` : null)}
+        onPublish={(plan) => void publish(plan)}
+      />
     </>
   );
 }
