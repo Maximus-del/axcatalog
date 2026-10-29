@@ -38,6 +38,8 @@ export function useSignedUrl(bucket: string | null, path: string | null, expires
 }
 
 export async function getSignedUrl(bucket: string, path: string, expiresIn = 3600) {
+  // "external" rows store a full URL (e.g. a Drive file linked from the art library), not a bucket path.
+  if (bucket === "external") return path;
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
   if (error) {
     console.error("getSignedUrl error", error);

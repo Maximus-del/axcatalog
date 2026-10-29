@@ -66,6 +66,11 @@ export async function loadImage(url: string): Promise<HTMLImageElement> {
   }
 }
 
+/** A URL fetch() can read from this page: hosts without CORS headers go through the image proxy. */
+export function corsSafeUrl(url: string): string {
+  return planFor(url).kind === "proxy" ? proxiedUrl(url, SUPABASE_URL, SUPABASE_ANON_KEY) : url;
+}
+
 /** Artwork lives in a private bucket, so it needs signing before it can be drawn. */
 async function resolveArtworkUrl(design: Design | undefined): Promise<string | null> {
   if (!design) return null;

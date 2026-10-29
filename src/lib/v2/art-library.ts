@@ -6,6 +6,10 @@
 // design_files.metadata.role; files uploaded before roles existed get one
 // inferred from their name (…PRINT-FRONT…, …_BACK…, …LOGO…).
 //
+// Files can be in Supabase storage (uploaded here) or linked from Drive
+// (storage_bucket = 'external', storage_path = the Drive download URL,
+// metadata.drive_file_id) — the Drive library was loaded that way.
+//
 // Mockup renders (design_files.file_type = 'mockup') are pictures OF a
 // product, not art FOR one, so they never appear here.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,7 +38,10 @@ export interface ArtItem {
   path: string;
   fileName: string;
   createdAt: string | null;
+  /** Full-resolution file (signed storage URL, or the Drive download URL). */
   url: string | null;
+  /** Small preview for the grid when one exists (Drive thumbnails). */
+  thumbUrl?: string | null;
 }
 
 /** Role from an explicit tag, else from the file name. */
@@ -89,15 +96,16 @@ async function fetchClientArt(athleteId: string): Promise<ArtItem[]> {
     t("designs").select("id, title").in("id", ids),
     t("design_files")
       .select("id, design_id, file_type, storage_bucket, storage_path, file_name, mime_type, metadata, created_at")
-      .in("design_id", ids)
-      .neq("file_type", "mockup"),
+      .in("design_id", ids),
   ]);
   const titles = new Map(((designs.data ?? []) as unknown as Row[]).map((d) => [String(d.id), String(d.title ?? "Untitled")]));
-  const rows = ((files.data ?? []) as unknown as Row[]).filter((f) => f.storage_bucket && f.storage_path && isImage(f));
+  // A 'mockup' file only counts once someone has tagged it (e.g. old logo PNGs filed as mockups).
+  const tagged = (f: Row) => !!((f.metadata ?? {}) as Record<string, unknown>).role;
+  const rows = ((files.data ?? []) as unknown as Row[]).filter((f) => f.storage_bucket && f.storage_path && isImage(f) && (f.file_type !== "mockup" || tagged(f)));
 
   // Signed URLs in one round trip per bucket (design-files is private).
   const byBucket = new Map<string, string[]>();
-  for (const f of rows) byBucket.set(String(f.storage_bucket), [...(byBucket.get(String(f.storage_bucket)) ?? []), String(f.storage_path)]);
+  for (const f of rows) if (f.storage_bucket !== "external") byBucket.set(String(f.storage_bucket), [...(byBucket.get(String(f.storage_bucket)) ?? []), String(f.storage_path)]);
   const signed = new Map<string, string>();
   for (const [bucket, paths] of byBucket) {
     const { data } = await supabase.storage.from(bucket).createSignedUrls(paths, 60 * 60 * 6);
@@ -114,7 +122,9 @@ async function fetchClientArt(athleteId: string): Promise<ArtItem[]> {
       return {
         fileId: String(f.id), designId: String(f.design_id), designTitle: titles.get(String(f.design_id)) ?? "Untitled",
         role, inferred, bucket, path, fileName: name, createdAt: (f.created_at as string | null) ?? null,
-        url: signed.get(`${bucket}/${path}`) ?? null,
+        // "external" = linked straight from Drive (storage_path is the file's download URL).
+        url: bucket === "external" ? path : signed.get(`${bucket}/${path}`) ?? null,
+        thumbUrl: typeof meta.drive_file_id === "string" ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(meta.drive_file_id)}&sz=w400` : null,
       } satisfies ArtItem;
     })
     .sort((a, b) => a.designTitle.localeCompare(b.designTitle) || a.role.localeCompare(b.role));

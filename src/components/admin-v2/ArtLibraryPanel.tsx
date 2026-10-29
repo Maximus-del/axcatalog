@@ -109,7 +109,7 @@ export function ArtLibraryPanel({
                 <div key={i.fileId} className={`group overflow-hidden rounded-xl border-2 ${on ? "border-[#03AC13]" : "border-transparent"} bg-[hsl(var(--ax-ink)/0.04)]`}>
                   <button type="button" className="block aspect-square w-full bg-[#2b2b2b] bg-[linear-gradient(45deg,#333_25%,transparent_25%),linear-gradient(-45deg,#333_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#333_75%),linear-gradient(-45deg,transparent_75%,#333_75%)] bg-[length:14px_14px] bg-[position:0_0,0_7px,7px_-7px,-7px_0]"
                     title={`${i.designTitle} — ${i.fileName}${pair ? " (brings its back/front too)" : ""}`} onClick={() => i.url ? onPick(i, pair) : toast.error("That file couldn't be opened")}>
-                    {i.url ? <img src={i.url} alt={i.fileName} className="h-full w-full object-contain p-1.5" loading="lazy" /> : null}
+                    {i.url ? <img src={i.thumbUrl ?? i.url} referrerPolicy="no-referrer" alt={i.fileName} className="h-full w-full object-contain p-1.5" loading="lazy" /> : null}
                   </button>
                   <div className="flex items-center gap-1 px-1.5 py-1">
                     <span className="min-w-0 flex-1 truncate text-[11px] font-medium" title={i.designTitle}>{i.designTitle}</span>

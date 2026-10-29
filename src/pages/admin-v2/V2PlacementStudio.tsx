@@ -8,7 +8,7 @@ import { useBlanks, useEntities } from "@/lib/v2/data";
 import { studioCode, type ArtItem } from "@/lib/v2/art-library";
 import { MOCKUP_REVIEW_KEY } from "@/lib/v2/mockup-review";
 import { ArtLibraryPanel } from "@/components/admin-v2/ArtLibraryPanel";
-import { loadImage, downloadBlob } from "@/lib/v2/mockup-export";
+import { corsSafeUrl, loadImage, downloadBlob } from "@/lib/v2/mockup-export";
 import {
   BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, hasWhiteSheet, heightForArt, knockOutWhite, mockupFilename, moveBy, oversize, presetRect, referenceFilename, resizeBy, toPreset,
   type Calibration, type Preset, type View,
@@ -63,7 +63,7 @@ async function prepareArt(file: File, from?: Pick<Art, "fileId" | "designId" | "
 
 /** A library file (signed URL) -> the same Art an upload makes. */
 async function artFromLibrary(item: ArtItem): Promise<Art> {
-  const res = await fetch(item.url!);
+  const res = await fetch(corsSafeUrl(item.url!));
   if (!res.ok) throw new Error(`Could not open ${item.fileName}`);
   const blob = await res.blob();
   return prepareArt(new File([blob], item.fileName, { type: blob.type || "image/png" }), { fileId: item.fileId, designId: item.designId, designTitle: item.designTitle });
