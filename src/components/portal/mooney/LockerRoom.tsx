@@ -44,9 +44,10 @@ function PlaqueDisplay({ destination, index, onOpen, onExplore, priority }: { de
   return <article className="mw-plaque" style={{ "--mw-destination-accent": destination.accent } as CSSProperties}>
     <Button variant="ghost" className="mw-plaque-stage" onClick={onOpen} aria-label={`Preview ${destination.label} collection`} data-count={n}>
       {n === 0 ? <div className="mw-figure-placeholder"><ImageOff className="h-8 w-8" /><span className="text-xs">Artwork coming soon</span></div> : <span className="mw-deck">{art.slice().reverse().map((src, back) => {
-        const i = n - 1 - back; // 0 = top card
+        const i = n - 1 - back; // 0 = first image
+        // The middle of the fan sits on top (three team cards: the centre one leads); ties go to the first image.
         const offset = i - (n - 1) / 2;
-        return <img key={src} className="mw-deck-card" src={src} alt={i === 0 ? `${destination.label} plaque` : ""} loading={priority ? "eager" : "lazy"} onError={() => setFailed((f) => ({ ...f, [src]: true }))} style={{ "--deck-offset": offset, zIndex: n - i } as CSSProperties} />;
+        return <img key={src} className="mw-deck-card" src={src} alt={i === 0 ? `${destination.label} plaque` : ""} loading={priority ? "eager" : "lazy"} onError={() => setFailed((f) => ({ ...f, [src]: true }))} style={{ "--deck-offset": offset, zIndex: Math.round((n - Math.abs(offset)) * 10) - i } as CSSProperties} />;
       })}</span>}
       <span className="mw-pedestal" aria-hidden />
     </Button>

@@ -39,9 +39,13 @@
 .mw-identity strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
 .mw-identity small { color: var(--mw-quiet); font-size: 11px; }
 .mw-main { min-width: 0; }
-.mw-room-ground { min-height: calc(100dvh - 64px); background-color: var(--mw-deep); background-image: linear-gradient(to bottom, hsl(var(--dark) / .25), hsl(var(--dark) / .85)), var(--mw-hero, url('/mooney/assets/locker-room.png')); background-size: 100% 100%, cover; background-position: center, center bottom; background-attachment: scroll, fixed; background-repeat: no-repeat; }
+/* The room photo lives on a layer pinned to the screen, not on the page itself.
+   background-attachment: fixed is ignored on iPhone/iPad, which then stretches
+   the photo over the WHOLE page height and shows only a dark middle strip. */
+.mw-room-ground { position: relative; isolation: isolate; clip-path: inset(0); min-height: calc(100dvh - 64px); background-color: var(--mw-deep); }
+.mw-room-ground::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; background-color: var(--mw-deep); background-image: linear-gradient(to bottom, hsl(var(--dark) / .25), hsl(var(--dark) / .85)), var(--mw-hero, url('/mooney/assets/locker-room.png')); background-size: 100% 100%, cover; background-position: center, center bottom; background-repeat: no-repeat; }
 /* Phones held upright get the portrait room when the theme has one (theme.world.heroMobileUrl). */
-@media (max-width: 768px) and (orientation: portrait) { .mw-room-ground { background-image: linear-gradient(to bottom, hsl(var(--dark) / .2), hsl(var(--dark) / .85)), var(--mw-hero-mobile, var(--mw-hero, url('/mooney/assets/locker-room.png'))); background-position: center, center top; } }
+@media (max-width: 768px) and (orientation: portrait) { .mw-room-ground::before { background-image: linear-gradient(to bottom, hsl(var(--dark) / .15), hsl(var(--dark) / .8)), var(--mw-hero-mobile, var(--mw-hero, url('/mooney/assets/locker-room.png'))); background-position: center, center top; } }
 .mw-topbar { display: flex; align-items: center; gap: 12px; padding: 8px 20px; min-height: 64px; background: var(--mw-deep); border-bottom: 1px solid var(--mw-line); }
 .mw-topbar h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; }
 .mw-topbar-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
@@ -522,6 +526,9 @@ div.mw-bulk[data-state] {
 .mw-deck { position: absolute; inset: 0 0 30px; display: block; }
 .mw-deck-card { --deck-offset: 0; position: absolute; left: 50%; bottom: 0; height: 92%; max-width: 92%; object-fit: contain; object-position: bottom; transform-origin: 50% 100%; transform: translateX(-50%) translateX(calc(var(--deck-offset) * 26%)) rotate(calc(var(--deck-offset) * 7deg)); transition: transform .35s cubic-bezier(.2,.8,.2,1), filter .35s; filter: drop-shadow(0 14px 22px rgb(0 0 0 / .55)); }
 .mw-plaque-stage[data-count="1"] .mw-deck-card { height: 96%; }
+/* A three-card deck (one card per team variant) fans tighter so it stays on its own pedestal. */
+.mw-plaque-stage[data-count="3"] .mw-deck-card { height: 86%; max-width: 76%; transform: translateX(-50%) translateX(calc(var(--deck-offset) * 19%)) rotate(calc(var(--deck-offset) * 6deg)); }
+.mw-plaque-stage[data-count="3"]:hover .mw-deck-card, .mw-plaque-stage[data-count="3"]:focus-visible .mw-deck-card { transform: translateX(-50%) translateX(calc(var(--deck-offset) * 30%)) rotate(calc(var(--deck-offset) * 9deg)) translateY(-6px); }
 .mw-plaque-stage:hover .mw-deck-card, .mw-plaque-stage:focus-visible .mw-deck-card { transform: translateX(-50%) translateX(calc(var(--deck-offset) * 40%)) rotate(calc(var(--deck-offset) * 11deg)) translateY(-6px); }
 .mw-pedestal { position: absolute; bottom: 7px; left: 3%; right: 3%; height: clamp(22px, 2.3vw, 36px); z-index: -1; background: linear-gradient(#1c1c1c, #151515 40%, #070808 70%); border-radius: 50% / 26%; border-bottom: 3px solid var(--mw-destination-accent); box-shadow: 0 3px 6px var(--mw-destination-accent), 0 12px 22px color-mix(in srgb, var(--mw-destination-accent) 20%, transparent), 0 18px 17px #0008; }
 .mw-pedestal::before { content: ''; position: absolute; left: 0; right: 0; top: -7px; height: 17px; border-radius: 50%; background: radial-gradient(ellipse at 50% 20%, #45413a, #202020 65%, #121314); border: 1px solid #635744; }
