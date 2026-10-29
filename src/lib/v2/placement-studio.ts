@@ -26,6 +26,8 @@ export interface Preset {
   topIn: number;
   /** 0 = centred. Positive = viewer's right (the wearer's left chest). */
   centerXIn: number;
+  /** Clockwise turn of the artwork, degrees (0 = straight). */
+  rotationDeg?: number;
   notes?: string | null;
   builtIn?: boolean;
 }
@@ -107,8 +109,23 @@ export function sideWords(centerXIn: number, view: View = "front"): string {
 }
 
 /** The one line handed to GPT / a printer alongside the PNG. */
-export function describe(p: Pick<Preset, "name" | "view" | "widthIn" | "heightIn" | "topIn" | "centerXIn">, blank: string): string {
-  return `${blank} · ${p.view.toUpperCase()} · ${p.name}: print area ${n(p.widthIn)} × ${n(p.heightIn)} in, top edge ${n(p.topIn)} in below the collar, ${sideWords(p.centerXIn, p.view)}. Keep the artwork inside the green box.`;
+export function describe(p: Pick<Preset, "name" | "view" | "widthIn" | "heightIn" | "topIn" | "centerXIn" | "rotationDeg">, blank: string): string {
+  const turn = rotationWords(p.rotationDeg ?? 0);
+  return `${blank} · ${p.view.toUpperCase()} · ${p.name}: print area ${n(p.widthIn)} × ${n(p.heightIn)} in, top edge ${n(p.topIn)} in below the collar, ${sideWords(p.centerXIn, p.view)}${turn ? `, ${turn}` : ""}. Keep the artwork inside the green box.`;
+}
+
+/** "rotated 12° clockwise" — empty when straight. */
+export function rotationWords(deg: number): string {
+  const d = normalizeDeg(deg);
+  if (Math.abs(d) < 0.5) return "";
+  return `rotated ${n(Math.abs(d))}° ${d > 0 ? "clockwise" : "counter-clockwise"}`;
+}
+
+/** Any angle -> (-180, 180], rounded to 0.5°. */
+export function normalizeDeg(deg: number): number {
+  let d = ((deg % 360) + 360) % 360;
+  if (d > 180) d -= 360;
+  return Math.round(d * 2) / 2;
 }
 
 /** Saved row -> Preset. */
@@ -121,6 +138,7 @@ export function toPreset(r: Record<string, unknown>): Preset {
     heightIn: Number(r.height_in ?? 4),
     topIn: Number(r.top_in ?? 3),
     centerXIn: Number(r.center_x_in ?? 0),
+    rotationDeg: Number(r.rotation_deg ?? 0),
     notes: (r.notes as string | null) ?? null,
   };
 }

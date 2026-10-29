@@ -103,3 +103,19 @@ group("placement studio — white knock-out", () => {
     expect(d[(1 * w + 1) * 4 + 3]).toBe(255);
   });
 });
+
+import { normalizeDeg, rotationWords } from "./placement-studio";
+
+group("placement studio — rotation", () => {
+  it("normalises angles and says which way", () => {
+    expect(normalizeDeg(370)).toBe(10);
+    expect(normalizeDeg(-190)).toBe(170);
+    expect(normalizeDeg(181)).toBe(-179);
+    expect(rotationWords(0)).toBe("");
+    expect(rotationWords(12)).toBe("rotated 12° clockwise");
+    expect(rotationWords(-7.5)).toBe("rotated 7.5° counter-clockwise");
+  });
+  it("puts the turn in the GPT line", () => {
+    expect(describe({ name: "Full back", view: "back", widthIn: 12, heightIn: 14, topIn: 4, centerXIn: 0, rotationDeg: -5 }, "AXISM 7010")).toContain("centred, rotated 5° counter-clockwise.");
+  });
+});

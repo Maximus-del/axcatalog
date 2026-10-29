@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Copy, Download, Eye, EyeOff, ImagePlus, Images, Inbox, Loader2, RotateCcw, Save, Shirt, Trash2, X } from "lucide-react";
+import { Copy, Download, ExternalLink, Eye, EyeOff, ImagePlus, Images, Loader2, RotateCcw, RotateCw, Save, Shirt, ShoppingBag, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBlanks, useEntities } from "@/lib/v2/data";
@@ -10,7 +10,7 @@ import { MOCKUP_REVIEW_KEY } from "@/lib/v2/mockup-review";
 import { ArtLibraryPanel } from "@/components/admin-v2/ArtLibraryPanel";
 import { corsSafeUrl, loadImage, downloadBlob } from "@/lib/v2/mockup-export";
 import {
-  BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, hasWhiteSheet, heightForArt, knockOutWhite, mockupFilename, moveBy, oversize, presetRect, referenceFilename, resizeBy, toPreset,
+  BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, hasWhiteSheet, heightForArt, knockOutWhite, mockupFilename, moveBy, normalizeDeg, oversize, presetRect, referenceFilename, resizeBy, toPreset,
   type Calibration, type Preset, type View,
 } from "@/lib/v2/placement-studio";
 import { PageHeader, Skeleton } from "@/components/admin-v2/primitives";
@@ -69,6 +69,17 @@ async function artFromLibrary(item: ArtItem): Promise<Art> {
   return prepareArt(new File([blob], item.fileName, { type: blob.type || "image/png" }), { fileId: item.fileId, designId: item.designId, designTitle: item.designTitle });
 }
 
+/** Draw artwork into its rect, turned about the rect's centre. */
+function drawArt(ctx: CanvasRenderingContext2D, img: HTMLImageElement, rect: { x: number; y: number; w: number; h: number }, deg = 0) {
+  if (!deg) { ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h); return; }
+  ctx.save();
+  ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
+  ctx.rotate((deg * Math.PI) / 180);
+  ctx.drawImage(img, -rect.w / 2, -rect.h / 2, rect.w, rect.h);
+  ctx.restore();
+}
+const turn = (deg: number | undefined, r: { x: number; y: number; w: number; h: number }) => (deg ? `rotate(${deg} ${r.x + r.w / 2} ${r.y + r.h / 2})` : undefined);
+
 const pngBlob = (c: HTMLCanvasElement) => new Promise<Blob>((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("Export failed"))), "image/png"));
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -121,6 +132,9 @@ export default function V2PlacementStudio() {
   const [autoPair, setAutoPair] = useState(true);
   const [productName, setProductName] = useState("");
   const [saving, setSaving] = useState<string | null>(null);
+  const [price, setPrice] = useState("45");
+  const [viaReview, setViaReview] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [showGuides, setShowGuides] = useState(true);
   const [everyColour, setEveryColour] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -243,7 +257,10 @@ export default function V2PlacementStudio() {
     setBox({ ...(d.mode === "move" ? moveBy(d.start, dx, dy, ppi) : resizeBy(d.start, dx, dy, ppi, art?.aspect ?? null)), builtIn: false });
   };
   const endDrag = () => { drag.current = null; };
+  const rotation = box.rotationDeg ?? 0;
+  const setRotation = (deg: number) => setBox((b) => ({ ...b, rotationDeg: normalizeDeg(deg), builtIn: false }));
   const nudge = (e: ReactKeyboardEvent) => {
+    if (e.key === "[" || e.key === "]") { e.preventDefault(); setRotation(rotation + (e.key === "]" ? 1 : -1) * (e.shiftKey ? 15 : 1)); return; }
     const step = (e.shiftKey ? 1 : 0.125) * ppi;
     const m: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     const v = m[e.key];
@@ -257,6 +274,8 @@ export default function V2PlacementStudio() {
       const name = box.name.trim() || "Preset";
       const { error } = await supabase.from("placement_presets" as never).upsert({
         blank_style: blankName, view, name, width_in: box.widthIn, height_in: box.heightIn, top_in: box.topIn, center_x_in: box.centerXIn, notes: box.notes ?? null,
+        // Only sent when used, so presets keep saving before the rotation column exists.
+        ...(rotation ? { rotation_deg: rotation } : {}),
       } as never, { onConflict: "blank_style,view,name" });
       if (error) throw new Error(error.message);
     },
@@ -293,7 +312,7 @@ export default function V2PlacementStudio() {
         // The artwork in place, so GPT sees exactly what goes where.
         const artImg = await loadImage(art.url);
         const ar = artRect(rr, artImg.naturalWidth / artImg.naturalHeight);
-        ctx.drawImage(artImg, ar.x, ar.y, ar.w, ar.h);
+        drawArt(ctx, artImg, ar, rotation);
       }
       const inch = rr.w / box.widthIn;
       // inch grid inside the box
@@ -361,7 +380,7 @@ export default function V2PlacementStudio() {
     const ctx = canvas.getContext("2d")!;
     ctx.drawImage(img, 0, 0, outW, outH);
     const ar = artRect(presetRect(sd.box, sd.calib, outW, outH), artImg.naturalWidth / artImg.naturalHeight);
-    ctx.drawImage(artImg, ar.x, ar.y, ar.w, ar.h);
+    drawArt(ctx, artImg, ar, sd.box.rotationDeg ?? 0);
     return pngBlob(canvas);
   };
 
@@ -378,7 +397,7 @@ export default function V2PlacementStudio() {
   }, [blank, everyColour, colorId, sides]);
   const code = client && productName.trim() ? studioCode(client.slug || client.name, productName) : null;
 
-  const saveToReview = async () => {
+  const saveMockups = async () => {
     if (!client || !code || !sidesWithArt.length || !saveColours.length) return;
     const total = saveColours.length;
     const rows: Record<string, unknown>[] = [];
@@ -399,14 +418,15 @@ export default function V2PlacementStudio() {
           athlete_id: client.id, design_code: code, design_name: productName.trim(), product_title: productName.trim(),
           garment: blankName, blank_style: blankName, color: c.name,
           front_url: urls.front ?? null, back_url: urls.back ?? null, front_drive_id: null, back_drive_id: null,
-          review_state: "pending", review_note: null, reviewed_at: null, reviewed_by: null, updated_at: new Date().toISOString(),
+          // Straight to approved unless it should go through Mockup Review first.
+          review_state: viaReview ? "pending" : "approved", review_note: null, reviewed_at: viaReview ? null : new Date().toISOString(), reviewed_by: null, updated_at: new Date().toISOString(),
         });
       }
       const { error } = await supabase.from("mockup_reviews" as never).upsert(rows as never, { onConflict: "design_code,garment,color" });
       if (error) throw error;
       void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
-      toast.success(`${rows.length} colour${rows.length === 1 ? "" : "s"} of ${productName.trim()} sent to Mockup Review`, {
-        action: { label: "Review", onClick: () => { window.location.href = "/admin-v2/mockups-review"; } },
+      toast.success(`${rows.length} mockup${rows.length === 1 ? "" : "s"} of ${productName.trim()} saved${viaReview ? " for review" : ""}`, {
+        action: { label: "Open", onClick: () => { window.location.href = openHref; } },
       });
     } catch (e) {
       toast.error(`Stopped after ${rows.length}: ${e instanceof Error ? e.message : "could not save"}`);
@@ -414,6 +434,36 @@ export default function V2PlacementStudio() {
       setSaving(null);
     }
   };
+  const openHref = code ? `/admin-v2/mockups-review?design=${encodeURIComponent(code)}&tab=${viaReview ? "pending" : "approved"}` : "/admin-v2/mockups-review";
+  const productType = blank ? (blank.garmentType || "tee").replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Tee";
+  const skuPrefix = blank ? `AX${(blank.styleNumber ?? blank.name ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase().slice(0, 10)}` : "AX";
+
+  /** The saved, approved colours of this product -> a Shopify DRAFT (or added to the existing product). */
+  const createShopifyProduct = async () => {
+    if (!code) return;
+    const amount = Number(price);
+    if (!(amount > 0)) { toast.error("Set a price first"); return; }
+    setCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("mockup-review-sync", {
+        body: { design_code: code, product_type: productType, price: amount.toFixed(2), sku_prefix: skuPrefix },
+      });
+      if (error) {
+        const ctx = (error as { context?: Response }).context;
+        const body = ctx ? await ctx.json().catch(() => null) : null;
+        throw new Error(body?.error ?? error.message);
+      }
+      const r = data as { added?: string[]; removed?: string[]; note?: string; product_gid?: string };
+      void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
+      if (r.note) toast.message(r.note === "Nothing approved yet" ? "Save the mockups first (or approve them in Mockup Review)." : r.note);
+      else toast.success(`${productName.trim()}: ${r.added?.length ?? 0} colour${r.added?.length === 1 ? "" : "s"} on Shopify (draft)${r.removed?.length ? `, ${r.removed.length} removed` : ""}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Shopify didn't take it");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const mockupJobs = useMemo(() => {
     if (!arts.length) return [] as Array<{ art: Art; colour: string; url: string }>;
     const targets = everyColour
@@ -469,7 +519,7 @@ export default function V2PlacementStudio() {
               ) : <div className="absolute inset-0 grid place-items-center text-[13px] text-[hsl(var(--ax-faint))]">No photo for this blank — use your own image.</div>}
               <svg ref={svgRef} className="absolute inset-0 h-full w-full touch-none select-none" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
                 onPointerMove={onDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
-                {art && (() => { const a = artRect(r, art.aspect); return <image href={art.url} x={a.x} y={a.y} width={a.w} height={a.h} preserveAspectRatio="none" style={{ pointerEvents: "none" }} />; })()}
+                {art && (() => { const a = artRect(r, art.aspect); return <image href={art.url} x={a.x} y={a.y} width={a.w} height={a.h} preserveAspectRatio="none" transform={turn(rotation, a)} style={{ pointerEvents: "none" }} />; })()}
                 {showGuides && <g style={{ pointerEvents: "none" }}>
                 {/* guides: collar, centre line, chest edges */}
                 <line x1={calib.chestLeft * W} x2={calib.chestLeft * W} y1={0} y2={H} stroke="#2563eb" strokeOpacity="0.35" strokeDasharray="6 6" strokeWidth="2" />
@@ -484,12 +534,40 @@ export default function V2PlacementStudio() {
                   <line key={`h${i}`} x1={r.x} x2={r.x + r.w} y1={r.y + i * ppi} y2={r.y + i * ppi} stroke={ACCENT} strokeOpacity="0.35" strokeWidth="1" />
                 ))}
                 </g>}
+                <g transform={turn(rotation, r)}>
                 <rect x={r.x} y={r.y} width={r.w} height={r.h} fill={ACCENT} fillOpacity={art ? 0.001 : showGuides ? 0.1 : 0.001} stroke={tooBig ? "#dc2626" : ACCENT} strokeOpacity={showGuides ? 1 : 0.5} strokeWidth="3" strokeDasharray="10 6"
                   style={{ cursor: "move" }} onPointerDown={startDrag("move")} />
                 <rect x={r.x + r.w - 11} y={r.y + r.h - 11} width="22" height="22" rx="4" fill="#fff" stroke={ACCENT} strokeWidth="3" style={{ cursor: "nwse-resize" }} onPointerDown={startDrag("resize")} />
-                <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT} style={{ pointerEvents: "none" }}>{box.widthIn} × {box.heightIn} in · {box.topIn} in below collar</text>
+                </g>
+                <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT} style={{ pointerEvents: "none" }}>{box.widthIn} × {box.heightIn} in · {box.topIn} in below collar{rotation ? ` · ${rotation}°` : ""}</text>
               </svg>
             </div>
+            {everyColour && colors.length > 0 && (
+              <div className="mx-auto mt-3 max-w-[760px]">
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">Every colour · click one to check it up close</p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {colors.map((c) => {
+                    const g = garmentOf(c);
+                    const a = art ? artRect(r, art.aspect) : null;
+                    const on = !ownImage && c.id === colorId;
+                    return (
+                      <button key={c.id} type="button" onClick={() => { setColorId(c.id); setOwnImage(null); }} title={c.name}
+                        className={`w-[92px] shrink-0 overflow-hidden rounded-lg border-2 bg-[#f3f3f1] text-left ${on ? "border-[#03AC13]" : "border-transparent hover:border-[hsl(var(--ax-border))]"}`}>
+                        <span className="relative block w-full" style={{ aspectRatio: String(aspect) }}>
+                          {g && <img src={g} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-fill" />}
+                          {a && art && (
+                            <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
+                              <image href={art.url} x={a.x} y={a.y} width={a.w} height={a.h} preserveAspectRatio="none" transform={turn(rotation, a)} />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="block truncate px-1.5 py-1 text-[10.5px]">{c.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="mx-auto mt-3 flex max-w-[760px] flex-wrap items-center gap-2">
               {arts.map((a, i) => (
                 <span key={a.id} className={`group relative h-14 w-14 overflow-hidden rounded-lg border-2 bg-[#2b2b2b] ${i === artIdx ? "border-[#03AC13]" : "border-transparent"}`}>
@@ -501,7 +579,7 @@ export default function V2PlacementStudio() {
               <input ref={artRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { void addArt(e.target.files); e.target.value = ""; }} />
               <button type="button" className={`${pill} ml-auto`} onClick={() => setShowGuides((g) => !g)}>{showGuides ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{showGuides ? "Hide guides" : "Show guides"}</button>
             </div>
-            <p className="mx-auto mt-2 max-w-[760px] text-[11.5px] text-[hsl(var(--ax-faint))]">Drag the print to move it · pull the white corner to size it · arrow keys nudge ⅛ in (Shift = 1 in). Every artwork uses the same placement.</p>
+            <p className="mx-auto mt-2 max-w-[760px] text-[11.5px] text-[hsl(var(--ax-faint))]">Drag the print to move it · pull the white corner to size it · arrow keys nudge ⅛ in (Shift = 1 in) · [ and ] rotate 1° (Shift = 15°). Every artwork uses the same placement.</p>
             <p className="mx-auto mt-2 max-w-[760px] rounded-lg bg-[hsl(var(--ax-ink)/0.04)] px-3 py-2 text-[12.5px]">{line}</p>
             {tooBig && <p className="mx-auto mt-2 max-w-[760px] text-[12px] text-[hsl(var(--ax-red))]">Over the {MAX_PRINT.widthIn} × {MAX_PRINT.heightIn} in max print size.</p>}
           </div>
@@ -553,6 +631,12 @@ export default function V2PlacementStudio() {
               <label className="flex items-center gap-2 text-[12px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={lockSquare} onChange={(e) => setLockSquare(e.target.checked)} />Keep square while it is square</label>
               <Slider name="Top edge below collar" value={box.topIn} min={0} max={14} step={0.25} onChange={(v) => setBox((b) => ({ ...b, topIn: v, builtIn: false }))} />
               <Slider name="Left / right of centre" value={box.centerXIn} min={-8} max={8} step={0.25} onChange={(v) => setBox((b) => ({ ...b, centerXIn: v, builtIn: false }))} />
+              <Slider name="Rotate" unit="°" value={rotation} min={-180} max={180} step={0.5} onChange={setRotation} />
+              <div className="flex gap-1.5">
+                <button type="button" className={pill} onClick={() => setRotation(rotation - 15)} aria-label="Rotate 15° left"><RotateCcw className="h-3.5 w-3.5" />15°</button>
+                <button type="button" className={pill} onClick={() => setRotation(rotation + 15)} aria-label="Rotate 15° right"><RotateCw className="h-3.5 w-3.5" />15°</button>
+                <button type="button" className={pill} disabled={!rotation} onClick={() => setRotation(0)}>Straighten</button>
+              </div>
             </div>
 
             <details className="rounded-lg border border-[hsl(var(--ax-border))] px-3 py-2">
@@ -578,17 +662,29 @@ export default function V2PlacementStudio() {
               <label className="flex w-full items-center gap-2 text-[12px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={everyColour} onChange={(e) => setEveryColour(e.target.checked)} />Every colour of this blank ({blank?.colors.length ?? 0}) — otherwise just {color?.name ?? "this colour"}</label>
               <div className="flex w-full flex-col gap-2 rounded-lg border-2 border-[#03AC13]/40 bg-[#03AC13]/[0.04] p-3">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">Save to {client ? client.name : "a client"}</p>
-                <input className="rounded-lg border border-[hsl(var(--ax-border))] bg-white px-2.5 py-1.5 text-[13px]" placeholder="Product name, e.g. Ice Man Tee" value={productName} onChange={(e) => setProductName(e.target.value)} />
+                <div className="flex gap-2">
+                  <input className="min-w-0 flex-1 rounded-lg border border-[hsl(var(--ax-border))] bg-white px-2.5 py-1.5 text-[13px]" placeholder="Product name, e.g. Ice Man Tee" value={productName} onChange={(e) => setProductName(e.target.value)} />
+                  <label className="flex w-[86px] items-center rounded-lg border border-[hsl(var(--ax-border))] bg-white px-2 text-[13px]" title="Retail price for Shopify">
+                    $<input className="w-full bg-transparent py-1.5 pl-0.5 outline-none" inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value.replace(/[^0-9.]/g, ""))} aria-label="Price" />
+                  </label>
+                </div>
                 <p className="text-[11.5px] text-[hsl(var(--ax-faint))]">
                   {!client ? "Pick a client in Client art above." : !sidesWithArt.length ? "Add art to the front or back first." : `${sidesWithArt.map((v) => (v === "front" ? "Front" : "Back")).join(" + ")} · ${saveColours.length} colour${saveColours.length === 1 ? "" : "s"} · ${blankName}`}
                 </p>
                 <button type="button" className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[#03AC13] px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
-                  disabled={!code || !sidesWithArt.length || !saveColours.length || !!saving || !!ownImage} onClick={() => void saveToReview()}
+                  disabled={!code || !sidesWithArt.length || !saveColours.length || !!saving || !!ownImage} onClick={() => void saveMockups()}
                   title={ownImage ? "Switch back to the blank photo to save — custom shirt photos aren't part of the blank library" : undefined}>
-                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Inbox className="h-3.5 w-3.5" />}
-                  {saving ? `Saving ${saving}…` : "Send to Mockup Review"}
+                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                  {saving ? `Saving ${saving}…` : `Save ${saveColours.length > 1 ? `${saveColours.length} mockups` : "mockup"}`}
                 </button>
-                <Link to="/admin-v2/mockups-review" className="text-center text-[11.5px] text-[hsl(var(--ax-secondary))] underline-offset-2 hover:underline">Open Mockup Review</Link>
+                <label className="flex items-center gap-2 text-[11.5px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={viaReview} onChange={(e) => setViaReview(e.target.checked)} />Send through Mockup Review first</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Link to={openHref} className={`${pill} justify-center ${code ? "" : "pointer-events-none opacity-40"}`}><ExternalLink className="h-3.5 w-3.5" />Open mockups</Link>
+                  <button type="button" className={`${pill} justify-center`} disabled={!code || creating} onClick={() => void createShopifyProduct()}
+                    title={`Approved colours → Shopify draft · ${productType} · $${price || "?"} · SKU ${skuPrefix}-…`}>
+                    {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}Create on Shopify
+                  </button>
+                </div>
               </div>
               <div className="flex w-full flex-col gap-1.5 rounded-lg border border-[hsl(var(--ax-border))] p-2.5">
                 <button type="button" className={`${pill} justify-center`} disabled={!mockupJobs.length || exporting} onClick={() => void exportMockups()}>

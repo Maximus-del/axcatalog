@@ -33,3 +33,6 @@ create policy "operators add mockup reviews" on public.mockup_reviews
 drop policy if exists "operators update mockup reviews" on public.mockup_reviews;
 create policy "operators update mockup reviews" on public.mockup_reviews
   for update using (public.current_user_is_operator()) with check (public.current_user_is_operator());
+
+-- 3. Rotation is part of a saved placement.
+alter table public.placement_presets add column if not exists rotation_deg numeric not null default 0;

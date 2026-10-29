@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Archive, ArrowLeft, ArrowRight, Check, ExternalLink, FolderSync, Loader2, PenLine, Repeat2, RotateCcw, ShoppingBag, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -72,8 +73,10 @@ export default function V2MockupReview() {
   const decide = useMockupDecision();
   const sync = useMockupSync();
   const intake = useMockupIntake();
-  const [tab, setTab] = useState<MockupState>("pending");
-  const [design, setDesign] = useState<string>("all");
+  // Placement Studio links here with ?design=CODE&tab=approved to open one product.
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<MockupState>(() => (["pending", "needs_fix", "approved", "archived"].includes(params.get("tab") ?? "") ? (params.get("tab") as MockupState) : "pending"));
+  const [design, setDesign] = useState<string>(() => params.get("design") ?? "all");
   const [index, setIndex] = useState(0);
   const [side, setSide] = useState<"front" | "back">("front");
   const [mode, setMode] = useState<"fix" | "archive" | null>(null);
