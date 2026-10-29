@@ -1,6 +1,8 @@
 // Mockup review -> Shopify. Pushes ONE design's decisions to its Shopify product.
 //
-// POST { design_code }
+// POST { design_code, product_type?, price?, sku_prefix? }
+//   The optional fields come from Placement Studio (the blank's garment type,
+//   the price typed there, AX + style number). Without them: Tee / $45 / AX7010.
 //   approved  -> colour is on the product (variants S..3XL created if missing,
 //                front/back photos attached, each new variant shows its front)
 //   archived / needs_fix -> colour's variants removed from the product
@@ -47,6 +49,11 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({} as Record<string, unknown>));
   const designCode = String(body.design_code ?? "").trim();
   if (!designCode) return json({ error: "design_code required" }, 400);
+  const clean = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[^\w .&'-]/g, "").trim().slice(0, max) : "");
+  const productType = clean(body.product_type, 40) || "Tee";
+  const priceIn = Number(body.price);
+  const newPrice = Number.isFinite(priceIn) && priceIn > 0 && priceIn < 10000 ? priceIn.toFixed(2) : DEFAULT_PRICE;
+  const skuPrefix = clean(body.sku_prefix, 16).replace(/[^A-Za-z0-9]/g, "") || "AX7010";
 
   const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: rowsData, error: rErr } = await admin.from("mockup_reviews").select("*").eq("design_code", designCode);
@@ -132,12 +139,12 @@ Deno.serve(async (req) => {
       const colors = approved.map((r) => r.color);
       const d = await gql(`mutation s($input: ProductSetInput!) { productSet(input: $input, synchronous: true) { product { id } userErrors { message } } }`, {
         input: {
-          title, status: "DRAFT", vendor: "Athlete Xclusive", productType: "Tee",
-          tags: ["Athlete Xclusive", "Premium Tee", "Streetwear", "Tee", rows[0].design_name],
+          title, status: "DRAFT", vendor: "Athlete Xclusive", productType,
+          tags: ["Athlete Xclusive", "Streetwear", productType, rows[0].design_name],
           productOptions: [{ name: "Color", values: colors.map((name) => ({ name })) }, { name: "Size", values: DEFAULT_SIZES.map((name) => ({ name })) }],
           variants: colors.flatMap((c) => DEFAULT_SIZES.map((sz) => ({
             optionValues: [{ optionName: "Color", name: c }, { optionName: "Size", name: sz }],
-            price: DEFAULT_PRICE, inventoryPolicy: "CONTINUE", sku: `${designCode}_V1_AX7010_${skuPart(c)}_${sz}`,
+            price: newPrice, inventoryPolicy: "CONTINUE", sku: `${designCode}_V1_${skuPrefix}_${skuPart(c)}_${sz}`,
           }))),
         },
       });
@@ -173,7 +180,7 @@ Deno.serve(async (req) => {
     if (toAdd.length) {
       const variants = toAdd.flatMap((c) => sizes.map((sz) => ({
         optionValues: [{ optionName: colorOpt.name, name: c }, { optionName: sizeOpt?.name ?? "Size", name: sz }],
-        price, inventoryPolicy: "CONTINUE", sku: `${designCode}_V1_AX7010_${skuPart(c)}_${sz}`,
+        price, inventoryPolicy: "CONTINUE", sku: `${designCode}_V1_${skuPrefix}_${skuPart(c)}_${sz}`,
       })));
       const d = await gql(`mutation c($productId: ID!, $variants: [ProductVariantsBulkInput!]!) { productVariantsBulkCreate(productId: $productId, variants: $variants) { userErrors { message } } }`, { productId: productGid, variants });
       userErrors(d.productVariantsBulkCreate);

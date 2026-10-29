@@ -141,7 +141,8 @@ export function toMockupItem(r: Row): MockupItem {
   };
 }
 
-const KEY = ["v2", "mockup-review"] as const;
+export const MOCKUP_REVIEW_KEY = ["v2", "mockup-review"] as const;
+const KEY = MOCKUP_REVIEW_KEY;
 const COLS = "id, athlete_id, design_code, design_name, product_title, garment, blank_style, color, front_url, back_url, front_drive_id, review_state, review_note, shopify_product_gid, shopify_state, synced_at, sync_error, reviewed_at";
 
 export function useMockupReviews() {

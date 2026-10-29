@@ -113,6 +113,7 @@ const V2Releases = lazy(v2Pages.releases);
 const V2ContentReview = lazy(v2Pages.contentReview);
 const V2MockupReview = lazy(v2Pages.mockupReview);
 const V2PlacementStudio = lazy(v2Pages.placementStudio);
+const V2AccessRequests = lazy(v2Pages.accessRequests);
 
 const PortalLayout = lazy(() => import("@/components/portal/PortalLayout"));
 const PortalHome = lazy(() => import("./pages/portal/PortalHome"));
@@ -285,6 +286,8 @@ const App = () => (
                 {/* Mockup colours: approve -> Shopify draft, needs edit, or drop. */}
                 <Route path="mockups-review" element={<V2MockupReview />} />
                 <Route path="placement" element={<V2PlacementStudio />} />
+                {/* Everyone waiting to get into a client's locker. */}
+                <Route path="access" element={<V2AccessRequests />} />
                 <Route path="commerce" element={<V2Commerce />} />
                 <Route path="commerce/blanks" element={<V2Commerce />} />
                 <Route path="commerce/blanks/:id" element={<V2BlankDetail />} />

@@ -93,6 +93,8 @@ export default function TestDrive() {
           }
         }}
         onAnswered={() => go("waiting")}
+        // Test drive: any 8-character code shows the instant-access path (nothing is redeemed).
+        onRedeemCode={async (code) => (code.length === 8 ? (go("approved"), null) : "Codes are 8 letters and numbers.")}
       />
     </>
   );

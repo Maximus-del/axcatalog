@@ -334,6 +334,19 @@ export async function requestAccess(token: string, fullName: string): Promise<"p
   return s === "approved" || s === "denied" ? s : "pending";
 }
 
+export type RedeemResult =
+  | { ok: true; athleteId: string; entityName: string; role: PortalRole }
+  | { ok: false; message: string };
+
+/** Type an access code -> straight in with that code's role (no approval wait). */
+export async function redeemAccessCode(code: string, fullName?: string): Promise<RedeemResult> {
+  const { data, error } = await rpc("portal_redeem_access_code", { _code: code, _full_name: fullName ?? null });
+  if (error) return { ok: false, message: error.message };
+  const d = (data ?? {}) as Record<string, unknown>;
+  if (d.status !== "approved") return { ok: false, message: String(d.message ?? "That code didn't work.") };
+  return { ok: true, athleteId: String(d.athleteId), entityName: String(d.entityName ?? ""), role: d.role === "owner" ? "owner" : "team" };
+}
+
 export interface MyRequest {
   id: string;
   athleteId: string;

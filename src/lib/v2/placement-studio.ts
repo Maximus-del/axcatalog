@@ -26,6 +26,8 @@ export interface Preset {
   topIn: number;
   /** 0 = centred. Positive = viewer's right (the wearer's left chest). */
   centerXIn: number;
+  /** Clockwise turn of the artwork, degrees (0 = straight). */
+  rotationDeg?: number;
   notes?: string | null;
   builtIn?: boolean;
 }
@@ -97,15 +99,33 @@ export function oversize(p: Pick<Preset, "widthIn" | "heightIn">): boolean {
 const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, "").replace(/\.$/, ""));
 
 /** Where horizontally, in words. */
-export function sideWords(centerXIn: number): string {
+export function sideWords(centerXIn: number, view: View = "front"): string {
   if (Math.abs(centerXIn) < 0.05) return "centred";
-  const side = centerXIn > 0 ? "wearer's left chest (viewer's right)" : "wearer's right chest (viewer's left)";
+  // Looking at the back, the viewer's right IS the wearer's right.
+  const side = view === "back"
+    ? (centerXIn > 0 ? "right side as you look at the back" : "left side as you look at the back")
+    : (centerXIn > 0 ? "wearer's left chest (viewer's right)" : "wearer's right chest (viewer's left)");
   return `${n(Math.abs(centerXIn))} in from centre on the ${side}`;
 }
 
 /** The one line handed to GPT / a printer alongside the PNG. */
-export function describe(p: Pick<Preset, "name" | "view" | "widthIn" | "heightIn" | "topIn" | "centerXIn">, blank: string): string {
-  return `${blank} · ${p.view.toUpperCase()} · ${p.name}: print area ${n(p.widthIn)} × ${n(p.heightIn)} in, top edge ${n(p.topIn)} in below the collar, ${sideWords(p.centerXIn)}. Keep the artwork inside the green box.`;
+export function describe(p: Pick<Preset, "name" | "view" | "widthIn" | "heightIn" | "topIn" | "centerXIn" | "rotationDeg">, blank: string): string {
+  const turn = rotationWords(p.rotationDeg ?? 0);
+  return `${blank} · ${p.view.toUpperCase()} · ${p.name}: print area ${n(p.widthIn)} × ${n(p.heightIn)} in, top edge ${n(p.topIn)} in below the collar, ${sideWords(p.centerXIn, p.view)}${turn ? `, ${turn}` : ""}. Keep the artwork inside the green box.`;
+}
+
+/** "rotated 12° clockwise" — empty when straight. */
+export function rotationWords(deg: number): string {
+  const d = normalizeDeg(deg);
+  if (Math.abs(d) < 0.5) return "";
+  return `rotated ${n(Math.abs(d))}° ${d > 0 ? "clockwise" : "counter-clockwise"}`;
+}
+
+/** Any angle -> (-180, 180], rounded to 0.5°. */
+export function normalizeDeg(deg: number): number {
+  let d = ((deg % 360) + 360) % 360;
+  if (d > 180) d -= 360;
+  return Math.round(d * 2) / 2;
 }
 
 /** Saved row -> Preset. */
@@ -118,6 +138,7 @@ export function toPreset(r: Record<string, unknown>): Preset {
     heightIn: Number(r.height_in ?? 4),
     topIn: Number(r.top_in ?? 3),
     centerXIn: Number(r.center_x_in ?? 0),
+    rotationDeg: Number(r.rotation_deg ?? 0),
     notes: (r.notes as string | null) ?? null,
   };
 }
@@ -126,4 +147,96 @@ export function toPreset(r: Record<string, unknown>): Preset {
 export function referenceFilename(blank: string, p: Pick<Preset, "name" | "view">): string {
   const slug = (s: string) => s.replace(/[×x]/g, "x").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return `PLACEMENT_${slug(blank)}_${p.view.toUpperCase()}_${slug(p.name)}.png`;
+}
+
+// ---------------------------------------------------------------------------
+// ARTWORK LAYER + DIRECT MANIPULATION
+//
+// Artwork sits INSIDE the print box: fitted, centred left-right, top edge on
+// the box's top edge (how a printer places it). With artwork loaded, the box
+// follows the art's proportions so "the box" and "the print" are the same
+// thing, and dragging/resizing on the canvas moves the print itself.
+
+const eighth = (n: number) => Math.round(n * 8) / 8;
+
+/** Box height (in) that fits artwork of this aspect (w/h) at the box's width. */
+export function heightForArt(widthIn: number, artAspect: number): number {
+  return artAspect > 0 ? Math.max(0.5, eighth(widthIn / artAspect)) : widthIn;
+}
+
+/** Where artwork is drawn inside a box rect: contained, centred, top-aligned. */
+export function artRect(box: Rect, artAspect: number): Rect {
+  if (!(artAspect > 0)) return box;
+  const fitW = Math.min(box.w, box.h * artAspect);
+  const fitH = fitW / artAspect;
+  return { x: box.x + (box.w - fitW) / 2, y: box.y, w: fitW, h: fitH };
+}
+
+/** Drag the box by (dx, dy) image pixels. Snaps to centre, never above the collar. */
+export function moveBy<T extends Pick<Preset, "topIn" | "centerXIn">>(p: T, dxPx: number, dyPx: number, ppi: number): T {
+  if (!(ppi > 0)) return p;
+  let cx = eighth(p.centerXIn + dxPx / ppi);
+  if (Math.abs(cx) < 0.2) cx = 0;
+  return { ...p, centerXIn: clamp(cx, -8, 8), topIn: clamp(eighth(p.topIn + dyPx / ppi), 0, 14) };
+}
+
+/**
+ * Resize from the corner handle. The box stays centred where it is, so a
+ * handle moved dx to the right widens it by 2·dx. With artwork, height follows
+ * the art's proportions; without, it follows the handle.
+ */
+export function resizeBy<T extends Pick<Preset, "widthIn" | "heightIn">>(p: T, dxPx: number, dyPx: number, ppi: number, artAspect: number | null): T {
+  if (!(ppi > 0)) return p;
+  const widthIn = clamp(eighth(p.widthIn + (2 * dxPx) / ppi), 0.5, MAX_PRINT.widthIn);
+  const heightIn = artAspect ? heightForArt(widthIn, artAspect) : clamp(eighth(p.heightIn + dyPx / ppi), 0.5, MAX_PRINT.heightIn);
+  return { ...p, widthIn, heightIn };
+}
+
+/** Filename for a rendered mockup: <ART>_<BLANK>_<Colour>_<VIEW>.png */
+export function mockupFilename(artName: string, blank: string, color: string, view: View): string {
+  const slug = (s: string) => s.replace(/\.[a-z0-9]+$/i, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return `${slug(artName)}_${slug(blank)}_${slug(color)}_${view.toUpperCase()}.png`;
+}
+
+// ---------------------------------------------------------------------------
+// WHITE BACKGROUND KNOCK-OUT
+//
+// Artwork often arrives flattened on white (a JPG, or a PNG exported without
+// transparency). Pasted on a black tee that's a white rectangle. This removes
+// only the white CONNECTED TO THE EDGES (flood fill from the border), so white
+// inside the design — highlights, lettering fills — stays.
+
+/** True when most corners are opaque near-white: the art sits on a white sheet. */
+export function hasWhiteSheet(data: Uint8ClampedArray, w: number, h: number, tol = 24): boolean {
+  const at = (x: number, y: number) => {
+    const i = (y * w + x) * 4;
+    return data[i + 3] > 250 && data[i] >= 255 - tol && data[i + 1] >= 255 - tol && data[i + 2] >= 255 - tol;
+  };
+  const corners = [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)];
+  return corners.filter(Boolean).length >= 3;
+}
+
+/** Make edge-connected near-white pixels transparent, in place. Returns pixels cleared. */
+export function knockOutWhite(data: Uint8ClampedArray, w: number, h: number, tol = 24): number {
+  const white = (p: number) => {
+    const i = p * 4;
+    return data[i + 3] > 0 && data[i] >= 255 - tol && data[i + 1] >= 255 - tol && data[i + 2] >= 255 - tol;
+  };
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  const push = (p: number) => { if (!seen[p] && white(p)) { seen[p] = 1; stack.push(p); } };
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  let cleared = 0;
+  while (stack.length) {
+    const p = stack.pop()!;
+    data[p * 4 + 3] = 0;
+    cleared++;
+    const x = p % w;
+    if (x > 0) push(p - 1);
+    if (x < w - 1) push(p + 1);
+    if (p >= w) push(p - w);
+    if (p < w * (h - 1)) push(p + w);
+  }
+  return cleared;
 }

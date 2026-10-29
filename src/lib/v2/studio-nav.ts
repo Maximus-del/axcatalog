@@ -65,6 +65,7 @@ export function sectionOf(pathname: string, search = ""): StudioSection {
     case "desk":
       return "work";
     case "people":
+    case "access":
       return "clients";
     case "creative": {
       const tab = new URLSearchParams(search).get("tab");
@@ -75,6 +76,8 @@ export function sectionOf(pathname: string, search = ""): StudioSection {
       return "library";
     case "releases":
     case "review":
+    case "mockups-review":
+    case "placement":
       return "releases";
     case "commerce":
     case "orders":

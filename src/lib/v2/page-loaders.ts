@@ -26,6 +26,7 @@ export const v2Pages = {
   contentReview: () => import("@/pages/admin-v2/V2ContentReview"),
   mockupReview: () => import("@/pages/admin-v2/V2MockupReview"),
   placementStudio: () => import("@/pages/admin-v2/V2PlacementStudio"),
+  accessRequests: () => import("@/pages/admin-v2/V2AccessRequests"),
 } as const;
 
 let started = false;
