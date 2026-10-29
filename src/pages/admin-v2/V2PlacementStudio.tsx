@@ -8,6 +8,8 @@ import { useBlanks, useEntities } from "@/lib/v2/data";
 import { studioCode, type ArtItem } from "@/lib/v2/art-library";
 import { MOCKUP_REVIEW_KEY } from "@/lib/v2/mockup-review";
 import { ArtLibraryPanel } from "@/components/admin-v2/ArtLibraryPanel";
+import { ShopifyPublishDialog, type PublishPlan } from "@/components/admin-v2/ShopifyPublishDialog";
+import { linkProductToClient } from "@/lib/v2/studio-shopify";
 import { corsSafeUrl, loadImage, downloadBlob } from "@/lib/v2/mockup-export";
 import {
   BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, hasWhiteSheet, heightForArt, knockOutWhite, mockupFilename, moveBy, normalizeDeg, oversize, presetRect, referenceFilename, resizeBy, toPreset,
@@ -134,7 +136,10 @@ export default function V2PlacementStudio() {
   const [saving, setSaving] = useState<string | null>(null);
   const [price, setPrice] = useState("45");
   const [viaReview, setViaReview] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishing, setPublishing] = useState<string | null>(null);
+  /** Colours unticked in the every-colour strip: not saved, not downloaded, not on Shopify. */
+  const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
   const [showGuides, setShowGuides] = useState(true);
   const [everyColour, setEveryColour] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -168,6 +173,8 @@ export default function V2PlacementStudio() {
   }, [colors, colorId]);
   const color = colors.find((c) => c.id === colorId) ?? null;
   const photo = ownImage ?? (color ? (view === "back" ? color.imageUrlBack ?? color.imageUrl : color.imageUrl) : null);
+  useEffect(() => { setExcluded(new Set()); }, [blankId]);
+  const toggleColour = (id: string) => setExcluded((cur) => { const next = new Set(cur); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const blankName = blank ? [blank.brand, blank.styleNumber].filter(Boolean).join(" ") || blank.displayName || blank.name : "Any tee";
 
   const presets = useMemo(() => {
@@ -392,13 +399,22 @@ export default function V2PlacementStudio() {
   const saveColours = useMemo(() => {
     const all = blank?.colors ?? [];
     const usable = all.filter((c) => sidesWithArt.every((v) => garmentOf(c, v)));
-    return everyColour ? usable : usable.filter((c) => c.id === colorId);
+    return everyColour ? usable.filter((c) => !excluded.has(c.id)) : usable.filter((c) => c.id === colorId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blank, everyColour, colorId, sides]);
-  const code = client && productName.trim() ? studioCode(client.slug || client.name, productName) : null;
+  }, [blank, everyColour, colorId, sides, excluded]);
+  const codeFor = (name: string) => (client && name.trim() ? studioCode(client.slug || client.name, name) : null);
+  const code = codeFor(productName);
 
-  const saveMockups = async () => {
-    if (!client || !code || !sidesWithArt.length || !saveColours.length) return;
+  /**
+   * Render + store the ticked colours and record them. Unticked colours that were
+   * saved before are archived, so they come off Shopify on the next sync.
+   * Returns false when nothing was saved.
+   */
+  const saveMockups = async (opts: { name?: string; approved?: boolean } = {}): Promise<boolean> => {
+    const name = (opts.name ?? productName).trim();
+    const code = codeFor(name);
+    const approved = opts.approved ?? !viaReview;
+    if (!client || !code || !sidesWithArt.length || !saveColours.length) return false;
     const total = saveColours.length;
     const rows: Record<string, unknown>[] = [];
     let n = 0;
@@ -415,63 +431,96 @@ export default function V2PlacementStudio() {
           urls[v] = supabase.storage.from("studio-mockups").getPublicUrl(path).data.publicUrl;
         }
         rows.push({
-          athlete_id: client.id, design_code: code, design_name: productName.trim(), product_title: productName.trim(),
+          athlete_id: client.id, design_code: code, design_name: name, product_title: name,
           garment: blankName, blank_style: blankName, color: c.name,
           front_url: urls.front ?? null, back_url: urls.back ?? null, front_drive_id: null, back_drive_id: null,
           // Straight to approved unless it should go through Mockup Review first.
-          review_state: viaReview ? "pending" : "approved", review_note: null, reviewed_at: viaReview ? null : new Date().toISOString(), reviewed_by: null, updated_at: new Date().toISOString(),
+          review_state: approved ? "approved" : "pending", review_note: null, reviewed_at: approved ? new Date().toISOString() : null, reviewed_by: null, updated_at: new Date().toISOString(),
         });
       }
       const { error } = await supabase.from("mockup_reviews" as never).upsert(rows as never, { onConflict: "design_code,garment,color" });
       if (error) throw error;
+      const droppedNames = everyColour ? (blank?.colors ?? []).filter((c) => excluded.has(c.id)).map((c) => c.name) : [];
+      if (droppedNames.length) {
+        await supabase.from("mockup_reviews" as never).update({ review_state: "archived", review_note: "Unticked in Placement Studio", updated_at: new Date().toISOString() } as never)
+          .eq("design_code", code).eq("garment", blankName).in("color", droppedNames).neq("review_state", "archived");
+      }
       void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
-      toast.success(`${rows.length} mockup${rows.length === 1 ? "" : "s"} of ${productName.trim()} saved${viaReview ? " for review" : ""}`, {
+      toast.success(`${rows.length} mockup${rows.length === 1 ? "" : "s"} of ${name} saved${approved ? "" : " for review"}`, {
         action: { label: "Open", onClick: () => { window.location.href = openHref; } },
       });
+      return true;
     } catch (e) {
       toast.error(`Stopped after ${rows.length}: ${e instanceof Error ? e.message : "could not save"}`);
+      return false;
     } finally {
       setSaving(null);
+    }
+  };
+
+  const invokeSync = async (body: Record<string, unknown>) => {
+    const { data, error } = await supabase.functions.invoke("mockup-review-sync", { body });
+    if (error) {
+      const ctx = (error as { context?: Response }).context;
+      const b = ctx ? await ctx.json().catch(() => null) : null;
+      throw new Error(b?.error ?? error.message);
+    }
+    const r = data as { added?: string[]; removed?: string[]; note?: string; error?: string; product_gid?: string; title?: string; created?: boolean; collection?: { title: string } | null };
+    if (r.error) throw new Error(r.error);
+    return r;
+  };
+
+  /** The whole last step: save the ticked colours, then create / update the Shopify product, collection and tags. */
+  const publish = async (plan: PublishPlan) => {
+    if (!client) return;
+    const name = plan.target.kind === "new" ? plan.target.title : plan.target.product.title;
+    const pCode = codeFor(name);
+    if (!pCode) return;
+    try {
+      setPublishing("Saving mockups…");
+      if (name !== productName) setProductName(name);
+      const ok = await saveMockups({ name, approved: true });
+      if (!ok) return;
+      if (plan.target.kind === "existing") {
+        await supabase.from("mockup_reviews" as never).update({ shopify_product_gid: plan.target.product.shopifyGid, product_title: name } as never).eq("design_code", pCode);
+      }
+      setPublishing("Sending to Shopify…");
+      const r = await invokeSync({
+        design_code: pCode, product_type: productType, price: plan.price.toFixed(2), sku_prefix: skuPrefix,
+        title: plan.target.kind === "new" ? name : undefined, tags: plan.tags,
+        collection_id: plan.collection.kind === "existing" ? plan.collection.id : undefined,
+        new_collection_title: plan.collection.kind === "new" ? plan.collection.title : undefined,
+      });
+      if (r.created && r.product_gid) {
+        setPublishing("Linking to the client…");
+        await linkProductToClient({ shopifyGid: r.product_gid, title: r.title ?? name, clientId: client.id, price: plan.price, colors: saveColours.map((c) => c.name) });
+      }
+      void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
+      void qc.invalidateQueries({ queryKey: ["v2", "studio", "client-products", client.id] });
+      void qc.invalidateQueries({ queryKey: ["v2", "studio", "shopify-collections"] });
+      setPublishOpen(false);
+      toast.success(
+        `${name}: ${r.created ? "created on Shopify (draft)" : "updated on Shopify"} · ${r.added?.length ?? 0} colour${r.added?.length === 1 ? "" : "s"} added${r.removed?.length ? ` · ${r.removed.length} removed` : ""}${r.collection ? ` · in ${r.collection.title}` : ""}`,
+        { duration: 8000 },
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Shopify didn't take it");
+    } finally {
+      setPublishing(null);
     }
   };
   const openHref = code ? `/admin-v2/mockups-review?design=${encodeURIComponent(code)}&tab=${viaReview ? "pending" : "approved"}` : "/admin-v2/mockups-review";
   const productType = blank ? (blank.garmentType || "tee").replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()) : "Tee";
   const skuPrefix = blank ? `AX${(blank.styleNumber ?? blank.name ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase().slice(0, 10)}` : "AX";
 
-  /** The saved, approved colours of this product -> a Shopify DRAFT (or added to the existing product). */
-  const createShopifyProduct = async () => {
-    if (!code) return;
-    const amount = Number(price);
-    if (!(amount > 0)) { toast.error("Set a price first"); return; }
-    setCreating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("mockup-review-sync", {
-        body: { design_code: code, product_type: productType, price: amount.toFixed(2), sku_prefix: skuPrefix },
-      });
-      if (error) {
-        const ctx = (error as { context?: Response }).context;
-        const body = ctx ? await ctx.json().catch(() => null) : null;
-        throw new Error(body?.error ?? error.message);
-      }
-      const r = data as { added?: string[]; removed?: string[]; note?: string; product_gid?: string };
-      void qc.invalidateQueries({ queryKey: MOCKUP_REVIEW_KEY });
-      if (r.note) toast.message(r.note === "Nothing approved yet" ? "Save the mockups first (or approve them in Mockup Review)." : r.note);
-      else toast.success(`${productName.trim()}: ${r.added?.length ?? 0} colour${r.added?.length === 1 ? "" : "s"} on Shopify (draft)${r.removed?.length ? `, ${r.removed.length} removed` : ""}`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Shopify didn't take it");
-    } finally {
-      setCreating(false);
-    }
-  };
-
   const mockupJobs = useMemo(() => {
     if (!arts.length) return [] as Array<{ art: Art; colour: string; url: string }>;
     const targets = everyColour
-      ? colors.map((c) => ({ colour: c.name, url: garmentOf(c) })).filter((t): t is { colour: string; url: string } => !!t.url)
+      ? colors.filter((c) => !excluded.has(c.id)).map((c) => ({ colour: c.name, url: garmentOf(c) })).filter((t): t is { colour: string; url: string } => !!t.url)
       : photo ? [{ colour: ownImage ? "Custom" : color?.name ?? "Colour", url: photo }] : [];
     return arts.flatMap((a) => targets.map((t) => ({ art: a, ...t })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arts, everyColour, colors, photo, ownImage, color, view]);
+  }, [arts, everyColour, colors, photo, ownImage, color, view, excluded]);
 
   const exportMockups = async () => {
     if (!mockupJobs.length) return;
@@ -544,15 +593,26 @@ export default function V2PlacementStudio() {
             </div>
             {everyColour && colors.length > 0 && (
               <div className="mx-auto mt-3 max-w-[760px]">
-                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">Every colour · click one to check it up close</p>
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(var(--ax-secondary))]">Every colour · {colors.length - colors.filter((c) => excluded.has(c.id)).length} of {colors.length} in</p>
+                  <span className="text-[11px] text-[hsl(var(--ax-faint))]">Click to check up close · untick the ones that don't look right</span>
+                  <span className="ml-auto flex gap-2 text-[11px]">
+                    <button type="button" className="underline-offset-2 hover:underline" onClick={() => setExcluded(new Set())}>All in</button>
+                    <button type="button" className="underline-offset-2 hover:underline" onClick={() => setExcluded(new Set(colors.map((c) => c.id)))}>None</button>
+                  </span>
+                </div>
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {colors.map((c) => {
                     const g = garmentOf(c);
                     const a = art ? artRect(r, art.aspect) : null;
                     const on = !ownImage && c.id === colorId;
+                    const out = excluded.has(c.id);
                     return (
-                      <button key={c.id} type="button" onClick={() => { setColorId(c.id); setOwnImage(null); }} title={c.name}
-                        className={`w-[92px] shrink-0 overflow-hidden rounded-lg border-2 bg-[#f3f3f1] text-left ${on ? "border-[#03AC13]" : "border-transparent hover:border-[hsl(var(--ax-border))]"}`}>
+                      <div key={c.id} className={`relative w-[92px] shrink-0 overflow-hidden rounded-lg border-2 bg-[#f3f3f1] ${on ? "border-[#03AC13]" : "border-transparent hover:border-[hsl(var(--ax-border))]"} ${out ? "opacity-40" : ""}`}>
+                      <label className="absolute right-1 top-1 z-10 grid h-5 w-5 cursor-pointer place-items-center rounded bg-white/90 shadow" title={out ? `Put ${c.name} back in` : `Leave ${c.name} out`}>
+                        <input type="checkbox" className="h-3.5 w-3.5 accent-[#03AC13]" checked={!out} onChange={() => toggleColour(c.id)} aria-label={`Include ${c.name}`} />
+                      </label>
+                      <button type="button" onClick={() => { setColorId(c.id); setOwnImage(null); }} title={c.name} className="block w-full text-left">
                         <span className="relative block w-full" style={{ aspectRatio: String(aspect) }}>
                           {g && <img src={g} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-fill" />}
                           {a && art && (
@@ -561,8 +621,9 @@ export default function V2PlacementStudio() {
                             </svg>
                           )}
                         </span>
-                        <span className="block truncate px-1.5 py-1 text-[10.5px]">{c.name}</span>
+                        <span className={`block truncate px-1.5 py-1 text-[10.5px] ${out ? "line-through" : ""}`}>{c.name}</span>
                       </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -680,9 +741,9 @@ export default function V2PlacementStudio() {
                 <label className="flex items-center gap-2 text-[11.5px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={viaReview} onChange={(e) => setViaReview(e.target.checked)} />Send through Mockup Review first</label>
                 <div className="grid grid-cols-2 gap-1.5">
                   <Link to={openHref} className={`${pill} justify-center ${code ? "" : "pointer-events-none opacity-40"}`}><ExternalLink className="h-3.5 w-3.5" />Open mockups</Link>
-                  <button type="button" className={`${pill} justify-center`} disabled={!code || creating} onClick={() => void createShopifyProduct()}
-                    title={`Approved colours → Shopify draft · ${productType} · $${price || "?"} · SKU ${skuPrefix}-…`}>
-                    {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShoppingBag className="h-3.5 w-3.5" />}Create on Shopify
+                  <button type="button" className={`${pill} justify-center`} disabled={!sidesWithArt.length || !saveColours.length || !!ownImage} onClick={() => setPublishOpen(true)}
+                    title="Pick the product, client and collection, then save + send to Shopify in one go">
+                    <ShoppingBag className="h-3.5 w-3.5" />Add to Shopify…
                   </button>
                 </div>
               </div>
@@ -701,6 +762,19 @@ export default function V2PlacementStudio() {
           </aside>
         </div>
       )}
+      <ShopifyPublishDialog
+        open={publishOpen}
+        onClose={() => setPublishOpen(false)}
+        entities={entities.data ?? []}
+        clientId={clientId}
+        onClientChange={pickClient}
+        productName={productName}
+        price={price}
+        productType={productType}
+        summary={`${sidesWithArt.map((v) => (v === "front" ? "Front" : "Back")).join(" + ") || "No art yet"} · ${saveColours.length} colour${saveColours.length === 1 ? "" : "s"}${saveColours.length ? ` (${saveColours.slice(0, 6).map((c) => c.name).join(", ")}${saveColours.length > 6 ? "…" : ""})` : ""} · ${blankName}`}
+        busy={publishing ?? (saving ? `Saving ${saving}…` : null)}
+        onPublish={(plan) => void publish(plan)}
+      />
     </>
   );
 }
