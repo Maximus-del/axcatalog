@@ -97,15 +97,18 @@ export function oversize(p: Pick<Preset, "widthIn" | "heightIn">): boolean {
 const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, "").replace(/\.$/, ""));
 
 /** Where horizontally, in words. */
-export function sideWords(centerXIn: number): string {
+export function sideWords(centerXIn: number, view: View = "front"): string {
   if (Math.abs(centerXIn) < 0.05) return "centred";
-  const side = centerXIn > 0 ? "wearer's left chest (viewer's right)" : "wearer's right chest (viewer's left)";
+  // Looking at the back, the viewer's right IS the wearer's right.
+  const side = view === "back"
+    ? (centerXIn > 0 ? "right side as you look at the back" : "left side as you look at the back")
+    : (centerXIn > 0 ? "wearer's left chest (viewer's right)" : "wearer's right chest (viewer's left)");
   return `${n(Math.abs(centerXIn))} in from centre on the ${side}`;
 }
 
 /** The one line handed to GPT / a printer alongside the PNG. */
 export function describe(p: Pick<Preset, "name" | "view" | "widthIn" | "heightIn" | "topIn" | "centerXIn">, blank: string): string {
-  return `${blank} · ${p.view.toUpperCase()} · ${p.name}: print area ${n(p.widthIn)} × ${n(p.heightIn)} in, top edge ${n(p.topIn)} in below the collar, ${sideWords(p.centerXIn)}. Keep the artwork inside the green box.`;
+  return `${blank} · ${p.view.toUpperCase()} · ${p.name}: print area ${n(p.widthIn)} × ${n(p.heightIn)} in, top edge ${n(p.topIn)} in below the collar, ${sideWords(p.centerXIn, p.view)}. Keep the artwork inside the green box.`;
 }
 
 /** Saved row -> Preset. */
@@ -175,4 +178,47 @@ export function resizeBy<T extends Pick<Preset, "widthIn" | "heightIn">>(p: T, d
 export function mockupFilename(artName: string, blank: string, color: string, view: View): string {
   const slug = (s: string) => s.replace(/\.[a-z0-9]+$/i, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return `${slug(artName)}_${slug(blank)}_${slug(color)}_${view.toUpperCase()}.png`;
+}
+
+// ---------------------------------------------------------------------------
+// WHITE BACKGROUND KNOCK-OUT
+//
+// Artwork often arrives flattened on white (a JPG, or a PNG exported without
+// transparency). Pasted on a black tee that's a white rectangle. This removes
+// only the white CONNECTED TO THE EDGES (flood fill from the border), so white
+// inside the design — highlights, lettering fills — stays.
+
+/** True when most corners are opaque near-white: the art sits on a white sheet. */
+export function hasWhiteSheet(data: Uint8ClampedArray, w: number, h: number, tol = 24): boolean {
+  const at = (x: number, y: number) => {
+    const i = (y * w + x) * 4;
+    return data[i + 3] > 250 && data[i] >= 255 - tol && data[i + 1] >= 255 - tol && data[i + 2] >= 255 - tol;
+  };
+  const corners = [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)];
+  return corners.filter(Boolean).length >= 3;
+}
+
+/** Make edge-connected near-white pixels transparent, in place. Returns pixels cleared. */
+export function knockOutWhite(data: Uint8ClampedArray, w: number, h: number, tol = 24): number {
+  const white = (p: number) => {
+    const i = p * 4;
+    return data[i + 3] > 0 && data[i] >= 255 - tol && data[i + 1] >= 255 - tol && data[i + 2] >= 255 - tol;
+  };
+  const seen = new Uint8Array(w * h);
+  const stack: number[] = [];
+  const push = (p: number) => { if (!seen[p] && white(p)) { seen[p] = 1; stack.push(p); } };
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  let cleared = 0;
+  while (stack.length) {
+    const p = stack.pop()!;
+    data[p * 4 + 3] = 0;
+    cleared++;
+    const x = p % w;
+    if (x > 0) push(p - 1);
+    if (x < w - 1) push(p + 1);
+    if (p >= w) push(p - w);
+    if (p < w * (h - 1)) push(p + w);
+  }
+  return cleared;
 }

@@ -79,3 +79,27 @@ group("placement studio — artwork layer", () => {
     expect(mockupFilename("Crimzyn Chin back.png", "AXISM 7010", "Smoke Gray", "back")).toBe("Crimzyn-Chin-back_AXISM-7010_Smoke-Gray_BACK.png");
   });
 });
+
+import { hasWhiteSheet, knockOutWhite } from "./placement-studio";
+
+group("placement studio — white knock-out", () => {
+  // 5x5 white sheet with a black ring around a white centre pixel.
+  const make = () => {
+    const w = 5, h = 5, d = new Uint8ClampedArray(w * h * 4).fill(255);
+    for (const [x, y] of [[1,1],[2,1],[3,1],[1,2],[3,2],[1,3],[2,3],[3,3]]) { const i = (y * w + x) * 4; d[i] = d[i + 1] = d[i + 2] = 0; }
+    return { d, w, h };
+  };
+  it("spots art on a white sheet", () => {
+    const { d, w, h } = make();
+    expect(hasWhiteSheet(d, w, h)).toBe(true);
+    const t = new Uint8ClampedArray(16).fill(0);
+    expect(hasWhiteSheet(t, 2, 2)).toBe(false);
+  });
+  it("clears only the white touching the edges, keeps white inside the design", () => {
+    const { d, w, h } = make();
+    expect(knockOutWhite(d, w, h)).toBe(16);
+    expect(d[(0 * w + 0) * 4 + 3]).toBe(0);
+    expect(d[(2 * w + 2) * 4 + 3]).toBe(255);
+    expect(d[(1 * w + 1) * 4 + 3]).toBe(255);
+  });
+});

@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBlanks } from "@/lib/v2/data";
 import { loadImage, downloadBlob } from "@/lib/v2/mockup-export";
 import {
-  BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, heightForArt, mockupFilename, moveBy, oversize, presetRect, referenceFilename, resizeBy, toPreset,
+  BUILT_IN_PRESETS, MAX_PRINT, artRect, clamp, defaultCalibration, describe, hasWhiteSheet, heightForArt, knockOutWhite, mockupFilename, moveBy, oversize, presetRect, referenceFilename, resizeBy, toPreset,
   type Calibration, type Preset, type View,
 } from "@/lib/v2/placement-studio";
 import { PageHeader, Skeleton } from "@/components/admin-v2/primitives";
@@ -20,8 +20,31 @@ import { PageHeader, Skeleton } from "@/components/admin-v2/primitives";
 // and every artwork uses the same placement. "Export mockups" renders the art
 // on the blank (one file per artwork, optionally every colour).
 
-type Art = { id: string; name: string; url: string; aspect: number };
-const readAspect = (url: string) => new Promise<number>((res) => { const i = new Image(); i.onload = () => res(i.naturalWidth / Math.max(1, i.naturalHeight)); i.onerror = () => res(1); i.src = url; });
+type Art = { id: string; name: string; url: string; srcUrl: string; cleanUrl: string | null; cleaned: boolean; aspect: number };
+
+/** Read an uploaded image; if it sits on a white sheet, also make a version with that white removed. */
+async function prepareArt(file: File): Promise<Art> {
+  const srcUrl = URL.createObjectURL(file);
+  const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error(`Could not read ${file.name}`)); i.src = srcUrl; });
+  const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
+  let cleanUrl: string | null = null;
+  try {
+    const scale = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale));
+    const h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true })!;
+    ctx.drawImage(img, 0, 0, w, h);
+    const px = ctx.getImageData(0, 0, w, h);
+    if (hasWhiteSheet(px.data, w, h) && knockOutWhite(px.data, w, h) > 0) {
+      ctx.putImageData(px, 0, 0);
+      const blob = await new Promise<Blob | null>((res) => c.toBlob(res, "image/png"));
+      if (blob) cleanUrl = URL.createObjectURL(blob);
+    }
+  } catch { /* keep the original */ }
+  return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${file.name}`, name: file.name, srcUrl, cleanUrl, cleaned: !!cleanUrl, url: cleanUrl ?? srcUrl, aspect };
+}
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const ACCENT = "#03AC13";
@@ -98,7 +121,12 @@ export default function V2PlacementStudio() {
   // A new view starts from that view's calibration and its first preset.
   useEffect(() => {
     setCalib(defaultCalibration(view));
-    setBox((b) => (b.view === view ? b : BUILT_IN_PRESETS.find((p) => p.view === view) ?? b));
+    setBox((b) => {
+      if (b.view === view) return b;
+      const next = BUILT_IN_PRESETS.find((p) => p.view === view) ?? b;
+      return art ? { ...next, heightIn: Math.min(MAX_PRINT.heightIn, heightForArt(next.widthIn, art.aspect)) } : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
   const presets = useMemo(() => {
@@ -129,12 +157,20 @@ export default function V2PlacementStudio() {
     if (!files?.length) return;
     const added: Art[] = [];
     for (const f of Array.from(files)) {
-      const url = URL.createObjectURL(f);
-      added.push({ id: `${Date.now()}-${f.name}`, name: f.name, url, aspect: await readAspect(url) });
+      try { added.push(await prepareArt(f)); } catch (e) { toast.error(e instanceof Error ? e.message : "Could not read that file"); }
+    }
+    if (!added.length) return;
+    // First artwork lands big and centred (a full print), not in a 4-inch logo box.
+    if (!arts.length) {
+      const widthIn = view === "back" ? 12 : 10;
+      setBox((bx) => ({ ...bx, name: view === "back" ? "Full back" : "Full front", widthIn, heightIn: Math.min(MAX_PRINT.heightIn, heightForArt(widthIn, added[0].aspect)), topIn: view === "back" ? 4 : 3, centerXIn: 0, builtIn: false }));
     }
     setArts((a) => { setArtIdx(a.length); return [...a, ...added]; });
-    if (!added.every((a) => /\.png$/i.test(a.name))) toast.message("Tip: use transparent PNGs — a JPG brings its white background onto the shirt.");
+    setShowGuides(false);
+    if (added.some((a) => a.cleaned)) toast.success("Removed the white background so it sits on the shirt. Untick “Remove white background” to undo.");
   };
+  const toggleClean = (on: boolean) =>
+    setArts((list) => list.map((a, i) => (i === artIdx && a.cleanUrl ? { ...a, cleaned: on, url: on ? a.cleanUrl : a.srcUrl } : a)));
   const removeArt = (i: number) => {
     setArts((a) => a.filter((_, j) => j !== i));
     setArtIdx((k) => (k > i ? k - 1 : k === i ? Math.max(0, i - 1) : k));
@@ -380,8 +416,8 @@ export default function V2PlacementStudio() {
                   {(["front", "back"] as const).map((v) => <button key={v} type="button" className={chip(view === v)} onClick={() => setView(v)}>{v === "front" ? "Front" : "Back"}</button>)}
                 </div>
               </div>
-              <button type="button" className={`${pill} justify-center ${ownImage ? "" : "col-span-2"}`} onClick={() => fileRef.current?.click()}><Shirt className="h-3.5 w-3.5" />{ownImage ? "Swap garment photo" : "Use my own garment photo"}</button>
-              {ownImage && <button type="button" className={`${pill} justify-center`} onClick={() => setOwnImage(null)}><RotateCcw className="h-3.5 w-3.5" />Back to blank</button>}
+              <button type="button" className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-full bg-[#03AC13] px-3.5 py-2.5 text-[13px] font-semibold text-white" onClick={() => artRef.current?.click()}><ImagePlus className="h-4 w-4" />{arts.length ? "Upload more artwork" : "Upload artwork"}</button>
+              {art?.cleanUrl && <label className="col-span-2 flex items-center gap-2 text-[12px] text-[hsl(var(--ax-secondary))]"><input type="checkbox" checked={art.cleaned} onChange={(e) => toggleClean(e.target.checked)} />Remove white background</label>}
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setOwnImage(URL.createObjectURL(f)); e.target.value = ""; }} />
             </div>
 
@@ -410,6 +446,10 @@ export default function V2PlacementStudio() {
             <details className="rounded-lg border border-[hsl(var(--ax-border))] px-3 py-2">
               <summary className="cursor-pointer text-[12px] font-semibold">Line the guides up with this photo</summary>
               <p className="mt-1 text-[11.5px] text-[hsl(var(--ax-faint))]">Green dot on the collar seam; blue lines on the body edges at the armpits. Set the chest width of the sample.</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <button type="button" className={pill} onClick={() => fileRef.current?.click()}><Shirt className="h-3.5 w-3.5" />{ownImage ? "Swap shirt photo" : "Use a different shirt photo"}</button>
+                {ownImage && <button type="button" className={pill} onClick={() => setOwnImage(null)}><RotateCcw className="h-3.5 w-3.5" />Back to blank</button>}
+              </div>
               <div className="mt-2 flex flex-col gap-2">
                 <Slider name="Chest width (flat)" value={calib.chestWidthIn} min={16} max={30} step={0.5} onChange={(v) => setCalib((c) => ({ ...c, chestWidthIn: v }))} />
                 <Slider name="Collar height" unit="%" value={Math.round(calib.collarY * 100)} min={5} max={45} step={0.5} onChange={(v) => setCalib((c) => ({ ...c, collarY: v / 100 }))} />
