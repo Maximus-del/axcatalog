@@ -33,11 +33,18 @@ type Art = {
 };
 
 /** Each side of the garment keeps its own art, placement and photo alignment. */
-type Side = { box: Preset; calib: Calibration; arts: Art[]; idx: number };
+/**
+ * Each side of the garment keeps its own art, placement and photo alignment.
+ * `box` is the placement every colour uses; `overrides` holds the colours you
+ * nudged one by one (their photos never line up perfectly).
+ */
+type Side = { box: Preset; calib: Calibration; arts: Art[]; idx: number; overrides: Record<string, Preset> };
 const newSide = (v: View): Side => ({
   box: v === "front" ? BUILT_IN_PRESETS[1] : BUILT_IN_PRESETS.find((p) => p.view === "back")!,
-  calib: defaultCalibration(v), arts: [], idx: 0,
+  calib: defaultCalibration(v), arts: [], idx: 0, overrides: {},
 });
+/** The placement a colour actually uses on this side. */
+const boxFor = (sd: Pick<Side, "box" | "overrides">, colourId: string | null | undefined): Preset => (colourId && sd.overrides?.[colourId]) || sd.box;
 
 /** Read an uploaded image; if it sits on a white sheet, also make a version with that white removed. */
 async function prepareArt(file: File, from?: Pick<Art, "fileId" | "designId" | "designTitle">): Promise<Art> {
@@ -162,6 +169,8 @@ export default function V2PlacementStudio() {
   const [publishing, setPublishing] = useState<string | null>(null);
   /** Colours unticked in the every-colour strip: not saved, not downloaded, not on Shopify. */
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
+  /** Who a drag / slider change applies to while checking colours one by one. */
+  const [scope, setScope] = useState<"all" | "single">("all");
   const [showGuides, setShowGuides] = useState(true);
   const [everyColour, setEveryColour] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -171,12 +180,28 @@ export default function V2PlacementStudio() {
 
   // The side being edited, plus setters that write to it.
   const side = sides[view];
-  const { box, calib, arts, idx: artIdx } = side;
+  const { calib, arts, idx: artIdx } = side;
+  // Placement for the colour on screen: its own if you nudged it, otherwise the shared one.
+  const box = boxFor(side, ownImage ? null : colorId);
+  const hasOwn = !ownImage && !!colorId && !!side.overrides[colorId];
   const art = arts[artIdx] ?? null;
   type Up<T> = T | ((prev: T) => T);
   const patch = (v: View, fn: (s: Side) => Side) => setSides((all) => ({ ...all, [v]: fn(all[v]) }));
   const apply = <T,>(u: Up<T>, prev: T) => (typeof u === "function" ? (u as (p: T) => T)(prev) : u);
-  const setBox = (u: Up<Preset>) => patch(view, (s) => ({ ...s, box: apply(u, s.box) }));
+  /**
+   * "Move all colours": edits the shared placement (colours you nudged keep theirs).
+   * "This colour only": edits just the colour on screen.
+   */
+  const setBox = (u: Up<Preset>) => patch(view, (s) => {
+    if (scope === "single" && everyColour && colorId && !ownImage) {
+      const cur = s.overrides[colorId] ?? s.box;
+      return { ...s, overrides: { ...s.overrides, [colorId]: apply(u, cur) } };
+    }
+    return { ...s, box: apply(u, s.box) };
+  });
+  const resetColour = () => colorId && patch(view, (s) => { const o = { ...s.overrides }; delete o[colorId]; return { ...s, overrides: o }; });
+  /** This colour's placement becomes everyone's, and every one-off nudge is cleared. */
+  const copyToAll = () => patch(view, (s) => ({ ...s, box: boxFor(s, colorId), overrides: {} }));
   const setCalib = (u: Up<Calibration>) => patch(view, (s) => ({ ...s, calib: apply(u, s.calib) }));
   const setArtIdx = (i: number) => patch(view, (s) => ({ ...s, idx: i }));
   const pickClient = (id: string | null) => { setClientId(id); try { if (id) localStorage.setItem("ax.studio.client", id); else localStorage.removeItem("ax.studio.client"); } catch { /* private mode */ } };
@@ -231,8 +256,10 @@ export default function V2PlacementStudio() {
 
   // Switching artwork keeps width + position; height follows the new art.
   useEffect(() => {
-    if (art) setBox((b) => (b.heightIn === heightForArt(b.widthIn, art.aspect) ? b : { ...b, heightIn: heightForArt(b.widthIn, art.aspect) }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!art) return;
+    // New art: every colour's box (shared + one-offs) takes the art's proportions.
+    const fit = (b: Preset) => (b.heightIn === heightForArt(b.widthIn, art.aspect) ? b : { ...b, heightIn: heightForArt(b.widthIn, art.aspect) });
+    patch(view, (s) => ({ ...s, box: fit(s.box), overrides: Object.fromEntries(Object.entries(s.overrides).map(([k, b]) => [k, fit(b)])) }));
   }, [art, view]);
 
   /**
@@ -247,7 +274,7 @@ export default function V2PlacementStudio() {
         const widthIn = asLogo ? 4 : v === "back" ? 12 : 10;
         bx = { ...bx, name: asLogo ? "Center chest logo" : v === "back" ? "Full back" : "Full front", widthIn, heightIn: Math.min(MAX_PRINT.heightIn, heightForArt(widthIn, added[0].aspect)), topIn: asLogo ? 3 : v === "back" ? 4 : 3, centerXIn: 0, builtIn: false };
       }
-      return { ...s, box: bx, arts: [...s.arts, ...added], idx: s.arts.length };
+      return { ...s, box: bx, arts: [...s.arts, ...added], idx: s.arts.length, overrides: !s.arts.length || asLogo ? {} : s.overrides };
     });
     setShowGuides(false);
     if (added.some((a) => a.cleaned)) toast.success("Removed the white background so it sits on the shirt. Untick “Remove white background” to undo.");
@@ -500,7 +527,7 @@ export default function V2PlacementStudio() {
         const sd = job.sides[v];
         const g = garmentOf(c, v);
         if (!g) continue;
-        const blob = await renderMockup(g, sd.arts[sd.idx], sd);
+        const blob = await renderMockup(g, sd.arts[sd.idx], { box: boxFor(sd, c.id), calib: sd.calib });
         const path = `${job.clientId}/${code}/${c.name.replace(/[^A-Za-z0-9]+/g, "-")}-${v}-${Date.now()}.png`;
         const up = await supabase.storage.from("studio-mockups").upload(path, blob, { contentType: "image/png", upsert: true });
         if (up.error) throw up.error;
@@ -648,13 +675,13 @@ export default function V2PlacementStudio() {
   const skuPrefix = blank ? `AX${(blank.styleNumber ?? blank.name ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase().slice(0, 10)}` : "AX";
 
   const mockupJobs = useMemo(() => {
-    if (!arts.length) return [] as Array<{ art: Art; colour: string; url: string }>;
+    if (!arts.length) return [] as Array<{ art: Art; colour: string; url: string; colourId: string | null }>;
     const targets = everyColour
-      ? colors.filter((c) => !excluded.has(c.id)).map((c) => ({ colour: c.name, url: garmentOf(c) })).filter((t): t is { colour: string; url: string } => !!t.url)
-      : photo ? [{ colour: ownImage ? "Custom" : color?.name ?? "Colour", url: photo }] : [];
+      ? colors.filter((c) => !excluded.has(c.id)).map((c) => ({ colour: c.name, url: garmentOf(c), colourId: c.id as string | null })).filter((t): t is { colour: string; url: string; colourId: string | null } => !!t.url)
+      : photo ? [{ colour: ownImage ? "Custom" : color?.name ?? "Colour", url: photo, colourId: ownImage ? null : colorId }] : [];
     return arts.flatMap((a) => targets.map((t) => ({ art: a, ...t })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arts, everyColour, colors, photo, ownImage, color, view, excluded]);
+  }, [arts, everyColour, colors, photo, ownImage, color, view, excluded, colorId]);
 
   const exportMockups = async () => {
     if (!mockupJobs.length) return;
@@ -662,7 +689,7 @@ export default function V2PlacementStudio() {
     let done = 0;
     try {
       for (const j of mockupJobs) {
-        const blob = await renderMockup(j.url, j.art);
+        const blob = await renderMockup(j.url, j.art, { box: boxFor(side, j.colourId), calib });
         downloadBlob(blob, mockupFilename(j.art.name, blankName, j.colour, view));
         done++;
         if (mockupJobs.length > 1) await pause(350); // browsers drop rapid back-to-back downloads
@@ -727,7 +754,7 @@ export default function V2PlacementStudio() {
                   <circle cx={calib.collarX * W} cy={calib.collarY * H} r="18" fill="transparent" />
                   <circle cx={calib.collarX * W} cy={calib.collarY * H} r="8" fill={ACCENT} stroke="#fff" strokeWidth="3" />
                 </g>
-                <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT} style={{ pointerEvents: "none" }}>{box.widthIn} × {box.heightIn} in · {box.topIn} in below collar{rotation ? ` · ${rotation}°` : ""}</text>
+                <text x={r.x} y={r.y - 8} fontSize="20" fontWeight="600" fill={tooBig ? "#dc2626" : ACCENT} style={{ pointerEvents: "none" }}>{box.widthIn} × {box.heightIn} in · {box.topIn} in below collar{rotation ? ` · ${rotation}°` : ""}{everyColour && scope === "single" && !ownImage ? ` · ${color?.name ?? "this colour"} only` : ""}</text>
               </svg>
             </div>
             {everyColour && colors.length > 0 && (
@@ -740,10 +767,27 @@ export default function V2PlacementStudio() {
                     <button type="button" className="underline-offset-2 hover:underline" onClick={() => setExcluded(new Set(colors.map((c) => c.id)))}>None</button>
                   </span>
                 </div>
+                {art && (
+                  <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-[hsl(var(--ax-ink)/0.04)] px-2.5 py-1.5">
+                    <span className="text-[11.5px] text-[hsl(var(--ax-secondary))]">Dragging moves</span>
+                    <div className="flex overflow-hidden rounded-full border border-[hsl(var(--ax-border))] text-[11.5px] font-semibold">
+                      <button type="button" className={`px-2.5 py-1 ${scope === "all" ? "bg-[hsl(var(--ax-ink))] text-white" : ""}`} onClick={() => setScope("all")}>All colours</button>
+                      <button type="button" className={`px-2.5 py-1 ${scope === "single" ? "bg-[#03AC13] text-white" : ""}`} onClick={() => setScope("single")}>Only {color?.name ?? "this colour"}</button>
+                    </div>
+                    {hasOwn && <button type="button" className="text-[11.5px] underline-offset-2 hover:underline" onClick={resetColour}>Reset {color?.name}</button>}
+                    {Object.keys(side.overrides).length > 0 && (
+                      <span className="text-[11px] text-[hsl(var(--ax-faint))]">{Object.keys(side.overrides).length} adjusted on their own</span>
+                    )}
+                    <button type="button" className="ml-auto text-[11.5px] font-semibold underline-offset-2 hover:underline" onClick={copyToAll}
+                      title="Every colour gets this colour's placement; one-off adjustments are cleared">Copy this placement to all</button>
+                  </div>
+                )}
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {colors.map((c) => {
                     const g = garmentOf(c);
-                    const a = art ? artRect(r, art.aspect) : null;
+                    const cb = boxFor(side, c.id);
+                    const a = art ? artRect(presetRect(cb, calib, W, H), art.aspect) : null;
+                    const own = !!side.overrides[c.id];
                     const on = !ownImage && c.id === colorId;
                     const out = excluded.has(c.id);
                     return (
@@ -751,12 +795,13 @@ export default function V2PlacementStudio() {
                       <label className="absolute right-1 top-1 z-10 grid h-5 w-5 cursor-pointer place-items-center rounded bg-white/90 shadow" title={out ? `Put ${c.name} back in` : `Leave ${c.name} out`}>
                         <input type="checkbox" className="h-3.5 w-3.5 accent-[#03AC13]" checked={!out} onChange={() => toggleColour(c.id)} aria-label={`Include ${c.name}`} />
                       </label>
-                      <button type="button" onClick={() => { setColorId(c.id); setOwnImage(null); }} title={c.name} className="block w-full text-left">
+                      {own && <span className="absolute left-1 top-1 z-10 rounded bg-[#03AC13] px-1 text-[9px] font-bold uppercase leading-4 text-white" title="Placement adjusted for this colour">Own</span>}
+                      <button type="button" onClick={() => { setColorId(c.id); setOwnImage(null); if (art) setScope("single"); }} title={c.name} className="block w-full text-left">
                         <span className="relative block w-full" style={{ aspectRatio: String(aspect) }}>
                           {g && <img src={g} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-fill" />}
                           {a && art && (
                             <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-hidden="true">
-                              <image href={art.url} x={a.x} y={a.y} width={a.w} height={a.h} preserveAspectRatio="none" transform={turn(rotation, a)} />
+                              <image href={art.url} x={a.x} y={a.y} width={a.w} height={a.h} preserveAspectRatio="none" transform={turn(cb.rotationDeg, a)} />
                             </svg>
                           )}
                         </span>
@@ -806,7 +851,6 @@ export default function V2PlacementStudio() {
                     const sd = b.sides[v0];
                     const bw = 1000, bh = 1000 / b.aspect;
                     const bArt = sd.arts[sd.idx];
-                    const ar = bArt ? artRect(presetRect(sd.box, sd.calib, bw, bh), bArt.aspect) : null;
                     return (
                       <div key={b.id} className="rounded-xl border border-[hsl(var(--ax-border))] p-2.5">
                         <div className="flex flex-wrap items-center gap-2">
@@ -824,12 +868,14 @@ export default function V2PlacementStudio() {
                         <div className="mt-2 flex gap-1.5 overflow-x-auto pb-1">
                           {b.colours.map((c) => {
                             const g = garmentOf(c, v0);
+                            const cbx = boxFor(sd, c.id);
+                            const car = bArt ? artRect(presetRect(cbx, sd.calib, bw, bh), bArt.aspect) : null;
                             return (
                               <span key={c.id} className="relative w-[64px] shrink-0 overflow-hidden rounded-md bg-[#f3f3f1]" title={c.name} style={{ aspectRatio: String(b.aspect) }}>
                                 {g && <img src={g} alt="" loading="lazy" referrerPolicy="no-referrer" className="absolute inset-0 h-full w-full object-fill" />}
-                                {ar && bArt && (
+                                {car && bArt && (
                                   <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${bw} ${bh}`} preserveAspectRatio="none" aria-hidden="true">
-                                    <image href={bArt.url} x={ar.x} y={ar.y} width={ar.w} height={ar.h} preserveAspectRatio="none" transform={turn(sd.box.rotationDeg, ar)} />
+                                    <image href={bArt.url} x={car.x} y={car.y} width={car.w} height={car.h} preserveAspectRatio="none" transform={turn(cbx.rotationDeg, car)} />
                                   </svg>
                                 )}
                               </span>
