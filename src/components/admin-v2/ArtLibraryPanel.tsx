@@ -1,9 +1,10 @@
 import { useMemo, useRef, useState } from "react";
-import { Link2, Loader2, Search, Upload } from "lucide-react";
+import { Link2, Loader2, Search, Trash2, Upload } from "lucide-react";
+import DropZone from "@/components/admin-v2/DropZone";
 import { toast } from "sonner";
 import type { Entity, EntityCounts } from "@/lib/v2/types";
 import {
-  ART_ROLES, countByRole, filterArt, pairFor, useClientArt, useSetArtRole, useUploadArt,
+  ART_ROLES, countByRole, filterArt, pairFor, useClientArt, useDeleteArt, useSetArtRole, useUploadArt,
   type ArtItem, type ArtRole, type ArtTab,
 } from "@/lib/v2/art-library";
 
@@ -38,6 +39,8 @@ export function ArtLibraryPanel({
   const art = useClientArt(clientId);
   const setRole = useSetArtRole(clientId);
   const upload = useUploadArt(clientId, client?.organizationId ?? null);
+  const del = useDeleteArt(clientId);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [tab, setTab] = useState<ArtTab>("all");
   const [query, setQuery] = useState("");
   const [upRole, setUpRole] = useState<ArtRole>("front");
@@ -52,20 +55,23 @@ export function ArtLibraryPanel({
   // Clients with designs first, then alphabetical.
   const clients = useMemo(() => [...entities].sort((a, b) => (b.counts?.designs ?? 0) - (a.counts?.designs ?? 0) || a.name.localeCompare(b.name)), [entities]);
 
-  const doUpload = async (files: FileList | null) => {
-    if (!files?.length) return;
+  const doUpload = async (input: FileList | File[] | null) => {
+    const files = input ? Array.from(input).filter((f) => /^image\//.test(f.type) || /\.(png|jpe?g|webp|svg)$/i.test(f.name)) : [];
+    if (!files.length) { if (input && Array.from(input).length) toast.error("Only images (PNG, JPG, WebP, SVG) go in the art library."); return; }
     let designId: string | null = upSet === "new" ? null : upSet;
-    for (const f of Array.from(files)) {
+    let added = 0;
+    for (const f of files) {
       try {
         // Several files into a "new set" all land in the SAME new set.
         const r = await upload.mutateAsync({ file: f, role: upRole, designId, newTitle: upTitle });
         designId = r.designId;
+        added++;
       } catch (e) {
         toast.error(e instanceof Error ? e.message : `Could not upload ${f.name}`);
       }
     }
     if (designId) setUpSet(designId);
-    toast.success(`Added to ${client?.name ?? "the client"}'s library`);
+    if (added) toast.success(`${added} file${added === 1 ? "" : "s"} added to ${client?.name ?? "the client"}'s library as ${ART_ROLES.find((r) => r.role === upRole)?.label ?? upRole}`);
   };
 
   return (
@@ -82,7 +88,8 @@ export function ArtLibraryPanel({
       </div>
 
       {clientId && (
-        <>
+        <DropZone onFiles={(f) => void doUpload(f)} busy={upload.isPending}
+          label={`Drop PNGs to add to ${client?.name ?? "this client"} as ${ART_ROLES.find((r) => r.role === upRole)?.label ?? "art"}${upSet === "new" ? (upTitle ? ` · new set "${upTitle}"` : " · new set") : ` · ${sets.find(([id]) => id === upSet)?.[1] ?? "set"}`}`}>
           <div className="mt-3 flex flex-wrap items-center gap-1">
             {TABS.map((t) => (
               <button key={t.tab} type="button" className={tabCls(tab === t.tab)} onClick={() => setTab(t.tab)}>
@@ -124,6 +131,20 @@ export function ArtLibraryPanel({
                   >
                     {ART_ROLES.map((r) => <option key={r.role} value={r.role}>{r.label}{i.inferred && r.role === i.role ? " (guess)" : ""}</option>)}
                   </select>
+                  {confirmDel === i.fileId ? (
+                    <div className="flex gap-1 px-1.5 pb-1.5">
+                      <button type="button" className="flex-1 rounded-md bg-red-600 py-0.5 text-[10.5px] font-semibold text-white"
+                        onClick={() => { del.mutate(i, { onSuccess: () => toast.success(i.bucket === "external" ? "Removed from the library (the Drive file is untouched)" : "Deleted"), onError: (e) => toast.error(e instanceof Error ? e.message : "Couldn't delete") }); setConfirmDel(null); }}>
+                        {i.bucket === "external" ? "Remove" : "Delete"}
+                      </button>
+                      <button type="button" className="rounded-md border border-[hsl(var(--ax-border))] px-1.5 text-[10.5px]" onClick={() => setConfirmDel(null)}>No</button>
+                    </div>
+                  ) : (
+                    <button type="button" className="mx-1.5 mb-1.5 flex w-[calc(100%-12px)] items-center justify-center gap-1 rounded-md py-0.5 text-[10.5px] text-[hsl(var(--ax-faint))] hover:bg-red-500/10 hover:text-red-500"
+                      aria-label={`Delete ${i.fileName}`} onClick={() => setConfirmDel(i.fileId)}>
+                      <Trash2 className="h-3 w-3" />Delete
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -151,7 +172,8 @@ export function ArtLibraryPanel({
             </button>
             <input ref={fileRef} type="file" accept="image/png,image/*" multiple className="hidden" onChange={(e) => { void doUpload(e.target.files); e.target.value = ""; }} />
           </div>
-        </>
+          <p className="mt-2 text-[11px] text-[hsl(var(--ax-faint))]">Tip: drag PNGs from your computer anywhere onto this panel — they go in as the "Add as" tag and set above.</p>
+        </DropZone>
       )}
     </section>
   );
