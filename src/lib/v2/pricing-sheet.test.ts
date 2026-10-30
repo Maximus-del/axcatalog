@@ -11,6 +11,8 @@ import {
   garmentOf,
   presetBreakdown,
   presetCosts,
+  previewOf,
+  backPreviewOf,
   printLines,
   rowError,
   rowMaths,
@@ -194,5 +196,29 @@ describe("printLines", () => {
     const lines = printLines([tee, tee2], { [tee2.id]: { ...draftOf(tee2), clientPrice: 30 } }, profit90, presets);
     expect(lines[0]).toMatchObject({ custom: 1 });
     expect(lines[0].shared.clientPrice).toBe(26);
+  });
+});
+
+describe("preview pictures", () => {
+  const img = (file_name: string, sort_order: number, metadata: Record<string, unknown> = {}) => ({
+    file_name,
+    sort_order,
+    storage_bucket: "external",
+    storage_path: `https://drive.example/${file_name}`,
+    metadata,
+  });
+  it("one front and one back, in the same colourway, ignoring model shots", () => {
+    const imgs = [
+      img("model-1.jpg", 0),
+      img("X_Graphite_BACK.png", 3, { drive_color: "GRAPHITE" }),
+      img("X_Black_FRONT.png", 1, { drive_color: "BLACK" }),
+      img("X_Black_BACK.png", 2, { drive_color: "BLACK" }),
+    ];
+    expect(previewOf(imgs)).toBe("https://drive.example/X_Black_FRONT.png");
+    expect(backPreviewOf(imgs)).toBe("https://drive.example/X_Black_BACK.png");
+  });
+  it("AX's chosen sides win, and a front-only product has no back", () => {
+    expect(backPreviewOf([img("a.png", 0, { portal_view: "front" }), img("b.png", 1, { portal_view: "back" })])).toBe("https://drive.example/b.png");
+    expect(backPreviewOf([img("X_FRONT.png", 0)])).toBeNull();
   });
 });

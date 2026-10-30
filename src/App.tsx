@@ -108,6 +108,7 @@ const V2Desk = lazy(v2Pages.desk);
 const V2Lineup = lazy(v2Pages.lineup);
 const V2PricingSheet = lazy(v2Pages.pricingSheet);
 const V2InvoiceBuilder = lazy(v2Pages.invoiceBuilder);
+const V2InvoiceDocument = lazy(v2Pages.invoiceDocument);
 const V2Work = lazy(v2Pages.work);
 const V2Releases = lazy(v2Pages.releases);
 const V2ContentReview = lazy(v2Pages.contentReview);
@@ -256,6 +257,8 @@ const App = () => (
               </Route>
 
               {/* AX OS V2 — built in parallel; V1 stays live at /admin */}
+              {/* A printable invoice: outside the V2 shell so it prints as a clean page. */}
+              <Route path="/admin-v2/invoice/:orderId" element={<RequireAdmin><V2InvoiceDocument /></RequireAdmin>} />
               <Route path="/admin-v2" element={<RequireAdmin><V2Layout /></RequireAdmin>}>
                 <Route index element={<V2Overview />} />
                 <Route path="people" element={<V2People />} />
