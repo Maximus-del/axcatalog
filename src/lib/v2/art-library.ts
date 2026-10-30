@@ -201,3 +201,32 @@ export function useSetArtRole(athleteId: string | null) {
     onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(["v2", "client-art", athleteId], ctx.prev); },
   });
 }
+
+/**
+ * Remove a file from a client's library. Uploaded files are deleted from
+ * storage too; Drive-linked files only lose the link (the Drive file stays).
+ */
+export function useDeleteArt(athleteId: string | null) {
+  const qc = useQueryClient();
+  const key = ["v2", "client-art", athleteId];
+  return useMutation({
+    mutationFn: async (item: Pick<ArtItem, "fileId" | "bucket" | "path">) => {
+      await must(t("design_files").delete().eq("id", item.fileId));
+      if (item.bucket !== "external") {
+        // Best effort: the library row is what matters; an orphaned object is harmless.
+        await supabase.storage.from(item.bucket).remove([item.path]).catch(() => undefined);
+      }
+    },
+    onMutate: async (item) => {
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<ArtItem[]>(key);
+      qc.setQueryData<ArtItem[]>(key, (list) => list?.filter((i) => i.fileId !== item.fileId));
+      return { prev };
+    },
+    onError: (_e, _v, ctx) => { if (ctx?.prev) qc.setQueryData(key, ctx.prev); },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: key });
+      void qc.invalidateQueries({ queryKey: ["v2", "designs"] });
+    },
+  });
+}
