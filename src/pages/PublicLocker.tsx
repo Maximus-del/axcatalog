@@ -156,9 +156,9 @@ function ProductSheet({ p, onClose, onAdd }: { p: LockerProduct | null; onClose:
           ) : null}
 
           {variant && !variant.available ? (
-            <p className="text-xs text-muted-foreground">Made to order — ships in 4–6 business days.</p>
+            <p className="text-xs text-muted-foreground">Made to order — ships in 2–5 business days.</p>
           ) : variant ? (
-            <p className="text-xs text-muted-foreground">In stock — ships in 2–4 business days.</p>
+            <p className="text-xs text-muted-foreground">In stock — ships in 2–5 business days.</p>
           ) : null}
 
           {p.variants.length === 0 ? (
