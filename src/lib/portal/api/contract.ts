@@ -159,6 +159,14 @@ export interface Summary {
    * attributed", never a number.
    */
   revenueAttributable: boolean;
+  /**
+   * [ADDED 2026-11-21] lifetimeRevenue is FAN sales only. Split by whether the
+   * product is still in the lineup or archived.
+   */
+  lifetimeCurrentRevenue: Money | null;
+  lifetimeArchivedRevenue: Money | null;
+  /** [ADDED 2026-11-21] Orders the client placed itself (bulk, camps): not fan sales, no split. */
+  ownOrders: { gross: Money | null; orders: number | null; units: number | null } | null;
   followers: number | null;
   accessMembers: number | null;
   vipMembers: number | null;

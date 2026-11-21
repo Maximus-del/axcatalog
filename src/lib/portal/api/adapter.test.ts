@@ -140,6 +140,22 @@ describe("revenue + summary", () => {
     expect(s.creditBalance?.amountMinor).toBe(1000);
   });
 
+  it("fan sales split current / archived; the client's own orders kept apart", () => {
+    const raw = {
+      ...LIVE_LIKE,
+      lifetime: { ...(LIVE_LIKE as { lifetime: object }).lifetime, current_gross: 4522.4, archived_gross: 225 },
+      own_orders: { gross: 50228, orders: 31, units: 1210 },
+    };
+    const s = summaryFrom({ revenue: parseRevenue(raw, PERIOD), credit: null, live: null, community: { followers: null, access: null, vip: null }, period: PERIOD });
+    expect(s.lifetimeCurrentRevenue?.amountMinor).toBe(452240);
+    expect(s.lifetimeArchivedRevenue?.amountMinor).toBe(22500);
+    expect(s.ownOrders).toEqual({ gross: { amountMinor: 5022800, currency: "USD" }, orders: 31, units: 1210 });
+    // Older server shape: no split, no own orders → unknown, not zero.
+    const old = summaryFrom({ revenue: parseRevenue(LIVE_LIKE, PERIOD), credit: null, live: null, community: { followers: null, access: null, vip: null }, period: PERIOD });
+    expect(old.lifetimeCurrentRevenue).toBeNull();
+    expect(old.ownOrders).toBeNull();
+  });
+
   it("server function not deployed → revenue unknown (null), not $0", () => {
     const s = summaryFrom({ revenue: null, credit: null, live: null, community: { followers: null, access: null, vip: null }, period: PERIOD });
     expect(s.lifetimeRevenue).toBeNull();

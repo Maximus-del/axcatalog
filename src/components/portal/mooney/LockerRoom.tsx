@@ -107,7 +107,7 @@ export function LockerRoom() {
 
   const statistics = [
     { label: "AX Credit", value: formatMoney(summary.data?.creditBalance ?? null, { cents: true }), icon: Wallet },
-    { label: "Lifetime gross revenue", value: formatMoney(summary.data?.lifetimeRevenue ?? null), icon: ChartNoAxesCombined },
+    { label: "Lifetime fan sales", value: formatMoney(summary.data?.lifetimeRevenue ?? null), icon: ChartNoAxesCombined },
     { label: "Orders", value: summary.data?.ordersCount?.toLocaleString() ?? "—", icon: ShoppingBag },
     { label: "Live products", value: summary.data?.liveProductsCount?.toLocaleString() ?? "—", icon: Package },
   ];

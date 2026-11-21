@@ -25,7 +25,13 @@ export interface RevenueReport {
   currency: string | null;
   asOf: string | null;
   basisNote: string | null;
-  lifetime: { gross: Money | null; refundFlagged: Money | null; orders: number | null; units: number | null } | null;
+  lifetime: {
+    gross: Money | null; refundFlagged: Money | null; orders: number | null; units: number | null;
+    /** Fan sales on products still in the lineup / on archived (or retired) products. */
+    current: Money | null; archived: Money | null;
+  } | null;
+  /** The client's own orders (bulk, camps, events): not fan sales, no split. */
+  ownOrders: { gross: Money | null; orders: number | null; units: number | null } | null;
   period: { gross: Money | null; refundFlagged: Money | null; orders: number | null } | null;
   /** Every month in the period, zero months included, oldest first. */
   monthly: RevenueMonth[];
@@ -39,12 +45,13 @@ const num = (v: unknown): number | null => (v === null || v === undefined || v =
 export function parseRevenue(raw: unknown, period: Period | null): RevenueReport {
   const r = (raw ?? {}) as Json;
   if (r.attributable !== true) {
-    return { attributable: false, currency: null, asOf: null, basisNote: null, lifetime: null, period: null, monthly: [], topProducts: [] };
+    return { attributable: false, currency: null, asOf: null, basisNote: null, lifetime: null, ownOrders: null, period: null, monthly: [], topProducts: [] };
   }
   const currency = typeof r.currency === "string" ? r.currency : null; // null when mixed currencies
   const m = (v: unknown) => (currency ? money(v, currency) : null);
   const life = (r.lifetime ?? {}) as Json;
   const per = r.period as Json | null;
+  const own = r.own_orders as Json | null | undefined;
   const byMonth = new Map<string, Json>();
   for (const row of (Array.isArray(r.monthly) ? r.monthly : []) as Json[]) {
     if (typeof row.month === "string") byMonth.set(row.month, row);
@@ -55,7 +62,12 @@ export function parseRevenue(raw: unknown, period: Period | null): RevenueReport
     currency,
     asOf: typeof r.as_of === "string" ? r.as_of : null,
     basisNote: typeof r.basis_note === "string" ? r.basis_note : null,
-    lifetime: { gross: m(life.gross), refundFlagged: m(life.refund_flagged), orders: num(life.orders), units: num(life.units) },
+    lifetime: {
+      gross: m(life.gross), refundFlagged: m(life.refund_flagged), orders: num(life.orders), units: num(life.units),
+      current: life.current_gross === undefined ? null : m(life.current_gross),
+      archived: life.archived_gross === undefined ? null : m(life.archived_gross),
+    },
+    ownOrders: own ? { gross: m(own.gross), orders: num(own.orders), units: num(own.units) } : null,
     period: per ? { gross: m(per.gross), refundFlagged: m(per.refund_flagged), orders: num(per.orders) } : null,
     monthly: keys.map((k) => ({
       month: k,
@@ -150,6 +162,9 @@ export function summaryFrom(input: {
     asOf: revenue?.asOf ?? (input.now ?? new Date()).toISOString(),
     revenueBasis: "gross",
     refundFlaggedRevenue: attributable ? (revenue?.lifetime?.refundFlagged ?? null) : null,
+    lifetimeCurrentRevenue: attributable ? (revenue?.lifetime?.current ?? null) : null,
+    lifetimeArchivedRevenue: attributable ? (revenue?.lifetime?.archived ?? null) : null,
+    ownOrders: attributable ? (revenue?.ownOrders ?? null) : null,
     revenueAttributable: attributable,
     followers: community.followers,
     accessMembers: community.access,
