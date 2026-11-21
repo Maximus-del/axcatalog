@@ -9,7 +9,7 @@ import {
   usePortalAnalytics, usePortalOrderHistory, usePortalPlaybook, usePortalProfile, usePortalScope, usePortalSummary, usePortalUpdateProfile,
 } from "@/hooks/usePortalApi";
 import { formatMoney } from "@/lib/portal/api/money";
-import { PortalApiError, type Order } from "@/lib/portal/api/contract";
+import { PortalApiError, type Money, type Order } from "@/lib/portal/api/contract";
 import { isSafePaymentUrl, startPayment } from "@/lib/portal/api/checkout";
 import { dueLabel } from "@/lib/portal/cart";
 import { entityVoice } from "@/lib/portal/entity-voice";
@@ -266,6 +266,12 @@ function ProfileStrip() {
   </section>;
 }
 
+/** "$4,522 current · $225 archived", or the plain basis note when the split isn't known. */
+function lineupSplit(sum: { lifetimeCurrentRevenue: Money | null; lifetimeArchivedRevenue: Money | null } | undefined): string {
+  if (!sum?.lifetimeCurrentRevenue || !sum.lifetimeArchivedRevenue) return "Gross sales, before refunds";
+  return `${formatMoney(sum.lifetimeCurrentRevenue)} current · ${formatMoney(sum.lifetimeArchivedRevenue)} archived`;
+}
+
 export function BrandHQ() {
   const { openOrderSheet } = usePortalData();
   const { viewingAs } = usePortalScope();
@@ -273,8 +279,9 @@ export function BrandHQ() {
   const sum = s.data;
   const stats = useMemo(() => [
     { label: "AX credit", icon: Wallet, value: formatMoney(sum?.creditBalance ?? null), sub: null as string | null },
-    { label: "Lifetime gross revenue", icon: BarChart3, value: sum && !sum.revenueAttributable ? "—" : formatMoney(sum?.lifetimeRevenue ?? null), sub: sum && !sum.revenueAttributable ? "Not attributed" : "Gross sales, before refunds" },
-    { label: "Orders", icon: ShoppingBag, value: num(sum?.ordersCount), sub: null },
+    { label: "Lifetime fan sales", icon: BarChart3, value: sum && !sum.revenueAttributable ? "—" : formatMoney(sum?.lifetimeRevenue ?? null), sub: sum && !sum.revenueAttributable ? "Not attributed" : lineupSplit(sum) },
+    { label: "Fan orders", icon: ShoppingBag, value: num(sum?.ordersCount), sub: null },
+    ...(sum?.ownOrders?.orders ? [{ label: "Your orders", icon: ShoppingBag, value: formatMoney(sum.ownOrders.gross), sub: `${num(sum.ownOrders.orders)} orders · ${num(sum.ownOrders.units)} pieces` }] : []),
   ], [sum]);
   return <main className="mw-gear mw-hq">
     <header className="mw-gear-header"><div><h1 className="mw-heading">Your brand. The big picture.</h1><p>Your numbers, your playbook, and ways to earn more on every order.</p></div></header>
