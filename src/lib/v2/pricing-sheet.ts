@@ -55,6 +55,8 @@ export interface SheetProduct {
   detectedSides: PrintSides | null;
   /** The front picture (or the primary one), for previews. */
   imageUrl?: string | null;
+  /** One back picture, matching the front's colourway when it can — only for previews. */
+  backImageUrl?: string | null;
   retail: number | null;
   /** products.athlete_price as stored now — what the portal charges today (null = rule). */
   athletePrice: number | null;
@@ -431,18 +433,40 @@ export function detectSides(images: Row[]): PrintSides | null {
 }
 
 /** Pure: the picture to preview a product by — the chosen front, else the primary, else the first. */
-export function previewOf(images: Row[]): string | null {
-  if (!images.length) return null;
-  const meta = (i: Row) => (i.metadata ?? {}) as Row;
-  const usable = images.filter((i) => !meta(i).shopify_orphaned);
-  const pick =
-    usable.find((i) => meta(i).portal_view === "front") ??
-    usable.find((i) => i.is_primary) ??
-    [...usable].sort((a, b) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0))[0];
-  if (!pick) return null;
-  const path = typeof pick.storage_path === "string" ? pick.storage_path : null;
+const imgMeta = (i: Row) => (i.metadata ?? {}) as Row;
+const imgName = (i: Row) => `${String(imgMeta(i).drive_name ?? "")} ${String(i.file_name ?? "")}`.toUpperCase();
+const isBack = (i: Row) => imgMeta(i).portal_view === "back" || /(^|[_\- ])BACK([_\-. ]|$)/.test(imgName(i));
+const isFront = (i: Row) => imgMeta(i).portal_view === "front" || /(^|[_\- ])FRONT([_\-. ]|$)/.test(imgName(i));
+const bySort = (a: Row, b: Row) => Number(a.sort_order ?? 0) - Number(b.sort_order ?? 0);
+const urlOf = (i: Row | undefined): string | null => {
+  if (!i) return null;
+  const path = typeof i.storage_path === "string" ? i.storage_path : null;
   if (path && /^https?:\/\//.test(path)) return path;
-  return publicUrl((pick.storage_bucket as string | null) ?? null, path);
+  return publicUrl((i.storage_bucket as string | null) ?? null, path);
+};
+const usableImages = (images: Row[]) => images.filter((i) => !imgMeta(i).shopify_orphaned).sort(bySort);
+
+/** Pure: the picture to preview a product by — the chosen front, else a FRONT file, else the primary, else the first. */
+export function previewOf(images: Row[]): string | null {
+  const usable = usableImages(images);
+  return urlOf(
+    usable.find((i) => imgMeta(i).portal_view === "front") ??
+      usable.find((i) => isFront(i) && !isBack(i)) ??
+      usable.find((i) => i.is_primary && !isBack(i)) ??
+      usable.find((i) => !isBack(i)) ??
+      usable[0],
+  );
+}
+
+/** Pure: one back picture — the chosen back, else a BACK file in the front's colourway, else any BACK file. Null when there is none. */
+export function backPreviewOf(images: Row[]): string | null {
+  const usable = usableImages(images);
+  const chosen = usable.find((i) => imgMeta(i).portal_view === "back");
+  if (chosen) return urlOf(chosen);
+  const front = usable.find((i) => imgMeta(i).portal_view === "front") ?? usable.find((i) => isFront(i) && !isBack(i));
+  const color = front ? imgMeta(front).drive_color : undefined;
+  const backs = usable.filter(isBack);
+  return urlOf(backs.find((i) => color && imgMeta(i).drive_color === color) ?? backs[0]);
 }
 
 // ------------------------------------------------------------------ data
@@ -511,6 +535,7 @@ async function fetchSheet(entityId: string, includeArchived: boolean): Promise<P
       blankCatalogCost: num(b?.cost),
       detectedSides: detectSides(imagesBy.get(String(p.id)) ?? []),
       imageUrl: previewOf(imagesBy.get(String(p.id)) ?? []),
+      backImageUrl: backPreviewOf(imagesBy.get(String(p.id)) ?? []),
       retail: num(p.price),
       athletePrice: num(p.athlete_price),
       ruleAthletePrice: ruleAthletePrice(garment),

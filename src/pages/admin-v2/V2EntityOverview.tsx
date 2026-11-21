@@ -853,6 +853,9 @@ function PaymentCell({ order, entityId, entityName }: { order: EntityOrder; enti
         <span className="text-[11px] font-medium" style={{ color: toneText(`var(${tone})`) }}>
           {covered && status === "unpaid" ? "Covered by credit" : PAYMENT_LABEL[status]}
         </span>
+        <a className={pill} href={`/admin-v2/invoice/${order.id}`} target="_blank" rel="noreferrer" title="The printable invoice">
+          Invoice
+        </a>
         {!covered && status !== "paid" && status !== "waived" && (
           <button type="button" className={pill} onClick={() => void emailInvoice()} disabled={busy}>
             {status === "invoiced" ? "Resend" : "Email invoice"}
