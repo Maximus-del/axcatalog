@@ -11,6 +11,7 @@ import { usePortalData } from "@/components/portal/PortalDataContext";
 import type { PortalScope } from "@/lib/portal/api/contract";
 import { defaultSummaryPeriod, fetchRevenue, fetchSummary } from "@/lib/portal/api/summary";
 import { fetchDestinations } from "@/lib/portal/api/destinations";
+import { fetchSalesDetail } from "@/lib/portal/api/sales";
 import { lastMonths, viewerTimeZone, type Period } from "@/lib/portal/api/period";
 import { fetchProductDestinations, filterProducts, frontBack, toContractProduct } from "@/lib/portal/api/products";
 import {
@@ -170,6 +171,26 @@ export function usePortalCheckoutOptions(enabled = true) {
 }
 
 /** GET /orders, newest first. */
+/**
+ * Brand HQ sales detail (products sold, fan orders, invoices). `photo(id)`
+ * gives the client's own product photo when the product is in their locker.
+ */
+export function usePortalSalesDetail(ordersLimit = 50) {
+  const scope = usePortalScope();
+  const { products, archivedProducts } = usePortalData();
+  const q = useQuery({
+    queryKey: keyFor(scope, "sales-detail", ordersLimit),
+    queryFn: () => fetchSalesDetail(scope, ordersLimit),
+    staleTime: 60_000,
+  });
+  const photos = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const x of [...products, ...archivedProducts]) m.set(x.id, frontBack(x).front ?? null);
+    return m;
+  }, [products, archivedProducts]);
+  return { ...q, photo: (id: string | null) => (id ? photos.get(id) ?? null : null), inLocker: (id: string | null) => !!id && photos.has(id) };
+}
+
 export function usePortalOrderHistory(cursor: string | null = null, limit = 24) {
   const scope = usePortalScope();
   return useQuery({

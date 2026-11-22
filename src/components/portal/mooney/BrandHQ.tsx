@@ -15,6 +15,7 @@ import { dueLabel } from "@/lib/portal/cart";
 import { entityVoice } from "@/lib/portal/entity-voice";
 import { usePortalData } from "../PortalDataContext";
 import { BrandPlaybook } from "./BrandPlaybook";
+import { SalesHistory } from "./SalesHistory";
 import { portalLink } from "./navigation";
 import { perMonth } from "@/lib/portal/brand-insights";
 
@@ -210,7 +211,7 @@ function RecentOrders() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per set of open orders
   }, [openIds, viewingAs]);
   return <section className="mw-studio-panel">
-    <h2 className="mw-section-title mw-hq-title"><ShoppingBag />Recent orders</h2>
+    <h2 className="mw-section-title mw-hq-title"><ShoppingBag />Portal orders</h2>
     {orders.isLoading ? <Skeleton className="mw-studio-skeleton" /> : orders.isError ? <div className="mw-state" role="alert"><p>Unable to load orders.</p><Button variant="outline" className="mw-pill" onClick={() => void orders.refetch()}>Try again</Button></div>
       : items.length === 0 ? <div className="mw-state"><p>No orders yet.</p></div>
       : <>
@@ -291,6 +292,7 @@ export function BrandHQ() {
         {i === 0 && <Button variant="outline" className="mw-pill" onClick={openOrderSheet} disabled={viewingAs} title={viewingAs ? "View-as is read-only." : undefined}>Use credit<ArrowRight /></Button>}
       </article>)}</section>
     <Insights />
+    <SalesHistory />
     <BrandPlaybook />
     <GrowEveryOrder />
     <RecentOrders />
